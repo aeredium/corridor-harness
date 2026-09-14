@@ -35,6 +35,14 @@ class ReadmeTest(unittest.TestCase):
         self.assertIn("A1, A2, A3, A5 and A4's native-balance check", self.text)
         self.assertIn("A6 and A4's notes gate nothing", self.text)
 
+    def test_it_says_a_check_that_could_not_be_made_holds_money_back(self):
+        """Spec T2 §5 as amended 14 September 2026; the README's gate paragraph says the same."""
+        self.assertIn("gates money only when it was made and passed", self.text)
+        self.assertIn("holds money back **exactly as a failure does**", self.text)
+        self.assertIn("never say money moved without the chain having been read", self.text)
+        self.assertIn("A4's native-balance check was not made: the run file names no RPC for arbitrum", self.text)
+        self.assertNotIn("that holds nothing back, and the report says it was not made", self.text)
+
     def test_it_says_what_a5_costs(self):
         self.assertIn("one metered `check_action` unit", self.text)
 

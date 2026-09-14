@@ -1582,9 +1582,12 @@ class Runner:
         self.answers: Dict[str, McpAnswer] = {}  # "<test id>|<tool>" -> the answer as received
         self.chain_said: Dict[str, Optional[str]] = {}  # role -> the chain wallet_status names
         self.pacts: Dict[str, Dict[str, Any]] = {}  # role -> the pact the Wallet states
-        # A4's native-balance check, which gates money (Spec T2 §5): True it was made,
-        # False the Wallet stated no balance the harness could read, None it could not be made.
+        # A4's native-balance check, which gates money (Spec T2 §5, as amended 14 September
+        # 2026): True it was made and passed, False the Wallet stated no balance the harness
+        # could read, None it could not be made. None holds money back exactly as False does,
+        # and a4_native_said carries the reason in the words the gate prints.
         self.a4_native_balance: Optional[bool] = None
+        self.a4_native_said: str = "A4 has not run in this run"
         self.series_a_gate_said: str = "Series A has not run in this run"
         self.outcomes: List[Outcome] = []
         self.walks: Dict[str, List[Dict[str, Any]]] = {}  # test id -> walk records
@@ -1783,7 +1786,15 @@ class Runner:
     GATE_TESTS = ("A1", "A2", "A3", "A5")
 
     def money_gate(self) -> Tuple[bool, str]:
-        """Whether Series A has passed far enough for money to move, and which tests say so."""
+        """
+        Whether Series A has passed far enough for money to move, and which tests say so.
+
+        The A4 native-balance check gates money only when it was MADE AND PASSED (Spec T2 §5,
+        as amended 14 September 2026 on the founder's ruling: "a missing RPC should make
+        anybody worry"). A check that could not be made — no RPC for the agent's chain, or the
+        chain did not answer — holds money back exactly as a failure does, because the report
+        must never say money moved without the chain having been read.
+        """
         missing: List[str] = []
         for test_id in self.GATE_TESTS:
             outcome = next((o for o in self.outcomes if o.test.id == test_id), None)
@@ -1793,14 +1804,10 @@ class Runner:
                 missing.append("%s %s" % (test_id, outcome.outcome))
         if self.a4_native_balance is False:
             missing.append("A4's native-balance check fail")
+        elif self.a4_native_balance is None:
+            missing.append("A4's native-balance check was not made: %s" % self.a4_native_said)
         if missing:
             return False, "; ".join(missing)
-        if self.a4_native_balance is None:
-            # It could not be made — no RPC for the agent's chain, or the chain did not answer.
-            # That is not a failure of the corridor and does not hold money back, but the report
-            # must never say it passed.
-            return True, ("A1, A2, A3 and A5 passed; A4's native-balance check could not be made, which holds "
-                          "nothing back; A6 and A4's notes gate nothing")
         return True, "A1, A2, A3, A5 and A4's native-balance check passed; A6 and A4's notes gate nothing"
 
     def report_line(self, outcome: Outcome) -> str:
@@ -2584,6 +2591,8 @@ class Runner:
         rpc = self.chains.get(chain_name)
         if not rpc or not facts.get("address"):
             self.a4_native_balance = None
+            self.a4_native_said = ("the run file names no RPC for %s" % chain_name if not rpc
+                                   else "the agent's wallet names no address to read on %s" % chain_name)
             return Outcome(test, PASS_NOTE, "the run file names no RPC for %s, so the Wallet's balances were not compared with the chain's." % chain_name,
                            note={"expected": "a comparison with the chain", "got": "the run file names no RPC for %s" % chain_name},
                            line="no RPC for %s" % chain_name)
@@ -2591,6 +2600,7 @@ class Runner:
             on_chain = rpc.native_balance(str(facts["address"]))
         except (HarnessError, Unreachable) as err:
             self.a4_native_balance = None
+            self.a4_native_said = "%s could not be read: %s" % (chain_name, err)
             return Outcome(test, PASS_NOTE, "the chain did not answer for the balance comparison: %s." % err,
                            note={"expected": "a comparison with the chain", "got": str(err)}, line="the chain did not answer")
         tokens = self.token_balances(rpc, str(facts["address"]))
@@ -2604,11 +2614,13 @@ class Runner:
                     "got": "it does not (Spec 49); the Wallet said: \u201c%s\u201d" % (sentence or (answer.text[:400] if answer else "(no answer)"))}
         if wallet_wei is None:
             self.a4_native_balance = False
+            self.a4_native_said = "get_balances stated no native balance the harness could read"
             return Outcome(test, FAIL, "get_balances stated no native balance the harness could read; %s." % erc20,
                            self.evidence_block(test, "a native balance to compare with the chain's eth_getBalance",
                                                answer.quoted() if answer else "(no answer)", "the MCP Wallet",
                                                previous=previous), note=note, line=erc20)
         self.a4_native_balance = True
+        self.a4_native_said = ""
         said = "the Wallet says %s wei on %s; the chain says %d wei" % (wallet_wei, chain_name, on_chain)
         agree = str(wallet_wei).strip().isdigit() and int(str(wallet_wei).strip()) == on_chain
         sentence = said + ("; they agree. " if agree else "; they are read at different moments and are quoted for comparison. ") + erc20 + "."
@@ -2942,9 +2954,11 @@ class Runner:
             lines.append("Series A ran as %s, the run file's %s; the agent itself reported role %s." % (
                 self.label_for(ran_as), ran_as, self.facts(ran_as).get("role_id")))
         lines.append("")
-        lines.append("What gates money (Spec T2 §5): A1, A2, A3, A5 and A4's native-balance check. A6 and A4's "
-                     "notes prove wording, not the corridor's judgement, and hold nothing back. This run: %s." %
-                     self.series_a_gate_said)
+        lines.append("What gates money (Spec T2 §5, as amended 14 September 2026): A1, A2, A3, A5 and A4's "
+                     "native-balance check, which gates money only when it was made and passed — a check that "
+                     "could not be made holds money back exactly as a failure does, because this report never "
+                     "says money moved without the chain having been read. A6 and A4's notes prove wording, not "
+                     "the corridor's judgement, and hold nothing back. This run: %s." % self.series_a_gate_said)
         moved = sum(w["action"].get("amount_usd", 0) for walks in self.walks.values() for w in walks if w.get("kind") == S.ALLOWED)
         lines.append("")
         lines.append("Total moved by allowed actions: %s dollars (the Series' figures, as sent)." % moved)

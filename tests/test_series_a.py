@@ -49,6 +49,10 @@ def chain_answer(body):
             return hex(30_000_000)  # 30 USDC
     if method == "eth_blockNumber":
         return hex(100)
+    if method in ("eth_getTransactionByHash", "eth_getTransactionReceipt"):
+        return None  # this fake chain mines nothing; the harness reports the hash unconfirmed
+    if method == "eth_getLogs":
+        return []
     raise AssertionError("the test reached for %s" % method)
 
 
@@ -302,11 +306,81 @@ class A2Test(SeriesABase):
         self.assertIn("the agent itself reported role trader.v1", report)
 
 
+class ChainMustBeReadBeforeMoneyMoves(SeriesABase):
+    """
+    Spec T2 §5 as amended 14 September 2026. The founder's ruling: "a missing RPC should make
+    anybody worry." A native-balance check that could not be made holds money back exactly as a
+    failure does, and every money test says which chain could not be read.
+    """
+
+    RPC_FAULT = None  # set by a test: the JSON-RPC error body the chain answers
+
+    def canned_http(self, method, url, headers=None, body=None, timeout=None):
+        if url.startswith("https://rpc.test/"):
+            if self.RPC_FAULT is not None:
+                return h.HttpAnswer(200, {}, json.dumps({"jsonrpc": "2.0", "id": 1, "error": self.RPC_FAULT}), 1)
+            return h.HttpAnswer(200, {}, json.dumps({"jsonrpc": "2.0", "id": 1, "result": chain_answer(body)}), 1)
+        for path, (status, text) in PAGES.items():
+            if url.endswith(path):
+                return h.HttpAnswer(status, {}, text, 1)
+        raise AssertionError("the test reached for %s" % url)
+
+    def run_a_and_c(self, chains):
+        session = FakeSession(police="allow", wallet="ticket", role_id="trader.v1")
+        runner = h.Runner("t", {"issuer": "https://mcppro.aeredium.io", "chains": chains,
+                                "testers": {"t": {"agents": {"trader": "t-trader", "payer": "t-payer"},
+                                                  "listed_address": OWNER}}},
+                          None, h.RunFolder(self.tmp, "t"), say=lambda s: None, ask=lambda q: "",
+                          session_factory=lambda label: session)
+        return runner, session, runner.run(["A", "C"])
+
+    def money_tests_in(self, outcomes):
+        return [o for o in outcomes if o.test.moves_money and o.test.agent != "payer_nogas"]
+
+    def test_no_rpc_for_the_agents_chain_skips_every_money_test_naming_it(self):
+        runner, session, outcomes = self.run_a_and_c(chains={})
+        money = self.money_tests_in(outcomes)
+        self.assertTrue(money, "Series C moves money")
+        for outcome in money:
+            self.assertEqual(outcome.outcome, h.SKIPPED, outcome.test.id)
+            self.assertIn("A4's native-balance check was not made: the run file names no RPC for arbitrum",
+                          outcome.sentence, outcome.test.id)
+        tools = [tool for _, tool, _ in session.calls]
+        self.assertNotIn("wallet.build_transaction", tools, "nothing was built")
+        self.assertNotIn("wallet.submit_transaction", tools, "nothing was signed")
+        self.assertEqual(session.submits, [])
+        self.assertIn("Total moved by allowed actions: 0 dollars", runner.report())
+
+    def test_a_chain_that_answers_a_fault_skips_every_money_test_quoting_it(self):
+        self.RPC_FAULT = {"code": -32000, "message": "archive node unavailable"}
+        try:
+            runner, session, outcomes = self.run_a_and_c(chains=CHAINS)
+        finally:
+            self.RPC_FAULT = None
+        money = self.money_tests_in(outcomes)
+        self.assertTrue(money)
+        for outcome in money:
+            self.assertEqual(outcome.outcome, h.SKIPPED, outcome.test.id)
+            self.assertIn("A4's native-balance check was not made: arbitrum could not be read", outcome.sentence)
+            self.assertIn("archive node unavailable", outcome.sentence, "the chain's own fault is quoted")
+        self.assertEqual(session.submits, [])
+        self.assertIsNone(runner.a4_native_balance)
+
+    def test_a_chain_that_answers_lets_money_through(self):
+        """The same run with a chain that answers: the gate opens, so the two above mean something."""
+        runner, session, outcomes = self.run_a_and_c(chains=CHAINS)
+        self.assertTrue(runner.series_a_passed, runner.series_a_gate_said)
+        self.assertIn("A4's native-balance check passed", runner.series_a_gate_said)
+        first = [o for o in outcomes if o.test.id == "C1"][0]
+        self.assertNotEqual(first.outcome, h.SKIPPED, first.sentence)
+        self.assertIn("wallet.build_transaction", [tool for _, tool, _ in session.calls])
+
+
 class MoneyGateTest(SeriesABase):
     """Exactly which of Series A holds money back (Spec T2 §5)."""
 
-    def gate_after(self, session):
-        runner = h.Runner("t", {"issuer": "https://mcppro.aeredium.io", "chains": CHAINS,
+    def gate_after(self, session, chains=None):
+        runner = h.Runner("t", {"issuer": "https://mcppro.aeredium.io", "chains": CHAINS if chains is None else chains,
                                 "testers": {"t": {"agents": {"trader": "t-trader", "payer": "t-payer"},
                                                   "listed_address": "0xfec697fc2D4323aE7618BFF2347C01E29653FB57"}}},
                           None, h.RunFolder(self.tmp, "t"), say=lambda s: None, ask=lambda q: "",
@@ -331,19 +405,19 @@ class MoneyGateTest(SeriesABase):
         self.assertEqual(a4.outcome, h.PASS_NOTE)
         self.assertTrue(runner.series_a_passed)
 
-    def test_the_gate_never_claims_a_check_it_could_not_make(self):
-        """No RPC for the agent's chain: the check was not made, and the report says so (Spec T2 §5)."""
-        session = FakeSession(role_id="trader.v1")
-        runner = h.Runner("t", {"issuer": "https://mcppro.aeredium.io", "chains": {},
-                                "testers": {"t": {"agents": {"trader": "t-trader"}, "listed_address": OWNER}}},
-                          None, h.RunFolder(self.tmp, "t"), say=lambda s: None, ask=lambda q: "",
-                          session_factory=lambda label: session)
-        runner.run(["A"])
-        self.assertIsNone(runner.a4_native_balance)
-        self.assertTrue(runner.series_a_passed, "a missing RPC is not the corridor's failure")
-        self.assertIn("could not be made", runner.series_a_gate_said)
+    def test_a_check_that_could_not_be_made_holds_money_back(self):
+        """
+        Spec T2 §5 as amended 14 September 2026, on the founder's ruling that "a missing RPC
+        should make anybody worry": the native-balance check gates money only when it was made
+        and passed, and a check that could not be made holds money back exactly as a failure does.
+        """
+        runner = self.gate_after(FakeSession(role_id="trader.v1"), chains={})
+        self.assertIsNone(runner.a4_native_balance, "no RPC, so the check could not be made")
+        self.assertFalse(runner.series_a_passed, "a check that was not made holds money back")
+        self.assertIn("A4's native-balance check was not made: the run file names no RPC for arbitrum",
+                      runner.series_a_gate_said)
         self.assertNotIn("A4's native-balance check passed", runner.series_a_gate_said)
-        self.assertIn("could not be made", runner.report())
+        self.assertNotIn("holds nothing back", runner.series_a_gate_said)
 
     def test_a5_holds_money_back(self):
         runner = self.gate_after(FakeSession(role_id="trader.v1", judged=False))
@@ -365,7 +439,15 @@ class MoneyGateTest(SeriesABase):
 
     def test_the_gate_is_named_in_the_report(self):
         runner = self.gate_after(FakeSession(role_id="trader.v1"))
-        self.assertIn("What gates money (Spec T2 §5): A1, A2, A3, A5 and A4's native-balance check.", runner.report())
+        report = runner.report()
+        self.assertIn("A1, A2, A3, A5 and A4's native-balance check, which gates money only when it was made "
+                      "and passed", report)
+        self.assertIn("never says money moved without the chain having been read", report)
+
+    def test_the_report_says_why_the_check_was_not_made(self):
+        runner = self.gate_after(FakeSession(role_id="trader.v1"), chains={})
+        self.assertIn("A4's native-balance check was not made: the run file names no RPC for arbitrum",
+                      runner.report())
 
 
 if __name__ == "__main__":
