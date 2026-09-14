@@ -1,0 +1,37 @@
+{
+  "tools": [
+    {
+      "name": "police.check_action",
+      "description": "Judge one action before it is built.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action_kind": {
+            "type": "string",
+            "description": "transfer_stable | trade | bridge_stable"
+          },
+          "slippage_bps": {
+            "type": "integer",
+            "description": "Declared maximum slippage, in basis points"
+          },
+          "price_deviation_bps": {
+            "type": "integer",
+            "description": "Oracle-versus-execution price deviation, in basis points"
+          }
+        }
+      }
+    },
+    {
+      "name": "wallet.build_transaction",
+      "description": "Build a ticket for a judged action.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "wallet_id": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

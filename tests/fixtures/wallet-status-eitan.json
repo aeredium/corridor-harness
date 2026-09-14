@@ -1,0 +1,12 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"wallet_id\": \"<removed>\",\n  \"address\": \"<removed>\",\n  \"chain\": \"arbitrum\",\n  \"native\": {\n    \"symbol\": \"ETH\",\n    \"wei\": \"<removed>\"\n  },\n  \"pact\": {\n    \"id\": \"<removed>\",\n    \"state\": \"active\",\n    \"policy_generation\": 4,\n    \"policy_hash\": \"0x5237c7e1b0c4f1a9d8e3b26a5f470c91d2846ebb73f5a0c1e94d6b28fa310577\"\n  }\n}"
+      }
+    ]
+  }
+}

@@ -92,6 +92,13 @@ RELAY_READER = "It was granted in the reading rank"
 RELAY_LAPSED = "Tell the person to pay the subscription"
 
 
+# The sentence the harness refuses a money series in, when an agent's wallet is on a
+# chain the product does not offer (Spec T2 §6). Victor's Trader was on aeredium-testnet.
+def chain_guard_sentence(label: str, chain: Optional[str]) -> str:
+    return ("%s's wallet is on %s, which the product does not offer; the series runs on ethereum, "
+            "arbitrum and base. Create the agent again on one of those and consent it." % (label, chain))
+
+
 class HarnessError(Exception):
     """A fault of the harness or its surroundings, never a judgment about the corridor."""
 
@@ -580,6 +587,74 @@ def find_policy_hash(obj: Any) -> Optional[str]:
         if isinstance(found, str) and found:
             return found
     return None
+
+
+# ---------------------------------------------------------------------------
+# THE HASH IS READ FROM THE WALLET (Spec T2 §1). MCP Police carries no tool
+# called can_sign — it answered, in its own words, "MCP Police carries no tool
+# called “can_sign”" — so every hash the harness reads comes from the Wallet's
+# wallet_status, as `pact.policy_hash`, and from get_balances' `pact_budget`
+# where wallet_status states none.
+# ---------------------------------------------------------------------------
+PACT_BLOCKS = ("pact", "pact_budget", "pactBudget")
+
+
+def pact_in(obj: Any) -> Dict[str, Any]:
+    """The Wallet's pact block: `pact` in wallet_status, `pact_budget` in get_balances."""
+    if isinstance(obj, (dict, list)):
+        for name in PACT_BLOCKS:
+            block = find_key(obj, [name], dict)
+            if isinstance(block, dict):
+                return block
+    return {}
+
+
+def wallet_pact(obj: Any) -> Dict[str, Any]:
+    """
+    The pact as the Wallet states it: its hash, its id, its state and its generation.
+    A Wallet that states the hash outside a pact block is still read, so that the
+    harness reports what the door said rather than nothing at all.
+    """
+    block = pact_in(obj)
+    found = find_key(block, ["policy_hash", "policyHash"], str) if block else None
+    if not (isinstance(found, str) and found):
+        found = find_policy_hash(obj)
+    return {
+        "policy_hash": found if isinstance(found, str) and found else None,
+        "pact_id": find_key(block, ["id", "pact_id", "pactId"], str) if block else None,
+        "state": find_key(block, ["state", "status"], str) if block else None,
+        "policy_generation": find_key(block, ["policy_generation", "policyGeneration"]) if block else None,
+    }
+
+
+def wallet_policy_hash(obj: Any) -> Optional[str]:
+    """The policy hash the Wallet states, and None where it states none."""
+    return wallet_pact(obj).get("policy_hash")
+
+
+def hash_moved(before: Optional[str], after: Optional[str]) -> bool:
+    """Whether the hash has moved between two Wallet answers, compared as the doors print it."""
+    return (before or "").lower() != (after or "").lower()
+
+
+def judged_in(obj: Any) -> Optional[Dict[str, Any]]:
+    """
+    Police's `judged` block, which allow, deny and hold all carry (Spec T2 §2): the
+    pact the door judged under. A5 reads its hash whatever the verdict, because it
+    compares hashes and not verdicts.
+    """
+    if isinstance(obj, (dict, list)):
+        block = find_key(obj, ["judged"], dict)
+        if isinstance(block, dict):
+            return block
+    return None
+
+
+def judged_policy_hash(obj: Any) -> Optional[str]:
+    """The hash Police says it judged under, read from the `judged` block and nowhere else."""
+    block = judged_in(obj)
+    found = find_key(block, ["policy_hash", "policyHash"], str) if block else None
+    return found if isinstance(found, str) and found else None
 
 
 def hex64_in(obj: Any) -> List[str]:
@@ -1490,6 +1565,13 @@ class Runner:
         self.agents: Dict[str, Dict[str, Any]] = {}  # role -> facts from aerconnect_my_agent
         self.policy_hash: Dict[str, Optional[str]] = {}
         self.policy_hash_begin: Dict[str, Optional[str]] = {}
+        self.answers: Dict[str, McpAnswer] = {}  # "<test id>|<tool>" -> the answer as received
+        self.chain_said: Dict[str, Optional[str]] = {}  # role -> the chain wallet_status names
+        self.pacts: Dict[str, Dict[str, Any]] = {}  # role -> the pact the Wallet states
+        # A4's native-balance check, which gates money (Spec T2 §5): True it was made,
+        # False the Wallet stated no balance the harness could read, None it could not be made.
+        self.a4_native_balance: Optional[bool] = None
+        self.series_a_gate_said: str = "Series A has not run in this run"
         self.outcomes: List[Outcome] = []
         self.walks: Dict[str, List[Dict[str, Any]]] = {}  # test id -> walk records
         self.tickets: Dict[str, List[str]] = {}
@@ -1557,6 +1639,86 @@ class Runner:
     def facts(self, role: str) -> Dict[str, Any]:
         return self.agents.get(role) or {}
 
+    # -- what the Wallet says about itself (Spec T2 §1, §4, §6) ----------------
+    def wallet_status(self, role: str, test_id: str) -> McpAnswer:
+        """wallet_status, called as the agent, and the chain it names remembered for the role."""
+        session = self.session(role, test_id)
+        props = session.properties_of("wallet.wallet_status")
+        args, _ = arguments_for(props, {}, self.call_facts(role))
+        answer = self.remember(test_id, "wallet.wallet_status", session.call("wallet.wallet_status", args, test_id))
+        data = answer.data if answer.data is not None else answer.text
+        found = find_key(data, ["chain", "network"], str) if isinstance(data, (dict, list)) else None
+        if isinstance(found, str) and found.strip():
+            self.chain_said[role] = found.strip().lower()
+        elif role not in self.chain_said:
+            said = self.facts(role).get("chain")
+            self.chain_said[role] = str(said).strip().lower() if said else None
+        return answer
+
+    def chain_of(self, role: str, test_id: str) -> Optional[str]:
+        """The chain the agent's wallet is on, as wallet_status names it."""
+        if role not in self.chain_said:
+            try:
+                self.wallet_status(role, test_id)
+            except (HarnessError, Unreachable):
+                said = self.facts(role).get("chain")
+                self.chain_said[role] = str(said).strip().lower() if said else None
+        return self.chain_said.get(role)
+
+    def role_said(self, role: str) -> str:
+        """
+        The role the agent itself reports, which is not always the role the run file
+        filed its label under: Eitan's first run was consented as a Payer under the
+        Trader's label. A5 asks the question this role can ask (Spec T2 §2).
+        """
+        role_id = str(self.facts(role).get("role_id") or "").lower()
+        if "payer" in role_id:
+            return "payer"
+        if "trader" in role_id:
+            return "trader"
+        return "payer" if role.startswith("payer") else "trader"
+
+    def consent_notes(self, role: str) -> List[str]:
+        """
+        What a tester needs to be told the moment a consent lands (Spec T2 §6, §7, §9):
+        whether the agent that answered is the one this label is for, and whether its
+        wallet is on a chain the product offers. Both were found the hard way on
+        14 September: Eitan consented a Payer under the Trader's label, and Victor's
+        Trader was on a chain the product no longer offers.
+        """
+        out: List[str] = []
+        wanted = S.ROLE_IDS.get(role, "%s.v1" % role)
+        said = str(self.facts(role).get("role_id") or "")
+        if said.strip().lower().split(".")[0] != wanted.split(".")[0]:
+            out.append("Note: %s reports role %s, not %s. If the consent page opened with \u201cYou are already "
+                       "connected\u201d, press \u201cConnect a different agent\u201d and consent the agent you meant."
+                       % (self.label_for(role) or role, said or "no role", wanted))
+        guard = self.chain_guard(role, "consent")
+        if guard:
+            out.append("Note: " + guard)
+        return out
+
+    def chain_guard(self, role: str, test_id: str) -> Optional[str]:
+        """
+        The chain guard (Spec T2 §6): the sentence refusing a money series to an agent
+        whose wallet is on a chain the product does not offer, or None where it is on one.
+        """
+        chain = self.chain_of(role, test_id)
+        if chain and chain in S.PRODUCT_CHAINS:
+            return None
+        return chain_guard_sentence(self.label_for(role) or role, chain or "no chain it would name")
+
+    def token_balances(self, rpc: "ChainRpc", address: str) -> Dict[str, str]:
+        """The ERC-20 balances read from the chain's own RPC, which is where A4 reads them (Spec T2 §4)."""
+        out: Dict[str, str] = {}
+        for symbol, token in rpc.tokens.items():
+            try:
+                out[symbol] = format_units(rpc.token_balance(token, address),
+                                           rpc.token_decimals(token) or T.DECIMALS.get(symbol, 6))
+            except (HarnessError, Unreachable) as err:
+                out[symbol] = "not read (%s)" % err
+        return out
+
     def call_facts(self, role: str) -> Dict[str, Any]:
         facts = self.facts(role)
         out: Dict[str, Any] = {}
@@ -1598,10 +1760,28 @@ class Runner:
             self.outcomes.append(outcome)
             if outcome.outcome != "dry":
                 self.say(self.report_line(outcome))
-            if test.series == "A" and all(o.test.series == "A" for o in self.outcomes):
-                self.series_a_passed = all(o.outcome in (PASS, PASS_NOTE, PERSON_OUT) for o in self.outcomes if o.test.who != S.PERSON) and \
-                    any(o.outcome in (PASS, PASS_NOTE) for o in self.outcomes)
+            if test.series == "A":
+                self.series_a_passed, self.series_a_gate_said = self.money_gate()
         return self.outcomes
+
+    # Which of Series A holds money back (Spec T2 §5). A6 and A4's notes prove wording,
+    # not the corridor's judgement, so they gate nothing.
+    GATE_TESTS = ("A1", "A2", "A3", "A5")
+
+    def money_gate(self) -> Tuple[bool, str]:
+        """Whether Series A has passed far enough for money to move, and which tests say so."""
+        missing: List[str] = []
+        for test_id in self.GATE_TESTS:
+            outcome = next((o for o in self.outcomes if o.test.id == test_id), None)
+            if outcome is None:
+                missing.append("%s has not run" % test_id)
+            elif outcome.outcome not in (PASS, PASS_NOTE):
+                missing.append("%s %s" % (test_id, outcome.outcome))
+        if self.a4_native_balance is False:
+            missing.append("A4's native-balance check fail")
+        if missing:
+            return False, "; ".join(missing)
+        return True, "A1, A2, A3, A5 and A4's native-balance check passed; A6 and A4's notes gate nothing"
 
     def report_line(self, outcome: Outcome) -> str:
         detail = outcome.line or outcome.sentence
@@ -1617,10 +1797,15 @@ class Runner:
         if test.agent == "payer_nogas" and not self.labels.get("payer_nogas"):
             return Outcome(test, SKIPPED, "needs a Payer funded with USDC and no ETH; name it in harness_run.json under agents.payer_nogas.")
         if test.moves_money and self.require_series_a and not self.series_a_passed:
-            return Outcome(test, SKIPPED, "Series A has not passed in this run, so nothing that moves money is sent (Spec T1 §5).")
+            return Outcome(test, SKIPPED, "Series A has not passed in this run, so nothing that moves money is sent "
+                                          "(Spec T1 §5): %s." % self.series_a_gate_said,
+                           line="held back by Series A: %s" % self.series_a_gate_said)
         if test.agent:
             self.session(test.agent, test.id)
         if test.moves_money:
+            guard = self.chain_guard(test.agent, test.id)
+            if guard:
+                return Outcome(test, SKIPPED, guard, line=guard)
             self.snapshot_balances(test.agent, before=True)
         previous = self.outcomes[-1] if self.outcomes else None
         outcome = self.run_steps(test, previous)
@@ -1637,16 +1822,20 @@ class Runner:
 
     # What each harness-side check calls, said in a dry run.
     DRY_CHECK_CALLS = {
-        "my_agent_facts": ["tools/call aerconnect_my_agent {} → expect one agent: name, role Trader, wallet id, address, chain, caps"],
-        "policy_hash_present": ["tools/call police.can_sign {} → expect the pact and its policy hash"],
-        "balances_vs_chain": ["[read] eth_getBalance for the agent's address on its chain, compared with wallet.get_balances"],
+        "my_agent_facts": ["tools/call aerconnect_my_agent {} → expect one agent: name, the role the run file files this label under (trader.v1 or payer.v1), wallet id, address, chain, caps"],
+        "wallet_names_its_chain": ["tools/call wallet.wallet_status {\"wallet_id\": \"<wallet id>\"} → expect chain one of ethereum, arbitrum, base; rails where the Wallet states them (Spec 49)"],
+        "pact_hash_agrees": [
+            "tools/call wallet.wallet_status {\"wallet_id\": \"<wallet id>\"} → expect pact.policy_hash",
+            "tools/call police.check_action {\"action\": \"trade\", \"chain\": \"<the agent's own chain>\", \"asset\": \"USDC\", \"amount_usd\": 5, \"to_asset\": \"WETH\", \"venue\": \"uniswap_v3\", \"contract_address\": \"<the listed router for that chain>\"} → expect judged.policy_hash, whatever the verdict (a Payer asks C1's question instead: transfer_stable, 1 USDC, to the listed address)",
+        ],
+        "balances_vs_chain": ["[read] eth_getBalance for the agent's address on its chain, compared with wallet.get_balances' native figure, and eth_call balanceOf for each token the run file names, which get_balances cannot state (Spec 49)"],
         "usage_delta": ["tools/call wallet.my_usage {} → compared with the reading taken before D2: up by two per trade with an approval"],
         "transcript_bytes": ["[read] evidence.jsonl for D2 to D15: no quote_tx_json, no calldata, no signed bytes"],
         "crossing_arrives": ["[read] eth_getLogs Transfer to the agent's address on the destination chain, and tools/call wallet.get_crossing {\"wallet_id\": \"<wallet id>\", \"ticket_id\": \"<ticket>\"} while waiting"],
         "complete_crossing": ["tools/call wallet.get_crossing {\"wallet_id\": \"<wallet id>\", \"ticket_id\": \"<ticket from E1>\"} — only if E1 said awaiting attestation"],
         "fee_accounting": ["[read] eth_getLogs Transfer to the fee address 0xabd0235C036CBeCb911DC74958B3c8F114cec42a on arbitrum and base over the run's blocks"],
         "sentences_vs_guide": ["[compare] every refusal collected in C, D and E against the table from Guide section 10"],
-        "one_hash_everywhere": ["tools/call police.can_sign {} → compared with the policy hash in D2's receipt and ticket"],
+        "one_hash_everywhere": ["tools/call wallet.wallet_status {\"wallet_id\": \"<wallet id>\"} → its pact.policy_hash compared with the policy hash in D2's receipt and ticket"],
     }
 
     def dry_step(self, test: S.Test, step: Any) -> List[str]:
@@ -1664,7 +1853,7 @@ class Runner:
         if isinstance(step, S.Pause):
             out = ["[pause] %s" % step.text]
             if step.hash_moves is not None:
-                out.append("tools/call police.can_sign {} — confirm the policy hash %s" % ("moved" if step.hash_moves else "did not move"))
+                out.append("tools/call wallet.wallet_status {\"wallet_id\": \"<wallet id>\"} — confirm pact.policy_hash %s" % ("moved" if step.hash_moves else "did not move"))
             return out
         if isinstance(step, S.Check):
             return list(self.DRY_CHECK_CALLS.get(step.name, ["[check] %s" % step.name]))
@@ -1731,9 +1920,21 @@ class Runner:
             return results[0]
         order = {FAIL: 0, HELD_OUT: 1, SKIPPED: 2, NOT_RUN: 2, PASS_NOTE: 3, PERSON_OUT: 3, PASS: 4}
         worst = min(results, key=lambda o: order.get(o.outcome, 0))
-        sentence = "; ".join(o.sentence for o in results if o.sentence)
+        parts = [o.sentence.strip() for o in results if o.sentence]
+        sentence = "; ".join(part[:-1] if part.endswith(".") else part for part in parts)
+        if sentence and not sentence.endswith("."):
+            sentence += "."
         line = ", ".join(o.line or o.sentence for o in results)
-        return Outcome(test, worst.outcome, sentence, worst.evidence, worst.note, line)
+        # Every note a step made is kept, not only the worst step's: A4 makes two, one for the
+        # rails the Wallet does not yet name and one for the token balances it cannot state.
+        notes = [o.note for o in results if o.note]
+        note = None
+        if len(notes) == 1:
+            note = notes[0]
+        elif notes:
+            note = {"expected": " | ".join(str(n.get("expected")) for n in notes),
+                    "got": " | ".join(str(n.get("got")) for n in notes)}
+        return Outcome(test, worst.outcome, sentence, worst.evidence, note, line)
 
     def step_http(self, test: S.Test, step: S.Http, previous: Optional[Outcome]) -> Outcome:
         issuer = self.run_file.get("issuer", DEFAULT_ISSUER)
@@ -1768,7 +1969,7 @@ class Runner:
             sent = args
         else:
             sent, _ = arguments_for(session.properties_of(step.tool), {}, self.call_facts(test.agent or "trader"))
-        answer = session.call(step.tool, sent, test.id)
+        answer = self.remember(test.id, step.tool, session.call(step.tool, sent, test.id))
         haystack = normalise(answer.quoted())
         present = [w for w in step.words if normalise(w) in haystack]
         missing = [w for w in step.words if normalise(w) not in haystack]
@@ -1799,10 +2000,8 @@ class Runner:
                 texts[page] = answer.text
         problems: List[str] = []
         for page in step.pages:
-            counts[page] = {}
-            for word in step.absent:
-                n = count_word(texts[page], word)
-                counts[page][word] = n
+            counts[page] = counts_for(texts[page], step.absent)
+            for word, n in counts[page].items():
                 if n:
                     problems.append("%s carries %r %d time(s)" % (page, word, n))
         for page, words in step.present_on.items():
@@ -1857,11 +2056,11 @@ class Runner:
             if step.hash_moves and not moved:
                 outcome = FAIL
                 sentence = "the policy hash did not move after the save (before %s, after %s)." % (before, after)
-                evidence = self.evidence_block(test, "the hash moves and can_sign prints the new hash", "before: %s\nafter: %s" % (before, after), "MCP Police's can_sign", previous=previous, policy_hash=after)
+                evidence = self.evidence_block(test, "the hash moves and wallet_status prints the new hash", "before: %s\nafter: %s" % (before, after), "the MCP Wallet's wallet_status", previous=previous, policy_hash=after)
             elif step.hash_moves is False and moved:
                 outcome = FAIL
                 sentence = "the policy hash moved although the save was expected to be refused (before %s, after %s)." % (before, after)
-                evidence = self.evidence_block(test, "the mandate table is unchanged", "before: %s\nafter: %s" % (before, after), "MCP Police's can_sign", previous=previous, policy_hash=after)
+                evidence = self.evidence_block(test, "the mandate table is unchanged", "before: %s\nafter: %s" % (before, after), "the MCP Wallet's wallet_status", previous=previous, policy_hash=after)
             else:
                 sentence = "the policy hash %s (before %s, after %s)." % ("moved" if moved else "did not move", before, after)
         if step.ask and step.expect_words:
@@ -1873,25 +2072,43 @@ class Runner:
         return Outcome(test, outcome, sentence, evidence, note, line=sentence)
 
     def read_policy_hash(self, role: str, test_id: str) -> Optional[str]:
-        session = self.session(role, test_id)
-        props = session.properties_of("police.can_sign")
-        args, _ = arguments_for(props, {}, self.call_facts(role))
-        answer = session.call("police.can_sign", args, test_id)
-        found = find_policy_hash(answer.data if answer.data is not None else answer.text)
+        """
+        The policy hash, read where it lives (Spec T2 §1): the Wallet's wallet_status, as
+        `pact.policy_hash`, and get_balances' `pact_budget.policy_hash` as a second source
+        where wallet_status states none. MCP Police carries no tool called can_sign.
+        """
+        answer = self.wallet_status(role, test_id)
+        pact = wallet_pact(answer.data if answer.data is not None else answer.text)
+        if not pact.get("policy_hash"):
+            second = self.pact_from_balances(role, test_id)
+            if second and second.get("policy_hash"):
+                pact = second
+        found = pact.get("policy_hash")
+        self.pacts[role] = pact
         self.policy_hash[role] = found
         if role not in self.policy_hash_begin:
             self.policy_hash_begin[role] = found
-        pact = find_key(answer.data, ["pact_id", "pactId"], str) if isinstance(answer.data, (dict, list)) else None
-        if pact and role in self.agents:
-            self.agents[role]["pact_id"] = pact
+        if role in self.agents and pact.get("pact_id"):
+            self.agents[role]["pact_id"] = pact["pact_id"]
         return found
+
+    def pact_from_balances(self, role: str, test_id: str) -> Optional[Dict[str, Any]]:
+        """get_balances' pact_budget, the second source for the hash (Spec T2 §1)."""
+        try:
+            session = self.session(role, test_id)
+            props = session.properties_of("wallet.get_balances")
+            args, _ = arguments_for(props, {}, self.call_facts(role))
+            answer = self.remember(test_id, "wallet.get_balances", session.call("wallet.get_balances", args, test_id))
+        except (HarnessError, Unreachable):
+            return None
+        return wallet_pact(answer.data if answer.data is not None else answer.text)
 
     def wait_for_hash(self, role: str, before: Optional[str], test_id: str, want_change: bool) -> Tuple[Optional[str], Optional[bool]]:
         deadline = self.clock() + HASH_WAIT_SECONDS
         after = before
         while True:
             after = self.read_policy_hash(role, test_id)
-            moved = after != before
+            moved = hash_moved(before, after)
             if moved == want_change:
                 return after, moved
             if self.clock() >= deadline:
@@ -2177,7 +2394,13 @@ class Runner:
         return handler(test, step, previous)
 
     def check_my_agent_facts(self, test: S.Test, step: S.Check, previous: Optional[Outcome]) -> Outcome:
-        session = self.session("trader", test.id)
+        """
+        A2 (Spec T2 §9): the connector acts for exactly one agent, and that agent's role is
+        the one the run file files its label under — payer.v1 for `payer`, trader.v1 for
+        `trader` — not the word "Trader" the Series' own text happened to use.
+        """
+        role = str(step.args.get("role") or test.agent or "trader")
+        session = self.session(role, test.id)
         answer = session.call(MY_AGENT_TOOL, {}, test.id)
         data = answer.data if isinstance(answer.data, dict) else {}
         agent = data.get("agent") or {}
@@ -2187,8 +2410,12 @@ class Runner:
             problems.append("the answer does not say it came from aer-connect")
         if not agent.get("name"):
             problems.append("no agent name")
-        if step.args.get("role", "trader") not in str(agent.get("roleId", "")).lower():
-            problems.append("roleId %r does not name a %s" % (agent.get("roleId"), step.args.get("role")))
+        wanted = S.ROLE_IDS.get(role, "%s.v1" % role)
+        family = str(agent.get("roleId", "")).strip().lower().split(".")[0]
+        if family != wanted.split(".")[0]:
+            problems.append("roleId %r is not %s, the role the run file files %s under; if the consent page "
+                            "opened with \u201cYou are already connected\u201d, press \u201cConnect a different agent\u201d "
+                            "and consent the agent you meant" % (agent.get("roleId"), wanted, self.label_for(role) or role))
         for field in ("id", "address", "chain"):
             if not wallet.get(field):
                 problems.append("wallet.%s is %r" % (field, wallet.get(field)))
@@ -2198,37 +2425,165 @@ class Runner:
         if agents_named:
             problems.append("the answer names more than one agent")
         who = who_answered(answer, "connector")
-        line = "%s, %s, wallet %s on %s" % (agent.get("name"), agent.get("roleId"), short(wallet.get("address")), wallet.get("chain"))
+        line = "%s (%s), %s, wallet %s on %s" % (self.label_for(role), agent.get("name"), agent.get("roleId"),
+                                                  short(wallet.get("address")), wallet.get("chain"))
         if problems:
-            return Outcome(test, FAIL, "; ".join(problems) + ".", self.evidence_block(test, "name, role Trader, wallet id, address, chain and caps; no other agent", answer.quoted(), who["party"], previous=previous), line=line)
+            return Outcome(test, FAIL, "; ".join(problems) + ".",
+                           self.evidence_block(test, "name, role %s, wallet id, address, chain and caps; no other agent" % wanted,
+                                               answer.quoted(), who["party"], previous=previous), line=line)
         return Outcome(test, PASS, "aerconnect_my_agent named one agent: %s." % line, line=line)
 
-    def check_policy_hash_present(self, test: S.Test, step: S.Check, previous: Optional[Outcome]) -> Outcome:
+    def a5_question(self, role: str, chain: str) -> Tuple[Optional[S.Action], str]:
+        """
+        The one question A5 asks: the one this agent's own role can ask, on its own chain
+        (Spec T2 §2). A Payer asks C1's, a Trader asks D2's. Nothing is built and nothing
+        is submitted: A5 reads the hash Police judged under, whatever the verdict.
+        """
+        if self.role_said(role) == "payer":
+            if not self.owner_address:
+                return None, "the run file names no listed_address for %s, so a Payer has no question to ask" % self.tester
+            return S.pay(T.PAYMENT_USD, chain=chain), "C1's question: a one-dollar transfer_stable to the listed address"
+        key = "UNISWAP_V3_%s" % chain.upper()
+        if key not in T.PINNED:
+            return S.trade("uniswap_v3", "", chain=chain), \
+                "D2's question on %s, which has no listed Uniswap router, so none is named" % chain
+        return S.trade("uniswap_v3", key, chain=chain), \
+            "D2's question: a five-dollar trade on uniswap_v3 for WETH with %s" % T.address(key)
+
+    def check_pact_hash_agrees(self, test: S.Test, step: S.Check, previous: Optional[Outcome]) -> Outcome:
+        """
+        A5, the one-hash check (Spec T2 §2). The Wallet's pact.policy_hash, then one
+        police.check_action as the agent the run is connected as, and Police's
+        judged.policy_hash read from allow, deny and hold alike. A5 compares hashes,
+        not verdicts.
+        """
         role = test.agent or "trader"
-        found = self.read_policy_hash(role, test.id)
-        answer = self.last_answer(test.id, "police.can_sign")
-        if found:
-            return Outcome(test, PASS, "can_sign printed the policy hash %s; compare it with the account page's mandate table by hand." % found, line="policy hash %s" % found)
-        return Outcome(test, FAIL, "can_sign printed no policy hash the harness could read.",
-                       self.evidence_block(test, "the answer names the pact and prints its policy hash", answer.quoted() if answer else "(no answer)", "MCP Police's can_sign", previous=previous), line="no policy hash read")
+        session = self.session(role, test.id)
+        wallet_hash = self.read_policy_hash(role, test.id)
+        chain = self.chain_of(role, test.id) or str(self.facts(role).get("chain") or "arbitrum")
+        action, asked = self.a5_question(role, chain)
+        if action is None:
+            return Outcome(test, FAIL, asked + ".", self.evidence_block(
+                test, "one check_action the agent's own role can ask", asked, "the harness itself (a fault, not a judgment)",
+                previous=previous, policy_hash=wallet_hash), line="no question asked; the Wallet says %s" % wallet_hash)
+        fields = action_fields(action, self.owner_address)
+        props = session.properties_of("police.check_action")
+        args, omitted = arguments_for(props, fields, self.call_facts(role))
+        answer = self.remember(test.id, "police.check_action", session.call("police.check_action", args, test.id))
+        data = answer.data if answer.data is not None else answer.text
+        police = classify_police(answer)
+        who = who_answered(answer, "police")
+
+        def block(expected: str, came_back: str) -> Dict[str, Any]:
+            out = self.evidence_block(test, expected, came_back, who["party"], reason=who.get("reason"),
+                                      sentence=who.get("sentence"), previous=previous, policy_hash=wallet_hash)
+            if omitted:
+                out["omitted_arguments"] = "the door's schema declared no field for: %s" % ", ".join(sorted(set(omitted)))
+            out["sent"] = fields
+            return out
+
+        if judged_in(data) is None:
+            return Outcome(test, FAIL, "Police's answer carried no judged block, so there is no hash to compare; its own words are quoted.",
+                           block("a judged block carrying the policy hash, whatever the verdict", answer.quoted()),
+                           line="%s; no judged block; the Wallet says %s" % (asked, wallet_hash))
+        police_hash = judged_policy_hash(data)
+        line = "%s; the Wallet says %s, Police judged under %s (verdict: %s)" % (asked, wallet_hash, police_hash, police["kind"])
+        if wallet_hash and police_hash and not hash_moved(wallet_hash, police_hash):
+            return Outcome(test, PASS, "the Wallet and Police carry one policy hash, %s, and Police's verdict was %s, which A5 does "
+                                       "not read; compare the hash with the account page's mandate table by hand." % (wallet_hash, police["kind"]),
+                           line=line)
+        if not wallet_hash:
+            said = "the Wallet stated no policy hash, so there is none to compare; Police judged under %s." % police_hash
+        elif not police_hash:
+            said = "Police's judged block carried no policy hash, so there is none to compare; the Wallet says %s." % wallet_hash
+        else:
+            said = "the two hashes differ: the Wallet's pact.policy_hash is %s and Police's judged.policy_hash is %s." % (wallet_hash, police_hash)
+        return Outcome(test, FAIL, said,
+                       block("one hash: wallet_status's pact.policy_hash and Police's judged.policy_hash",
+                             json.dumps({"wallet_status pact.policy_hash": wallet_hash,
+                                         "police judged.policy_hash": police_hash,
+                                         "verdict": police["kind"], "asked": asked}, indent=2)), line=line)
+
+    def check_wallet_names_its_chain(self, test: S.Test, step: S.Check, previous: Optional[Outcome]) -> Outcome:
+        """
+        A4's first half as the product stands (Spec T2 §4): wallet_status names the wallet's
+        own chain, which must be one of the three the product offers. It does not yet name
+        all three as rails — that is the Wallet's, under Spec 49 — so the absence of a `rails`
+        or `transfer_rails` field is a pass with a note naming Spec 49, and never a failure.
+        """
+        role = test.agent or "trader"
+        answer = self.wallet_status(role, test.id)
+        data = answer.data if answer.data is not None else answer.text
+        chain = self.chain_of(role, test.id)
+        rails = find_key(data, ["rails", "transfer_rails", "transferRails"]) if isinstance(data, (dict, list)) else None
+        who = who_answered(answer, "wallet")
+        line = "chain %s; rails %s" % (chain, json.dumps(rails) if rails is not None else "not stated")
+        if not chain:
+            return Outcome(test, FAIL, "wallet_status named no chain the harness could read.",
+                           self.evidence_block(test, "wallet_status names the wallet's own chain", answer.quoted(),
+                                               who["party"], sentence=who.get("sentence"), previous=previous), line=line)
+        if chain not in S.PRODUCT_CHAINS:
+            return Outcome(test, FAIL, chain_guard_sentence(self.label_for(role) or role, chain),
+                           self.evidence_block(test, "a chain the product offers: %s" % ", ".join(S.PRODUCT_CHAINS),
+                                               answer.quoted(), who["party"], sentence=who.get("sentence"), previous=previous), line=line)
+        if rails is None:
+            return Outcome(test, PASS_NOTE, "wallet_status names the wallet's own chain, %s; it states no rails, which is the "
+                                            "Wallet's under Spec 49, not the corridor's judgement." % chain,
+                           note={"expected": "a rails or transfer_rails field naming ethereum, arbitrum and base",
+                                 "got": "wallet_status names only the wallet's own chain, %s (Spec 49)" % chain}, line=line)
+        return Outcome(test, PASS, "wallet_status names the wallet's own chain, %s, and its rails: %s." % (chain, json.dumps(rails)), line=line)
 
     def check_balances_vs_chain(self, test: S.Test, step: S.Check, previous: Optional[Outcome]) -> Outcome:
+        """
+        A4's second half (Spec T2 §4). The native balance is read from the Wallet whatever
+        its JSON type — the Wallet sends a number, and asking for a string printed "None wei"
+        — and compared with the chain's own eth_getBalance. The ERC-20 balances are read from
+        the chain's RPC alone, because get_balances cannot state them, and the Wallet's own
+        sentence is quoted in a note pointing at Spec 49. This native comparison gates money
+        (Spec T2 §5); the notes do not.
+        """
         role = test.agent or "trader"
         facts = self.facts(role)
         answer = self.last_answer(test.id, "wallet.get_balances")
-        wallet_wei = find_key(answer.data, ["wei"], str) if answer and isinstance(answer.data, (dict, list)) else None
-        chain_name = str(facts.get("chain") or "arbitrum")
+        data = answer.data if answer is not None else None
+        wallet_wei = find_key(data, ["wei"]) if isinstance(data, (dict, list)) else None
+        stated = find_key(data, ["tokens", "erc20", "token_balances", "tokenBalances"], list) if isinstance(data, (dict, list)) else None
+        chain_name = self.chain_of(role, test.id) or str(facts.get("chain") or "arbitrum")
         rpc = self.chains.get(chain_name)
         if not rpc or not facts.get("address"):
-            return Outcome(test, PASS_NOTE, "the run file names no RPC for %s, so the Wallet's balances were not compared with the chain's." % chain_name, note={"expected": "a comparison", "got": "no RPC"})
+            self.a4_native_balance = None
+            return Outcome(test, PASS_NOTE, "the run file names no RPC for %s, so the Wallet's balances were not compared with the chain's." % chain_name,
+                           note={"expected": "a comparison with the chain", "got": "the run file names no RPC for %s" % chain_name},
+                           line="no RPC for %s" % chain_name)
         try:
             on_chain = rpc.native_balance(str(facts["address"]))
         except (HarnessError, Unreachable) as err:
-            return Outcome(test, PASS_NOTE, "the chain did not answer for the balance comparison: %s." % err, note={"expected": "a comparison", "got": str(err)})
+            self.a4_native_balance = None
+            return Outcome(test, PASS_NOTE, "the chain did not answer for the balance comparison: %s." % err,
+                           note={"expected": "a comparison with the chain", "got": str(err)}, line="the chain did not answer")
+        tokens = self.token_balances(rpc, str(facts["address"]))
+        erc20 = "the token balances were read from %s's own RPC: %s" % (
+            chain_name, ", ".join("%s %s" % (v, k) for k, v in sorted(tokens.items())) or "the run file names no token on this chain")
+        note = None
+        if not stated:
+            sentence = _sentence_in(data) if isinstance(data, (dict, list)) else None
+            note = {"expected": "get_balances states the ERC-20 balances",
+                    "got": "it does not (Spec 49); the Wallet said: \u201c%s\u201d" % (sentence or (answer.text[:400] if answer else "(no answer)"))}
+        if wallet_wei is None:
+            self.a4_native_balance = False
+            return Outcome(test, FAIL, "get_balances stated no native balance the harness could read; %s." % erc20,
+                           self.evidence_block(test, "a native balance to compare with the chain's eth_getBalance",
+                                               answer.quoted() if answer else "(no answer)", "the MCP Wallet",
+                                               previous=previous), note=note, line=erc20)
+        self.a4_native_balance = True
         said = "the Wallet says %s wei on %s; the chain says %d wei" % (wallet_wei, chain_name, on_chain)
-        if wallet_wei is not None and str(wallet_wei).isdigit() and int(wallet_wei) == on_chain:
-            return Outcome(test, PASS, said + "; they agree.", line=said)
-        return Outcome(test, PASS_NOTE, said + "; they are read at different moments and are quoted for comparison.", note={"expected": str(on_chain), "got": str(wallet_wei)}, line=said)
+        agree = str(wallet_wei).strip().isdigit() and int(str(wallet_wei).strip()) == on_chain
+        sentence = said + ("; they agree. " if agree else "; they are read at different moments and are quoted for comparison. ") + erc20 + "."
+        if agree and note is None:
+            return Outcome(test, PASS, sentence, line=said + "; " + erc20)
+        if note is None:
+            note = {"expected": str(on_chain) + " wei", "got": str(wallet_wei) + " wei"}
+        return Outcome(test, PASS_NOTE, sentence, note=note, line=said + "; " + erc20)
 
     def check_usage_delta(self, test: S.Test, step: S.Check, previous: Optional[Outcome]) -> Outcome:
         role = test.agent or "trader"
@@ -2408,18 +2763,27 @@ class Runner:
         walk = walks[0]
         receipt_hash = (walk.get("police") or {}).get("policy_hash")
         ticket_hash = (walk.get("build") or {}).get("policy_hash")
-        can_sign_hash = self.read_policy_hash(test.agent or "trader", test.id)
-        found = {"receipt": receipt_hash, "ticket": ticket_hash, "can_sign": can_sign_hash}
+        wallet_hash = self.read_policy_hash(test.agent or "trader", test.id)
+        found = {"receipt": receipt_hash, "ticket": ticket_hash, "wallet_status": wallet_hash}
         present = {k: v for k, v in found.items() if v}
         line = ", ".join("%s %s" % (k, v) for k, v in found.items())
         if len(present) == 3 and len(set(present.values())) == 1:
-            return Outcome(test, PASS, "the receipt, the ticket and can_sign carry one policy hash, %s; the engine's verdict on P0 and the account page are read by hand." % can_sign_hash, line=line)
+            return Outcome(test, PASS, "the receipt, the ticket and the Wallet's pact carry one policy hash, %s; the engine's verdict on P0 and the account page are read by hand." % wallet_hash, line=line)
         if len(set(present.values())) > 1:
-            return Outcome(test, FAIL, "the policy hashes differ: %s." % line, self.evidence_block(test, "one hash in the receipt, the ticket and can_sign", json.dumps(found, indent=2), "MCP Police's receipt and can_sign, and the MCP Wallet's ticket", previous=previous), line=line)
+            return Outcome(test, FAIL, "the policy hashes differ: %s." % line, self.evidence_block(test, "one hash in the receipt, the ticket and the Wallet's pact", json.dumps(found, indent=2), "MCP Police's receipt and the MCP Wallet's ticket and wallet_status", previous=previous), line=line)
         return Outcome(test, PASS_NOTE, "not every answer carried a policy hash the harness could read: %s." % line, None, {"expected": "three hashes", "got": line}, line=line)
 
     # -- evidence ---------------------------------------------------------------
+    def remember(self, test_id: str, tool: str, answer: McpAnswer) -> McpAnswer:
+        """The last answer each tool gave in each test, kept as received, so a later check reads
+        the door's own words rather than the redacted line written to the evidence file."""
+        self.answers["%s|%s" % (test_id, tool)] = answer
+        return answer
+
     def last_answer(self, test_id: str, tool: str) -> Optional[McpAnswer]:
+        remembered = self.answers.get("%s|%s" % (test_id, tool))
+        if remembered is not None:
+            return remembered
         for entry in reversed(self.folder.evidence):
             if entry.get("test_id") == test_id and entry.get("tool") == tool:
                 return McpAnswer(entry.get("http_status") or 0, entry.get("answer"), json.dumps(entry.get("answer"), ensure_ascii=False), entry.get("round_trip_ms") or 0)
@@ -2451,6 +2815,10 @@ class Runner:
         out: List[str] = []
         for session in self.sessions.values():
             out.extend(getattr(session, "secrets_seen", []) or [])
+        # Every answer a check quoted, whether or not it was part of a walk: A5's one
+        # check_action returns a receipt on an allow, and its evidence quotes the answer whole.
+        for answer in self.answers.values():
+            out.extend(secret_values(answer.body))
         for walks in self.walks.values():
             for walk in walks:
                 token = (walk.get("police") or {}).get("receipt")
@@ -2512,7 +2880,8 @@ class Runner:
         lines: List[str] = []
         lines.append("# Corridor harness run — %s — %s" % (self.tester, self.started_at))
         lines.append("")
-        lines.append("Spec T1, Series version 1.0 (13 September 2026). A failure below is evidence, not a verdict: the harness never guesses at a cause.")
+        lines.append("Spec T1 as amended by Spec T2 (14 September 2026); Series version 1.0 (13 September 2026), A4, A5 and A6 "
+                     "amended 14 September 2026. A failure below is evidence, not a verdict: the harness never guesses at a cause.")
         lines.append("")
         lines.append("## Summary")
         lines.append("")
@@ -2522,9 +2891,25 @@ class Runner:
             lines.append("**The series stopped at %s: %s. Nothing further was sent.**" % (self.stopped, self.stopped_reason))
         lines.append("")
         for role, facts in self.agents.items():
-            lines.append("- %s (%s): %s, wallet %s on %s. Policy hash at the start %s, at the end %s." % (
-                role, facts.get("label"), facts.get("name"), facts.get("address"), facts.get("chain"),
-                self.policy_hash_begin.get(role), self.policy_hash.get(role)))
+            pact = self.pacts.get(role) or {}
+            lines.append("- %s (%s): %s, role %s, wallet %s on %s. Pact %s, state %s, policy generation %s. "
+                         "Policy hash at the start %s, at the end %s (read from the MCP Wallet's wallet_status, pact.policy_hash)." % (
+                             role, facts.get("label"), facts.get("name"), facts.get("role_id"), facts.get("address"),
+                             self.chain_said.get(role) or facts.get("chain"),
+                             pact.get("pact_id") or facts.get("pact_id") or "not stated",
+                             pact.get("state") or "not stated",
+                             pact.get("policy_generation") if pact.get("policy_generation") is not None else "not stated",
+                             self.policy_hash_begin.get(role), self.policy_hash.get(role)))
+        series_a = next((o for o in self.outcomes if o.test.series == "A" and o.test.agent), None)
+        if series_a is not None:
+            ran_as = series_a.test.agent
+            lines.append("")
+            lines.append("Series A ran as %s, the run file's %s; the agent itself reported role %s." % (
+                self.label_for(ran_as), ran_as, self.facts(ran_as).get("role_id")))
+        lines.append("")
+        lines.append("What gates money (Spec T2 §5): A1, A2, A3, A5 and A4's native-balance check. A6 and A4's "
+                     "notes prove wording, not the corridor's judgement, and hold nothing back. This run: %s." %
+                     self.series_a_gate_said)
         moved = sum(w["action"].get("amount_usd", 0) for walks in self.walks.values() for w in walks if w.get("kind") == S.ALLOWED)
         lines.append("")
         lines.append("Total moved by allowed actions: %s dollars (the Series' figures, as sent)." % moved)
@@ -2623,6 +3008,21 @@ def count_word(text: str, word: str) -> int:
     return len(re.findall(re.escape(word), text, re.I))
 
 
+def counts_for(text: str, words: Sequence[str]) -> Dict[str, int]:
+    """How many times each word appears on one page: A6's count, word by word."""
+    return {word: count_word(text, word) for word in words}
+
+
+def fee_word_counts(text: str) -> Dict[str, int]:
+    """A6's pin (Spec T2 §3): the fee's own words, and never "basis points" on its own."""
+    return counts_for(text, S.FEE_WORDS)
+
+
+def fee_words_found(text: str) -> int:
+    """How many pinned fee words a page carries in all. A6 expects 0 on /guide, /account and tools/list."""
+    return sum(fee_word_counts(text).values())
+
+
 # ---------------------------------------------------------------------------
 # The command line (Spec T1 §8).
 # ---------------------------------------------------------------------------
@@ -2690,8 +3090,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         runner.session(args.consent, "consent")
         facts = runner.facts(args.consent)
         print("Connected as %s: %s (%s), wallet %s at %s on %s." % (label, facts.get("name"), facts.get("role_id"), facts.get("wallet_id"), facts.get("address"), facts.get("chain")))
+        for line in runner.consent_notes(args.consent):
+            print(line)
         hash_now = runner.read_policy_hash(args.consent, "consent")
-        print("Policy hash now: %s" % hash_now)
+        pact = runner.pacts.get(args.consent) or {}
+        print("Policy hash now: %s (the Wallet's wallet_status, pact.policy_hash). Pact %s, state %s, policy generation %s." % (
+            hash_now, pact.get("pact_id") or "not stated", pact.get("state") or "not stated",
+            pact.get("policy_generation") if pact.get("policy_generation") is not None else "not stated"))
         print("Evidence: %s" % os.path.join(folder.path, "evidence.jsonl"))
         return 0
 

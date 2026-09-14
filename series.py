@@ -234,6 +234,24 @@ OTHER_SENTENCES: List[Dict[str, str]] = [
     },
 ]
 
+# A6 pins the fee, not the word (Spec T2 §3). The phrase "basis points" is NOT here:
+# MCP Police's check_action schema uses it for `slippage_bps` ("Declared maximum
+# slippage, in basis points") and `price_deviation_bps`, and neither is the fee, so
+# counting it made A6 fail on the corridor's own tool list. Each of these is the fee
+# itself, and "fee" is counted as a whole word: `sweepTokenWithFee`, `fee_recipient`
+# and `feeRecipient` carry it with a word character on one side, so each is pinned
+# in its own right.
+FEE_WORDS: Sequence[str] = ("fee", "0.05%", "five basis points", "5 bps", "sweepTokenWithFee",
+                            "fee_recipient", "feeRecipient")
+
+# The chains the product offers (Spec T2 §6). An agent whose wallet is on any other
+# chain is refused every money series, in the sentence the harness gives.
+PRODUCT_CHAINS = ("ethereum", "arbitrum", "base")
+
+# The role each label's agent must report, by the key the run file files it under
+# (Spec T2 §9). A2 reads the role the agent itself states against this.
+ROLE_IDS = {"trader": "trader.v1", "payer": "payer.v1", "payer_nogas": "payer.v1"}
+
 # The B3 lines a pause reads aloud, keys into tables.py in the Series' order.
 B3_LINES = [
     ("Uniswap SwapRouter02 on Ethereum and Arbitrum", "UNISWAP_V3_ARBITRUM"),
@@ -310,8 +328,8 @@ TESTS: List[Test] = [
         rule="Proves the connector acts for exactly one agent (Rule 17, Rule 21).",
         text="**A2. Claude connects as one agent.** In Claude, with AER Connect connected as the Trader, ask: *\"Which agent are you?\"* Claude calls `my_agent` and answers with the agent's name, role Trader, wallet id, address and chain, and the caps written on its policy entry. It names no other agent. Proves the connector acts for exactly one agent (Rule 17, Rule 21). Evidence: the answer.",
         says="Which agent are you?",
-        steps=[Check("my_agent_facts", {"role": "trader"})],
-        where="Answered by AER Connect's own tool aerconnect_my_agent (services/mcprelay.ts, myAgentAnswer) under Rule 17 and Rule 21",
+        steps=[Check("my_agent_facts")],
+        where="Answered by AER Connect's own tool aerconnect_my_agent (services/mcprelay.ts, myAgentAnswer) under Rule 17 and Rule 21; the role is read against the label the run file gives this agent (Spec T2 §9)",
     ),
     Test(
         id="A3", series="A", who=HARNESS, agent="trader", title="The guide is inside the MCP",
@@ -332,28 +350,28 @@ TESTS: List[Test] = [
     Test(
         id="A4", series="A", who=HARNESS, agent="trader", title="The Wallet names its rails",
         rule="Proves Rule 18.",
-        text="**A4. The Wallet names its rails.** Ask Claude: *\"What chains can your wallet reach, and what are my balances?\"* Claude calls `wallet_status` and `get_balances`; the answer names Ethereum, Arbitrum and Base as rails, and reads balances on each chain the wallet is on. Proves Rule 18. Evidence: the answer, compared with the block explorer's balances.",
+        text="**A4. The Wallet names its rails.** Ask Claude: *\"What chains can your wallet reach, and what are my balances?\"* Claude calls `wallet_status` and `get_balances`. `wallet_status` names the wallet's own chain, which must be one of ethereum, arbitrum and base; it does not yet name all three as rails, so a missing `rails` or `transfer_rails` field is a pass with a note pointing at Spec 49, not a failure. The native balance the Wallet states is compared with the chain's own `eth_getBalance`, whether the Wallet sends it as a JSON number or as a string. The ERC-20 balances are read from the chain's own RPC alone, because `get_balances` cannot yet state them (Spec 49), and the Wallet's own sentence is quoted in a note. Proves Rule 18. Evidence: the answer, compared with the chain's balances.",
         says="What chains can your wallet reach, and what are my balances?",
         steps=[
-            Call("wallet.wallet_status", {"wallet_id": "<wallet id>"}, ["ethereum", "arbitrum", "base"], label="rails"),
+            Check("wallet_names_its_chain"),
             Call("wallet.get_balances", {"wallet_id": "<wallet id>"}, ["wallet"], label="balances"),
             Check("balances_vs_chain"),
         ],
-        where="Answered by the MCP Wallet's wallet_status and get_balances under Rule 18; compared with the chains' own eth_getBalance",
+        where="Answered by the MCP Wallet's wallet_status and get_balances under Rule 18 as Spec 49 leaves them; the native balance is compared with the chain's own eth_getBalance and the token balances are read from the chain alone",
     ),
     Test(
-        id="A5", series="A", who=HARNESS, agent="trader", title="Police knows the pact and its hash",
+        id="A5", series="A", who=HARNESS, agent="trader", title="The Wallet and Police agree on the pact's hash",
         rule="Proves Rule 4, one pact one hash.",
-        text="**A5. Police knows the pact and its hash.** Ask Claude: *\"Can you sign right now, and under which policy?\"* Claude calls `can_sign` or `assignment_status`; the answer names the pact and prints its policy hash. The same hash appears in the account page's mandate table for that agent. Proves Rule 4, one pact one hash. Evidence: the two hashes side by side.",
-        says="Can you sign right now, and under which policy?",
-        steps=[Check("policy_hash_present")],
-        where="Answered by MCP Police's can_sign under Rule 4; the account page's mandate table is compared by hand (the harness does not read the account page, Spec T1 §9)",
+        text="**A5. The Wallet and Police agree on the pact's hash.** Ask Claude: *\"Which policy are you signing under right now?\"* MCP Police carries no tool called `can_sign`, so the hash is read from the Wallet: `wallet_status` states it as `pact.policy_hash`. The harness then makes one `check_action` as the agent the run is connected as, with a question that fits its role and its own chain — a Payer asks C1's, a one-dollar `transfer_stable` to the listed address; a Trader asks D2's, a five-dollar `trade` on `uniswap_v3` for WETH with the listed router — and reads `judged.policy_hash` from Police's answer whatever the verdict: allow, deny and hold all carry it. The two hashes are the same string. A5 compares hashes, not verdicts, and fails in Police's own words where the answer carries no `judged` block. The same hash appears in the account page's mandate table for that agent. Proves Rule 4, one pact one hash. Evidence: the two hashes side by side. Cost: one metered `check_action` unit.",
+        says="Which policy are you signing under right now?",
+        steps=[Check("pact_hash_agrees")],
+        where="Answered by the MCP Wallet's wallet_status (pact.policy_hash) and MCP Police's check_action (judged.policy_hash) under Rule 4; the account page's mandate table is compared by hand (the harness does not read the account page, Spec T1 §9)",
     ),
     Test(
         id="A6", series="A", who=HARNESS, agent="trader", title="The fee address is configured, and is not advertised",
         rule="Proves the ruling of 13 September on the fee.",
-        text="**A6. The fee address is configured, and is not advertised.** Albert, on Virginia: the Wallet's environment carries `AGENT_TRADE_FEE_BPS=5` and the fee address. From any computer: `/guide`, `/account` and the tool list carry no \"fee\", \"basis points\" or \"0.05%\"; `/terms` states the trading fee. Proves the ruling of 13 September on the fee. Evidence: grep counts (guide 0, terms at least 1).",
-        steps=[Grep(pages=["/guide", "/account", "tools/list"], absent=["fee", "basis points", "0.05%"],
+        text="**A6. The fee address is configured, and is not advertised.** Albert, on Virginia: the Wallet's environment carries `AGENT_TRADE_FEE_BPS=5` and the fee address. From any computer: `/guide`, `/account` and the tool list carry none of \"fee\" as a whole word, \"0.05%\", \"five basis points\", \"5 bps\", \"sweepTokenWithFee\", \"fee_recipient\" or \"feeRecipient\"; `/terms` states the trading fee. \"basis points\" on its own is not counted: MCP Police's `check_action` schema uses the phrase for `slippage_bps` and `price_deviation_bps`, and neither is the fee. Proves the ruling of 13 September on the fee. Evidence: grep counts (guide 0, account 0, tool list 0, terms at least 1).",
+        steps=[Grep(pages=["/guide", "/account", "tools/list"], absent=FEE_WORDS,
                     present_on={"/terms": ["trading fee"]})],
         where="Answered by the connector's public pages and tools/list under the fee ruling of 13 September 2026 (Spec 38); the Wallet's environment on Virginia is Albert's half",
     ),
@@ -373,7 +391,7 @@ TESTS: List[Test] = [
         steps=[Pause("Open Set limits for the Trader, clear the choice between 'a list for this agent only' and 'one list for all my agents', press Save, and read the page's sentence; then press Enter.",
                      agent="trader", hash_moves=False, ask="Type the sentence the page said, exactly:",
                      expect_words=["Say whether this list is for this agent only or for all your agents", "Nothing was sent"])],
-        where="Answered by the limits form on the page (pages/agentform.ts) under Rule 2; the hash is read from MCP Police's can_sign",
+        where="Answered by the limits form on the page (pages/agentform.ts) under Rule 2; the hash is read from the MCP Wallet's wallet_status",
     ),
     Test(
         id="B2", series="B", who=PAUSE, agent="trader", title="A wrong address is refused naming the line",
@@ -382,7 +400,7 @@ TESTS: List[Test] = [
         steps=[Pause("Open Set limits for the Trader, add a line reading 0x1234 to the destination list, press Save with your passkey, and read the refusal; then press Enter.",
                      agent="trader", hash_moves=False, ask="Type the refusal's sentence, exactly:",
                      expect_words=["0x1234"])],
-        where="Answered by the access platform through the limits form under Rule 5 and Rule 13; the hash is read from MCP Police's can_sign",
+        where="Answered by the access platform through the limits form under Rule 5 and Rule 13; the hash is read from the MCP Wallet's wallet_status",
     ),
     Test(
         id="B3", series="B", who=PAUSE, agent="trader", title="The Trader's list",
@@ -390,7 +408,7 @@ TESTS: List[Test] = [
         text="**B3. The Trader's list.** For the Trader, write exactly these lines and save: Uniswap SwapRouter02 on Ethereum and Arbitrum `0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45`, Uniswap on Base `0x2626664c2603336E57B271c5C0b26F421741e481`, PancakeSwap SmartRouter on Ethereum `0x13f4EA83D0bd40E75C8222255bc855a974568Dd4`, on Arbitrum `0x32226588378236Fd0c7c4053999F88aC0e5cAc77`, on Base `0x678Aa4bF4E210cf2166753e054d5b7c31cc7fa86`, Circle CCTP TokenMessengerV2 `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d`, Tether USDT0 on Ethereum `0x6C96dE32CEa08842dcc4058c14d3aaAD7Fa41dee` and on Arbitrum `0x14E4A1B13bf7F943c8ff7C51fb60FA964A298D92`. Choose \"a list for this agent only\". The save succeeds, the hash moves, and within a minute Claude's `can_sign` prints the new hash. Proves Rule 9 (the mirror refreshes) and Rule 4. Evidence: old hash, new hash, the minute.",
         steps=[Pause("Open Set limits for the Trader, write exactly the eight lines the harness prints below into the destination list, choose 'a list for this agent only', and save with your passkey; then press Enter.",
                      agent="trader", hash_moves=True)],
-        where="Answered by MCP Police's can_sign under Rule 9 and Rule 4",
+        where="Answered by the MCP Wallet's wallet_status under Rule 9 and Rule 4",
     ),
     Test(
         id="B4", series="B", who=PAUSE, agent="payer", title="The Payer's list",
@@ -398,7 +416,7 @@ TESTS: List[Test] = [
         text="**B4. The Payer's list.** For the Payer, write one line: the owner's own wallet address (Victor's listed destination `0xfec697fc2D4323aE7618BFF2347C01E29653FB57`, and Eitan's equivalent). Choose \"one list for all my agents\" for one tester and \"a list for this agent only\" for the other, so both answers are exercised. Proves Rule 5. Evidence: the mandate table reading the list back (Rule 21).",
         steps=[Pause("Open Set limits for the Payer, write one line — the owner's listed address the harness prints below — choose the list scope the run file names for this tester, and save with your passkey; then press Enter.",
                      agent="payer", hash_moves=True)],
-        where="Answered by MCP Police's can_sign under Rule 5; the mandate table is read by hand (Rule 21)",
+        where="Answered by the MCP Wallet's wallet_status under Rule 5; the mandate table is read by hand (Rule 21)",
     ),
     Test(
         id="B5", series="B", who=PAUSE, agent="payer", title="The template is a floor the owner narrows",
@@ -736,7 +754,7 @@ TESTS: List[Test] = [
         rule="Proves Rule 4.",
         text="**F4. One hash everywhere.** For one allowed trade (D2), the policy hash in Police's receipt, in the Wallet's ticket, in the engine's verdict (Albert reads it on P0) and on the account page are the same string. Proves Rule 4. Evidence: the four hashes.",
         steps=[Check("one_hash_everywhere", {"test": "D2"})],
-        where="Answered by MCP Police's receipt, the MCP Wallet's ticket and Police's can_sign under Rule 4; the engine's verdict on P0 and the account page are read by hand",
+        where="Answered by MCP Police's receipt, the MCP Wallet's ticket and the Wallet's wallet_status under Rule 4; the engine's verdict on P0 and the account page are read by hand",
     ),
     Test(
         id="F5", series="F", who=PERSON, title="The engine judged the bytes", rule="Proves Rule 14 and E2's parser.",

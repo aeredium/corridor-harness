@@ -67,11 +67,26 @@ class SeriesIdsTest(unittest.TestCase):
         self.assertEqual(S.BY_ID["D13"].figure_usd, 12)
         self.assertEqual(S.BY_ID["C4"].figure_usd, 25)
 
+    def test_the_fixture_says_it_is_amended(self):
+        self.assertIn("**Amended 14 September 2026: A4, A5, A6 (Spec T2).**", self.document)
+
     def test_the_original_in_downloads_agrees_if_present(self):
+        """The fixture is the Series as amended (Spec T2 §8): the three amended paragraphs are the
+        only bytes that changed, and every other paragraph of the original is still in it verbatim."""
         if not os.path.exists(ORIGINAL):
             self.skipTest("the Series document is not in ~/Downloads on this machine")
-        self.assertEqual(ids_in(read(ORIGINAL)), self.document_ids)
-        self.assertEqual(read(ORIGINAL), self.document, "the fixture is a byte-for-byte copy of the Series")
+        original = read(ORIGINAL)
+        self.assertEqual(ids_in(original), self.document_ids, "no test id was added, removed or moved")
+        amended, kept = [], 0
+        for paragraph in original.split("\n\n"):
+            if paragraph.startswith(("**A4.", "**A5.", "**A6.")):
+                amended.append(paragraph)
+                self.assertNotIn(paragraph, self.document, "an amended paragraph was left unamended")
+            else:
+                kept += 1
+                self.assertIn(paragraph, self.document, "the fixture changed a paragraph Spec T2 did not amend")
+        self.assertEqual(len(amended), 3, "A4, A5 and A6 are the three paragraphs amended")
+        self.assertGreater(kept, 60)
 
 
 if __name__ == "__main__":

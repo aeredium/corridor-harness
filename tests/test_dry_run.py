@@ -60,9 +60,9 @@ class DryRunTest(unittest.TestCase):
         e1 = [l for l in lines if l.startswith("E1 — tools/call police.check_action")][0]
         self.assertIn('"action": "bridge_stable"', e1)
         self.assertIn('"to_chain": "base"', e1)
-        # every pause is printed, with the can_sign that follows it
+        # every pause is printed, with the wallet_status that follows it
         self.assertTrue(any(l.startswith("C5 — [pause]") for l in lines))
-        self.assertTrue(any(l.startswith("C5 — tools/call police.can_sign") for l in lines))
+        self.assertTrue(any(l.startswith("C5 — tools/call wallet.wallet_status") for l in lines))
         self.assertTrue(any(l.startswith("B3 — [pause]") for l in lines))
         # A1 is plain HTTP
         self.assertTrue(any(l.startswith("A1 — POST https://mcppro.aeredium.io/mcp (no bearer) → expect 401") for l in lines))
@@ -70,6 +70,45 @@ class DryRunTest(unittest.TestCase):
         self.assertTrue(any(l.startswith("C8 — tools/call") for l in lines))
         self.assertTrue(any(l.startswith("E3 — tools/call") for l in lines))
         self.assertFalse(any("STOP" in l for l in lines))
+
+    def test_the_hash_is_read_from_the_wallet_and_never_from_can_sign(self):
+        """Spec T2 §1: MCP Police carries no tool called can_sign, so no dry line names one."""
+        lines = h.dry_lines(["A", "B", "C", "D", "E"])
+        self.assertEqual([l for l in lines if "can_sign" in l], [])
+        series_a = [l for l in lines if l[:2] in ("A1", "A2", "A3", "A4", "A5", "A6")]
+        self.assertTrue(any("wallet.wallet_status" in l for l in series_a),
+                        "Series A reads the hash from the Wallet")
+        # every pause that reads a hash reads it from the Wallet
+        pauses = [l for l in lines if "confirm pact.policy_hash" in l]
+        self.assertTrue(pauses)
+        for line in pauses:
+            self.assertIn("tools/call wallet.wallet_status", line)
+
+    def test_a5_asks_police_exactly_once(self):
+        """Spec T2 §2: A5 reads the Wallet's hash, then makes ONE check_action, and compares hashes."""
+        a5 = [l for l in h.dry_lines(["A"]) if l.startswith("A5 — ")]
+        self.assertEqual(len([l for l in a5 if "police.check_action" in l]), 1, a5)
+        self.assertEqual(len([l for l in a5 if "wallet.wallet_status" in l]), 1, a5)
+        self.assertTrue(any("pact.policy_hash" in l for l in a5), a5)
+        self.assertTrue(any("judged.policy_hash" in l and "whatever the verdict" in l for l in a5), a5)
+
+    def test_a4_reads_the_chain_and_the_tokens_as_the_product_stands(self):
+        """Spec T2 §4: wallet_status names the wallet's own chain; the tokens come from the RPC."""
+        a4 = [l for l in h.dry_lines(["A"]) if l.startswith("A4 — ")]
+        self.assertTrue(any("wallet.wallet_status" in l and "ethereum, arbitrum, base" in l for l in a4), a4)
+        self.assertTrue(any("Spec 49" in l for l in a4), a4)
+        self.assertFalse(any('expect words ["ethereum", "arbitrum", "base"]' in l for l in a4),
+                         "A4 no longer demands three rails from a Wallet that names one chain")
+
+    def test_a6_counts_the_fee_and_not_the_phrase_basis_points(self):
+        """Spec T2 §3: the pin is the fee's own words."""
+        a6 = [l for l in h.dry_lines(["A"]) if l.startswith("A6 — ")]
+        self.assertEqual(len([l for l in a6 if "(expect 0)" in l]), 3, a6)
+        for line in a6:
+            if "(expect 0)" in line:
+                self.assertIn("sweepTokenWithFee", line)
+                self.assertIn("feeRecipient", line)
+                self.assertNotIn('"basis points"', line)
 
     def test_no_amount_above_the_series_figures(self):
         for test in S.TESTS:
