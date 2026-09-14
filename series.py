@@ -244,6 +244,14 @@ OTHER_SENTENCES: List[Dict[str, str]] = [
 FEE_WORDS: Sequence[str] = ("fee", "0.05%", "five basis points", "5 bps", "sweepTokenWithFee",
                             "fee_recipient", "feeRecipient")
 
+# The series that walk the corridor with money, which the chain guard refuses whole for
+# an agent on a chain the product does not offer (Spec T2 §6). Series B is the owner's
+# road: its form and list tests stand whatever chain the wallet is on, save B8, which
+# walks the corridor and is caught by its own moves_money flag. Series A moves nothing
+# and always runs. F reads back what the money series did; where they did not run, its
+# checks say so in their own words.
+MONEY_SERIES = ("C", "D", "E", "H")
+
 # The chains the product offers (Spec T2 §6). An agent whose wallet is on any other
 # chain is refused every money series, in the sentence the harness gives.
 PRODUCT_CHAINS = ("ethereum", "arbitrum", "base")

@@ -56,6 +56,22 @@ class FeePinTest(unittest.TestCase):
             self.assertEqual(h.fee_word_counts(carrier)["fee"], 0, carrier)
             self.assertEqual(h.fee_words_found(carrier), 1, carrier)
 
+    def test_the_fee_is_caught_inside_a_longer_identifier(self):
+        """Only `fee` is a whole word; the rest are counted as written, wherever they sit."""
+        self.assertEqual(h.count_fee_word("sweepTokenWithFeeAndUnwrap", "sweepTokenWithFee"), 1)
+        self.assertEqual(h.count_fee_word("feeRecipientAddress", "feeRecipient"), 1)
+        self.assertEqual(h.count_fee_word("fee_recipient_address", "fee_recipient"), 1)
+        self.assertEqual(h.fee_words_found('{"feeRecipientAddress": "0x…"}'), 1)
+
+    def test_a_figure_is_not_counted_inside_a_longer_figure(self):
+        """`5 bps` is the fee; the `15 bps` of a slippage cap is the prose A6 stopped counting."""
+        self.assertEqual(h.count_fee_word("a 15 bps slippage cap", "5 bps"), 0)
+        self.assertEqual(h.count_fee_word("a 2.5 bps cap", "5 bps"), 0)
+        self.assertEqual(h.count_fee_word("a 5 bps cut", "5 bps"), 1)
+        self.assertEqual(h.count_fee_word("price is 10.05% today", "0.05%"), 0)
+        self.assertEqual(h.count_fee_word("a 0.05% cut", "0.05%"), 1)
+        self.assertEqual(h.fee_words_found("Declared maximum slippage, 15 bps, in basis points"), 0)
+
     def test_the_phrase_basis_points_alone_is_no_longer_pinned(self):
         self.assertNotIn("basis points", S.FEE_WORDS)
         self.assertEqual(h.fee_words_found("Declared maximum slippage, in basis points"), 0)

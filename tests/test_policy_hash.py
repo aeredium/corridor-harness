@@ -34,9 +34,9 @@ def answer_from(name):
 
 class HashReaderTest(unittest.TestCase):
     def test_the_recorded_wallet_status_answer_states_the_hash(self):
-        answer = answer_from("wallet-status-eitan.json")
-        self.assertEqual(h.wallet_policy_hash(answer.data), EITAN)
-        self.assertTrue(EITAN.startswith("0x5237c7e1"))
+        found = h.wallet_policy_hash(answer_from("wallet-status-eitan.json").data)
+        self.assertTrue(found.startswith("0x5237c7e1"), found)
+        self.assertEqual(found, EITAN)
 
     def test_the_pact_is_read_whole(self):
         pact = h.wallet_pact(answer_from("wallet-status-eitan.json").data)
@@ -56,6 +56,11 @@ class HashReaderTest(unittest.TestCase):
     def test_get_balances_is_the_second_source(self):
         balances = {"wallet_id": "w-1", "pact_budget": {"id": "p-1", "policy_hash": EITAN, "spent_usd": 0}}
         self.assertEqual(h.wallet_policy_hash(balances), EITAN)
+
+    def test_a_stray_transaction_hash_is_not_the_policy_hash(self):
+        """The fallback reads a hash named for the policy, never a bare `hash` key (Spec T2 §1)."""
+        self.assertIsNone(h.wallet_policy_hash({"pact": {"id": "p-1"}, "last_tx": {"hash": "0x" + "ab" * 32}}))
+        self.assertEqual(h.wallet_policy_hash({"policy_hash": EITAN}), EITAN, "a flat policy_hash is still read")
 
     def test_a_wallet_that_states_no_hash_reads_as_none(self):
         self.assertIsNone(h.wallet_policy_hash({"wallet_id": "w-1", "chain": "arbitrum"}))
@@ -124,6 +129,38 @@ class SecondSourceTest(unittest.TestCase):
         runner = runner_for(session, self.tmp)
         runner.session("trader", "A5")
         self.assertIsNone(runner.read_policy_hash("trader", "A5"))
+
+
+class PauseWithNoHashTest(unittest.TestCase):
+    """A hash the Wallet never stated proves nothing about whether the mandate moved (Spec T2 §1)."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_a_pause_never_passes_on_two_hashes_that_were_never_read(self):
+        import series as S
+        # B1 expects the hash NOT to move; with no hash at all, None == None would have read
+        # as "it did not move" and passed without proving anything.
+        session = FakeSession(role_id="trader.v1", pact_in_status=False, policy_hash=None)
+        runner = runner_for(session, self.tmp)
+        outcome = runner.run_test(S.BY_ID["B1"])
+        self.assertEqual(outcome.outcome, h.FAIL, outcome.sentence)
+        self.assertIn("stated no policy hash", outcome.sentence)
+        self.assertFalse(h.hash_moved(None, None), "None against None still reads as unmoved, which is why it is caught earlier")
+
+    def test_a_pause_still_reads_a_hash_the_wallet_does_state(self):
+        import series as S
+        session = FakeSession(role_id="trader.v1")
+        runner = runner_for(session, self.tmp)
+        outcome = runner.run_test(S.BY_ID["B1"])
+        # Nobody was at the terminal to type the page's sentence, so B1 is a pass with a note;
+        # what matters here is that the hash half read the Wallet and did not fail.
+        self.assertIn(outcome.outcome, (h.PASS, h.PASS_NOTE), outcome.sentence)
+        self.assertIn("the policy hash did not move", outcome.sentence)
+        self.assertIn(EITAN, outcome.sentence)
 
 
 class OneHashEverywhereTest(unittest.TestCase):

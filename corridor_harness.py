@@ -618,7 +618,9 @@ def wallet_pact(obj: Any) -> Dict[str, Any]:
     block = pact_in(obj)
     found = find_key(block, ["policy_hash", "policyHash"], str) if block else None
     if not (isinstance(found, str) and found):
-        found = find_policy_hash(obj)
+        # A Wallet that states the hash outside a pact block is still read — but only under a
+        # name that means the policy, never a bare `hash`, which is some transaction's.
+        found = find_key(obj, ["policy_hash", "policyHash", "policy_document_hash", "pact_hash"], str)
     return {
         "policy_hash": found if isinstance(found, str) and found else None,
         "pact_id": find_key(block, ["id", "pact_id", "pactId"], str) if block else None,
@@ -1404,8 +1406,17 @@ class ChainRpc:
             raise HarnessError("%s %s refused: %s" % (self.name, method, json.dumps(parsed["error"])))
         return parsed.get("result")
 
+    def quantity(self, method: str, result: Any) -> int:
+        """A hex quantity, or a fault named in words. A door that answers null must not end the run."""
+        if not isinstance(result, str):
+            raise HarnessError("%s %s answered %r, which is not a hex quantity" % (self.name, method, result))
+        try:
+            return int(result, 16)
+        except ValueError:
+            raise HarnessError("%s %s answered %r, which is not a number" % (self.name, method, result[:80]))
+
     def block_number(self) -> int:
-        return int(self.call("eth_blockNumber", []), 16)
+        return self.quantity("eth_blockNumber", self.call("eth_blockNumber", []))
 
     def transaction(self, tx_hash: str) -> Optional[Dict[str, Any]]:
         return self.call("eth_getTransactionByHash", [tx_hash])
@@ -1424,15 +1435,18 @@ class ChainRpc:
             sleep(3)
 
     def native_balance(self, address: str) -> int:
-        return int(self.call("eth_getBalance", [address, "latest"]), 16)
+        return self.quantity("eth_getBalance", self.call("eth_getBalance", [address, "latest"]))
 
     def eth_call(self, to: str, data: str) -> str:
-        return str(self.call("eth_call", [{"to": to, "data": data}, "latest"]))
+        result = self.call("eth_call", [{"to": to, "data": data}, "latest"])
+        if not isinstance(result, str):
+            raise HarnessError("%s eth_call to %s answered %r, which is not hex" % (self.name, short(to), result))
+        return result
 
     def token_balance(self, token: str, holder: str) -> int:
         data = selector("balanceOf(address)") + holder.lower().replace("0x", "").rjust(64, "0")
         result = self.eth_call(token, data)
-        return int(result, 16) if result not in ("0x", "") else 0
+        return self.quantity("balanceOf", result) if result not in ("0x", "") else 0
 
     def token_symbol(self, token: str) -> str:
         try:
@@ -1451,7 +1465,7 @@ class ChainRpc:
     def token_decimals(self, token: str) -> Optional[int]:
         try:
             result = self.eth_call(token, selector("decimals()"))
-            return int(result, 16) if result not in ("0x", "") else None
+            return self.quantity("decimals", result) if result not in ("0x", "") else None
         except (HarnessError, Unreachable, ValueError):
             return None
 
@@ -1715,7 +1729,7 @@ class Runner:
             try:
                 out[symbol] = format_units(rpc.token_balance(token, address),
                                            rpc.token_decimals(token) or T.DECIMALS.get(symbol, 6))
-            except (HarnessError, Unreachable) as err:
+            except (HarnessError, Unreachable, ValueError, TypeError) as err:
                 out[symbol] = "not read (%s)" % err
         return out
 
@@ -1781,6 +1795,12 @@ class Runner:
             missing.append("A4's native-balance check fail")
         if missing:
             return False, "; ".join(missing)
+        if self.a4_native_balance is None:
+            # It could not be made — no RPC for the agent's chain, or the chain did not answer.
+            # That is not a failure of the corridor and does not hold money back, but the report
+            # must never say it passed.
+            return True, ("A1, A2, A3 and A5 passed; A4's native-balance check could not be made, which holds "
+                          "nothing back; A6 and A4's notes gate nothing")
         return True, "A1, A2, A3, A5 and A4's native-balance check passed; A6 and A4's notes gate nothing"
 
     def report_line(self, outcome: Outcome) -> str:
@@ -1802,10 +1822,11 @@ class Runner:
                            line="held back by Series A: %s" % self.series_a_gate_said)
         if test.agent:
             self.session(test.agent, test.id)
-        if test.moves_money:
+        if test.agent and (test.moves_money or test.series in S.MONEY_SERIES):
             guard = self.chain_guard(test.agent, test.id)
             if guard:
                 return Outcome(test, SKIPPED, guard, line=guard)
+        if test.moves_money:
             self.snapshot_balances(test.agent, before=True)
         previous = self.outcomes[-1] if self.outcomes else None
         outcome = self.run_steps(test, previous)
@@ -2000,7 +2021,8 @@ class Runner:
                 texts[page] = answer.text
         problems: List[str] = []
         for page in step.pages:
-            counts[page] = counts_for(texts[page], step.absent)
+            # The words a page must NOT carry are A6's fee pin, counted by A6's rule.
+            counts[page] = counts_for(texts[page], step.absent, count_fee_word)
             for word, n in counts[page].items():
                 if n:
                     problems.append("%s carries %r %d time(s)" % (page, word, n))
@@ -2049,6 +2071,16 @@ class Runner:
         sentence = "the owner did: %s" % step.text
         evidence = None
         note = None
+        if step.hash_moves is not None and before is None:
+            # hash_moved(None, None) is False, which would have read as "it did not move" and
+            # passed B1 and B2 without proving anything. A hash never stated is a failure to read.
+            answer = self.last_answer(test.id, "wallet.wallet_status")
+            return Outcome(test, FAIL, "the Wallet stated no policy hash before this step, so whether the mandate "
+                                       "moved could not be read.",
+                           self.evidence_block(test, "wallet_status states pact.policy_hash before and after the save",
+                                               answer.quoted() if answer else "(no answer)",
+                                               "the MCP Wallet's wallet_status", previous=previous),
+                           line="no policy hash to compare")
         if step.hash_moves is not None:
             after, moved = self.wait_for_hash(role, before, test.id, want_change=step.hash_moves)
             if moved is None:
@@ -2562,8 +2594,9 @@ class Runner:
             return Outcome(test, PASS_NOTE, "the chain did not answer for the balance comparison: %s." % err,
                            note={"expected": "a comparison with the chain", "got": str(err)}, line="the chain did not answer")
         tokens = self.token_balances(rpc, str(facts["address"]))
+        said = [("%s %s" % (k, v)) if v.startswith("not read") else ("%s %s" % (v, k)) for k, v in sorted(tokens.items())]
         erc20 = "the token balances were read from %s's own RPC: %s" % (
-            chain_name, ", ".join("%s %s" % (v, k) for k, v in sorted(tokens.items())) or "the run file names no token on this chain")
+            chain_name, ", ".join(said) or "the run file names no token on this chain")
         note = None
         if not stated:
             sentence = _sentence_in(data) if isinstance(data, (dict, list)) else None
@@ -2874,6 +2907,8 @@ class Runner:
 
     # -- the report (Spec T1 §6) ------------------------------------------------
     def report(self) -> str:
+        # A note quotes a door's own words, so it is scrubbed exactly as an evidence block is.
+        secrets_ = self.secrets()
         counts: Dict[str, int] = {}
         for o in self.outcomes:
             counts[o.outcome] = counts.get(o.outcome, 0) + 1
@@ -2943,8 +2978,8 @@ class Runner:
                 lines.append("Outcome, written by the person: ____________________________________________")
             if o.note:
                 lines.append("")
-                lines.append("Note — expected: “%s”" % o.note.get("expected"))
-                lines.append("Note — got: “%s”" % o.note.get("got"))
+                lines.append("Note — expected: “%s”" % redact(o.note.get("expected"), secrets_))
+                lines.append("Note — got: “%s”" % redact(o.note.get("got"), secrets_))
             if o.evidence:
                 lines.extend(self.render_evidence(o.evidence))
         notes = [o for o in self.outcomes if o.outcome == PASS_NOTE and o.note]
@@ -2954,12 +2989,14 @@ class Runner:
         if not notes:
             lines.append("None.")
         for o in notes:
-            lines.append("- %s: expected “%s”; got “%s”" % (o.test.id, o.note.get("expected"), o.note.get("got")))
+            lines.append("- %s: expected “%s”; got “%s”" % (o.test.id, redact(o.note.get("expected"), secrets_),
+                                                            redact(o.note.get("got"), secrets_)))
         if self.refusals:
             lines.append("")
             lines.append("Refusals collected in C, D and E against Guide section 10:")
             for r in self.refusals:
-                lines.append("- %s (%s, %s): “%s” — %s" % (r["test"], r["kind"], r["who"], r["sentence"], ("matches: " + r["guide_match"]) if r["guide_match"] else "not in section 10; note for version 1.2"))
+                lines.append("- %s (%s, %s): “%s” — %s" % (r["test"], r["kind"], r["who"], redact(r["sentence"], secrets_),
+                                                           ("matches: " + r["guide_match"]) if r["guide_match"] else "not in section 10; note for version 1.2"))
         lines.append("")
         lines.append("## Left to a person")
         lines.append("")
@@ -3008,14 +3045,30 @@ def count_word(text: str, word: str) -> int:
     return len(re.findall(re.escape(word), text, re.I))
 
 
-def counts_for(text: str, words: Sequence[str]) -> Dict[str, int]:
-    """How many times each word appears on one page: A6's count, word by word."""
-    return {word: count_word(text, word) for word in words}
+def count_fee_word(text: str, word: str) -> int:
+    """
+    A6's own rule (Spec T2 §3). Only `fee` is a whole word, so `coffee` is not the fee;
+    every other pinned term is counted as it is written, wherever it sits, so that
+    `sweepTokenWithFeeAndUnwrap` and `feeRecipientAddress` are both caught. A term that
+    opens with a digit may not begin inside a longer figure, so the fee's `5 bps` is not
+    the `15 bps` of a slippage cap, which is the kind of prose §3 stopped counting.
+    """
+    if word == "fee":
+        return len(re.findall(r"\bfee\b", text, re.I))
+    pattern = re.escape(word)
+    if word[:1].isdigit():
+        pattern = r"(?<![0-9.])" + pattern
+    return len(re.findall(pattern, text, re.I))
+
+
+def counts_for(text: str, words: Sequence[str], counter: Callable[[str, str], int] = count_word) -> Dict[str, int]:
+    """How many times each word appears on one page, word by word."""
+    return {word: counter(text, word) for word in words}
 
 
 def fee_word_counts(text: str) -> Dict[str, int]:
     """A6's pin (Spec T2 §3): the fee's own words, and never "basis points" on its own."""
-    return counts_for(text, S.FEE_WORDS)
+    return counts_for(text, S.FEE_WORDS, count_fee_word)
 
 
 def fee_words_found(text: str) -> int:

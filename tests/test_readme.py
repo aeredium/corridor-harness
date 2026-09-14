@@ -52,9 +52,15 @@ class ReadmeTest(unittest.TestCase):
             self.assertNotIn("tools/harness", command, command)
 
     def test_the_gate_the_readme_names_is_the_gate_the_harness_keeps(self):
-        self.assertEqual(h.Runner.GATE_TESTS, ("A1", "A2", "A3", "A5"))
+        """The README's sentence about what gates money is read against the gate itself."""
+        said = [line for line in self.text.splitlines() if "have passed in the same run" in line]
+        self.assertEqual(len(said), 1, "one sentence names the gate")
         for test_id in h.Runner.GATE_TESTS:
+            self.assertIn(test_id, said[0], "the README names %s among the tests that gate money" % test_id)
             self.assertIn(test_id, S.BY_ID)
+        for test_id in ("A4", "A6"):
+            self.assertNotIn("%s," % test_id, said[0], "%s does not gate money" % test_id)
+        self.assertIn("A4's native-balance check", said[0])
 
 
 if __name__ == "__main__":

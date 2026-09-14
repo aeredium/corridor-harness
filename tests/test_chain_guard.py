@@ -91,11 +91,25 @@ class ChainGuardTest(unittest.TestCase):
         self.assertIn(GUARD.replace("t-trader", "t-payer"), report)
         self.assertIn(GUARD.rstrip("."), report)
 
+    def test_the_whole_money_series_is_refused_not_only_the_tests_that_move_money(self):
+        """Spec T2 §6 refuses every money series. D4, D16 and E2 sit in one without moving money."""
+        runner, session, outcomes = self.run_series("aeredium-testnet", series=("A", "D", "E"))
+        by_id = {o.test.id: o for o in outcomes}
+        for test_id in ("D4", "D16", "E2"):
+            self.assertFalse(S.BY_ID[test_id].moves_money, "%s is in a money series without moving money" % test_id)
+            self.assertEqual(by_id[test_id].outcome, h.SKIPPED, test_id)
+            self.assertEqual(by_id[test_id].sentence, GUARD, test_id)
+        self.assertEqual([tool for _, tool, _ in session.calls if tool == "wallet.my_usage"], [],
+                         "a guarded agent's doors are not called for the money series at all")
+
     def test_a_wallet_on_one_of_the_three_is_not_guarded(self):
         for chain in S.PRODUCT_CHAINS:
             runner, session, outcomes = self.run_series(chain, series=("C",))
             guarded = [o for o in outcomes if o.sentence.endswith("consent it.")]
             self.assertEqual(guarded, [], chain)
+            # and the money tests really did run, so the absence of a guard means something
+            self.assertIn("wallet.build_transaction", [tool for _, tool, _ in session.calls], chain)
+            self.assertTrue(any(o.test.moves_money and o.outcome != h.SKIPPED for o in outcomes), chain)
 
     def test_the_guard_reads_the_chain_from_wallet_status_not_from_my_agent(self):
         session = FakeSession(chain="aeredium-testnet", role_id="trader.v1")

@@ -16,9 +16,9 @@ import series as S  # noqa: E402
 import tables as T  # noqa: E402
 
 try:
-    from .fakes import FakeSession, POLICY_HASH, runner_for
+    from .fakes import FakeSession, OWNER, POLICY_HASH, runner_for
 except ImportError:  # run as a top-level module by `unittest discover tests`
-    from fakes import FakeSession, POLICY_HASH, runner_for
+    from fakes import FakeSession, OWNER, POLICY_HASH, runner_for
 
 OTHER_HASH = "0x9f41ad0c6e2b58147ac3d9f0b6512e8837d4ca7091fe2b6d5308cc41ab97e260"
 NATIVE_WEI = 1000000000000000
@@ -232,6 +232,46 @@ class A4Test(SeriesABase):
         self.assertIs(runner.a4_native_balance, False)
 
 
+class ChainReaderFaultTest(SeriesABase):
+    """A door that answers something other than a hex quantity is a fault, never the end of a run."""
+
+    def canned_http(self, method, url, headers=None, body=None, timeout=None):
+        if url.startswith("https://rpc.test/"):
+            payload = json.loads(body.decode("utf-8"))
+            if payload["method"] == "eth_call":  # the token read answers null
+                return h.HttpAnswer(200, {}, json.dumps({"jsonrpc": "2.0", "id": 1, "result": None}), 1)
+            return h.HttpAnswer(200, {}, json.dumps({"jsonrpc": "2.0", "id": 1, "result": chain_answer(body)}), 1)
+        for path, (status, text) in PAGES.items():
+            if url.endswith(path):
+                return h.HttpAnswer(status, {}, text, 1)
+        raise AssertionError("the test reached for %s" % url)
+
+    def test_a_null_token_read_is_a_note_and_the_run_goes_on(self):
+        runner, a4 = self.outcome_for("A4", FakeSession(role_id="trader.v1"), chains=CHAINS)
+        self.assertIn(a4.outcome, (h.PASS, h.PASS_NOTE), a4.sentence)
+        self.assertIn("USDC not read", a4.line)
+        self.assertTrue(runner.a4_native_balance, "the native comparison still stands")
+        self.assertEqual([o.test.id for o in runner.outcomes][-1], "A8", "the run reached the end of Series A")
+
+
+class SecretsInTheReportTest(SeriesABase):
+    """A note quotes a door's own words, so it is scrubbed exactly as an evidence block is."""
+
+    class Leaky(FakeSession):
+        def balances_answer(self):
+            row = FakeSession.balances_answer(self)
+            row["receipt"] = {"token": "wallet-secret-token-xyz"}
+            row.pop("sentence")
+            return row
+
+    def test_a_secret_in_a_note_never_reaches_the_report(self):
+        runner, a4 = self.outcome_for("A4", self.Leaky(role_id="trader.v1"), chains=CHAINS)
+        self.assertIn("wallet-secret-token-xyz", json.dumps(a4.note), "the note really did quote the answer")
+        report = runner.report()
+        self.assertNotIn("wallet-secret-token-xyz", report)
+        self.assertIn("<redacted>", report)
+
+
 class A2Test(SeriesABase):
     """A2 reads the role against the label the run file gives the agent (Spec T2 §9)."""
 
@@ -290,6 +330,20 @@ class MoneyGateTest(SeriesABase):
         a4 = next(o for o in runner.outcomes if o.test.id == "A4")
         self.assertEqual(a4.outcome, h.PASS_NOTE)
         self.assertTrue(runner.series_a_passed)
+
+    def test_the_gate_never_claims_a_check_it_could_not_make(self):
+        """No RPC for the agent's chain: the check was not made, and the report says so (Spec T2 §5)."""
+        session = FakeSession(role_id="trader.v1")
+        runner = h.Runner("t", {"issuer": "https://mcppro.aeredium.io", "chains": {},
+                                "testers": {"t": {"agents": {"trader": "t-trader"}, "listed_address": OWNER}}},
+                          None, h.RunFolder(self.tmp, "t"), say=lambda s: None, ask=lambda q: "",
+                          session_factory=lambda label: session)
+        runner.run(["A"])
+        self.assertIsNone(runner.a4_native_balance)
+        self.assertTrue(runner.series_a_passed, "a missing RPC is not the corridor's failure")
+        self.assertIn("could not be made", runner.series_a_gate_said)
+        self.assertNotIn("A4's native-balance check passed", runner.series_a_gate_said)
+        self.assertIn("could not be made", runner.report())
 
     def test_a5_holds_money_back(self):
         runner = self.gate_after(FakeSession(role_id="trader.v1", judged=False))
