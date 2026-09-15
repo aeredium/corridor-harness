@@ -659,6 +659,84 @@ def judged_policy_hash(obj: Any) -> Optional[str]:
     return found if isinstance(found, str) and found else None
 
 
+# ---------------------------------------------------------------------------
+# What the Wallet says about itself under Spec 49, read where it puts it (Spec T3).
+# ---------------------------------------------------------------------------
+def wallet_tokens(data: Any) -> Tuple[Optional[List[Any]], Optional[str], Optional[str]]:
+    """
+    The token balances where the Wallet puts them (Spec 49, Spec T3 §2). Spec 49's
+    get_balances answers `tokens: {balances: [{asset, chain, contract, decimals, raw,
+    amount, available, source}, …], chains, road, said}`; another door may send a bare
+    list under `tokens`, `erc20`, `token_balances` or `tokenBalances`. Returns the rows,
+    the Wallet's `road` sentence — where its asset list came from — and its `said`
+    sentence. (None, None, None) where neither shape is present, and only then does A4
+    write the note that get_balances does not state the tokens.
+    """
+    if not isinstance(data, (dict, list)):
+        return None, None, None
+    found = find_key(data, ["tokens", "erc20", "token_balances", "tokenBalances"])
+    if isinstance(found, list):
+        return found, None, None
+    if isinstance(found, dict) and isinstance(found.get("balances"), list):
+        road = found.get("road")
+        said = found.get("said")
+        return (found["balances"],
+                road.strip() if isinstance(road, str) and road.strip() else None,
+                said.strip() if isinstance(said, str) and said.strip() else None)
+    return None, None, None
+
+
+def rail_names(rails: Any) -> List[Tuple[str, Optional[str]]]:
+    """
+    The rails a door names, each as (name, chain id or None). Spec 49's wallet_status
+    lists {chain, chain_id, live}; another door may list bare names, or map each name to
+    its id. A shape that names nothing yields nothing: no rail is invented.
+    """
+    out: List[Tuple[str, Optional[str]]] = []
+    if isinstance(rails, dict):
+        for name, value in rails.items():
+            out.append((str(name), _chain_id_in(value)))
+    elif isinstance(rails, list):
+        for item in rails:
+            if isinstance(item, str) and item.strip():
+                out.append((item.strip(), None))
+            elif isinstance(item, dict):
+                name = find_key(item, ["chain", "name", "network", "rail", "key"], str)
+                if isinstance(name, str) and name.strip():
+                    out.append((name.strip(), _chain_id_in(item)))
+    return out
+
+
+def _chain_id_in(value: Any) -> Optional[str]:
+    """A chain id beside a rail's name where the door gives one: an integer, a run of digits, or a chain_id field."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, str):
+        return value.strip() if value.strip().isdigit() else None
+    if isinstance(value, dict):
+        for key in ("chain_id", "chainId", "id"):
+            if key in value:
+                return _chain_id_in(value[key])
+    return None
+
+
+def rail_word(name: str, chain_id: Optional[str]) -> str:
+    """One rail as the Wallet's own rails_said spells it — "arbitrum (42161)" — or the bare name where no id was given."""
+    return "%s (%s)" % (name, chain_id) if chain_id else name
+
+
+def merge_notes(notes: Sequence[Dict[str, str]]) -> Optional[Dict[str, str]]:
+    """One note from several, joined as combine joins a test's steps' notes: none is None, one is itself."""
+    if not notes:
+        return None
+    if len(notes) == 1:
+        return dict(notes[0])
+    return {"expected": " | ".join(str(n.get("expected")) for n in notes),
+            "got": " | ".join(str(n.get("got")) for n in notes)}
+
+
 def hex64_in(obj: Any) -> List[str]:
     text = obj if isinstance(obj, str) else json.dumps(obj)
     seen: List[str] = []
@@ -917,11 +995,16 @@ def is_unexpected_allow(expect: str, walk: Dict[str, Any]) -> bool:
 # ---------------------------------------------------------------------------
 # Argument building: the Guide's vocabulary, shaped to the door's own schema.
 # ---------------------------------------------------------------------------
+# Each canonical field, and the names a door may declare it under. A live call takes
+# the name the door's own schema declares — and where it declares more than one, the
+# one its `required` list names (Spec T3 §1, choose_alias). A dry run, with no schema
+# to read, prints the FIRST name: for the amount that is the cents name, which MCP
+# Police requires; the Wallet declares amount_usd, in dollars, and a live call obeys it.
 CANON_ALIASES: List[Tuple[str, List[str]]] = [
     ("action", ["action", "action_kind"]),
     ("chain", ["chain"]),
     ("asset", ["asset", "asset_symbol"]),
-    ("amount_usd", ["amount_usd", "amount_usd_cents"]),
+    ("amount_usd", ["amount_usd_cents", "amount_usd"]),
     ("to_address", ["to_address"]),
     ("to_asset", ["to_asset"]),
     ("venue", ["venue"]),
@@ -937,16 +1020,64 @@ FACT_ALIASES: List[Tuple[str, List[str]]] = [
 ]
 
 
-def arguments_for(properties: Optional[Dict[str, Any]], action_fields: Dict[str, Any],
+# The words MCP Police writes on a field it declares only to refuse it: "NOT ACCEPTED.
+# Present only so an amount sent in dollars is refused rather than silently ignored."
+# Eitan's A5 failed on 14 September because the harness found that decoy first and sent
+# amount_usd: 5; Police refused it before judging, and no hash came back (Spec T3 §1).
+NOT_ACCEPTED = "NOT ACCEPTED"
+
+
+def schema_parts(schema: Optional[Dict[str, Any]]) -> Tuple[Optional[Dict[str, Any]], List[str], Dict[str, str]]:
+    """
+    The three things arguments_for reads off a door's inputSchema, taken whole from
+    tools/list: its `properties` map, its `required` list, and each field's description.
+    No schema at all — a dry run — is None for the map; a schema that declares no
+    properties is an empty map, under which nothing is sent.
+    """
+    if schema is None:
+        return None, [], {}
+    properties = schema.get("properties") if isinstance(schema, dict) else None
+    if not isinstance(properties, dict):
+        properties = {}
+    required_field = schema.get("required") if isinstance(schema, dict) else None
+    required = [name for name in required_field if isinstance(name, str)] if isinstance(required_field, list) else []
+    descriptions = {str(name): str(prop.get("description") or "") for name, prop in properties.items() if isinstance(prop, dict)}
+    return properties, required, descriptions
+
+
+def choose_alias(present: Sequence[str], required: Sequence[str], descriptions: Dict[str, str]) -> str:
+    """
+    Which of the names a door declares for one canonical field is sent (Spec T3 §1). One
+    present: that one. More than one: the one the schema's `required` list names; failing
+    that, one whose description does not say NOT ACCEPTED; failing that, the first present,
+    as before Spec T3. The required field wins: a door that declares amount_usd_cents as
+    required and amount_usd as a decoy is sent cents, and a door that declares only
+    amount_usd — one that speaks dollars — is obeyed.
+    """
+    if len(present) == 1:
+        return present[0]
+    for alias in present:
+        if alias in required:
+            return alias
+    for alias in present:
+        if NOT_ACCEPTED.lower() not in descriptions.get(alias, "").lower():
+            return alias
+    return present[0]
+
+
+def arguments_for(schema: Optional[Dict[str, Any]], action_fields: Dict[str, Any],
                   facts: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
     """
-    The arguments for one call. With the door's schema in hand, only the fields it
-    declares are sent, under the names it declares (the double in
-    apps/server/src/test/mcpDoorDouble.ts spells Police's as action_kind,
-    asset_symbol, amount_usd_cents and child_wallet_id, and the Wallet's as the
-    Guide spells them). Without a schema — a dry run — the Guide's own names are
-    printed. What could not be placed is returned so the evidence can say so.
+    The arguments for one call. With the door's inputSchema in hand — whole, as tools/list
+    gave it, so its `required` list and each field's description are read too — only the
+    fields it declares are sent, under the names it declares (the double in
+    apps/server/src/test/mcpDoorDouble.ts spells Police's as action_kind, asset_symbol,
+    amount_usd_cents and child_wallet_id, and the Wallet's as the Guide spells them), and
+    where it declares more than one name for a field the required one wins (Spec T3 §1).
+    Without a schema — a dry run — each field is printed under the first name in the
+    alias table. What could not be placed is returned so the evidence can say so.
     """
+    properties, required, descriptions = schema_parts(schema)
     args: Dict[str, Any] = {}
     omitted: List[str] = []
     for canon, aliases in CANON_ALIASES + FACT_ALIASES:
@@ -956,14 +1087,28 @@ def arguments_for(properties: Optional[Dict[str, Any]], action_fields: Dict[str,
         if properties is None:
             name = aliases[0]
         else:
-            name = next((alias for alias in aliases if alias in properties), None)
-            if name is None:
+            present = [alias for alias in aliases if alias in properties]
+            if not present:
                 omitted.append(canon)
                 continue
+            name = choose_alias(present, required, descriptions)
         if name == "amount_usd_cents":
             value = int(round(float(value) * 100))
         args[name] = value
     return args, omitted
+
+
+# A5's one question as a dry run prints it (Spec T2 §2): D2's trade, with the two facts a
+# dry run cannot know left as placeholders. Shaped by the same alias table as a live call.
+A5_DRY_QUESTION: Dict[str, Any] = {"action": "trade", "chain": "<the agent's own chain>", "asset": "USDC",
+                                   "amount_usd": T.TRADE_USD, "to_asset": "WETH", "venue": "uniswap_v3",
+                                   "contract_address": "<the listed router for that chain>"}
+
+
+def dry_check_action_line(fields: Dict[str, Any], then: str) -> str:
+    """One police.check_action as a dry run prints it: the Guide's fields under the alias table's first names."""
+    args, _ = arguments_for(None, fields, {})
+    return "tools/call police.check_action %s → %s" % (json.dumps(args, ensure_ascii=False), then)
 
 
 def action_fields(action: S.Action, owner_address: Optional[str]) -> Dict[str, Any]:
@@ -1366,12 +1511,24 @@ class Mcp:
         self.tools = {str(tool.get("name")): tool for tool in tools if isinstance(tool, dict)}
         return tools
 
-    def properties_of(self, tool: str) -> Optional[Dict[str, Any]]:
+    def schema_of(self, tool: str) -> Optional[Dict[str, Any]]:
+        """
+        The whole inputSchema tools/list gave for a tool, so its `required` list and each
+        field's description can be read beside its properties (Spec T3 §1). None where the
+        door lists no such tool; an empty map where it lists the tool with no schema.
+        """
         listed = self.tools.get(tool)
         if not listed:
             return None
-        schema = listed.get("inputSchema") or {}
-        props = schema.get("properties") if isinstance(schema, dict) else None
+        schema = listed.get("inputSchema")
+        return schema if isinstance(schema, dict) else {}
+
+    def properties_of(self, tool: str) -> Optional[Dict[str, Any]]:
+        """The schema's `properties` alone, as the harness read them before Spec T3."""
+        schema = self.schema_of(tool)
+        if schema is None:
+            return None
+        props = schema.get("properties")
         return props if isinstance(props, dict) else {}
 
     def call(self, tool: str, arguments: Dict[str, Any], test_id: str) -> McpAnswer:
@@ -1660,7 +1817,7 @@ class Runner:
     def wallet_status(self, role: str, test_id: str) -> McpAnswer:
         """wallet_status, called as the agent, and the chain it names remembered for the role."""
         session = self.session(role, test_id)
-        props = session.properties_of("wallet.wallet_status")
+        props = session.schema_of("wallet.wallet_status")
         args, _ = arguments_for(props, {}, self.call_facts(role))
         answer = self.remember(test_id, "wallet.wallet_status", session.call("wallet.wallet_status", args, test_id))
         data = answer.data if answer.data is not None else answer.text
@@ -1725,10 +1882,16 @@ class Runner:
             return None
         return chain_guard_sentence(self.label_for(role) or role, chain or "no chain it would name")
 
-    def token_balances(self, rpc: "ChainRpc", address: str) -> Dict[str, str]:
-        """The ERC-20 balances read from the chain's own RPC, which is where A4 reads them (Spec T2 §4)."""
+    def token_balances(self, rpc: "ChainRpc", address: str, only: Optional[Sequence[str]] = None) -> Dict[str, str]:
+        """
+        The ERC-20 balances read from the chain's own RPC, for every token the run file
+        names on it, or for `only` those symbols: where the Wallet states the tokens (Spec
+        49) this reads the ones it did not state, and where it states none, all of them.
+        """
         out: Dict[str, str] = {}
         for symbol, token in rpc.tokens.items():
+            if only is not None and symbol not in only:
+                continue
             try:
                 out[symbol] = format_units(rpc.token_balance(token, address),
                                            rpc.token_decimals(token) or T.DECIMALS.get(symbol, 6))
@@ -1851,12 +2014,12 @@ class Runner:
     # What each harness-side check calls, said in a dry run.
     DRY_CHECK_CALLS = {
         "my_agent_facts": ["tools/call aerconnect_my_agent {} → expect one agent: name, the role the run file files this label under (trader.v1 or payer.v1), wallet id, address, chain, caps"],
-        "wallet_names_its_chain": ["tools/call wallet.wallet_status {\"wallet_id\": \"<wallet id>\"} → expect chain one of ethereum, arbitrum, base; rails where the Wallet states them (Spec 49)"],
+        "wallet_names_its_chain": ["tools/call wallet.wallet_status {\"wallet_id\": \"<wallet id>\"} → expect chain one of ethereum, arbitrum, base; rails where the Wallet states them (Spec 49), each with its chain id, and any rail outside the three named as a note"],
         "pact_hash_agrees": [
             "tools/call wallet.wallet_status {\"wallet_id\": \"<wallet id>\"} → expect pact.policy_hash",
-            "tools/call police.check_action {\"action\": \"trade\", \"chain\": \"<the agent's own chain>\", \"asset\": \"USDC\", \"amount_usd\": 5, \"to_asset\": \"WETH\", \"venue\": \"uniswap_v3\", \"contract_address\": \"<the listed router for that chain>\"} → expect judged.policy_hash, whatever the verdict (a Payer asks C1's question instead: transfer_stable, 1 USDC, to the listed address)",
+            dry_check_action_line(A5_DRY_QUESTION, "expect judged.policy_hash, whatever the verdict (a Payer asks C1's question instead: transfer_stable, 1 USDC, to the listed address)"),
         ],
-        "balances_vs_chain": ["[read] eth_getBalance for the agent's address on its chain, compared with wallet.get_balances' native figure, and eth_call balanceOf for each token the run file names, which get_balances cannot state (Spec 49)"],
+        "balances_vs_chain": ["[read] eth_getBalance for the agent's address on its chain, compared with wallet.get_balances' native figure; eth_call balanceOf for each token get_balances states in tokens.balances (Spec 49) that the run file names, compared with the Wallet's raw figure, and for each token the run file names that the Wallet does not state; tokens.road printed after the balances"],
         "usage_delta": ["tools/call wallet.my_usage {} → compared with the reading taken before D2: up by two per trade with an approval"],
         "transcript_bytes": ["[read] evidence.jsonl for D2 to D15: no quote_tx_json, no calldata, no signed bytes"],
         "crossing_arrives": ["[read] eth_getLogs Transfer to the agent's address on the destination chain, and tools/call wallet.get_crossing {\"wallet_id\": \"<wallet id>\", \"ticket_id\": \"<ticket>\"} while waiting"],
@@ -1996,7 +2159,7 @@ class Runner:
         if step.tool in (MY_AGENT_TOOL, GUIDE_TOOL):
             sent = args
         else:
-            sent, _ = arguments_for(session.properties_of(step.tool), {}, self.call_facts(test.agent or "trader"))
+            sent, _ = arguments_for(session.schema_of(step.tool), {}, self.call_facts(test.agent or "trader"))
         answer = self.remember(test.id, step.tool, session.call(step.tool, sent, test.id))
         haystack = normalise(answer.quoted())
         present = [w for w in step.words if normalise(w) in haystack]
@@ -2135,7 +2298,7 @@ class Runner:
         """get_balances' pact_budget, the second source for the hash (Spec T2 §1)."""
         try:
             session = self.session(role, test_id)
-            props = session.properties_of("wallet.get_balances")
+            props = session.schema_of("wallet.get_balances")
             args, _ = arguments_for(props, {}, self.call_facts(role))
             answer = self.remember(test_id, "wallet.get_balances", session.call("wallet.get_balances", args, test_id))
         except (HarnessError, Unreachable):
@@ -2185,7 +2348,7 @@ class Runner:
         self.walks.setdefault(test.id, []).append(walk)
         # 1. police.check_action
         if not step.build_only:
-            props = session.properties_of("police.check_action")
+            props = session.schema_of("police.check_action")
             check_args, omitted = arguments_for(props, fields, self.call_facts(role))
             answer = session.call("police.check_action", check_args, test.id)
             walk["answers"].append(("police.check_action", answer))
@@ -2198,7 +2361,7 @@ class Runner:
         build_facts = dict(self.call_facts(role))
         if not step.no_receipt and walk.get("police", {}).get("receipt"):
             build_facts["police_receipt"] = walk["police"]["receipt"]
-        props = session.properties_of("wallet.build_transaction")
+        props = session.schema_of("wallet.build_transaction")
         build_args, omitted = arguments_for(props, fields, build_facts)
         answer = session.call("wallet.build_transaction", build_args, test.id)
         walk["answers"].append(("wallet.build_transaction", answer))
@@ -2215,7 +2378,7 @@ class Runner:
         if ticket_id:
             self.tickets.setdefault(test.id, []).append(ticket_id)
         # 3. wallet.submit_transaction — only with a ticket this run's build issued (Spec T1 §5).
-        props = session.properties_of("wallet.submit_transaction")
+        props = session.schema_of("wallet.submit_transaction")
         submit_facts = dict(self.call_facts(role))
         if ticket_id:
             submit_facts["ticket_id"] = ticket_id
@@ -2506,7 +2669,7 @@ class Runner:
                 test, "one check_action the agent's own role can ask", asked, "the harness itself (a fault, not a judgment)",
                 previous=previous, policy_hash=wallet_hash), line="no question asked; the Wallet says %s" % wallet_hash)
         fields = action_fields(action, self.owner_address)
-        props = session.properties_of("police.check_action")
+        props = session.schema_of("police.check_action")
         args, omitted = arguments_for(props, fields, self.call_facts(role))
         answer = self.remember(test.id, "police.check_action", session.call("police.check_action", args, test.id))
         data = answer.data if answer.data is not None else answer.text
@@ -2545,18 +2708,27 @@ class Runner:
 
     def check_wallet_names_its_chain(self, test: S.Test, step: S.Check, previous: Optional[Outcome]) -> Outcome:
         """
-        A4's first half as the product stands (Spec T2 §4): wallet_status names the wallet's
-        own chain, which must be one of the three the product offers. It does not yet name
-        all three as rails — that is the Wallet's, under Spec 49 — so the absence of a `rails`
-        or `transfer_rails` field is a pass with a note naming Spec 49, and never a failure.
+        A4's first half (Spec T2 §4, Spec T3 §3). wallet_status names the wallet's own
+        chain, which must be one of the three the product offers; that is the whole
+        judgement, and it is unchanged. The rails are printed as the door names them: none
+        stated is a pass with a note naming Spec 49, never a failure; stated, each is
+        printed with its chain id, and any rail outside ethereum, arbitrum and base —
+        Eitan's door names aeredium-testnet (2237) — is a note, not a failure. The door is
+        telling the truth about itself.
         """
         role = test.agent or "trader"
         answer = self.wallet_status(role, test.id)
         data = answer.data if answer.data is not None else answer.text
         chain = self.chain_of(role, test.id)
         rails = find_key(data, ["rails", "transfer_rails", "transferRails"]) if isinstance(data, (dict, list)) else None
+        named = rail_names(rails)
+        rails_said = ", ".join(rail_word(name, chain_id) for name, chain_id in named) if named else (
+            "not stated" if rails is None else json.dumps(rails))
+        outside = [rail_word(name, chain_id) for name, chain_id in named if name.lower() not in S.PRODUCT_CHAINS]
         who = who_answered(answer, "wallet")
-        line = "chain %s; rails %s" % (chain, json.dumps(rails) if rails is not None else "not stated")
+        line = "chain %s; rails %s" % (chain, rails_said)
+        if outside:
+            line += "; outside the three the product offers: %s" % ", ".join(outside)
         if not chain:
             return Outcome(test, FAIL, "wallet_status named no chain the harness could read.",
                            self.evidence_block(test, "wallet_status names the wallet's own chain", answer.quoted(),
@@ -2570,32 +2742,49 @@ class Runner:
                                             "Wallet's under Spec 49, not the corridor's judgement." % chain,
                            note={"expected": "a rails or transfer_rails field naming ethereum, arbitrum and base",
                                  "got": "wallet_status names only the wallet's own chain, %s (Spec 49)" % chain}, line=line)
-        return Outcome(test, PASS, "wallet_status names the wallet's own chain, %s, and its rails: %s." % (chain, json.dumps(rails)), line=line)
+        said = "wallet_status names the wallet's own chain, %s, and its rails: %s" % (chain, rails_said)
+        if outside:
+            return Outcome(test, PASS_NOTE, "%s; %s %s outside the three the product offers, which is the door telling the "
+                                            "truth about itself, not a failure." % (said, ", ".join(outside),
+                                                                                   "is a rail" if len(outside) == 1 else "are rails"),
+                           note={"expected": "rails among ethereum, arbitrum and base",
+                                 "got": "the door also names %s, outside the three the product offers; it is telling the truth "
+                                        "about itself (Spec T3 §3)" % ", ".join(outside)}, line=line)
+        return Outcome(test, PASS, said + ".", line=line)
 
     def check_balances_vs_chain(self, test: S.Test, step: S.Check, previous: Optional[Outcome]) -> Outcome:
         """
-        A4's second half (Spec T2 §4). The native balance is read from the Wallet whatever
-        its JSON type — the Wallet sends a number, and asking for a string printed "None wei"
-        — and compared with the chain's own eth_getBalance. The ERC-20 balances are read from
-        the chain's RPC alone, because get_balances cannot state them, and the Wallet's own
-        sentence is quoted in a note pointing at Spec 49. This native comparison gates money
-        (Spec T2 §5); the notes do not.
+        A4's second half (Spec T2 §4, Spec T3 §2). The native balance is read from the
+        Wallet whatever its JSON type — the Wallet sends a number, and asking for a string
+        printed "None wei" — and compared with the chain's own eth_getBalance; that
+        comparison gates money (Spec T2 §5), and the notes do not. The token balances are
+        read where the Wallet puts them: Spec 49's get_balances states them in
+        tokens.balances, and each row the run file names is compared with the chain's own
+        balanceOf for that contract — agreement, or the two figures — with the Wallet's
+        tokens.road sentence printed after them. Only where get_balances states no tokens
+        in either shape are they read from the chain alone and the Wallet's own sentence
+        quoted in a note pointing at Spec 49; where the Wallet states them and they agree
+        with the chain, A4 is a plain pass.
         """
         role = test.agent or "trader"
         facts = self.facts(role)
         answer = self.last_answer(test.id, "wallet.get_balances")
         data = answer.data if answer is not None else None
         wallet_wei = find_key(data, ["wei"]) if isinstance(data, (dict, list)) else None
-        stated = find_key(data, ["tokens", "erc20", "token_balances", "tokenBalances"], list) if isinstance(data, (dict, list)) else None
+        stated, road, tokens_said = wallet_tokens(data)
+        road_said = (" the Wallet's road: \u201c%s\u201d" % road) if road else ""
         chain_name = self.chain_of(role, test.id) or str(facts.get("chain") or "arbitrum")
         rpc = self.chains.get(chain_name)
         if not rpc or not facts.get("address"):
             self.a4_native_balance = None
             self.a4_native_said = ("the run file names no RPC for %s" % chain_name if not rpc
                                    else "the agent's wallet names no address to read on %s" % chain_name)
-            return Outcome(test, PASS_NOTE, "the run file names no RPC for %s, so the Wallet's balances were not compared with the chain's." % chain_name,
-                           note={"expected": "a comparison with the chain", "got": "the run file names no RPC for %s" % chain_name},
-                           line="no RPC for %s" % chain_name)
+            unread = "%s, so the Wallet's balances were not compared with the chain's" % self.a4_native_said
+            if stated is not None:
+                unread += "; the Wallet states %s" % (", ".join(self.stated_token_words(stated, chain_name)) or "no token balances")
+            return Outcome(test, PASS_NOTE, unread + (";" + road_said if road_said else "") + ".",
+                           note={"expected": "a comparison with the chain", "got": self.a4_native_said},
+                           line=("no RPC for %s" % chain_name if not rpc else "no address to read") + (";" + road_said if road_said else ""))
         try:
             on_chain = rpc.native_balance(str(facts["address"]))
         except (HarnessError, Unreachable) as err:
@@ -2603,15 +2792,27 @@ class Runner:
             self.a4_native_said = "%s could not be read: %s" % (chain_name, err)
             return Outcome(test, PASS_NOTE, "the chain did not answer for the balance comparison: %s." % err,
                            note={"expected": "a comparison with the chain", "got": str(err)}, line="the chain did not answer")
-        tokens = self.token_balances(rpc, str(facts["address"]))
-        said = [("%s %s" % (k, v)) if v.startswith("not read") else ("%s %s" % (v, k)) for k, v in sorted(tokens.items())]
-        erc20 = "the token balances were read from %s's own RPC: %s" % (
-            chain_name, ", ".join(said) or "the run file names no token on this chain")
-        note = None
-        if not stated:
+        address = str(facts["address"])
+        notes: List[Dict[str, str]] = []
+        if stated is None:
+            tokens = self.token_balances(rpc, address)
+            words = [("%s %s" % (k, v)) if v.startswith("not read") else ("%s %s" % (v, k)) for k, v in sorted(tokens.items())]
+            erc20 = "the token balances were read from %s's own RPC: %s" % (
+                chain_name, ", ".join(words) or "the run file names no token on this chain")
             sentence = _sentence_in(data) if isinstance(data, (dict, list)) else None
-            note = {"expected": "get_balances states the ERC-20 balances",
-                    "got": "it does not (Spec 49); the Wallet said: \u201c%s\u201d" % (sentence or (answer.text[:400] if answer else "(no answer)"))}
+            notes.append({"expected": "get_balances states the ERC-20 balances",
+                          "got": "it does not (Spec 49); the Wallet said: \u201c%s\u201d" % (sentence or (answer.text[:400] if answer else "(no answer)"))})
+        else:
+            words, differ = self.compare_stated_tokens(stated, chain_name, rpc, address)
+            if words:
+                erc20 = "the Wallet states the token balances on %s: %s" % (chain_name, ", ".join(words))
+            else:
+                erc20 = "the Wallet states no token balances" + ((", saying: \u201c%s\u201d" % tokens_said) if tokens_said else "")
+            if differ:
+                notes.append({"expected": "the chain's own balanceOf: " + "; ".join(chain_figure for chain_figure, _ in differ),
+                              "got": "the Wallet's raw figure: " + "; ".join(wallet_figure for _, wallet_figure in differ)})
+        erc20 += (";" + road_said) if road_said else ""
+        note = merge_notes(notes)
         if wallet_wei is None:
             self.a4_native_balance = False
             self.a4_native_said = "get_balances stated no native balance the harness could read"
@@ -2626,9 +2827,93 @@ class Runner:
         sentence = said + ("; they agree. " if agree else "; they are read at different moments and are quoted for comparison. ") + erc20 + "."
         if agree and note is None:
             return Outcome(test, PASS, sentence, line=said + "; " + erc20)
-        if note is None:
-            note = {"expected": str(on_chain) + " wei", "got": str(wallet_wei) + " wei"}
+        if not agree:
+            notes.insert(0, {"expected": str(on_chain) + " wei", "got": str(wallet_wei) + " wei"})
+            note = merge_notes(notes)
         return Outcome(test, PASS_NOTE, sentence, note=note, line=said + "; " + erc20)
+
+    def compare_stated_tokens(self, rows: Sequence[Any], home: str, rpc: "ChainRpc", address: str) -> Tuple[List[str], List[Tuple[str, str]]]:
+        """
+        Each token row the Wallet states, against the chain's own balanceOf (Spec T3 §2).
+        A row is compared where it carries asset, chain, raw and decimals and the run file
+        names its contract on its chain; the harness reads no contract the run file did not
+        name, so any other row is printed as the Wallet stated it and marked not compared.
+        A token the run file names on the wallet's chain that the Wallet did not state is
+        read from the chain alone and said so. Returns the words for the line and, for each
+        row that differs, the chain's figure beside the Wallet's.
+        """
+        words: List[str] = []
+        differ: List[Tuple[str, str]] = []
+        compared: List[str] = []  # the contracts compared on the wallet's own chain, lower-case
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            asset = str(row.get("asset") or row.get("symbol") or "a token")
+            chain = str(row.get("chain") or home).strip().lower()
+            where = "" if chain == home else " on %s" % chain
+            raw, decimals, contract = row.get("raw"), row.get("decimals"), row.get("contract")
+            if not row.get("asset") or not row.get("chain") or raw is None or decimals is None:
+                reason = row.get("reason")
+                words.append("%s%s not read by the Wallet%s" % (asset, where, (": %s" % reason) if isinstance(reason, str) and reason else ""))
+                continue
+            try:
+                raw_int, dec_int = int(str(raw).strip()), int(decimals)
+            except (ValueError, TypeError):
+                words.append("%s%s stated as %r, which is not a figure the harness could read" % (asset, where, raw))
+                continue
+            amount = format_units(raw_int, dec_int)
+            reader = self.chains.get(chain)
+            if reader is None:
+                words.append("%s %s%s (not compared: the run file names no RPC for %s)" % (amount, asset, where, chain))
+                continue
+            listed = {symbol: str(token) for symbol, token in reader.tokens.items()}
+            symbol = next((s for s, token in listed.items() if isinstance(contract, str) and token.lower() == contract.lower()), None)
+            if symbol is None:
+                same_name = next((token for s, token in listed.items() if s.upper() == asset.upper()), None)
+                if same_name:
+                    words.append("%s %s%s (not compared: the run file names %s at %s on %s, the Wallet at %s)"
+                                 % (amount, asset, where, asset, same_name, chain, contract))
+                else:
+                    words.append("%s %s%s (not compared: the run file names no %s on %s)" % (amount, asset, where, asset, chain))
+                continue
+            if chain == home:
+                compared.append(str(contract).lower())
+            try:
+                on_chain = reader.token_balance(str(contract), address)
+            except (HarnessError, Unreachable, ValueError, TypeError) as err:
+                words.append("%s %s%s (the chain's balanceOf was not read: %s)" % (amount, asset, where, err))
+                continue
+            if on_chain == raw_int:
+                words.append("%s %s%s (the chain agrees)" % (amount, asset, where))
+            else:
+                chain_figure = format_units(on_chain, dec_int)
+                words.append("%s%s: the Wallet says %s (%d raw), the chain says %s (%d raw)"
+                             % (asset, where, amount, raw_int, chain_figure, on_chain))
+                differ.append(("%s %s%s (%d raw)" % (chain_figure, asset, where, on_chain),
+                               "%s %s%s (%d raw)" % (amount, asset, where, raw_int)))
+        unstated = [symbol for symbol, token in rpc.tokens.items() if str(token).lower() not in compared]
+        for symbol, figure in sorted(self.token_balances(rpc, address, only=unstated).items()):
+            if figure.startswith("not read"):
+                words.append("%s %s, read from the chain alone (the Wallet stated no balance for this contract)" % (symbol, figure))
+            else:
+                words.append("%s %s read from the chain alone (the Wallet stated no balance for this contract)" % (figure, symbol))
+        return words, differ
+
+    def stated_token_words(self, rows: Sequence[Any], home: str) -> List[str]:
+        """The token balances as the Wallet states them, in words, where no chain could be read to compare them with."""
+        words: List[str] = []
+        for row in rows:
+            if not isinstance(row, dict) or not row.get("asset"):
+                continue
+            chain = str(row.get("chain") or home).strip().lower()
+            where = "" if chain == home else " on %s" % chain
+            try:
+                amount = format_units(int(str(row.get("raw")).strip()), int(row.get("decimals")))
+            except (ValueError, TypeError):
+                words.append("%s%s not read by the Wallet" % (row["asset"], where))
+                continue
+            words.append("%s %s%s" % (amount, row["asset"], where))
+        return words
 
     def check_usage_delta(self, test: S.Test, step: S.Check, previous: Optional[Outcome]) -> Outcome:
         role = test.agent or "trader"
@@ -2655,7 +2940,7 @@ class Runner:
 
     def read_usage(self, role: str, test_id: str) -> Any:
         session = self.session(role, test_id)
-        props = session.properties_of("wallet.my_usage")
+        props = session.schema_of("wallet.my_usage")
         args, _ = arguments_for(props, {}, self.call_facts(role))
         answer = session.call("wallet.my_usage", args, test_id)
         return answer.data if answer.data is not None else answer.text
@@ -2709,7 +2994,7 @@ class Runner:
                         arrivals.append(self.chain_line(test, str(to_chain), tx, receipt, facts))
                 break
             try:
-                props = session.properties_of("wallet.get_crossing")
+                props = session.schema_of("wallet.get_crossing")
                 ticket = (self.tickets.get(test.id) or [None])[-1]
                 args, _ = arguments_for(props, {}, {**self.call_facts(test.agent), **({"ticket_id": ticket} if ticket else {})})
                 if props is not None:
@@ -2741,7 +3026,7 @@ class Runner:
         if "awaiting attestation" not in text.lower():
             return Outcome(test, PERSON_OUT, "E1 completed at once, so the awaiting-attestation road did not arise here; forcing it is Albert's on Virginia.")
         session = self.session(test.agent, test.id)
-        props = session.properties_of("wallet.get_crossing")
+        props = session.schema_of("wallet.get_crossing")
         ticket = (self.tickets.get(source) or [None])[-1]
         args, _ = arguments_for(props, {}, {**self.call_facts(test.agent), **({"ticket_id": ticket} if ticket else {})})
         answer = session.call("wallet.get_crossing", args, test.id)
@@ -2927,8 +3212,9 @@ class Runner:
         lines: List[str] = []
         lines.append("# Corridor harness run — %s — %s" % (self.tester, self.started_at))
         lines.append("")
-        lines.append("Spec T1 as amended by Spec T2 (14 September 2026); Series version 1.0 (13 September 2026), A4, A5 and A6 "
-                     "amended 14 September 2026. A failure below is evidence, not a verdict: the harness never guesses at a cause.")
+        lines.append("Spec T1 as amended by Spec T2 (14 September 2026) and Spec T3 (15 September 2026); Series version 1.0 "
+                     "(13 September 2026), A4, A5 and A6 amended 14 September 2026 and A4 again 15 September 2026. A failure "
+                     "below is evidence, not a verdict: the harness never guesses at a cause.")
         lines.append("")
         lines.append("## Summary")
         lines.append("")

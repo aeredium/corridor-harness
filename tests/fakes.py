@@ -5,6 +5,10 @@ It carries no `police.can_sign`, because MCP Police carries none (Spec T2 §1): 
 that still reached for it would fail here with "unexpected tool", which is the point.
 The hash lives in the Wallet's `wallet_status`, as `pact.policy_hash`, and MCP Police
 states what it judged under in a `judged` block on allow, deny and hold alike.
+
+Its `get_balances` answers as the Wallet did before Spec 49 — the native balance and a
+sentence — unless a `tokens` block is given, in which case it is stated where Spec 49's
+Wallet puts it (Spec T3 §2); its `wallet_status` states `rails` where given (Spec T3 §3).
 """
 import json
 import os
@@ -48,7 +52,7 @@ class FakeSession:
 
     def __init__(self, police="allow", wallet="ticket", chain="arbitrum", role_id="payer.v1",
                  policy_hash=POLICY_HASH, judged_hash=SAME, judged=True, native_wei=1000000000000000,
-                 rails=None, pact_in_status=True):
+                 rails=None, pact_in_status=True, tokens=None):
         self.police = police
         self.wallet = wallet
         self.chain = chain
@@ -59,6 +63,7 @@ class FakeSession:
         self.native_wei = native_wei
         self.rails = rails
         self.pact_in_status = pact_in_status  # False: the hash is only in get_balances' pact_budget
+        self.tokens = tokens  # None: no tokens block, as before Spec 49; else Spec 49's object, or a bare list
         self.calls = []
         self.submits = []
         self.secrets_seen = []
@@ -80,6 +85,10 @@ class FakeSession:
     def tools_list(self, test_id):
         return list(self.tools.values())
 
+    def schema_of(self, tool):
+        listed = self.tools.get(tool)
+        return listed["inputSchema"] if listed else None
+
     def properties_of(self, tool):
         listed = self.tools.get(tool)
         return listed["inputSchema"]["properties"] if listed else None
@@ -95,10 +104,15 @@ class FakeSession:
         return body
 
     def balances_answer(self):
-        return {"wallet_id": "w-1", "address": WALLET, "chain": self.chain,
+        body = {"wallet_id": "w-1", "address": WALLET, "chain": self.chain,
                 "native": {"symbol": "ETH", "wei": self.native_wei},
                 "sentence": "This door states the native balance only; ERC-20 balances are not read here.",
                 "pact_budget": {"id": "p-1", "policy_hash": self.policy_hash, "spent_usd": 0}}
+        if self.tokens is not None:
+            # Spec 49: the tokens are stated, and the sentence that said they were not is gone.
+            body["tokens"] = self.tokens
+            body.pop("sentence")
+        return body
 
     def check_action_answer(self, args):
         # The judged block is there whatever the verdict; an empty judged_hash makes a

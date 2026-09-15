@@ -51,7 +51,9 @@ class DryRunTest(unittest.TestCase):
         self.assertIn('"venue": "uniswap_v3"', d2)
         self.assertIn('"to_asset": "WETH"', d2)
         self.assertIn(T.address("UNISWAP_V3_ARBITRUM"), d2)
-        self.assertIn('"amount_usd": 5', d2)
+        # Spec T3 §1: with no schema to read, the amount is printed under the cents name Police requires.
+        self.assertIn('"amount_usd_cents": 500', d2)
+        self.assertNotIn('"amount_usd"', d2)
         # D8 leaves contract_address empty for best_direct
         d8 = [l for l in lines if l.startswith("D8 — tools/call police.check_action")][0]
         self.assertIn('"venue": "best_direct"', d8)

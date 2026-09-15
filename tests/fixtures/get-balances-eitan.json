@@ -1,0 +1,12 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"wallet_id\": \"<removed>\",\n  \"address\": \"<removed>\",\n  \"chain\": \"arbitrum\",\n  \"custody\": {\n    \"type\": \"aeredium\",\n    \"mode\": \"custodial\"\n  },\n  \"native\": {\n    \"available\": true,\n    \"wei\": 1000000000000000,\n    \"source\": \"eth_getBalance on arbitrum via arb1.arbitrum.io\"\n  },\n  \"tokens\": {\n    \"road\": \"every verified stablecoin row this door holds for arbitrum, because the pact's compiled document names no assets this door could read\",\n    \"chains\": [\n      \"arbitrum\"\n    ],\n    \"balances\": [\n      {\n        \"chain\": \"arbitrum\",\n        \"asset\": \"USDC\",\n        \"contract\": \"0xaf88d065e77c8cC2239327C5EDb3A432268e5831\",\n        \"available\": true,\n        \"raw\": \"2000000\",\n        \"source\": \"eth_call balanceOf on arbitrum via arb1.arbitrum.io\",\n        \"decimals\": 6,\n        \"amount\": \"2.000000\"\n      },\n      {\n        \"chain\": \"arbitrum\",\n        \"asset\": \"USDT\",\n        \"contract\": \"0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9\",\n        \"available\": true,\n        \"raw\": \"0\",\n        \"source\": \"eth_call balanceOf on arbitrum via arb1.arbitrum.io\",\n        \"decimals\": 6,\n        \"amount\": \"0.000000\"\n      },\n      {\n        \"chain\": \"arbitrum\",\n        \"asset\": \"WETH\",\n        \"contract\": \"0x82aF49447D8a07e3bd95BD0d56f35241523fBab1\",\n        \"available\": true,\n        \"raw\": \"0\",\n        \"source\": \"eth_call balanceOf on arbitrum via arb1.arbitrum.io\",\n        \"decimals\": 18,\n        \"amount\": \"0.000000000000000000\"\n      }\n    ],\n    \"said\": \"this wallet holds 2.000000 USDC on arbitrum, 0.000000 USDT on arbitrum and 0.000000000000000000 WETH on arbitrum\"\n  },\n  \"pact_budget\": {\n    \"available\": false,\n    \"pact_id\": \"<removed>\",\n    \"reason\": \"budget is held by the access platform for pact <removed>; this door holds no counters of its own for it\"\n  }\n}"
+      }
+    ]
+  }
+}
