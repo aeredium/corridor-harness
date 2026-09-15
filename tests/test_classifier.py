@@ -121,7 +121,7 @@ class ClassifierTest(unittest.TestCase):
     def test_arguments_take_the_doors_own_names(self):
         police_props = {"role_id": {}, "action_kind": {}, "chain": {}, "asset_symbol": {}, "to_address": {}, "amount_usd_cents": {}, "child_wallet_id": {}}
         fields = h.action_fields(S.pay(1, to="DEAD_ADDRESS"), None)
-        args, omitted = h.arguments_for(police_props, fields, {"wallet_id": "w-1", "role_id": "payer.v1"})
+        args, omitted = h.arguments_for({"type": "object", "properties": police_props}, fields, {"wallet_id": "w-1", "role_id": "payer.v1"})
         self.assertEqual(args, {"action_kind": "transfer_stable", "chain": "arbitrum", "asset_symbol": "USDC", "amount_usd_cents": 100,
                                 "to_address": "0x000000000000000000000000000000000000dEaD", "child_wallet_id": "w-1", "role_id": "payer.v1"})
         self.assertEqual(omitted, [])
@@ -129,8 +129,12 @@ class ClassifierTest(unittest.TestCase):
         self.assertEqual(guide_args["venue"], "uniswap_v3")
         self.assertEqual(guide_args["to_asset"], "WETH")
         self.assertEqual(guide_args["contract_address"], "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45")
-        self.assertEqual(guide_args["amount_usd"], 5)
-        wallet_args, omitted = h.arguments_for({"wallet_id": {}, "action": {}, "amount_usd": {}, "chain": {}, "asset": {}, "police_receipt": {}}, fields, {"wallet_id": "w-1", "police_receipt": "r"})
+        # Spec T3 §1: with no schema, the amount takes the alias table's first name, the cents name Police requires.
+        self.assertEqual(guide_args["amount_usd_cents"], 500)
+        self.assertNotIn("amount_usd", guide_args)
+        wallet_schema = {"type": "object", "properties": {"wallet_id": {}, "action": {}, "amount_usd": {}, "chain": {}, "asset": {}, "police_receipt": {}}}
+        wallet_args, omitted = h.arguments_for(wallet_schema, fields, {"wallet_id": "w-1", "police_receipt": "r"})
+        self.assertEqual(wallet_args["amount_usd"], 1, "a door that declares only the dollars name is sent dollars")
         self.assertEqual(wallet_args["police_receipt"], "r")
         self.assertEqual(omitted, ["to_address"], "what the schema did not declare is named, not guessed")
 

@@ -358,14 +358,14 @@ TESTS: List[Test] = [
     Test(
         id="A4", series="A", who=HARNESS, agent="trader", title="The Wallet names its rails",
         rule="Proves Rule 18.",
-        text="**A4. The Wallet names its rails.** Ask Claude: *\"What chains can your wallet reach, and what are my balances?\"* Claude calls `wallet_status` and `get_balances`. `wallet_status` names the wallet's own chain, which must be one of ethereum, arbitrum and base; it does not yet name all three as rails, so a missing `rails` or `transfer_rails` field is a pass with a note pointing at Spec 49, not a failure. The native balance the Wallet states is compared with the chain's own `eth_getBalance`, whether the Wallet sends it as a JSON number or as a string. The ERC-20 balances are read from the chain's own RPC alone, because `get_balances` cannot yet state them (Spec 49), and the Wallet's own sentence is quoted in a note. Proves Rule 18. Evidence: the answer, compared with the chain's balances.",
+        text="**A4. The Wallet names its rails.** Ask Claude: *\"What chains can your wallet reach, and what are my balances?\"* Claude calls `wallet_status` and `get_balances`. `wallet_status` names the wallet's own chain, which must be one of ethereum, arbitrum and base; it does not yet name all three as rails, so a missing `rails` or `transfer_rails` field is a pass with a note pointing at Spec 49, not a failure. The native balance the Wallet states is compared with the chain's own `eth_getBalance`, whether the Wallet sends it as a JSON number or as a string. The token balances are compared with the Wallet's statement where it makes one: for each token `get_balances` states in `tokens.balances` (Spec 49) that the run file names, the Wallet's `raw` figure is compared with the chain's own `balanceOf` for that contract, and the Wallet's `tokens.road` sentence is printed after the balances; where `get_balances` states no tokens, they are read from the chain's own RPC alone and the Wallet's own sentence is quoted in a note. Proves Rule 18. Evidence: the answer, compared with the chain's balances.",
         says="What chains can your wallet reach, and what are my balances?",
         steps=[
             Check("wallet_names_its_chain"),
             Call("wallet.get_balances", {"wallet_id": "<wallet id>"}, ["wallet"], label="balances"),
             Check("balances_vs_chain"),
         ],
-        where="Answered by the MCP Wallet's wallet_status and get_balances under Rule 18 as Spec 49 leaves them; the native balance is compared with the chain's own eth_getBalance and the token balances are read from the chain alone",
+        where="Answered by the MCP Wallet's wallet_status and get_balances under Rule 18 as Spec 49 leaves them; the native balance is compared with the chain's own eth_getBalance and the token balances with the Wallet's own statement in tokens.balances where it makes one, else read from the chain alone (Spec T3)",
     ),
     Test(
         id="A5", series="A", who=HARNESS, agent="trader", title="The Wallet and Police agree on the pact's hash",

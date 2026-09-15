@@ -1,0 +1,108 @@
+{
+  "tools": [
+    {
+      "name": "police.check_action",
+      "title": "Check whether an action would pass",
+      "description": "ADVISORY. Judges a stated action against one role template and answers allow, deny or hold_for_manual_approval, naming the first rule that fired. It never signs, moves or spends. Amounts are integers of USD CENTS ($10.00 is 1000), never dollars.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "role_id": {
+            "type": "string",
+            "description": "Role template id, e.g. \"payer.v1\"."
+          },
+          "action_kind": {
+            "type": "string",
+            "description": "The signing method / action kind, e.g. \"transfer_stable\". Absent is refused fail-closed where a rule reads it."
+          },
+          "chain": {
+            "type": "string",
+            "description": "Chain id, e.g. \"aeredium\". On a crossing this is the SOURCE chain, and it is the chain every rule is judged on."
+          },
+          "to_chain": {
+            "type": "string",
+            "description": "For bridge_stable: the chain the crossing delivers on. Reported, not judged — every rule is judged on the source chain — and NOT part of the receipt’s action hash."
+          },
+          "asset_symbol": {
+            "type": "string",
+            "description": "Platform asset symbol, e.g. \"USDC\"."
+          },
+          "venue": {
+            "type": "string",
+            "description": "Execution venue id, e.g. \"uniswap_v3\", where the role names venues."
+          },
+          "function": {
+            "type": "string",
+            "description": "Contract function class, e.g. \"swap\", where the role names functions."
+          },
+          "amount_usd_cents": {
+            "type": "number",
+            "description": "The transaction amount as a whole number of USD CENTS. $10.00 is 1000. Fractions and dollar figures are refused."
+          },
+          "child_wallet_id": {
+            "type": "string",
+            "description": "Your agent child wallet id. Required for a RECEIPT: the wallet always names it, so a receipt without it could never match. The verdict itself does not need it."
+          },
+          "to_address": {
+            "type": "string",
+            "description": "The destination address, where the action has one. ON A CROSSING it is empty or the agent’s own address — a crossing delivers to itself — and anything else is refused before the action is judged. Part of the receipt’s action hash; lower-cased before hashing."
+          },
+          "counterparty_address": {
+            "type": "string",
+            "description": "The counterparty address, where the action has one. Part of the receipt’s action hash."
+          },
+          "contract_address": {
+            "type": "string",
+            "description": "The contract address, where the action has one. FOR A TRADE THIS IS THE DESTINATION the owner’s list is checked against — the venue’s contract — so a trade without it is refused; with venue best_direct leave it empty. FOR A CROSSING it is the issuer’s bridge contract on the source chain, checked against the same list. Part of the receipt’s action hash."
+          },
+          "method_selector": {
+            "type": "string",
+            "description": "The contract method selector, where the action has one. Part of the receipt’s action hash."
+          },
+          "spent_today_usd_cents": {
+            "type": "number",
+            "description": "Stated context: USD cents this credential has already spent today. Unstated is assumed zero, and the verdict says so."
+          },
+          "transactions_today": {
+            "type": "number",
+            "description": "Stated context: transactions this credential has already made today. Unstated is assumed zero, and the verdict says so."
+          },
+          "slippage_bps": {
+            "type": "number",
+            "description": "Declared maximum slippage, in basis points."
+          },
+          "price_deviation_bps": {
+            "type": "number",
+            "description": "Oracle-versus-execution price deviation, in basis points."
+          },
+          "simulation_passed": {
+            "type": "boolean",
+            "description": "The dry-run simulation verdict you expect. Produced at execution; absent fails closed."
+          },
+          "oracle_check_passed": {
+            "type": "boolean",
+            "description": "The oracle sanity verdict you expect. Produced at execution; absent fails closed."
+          },
+          "amount": {
+            "type": "number",
+            "description": "NOT ACCEPTED. Present only so an amount sent in dollars is refused rather than silently ignored."
+          },
+          "amount_usd": {
+            "type": "number",
+            "description": "NOT ACCEPTED. Present only so an amount sent in dollars is refused rather than silently ignored."
+          },
+          "amount_dollars": {
+            "type": "number",
+            "description": "NOT ACCEPTED. Present only so an amount sent in dollars is refused rather than silently ignored."
+          }
+        },
+        "required": [
+          "role_id",
+          "amount_usd_cents"
+        ],
+        "additionalProperties": false,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    }
+  ]
+}

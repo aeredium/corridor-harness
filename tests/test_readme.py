@@ -46,6 +46,26 @@ class ReadmeTest(unittest.TestCase):
     def test_it_says_what_a5_costs(self):
         self.assertIn("one metered `check_action` unit", self.text)
 
+    def test_it_says_the_required_field_wins(self):
+        """Spec T3 §1: the README names the decoy, the rule and what a dry run prints."""
+        self.assertIn("Spec T3", self.text)
+        self.assertIn("the required field wins", self.text)
+        self.assertIn("NOT ACCEPTED", self.text)
+        self.assertIn("A door that declares only `amount_usd`, one that speaks dollars, is still obeyed.", self.text)
+        self.assertIn("which for the amount is `amount_usd_cents`", self.text)
+        self.assertNotIn("A dry run, with no schema to read, prints the Guide's names.", self.text)
+
+    def test_it_says_a4_reads_the_tokens_where_the_wallet_puts_them(self):
+        """Spec T3 §2 and §3: the README says where A4 reads the tokens, what it prints, and what the rails line notes."""
+        self.assertIn("A4 reads the tokens where the Wallet puts them", self.text)
+        self.assertIn("`tokens.balances`", self.text)
+        self.assertIn("`tokens.road`", self.text)
+        self.assertIn("every verified stablecoin row this door holds for arbitrum", self.text)
+        self.assertIn("where the Wallet states them and they agree with the chain, A4 is a plain pass", self.text)
+        self.assertIn("`aeredium-testnet (2237)`", self.text)
+        self.assertIn("printed as a note, not a failure", self.text)
+        self.assertIn("on 15 September 2026 for A4 again (Spec T3)", self.text)
+
     def test_it_carries_the_chain_guards_sentence(self):
         self.assertIn("which the product does not offer; the series runs on ethereum, arbitrum and base. "
                       "Create the agent again on one of those and consent it.", self.text)

@@ -69,6 +69,8 @@ class SeriesIdsTest(unittest.TestCase):
 
     def test_the_fixture_says_it_is_amended(self):
         self.assertIn("**Amended 14 September 2026: A4, A5, A6 (Spec T2).**", self.document)
+        self.assertIn("**Amended 15 September 2026: A4 (Spec T3).**", self.document)
+        self.assertIn("The token balances are compared with the Wallet's statement where it makes one", self.document)
 
     def test_the_original_in_downloads_agrees_if_present(self):
         """The fixture is the Series as amended (Spec T2 §8): the three amended paragraphs are the
