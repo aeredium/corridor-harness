@@ -93,7 +93,7 @@ RELAY_LAPSED = "Tell the person to pay the subscription"
 
 
 # The sentence the harness refuses a money series in, when an agent's wallet is on a
-# chain the product does not offer (Spec T2 §6). Victor's Trader was on aeredium-testnet.
+# chain the product does not offer (Spec T2 §6). Bob's Trader was on aeredium-testnet.
 def chain_guard_sentence(label: str, chain: Optional[str]) -> str:
     return ("%s's wallet is on %s, which the product does not offer; the series runs on ethereum, "
             "arbitrum and base. Create the agent again on one of those and consent it." % (label, chain))
@@ -1022,7 +1022,7 @@ FACT_ALIASES: List[Tuple[str, List[str]]] = [
 
 # The words MCP Police writes on a field it declares only to refuse it: "NOT ACCEPTED.
 # Present only so an amount sent in dollars is refused rather than silently ignored."
-# Eitan's A5 failed on 14 September because the harness found that decoy first and sent
+# Alice's A5 failed on 14 September because the harness found that decoy first and sent
 # amount_usd: 5; Police refused it before judging, and no hash came back (Spec T3 §1).
 NOT_ACCEPTED = "NOT ACCEPTED"
 
@@ -1208,26 +1208,39 @@ def read_json(path: str) -> Optional[Any]:
         return json.load(handle)
 
 
+# The one tester entry the seeded run file holds (Spec T5 §1): a placeholder, never a person.
+EXAMPLE_TESTER = "example"
+
+# What the seeded run file opens with. JSON has no comments, so it is a key (Spec T5 §1).
+RUN_FILE_README = [
+    "Replace `example` with your own tester name and complete each field. Add one entry per tester.",
+    "This file is yours and stays on your machine. Never commit it, and never name a real tester in a public place.",
+    "It carries no secrets: labels, the owner's listed address per tester, and the chain RPC endpoints the harness",
+    "may READ from (public endpoints suffice; it only reads). The 'tokens' map names the token contracts whose",
+    "balances are read for the report; they are read targets, never destinations, and can be checked against",
+    "the block explorer.",
+    "agents: the labels the Trader and the Payer were consented under; payer_nogas is the label of a Payer funded",
+    "with USDC and no ETH, for C8, or null to skip C8. listed_address: the owner's own wallet address as the",
+    "Wallet lists it, the destination the Payer's transfers name; while it is empty the harness sends nothing",
+    "there, because it never invents a destination. payer_list_scope: 'agent' for a list for this agent only, or",
+    "'shared' for one list for all the owner's agents, as chosen at B4.",
+]
+
+
 def default_run_file() -> Dict[str, Any]:
-    """The skeleton the harness writes on first use for the owner to complete (Spec T1 §3). No secrets."""
+    """
+    The skeleton the harness writes on first use for the owner to complete (Spec T1 §3, Spec T5 §1).
+    No secrets, and no real name: one tester entry named `example` with a placeholder in every
+    field, under a readme that says to replace it. The harness never writes a person's name.
+    """
     return {
-        "_read_me": [
-            "Complete this file once. It carries no secrets: labels, the owner's listed address per tester,",
-            "and the chain RPC endpoints the harness may READ from (public endpoints suffice; it only reads).",
-            "The 'tokens' map names the token contracts whose balances are read for the report; they are",
-            "read targets, never destinations, and can be checked against the block explorer.",
-        ],
+        "_readme": list(RUN_FILE_README),
         "issuer": DEFAULT_ISSUER,
         "testers": {
-            "eitan": {
-                "agents": {"trader": "eitan-trader", "payer": "eitan-payer", "payer_nogas": None},
+            EXAMPLE_TESTER: {
+                "agents": {"trader": "%s-trader" % EXAMPLE_TESTER, "payer": "%s-payer" % EXAMPLE_TESTER, "payer_nogas": None},
                 "listed_address": "",
                 "payer_list_scope": "agent",
-            },
-            "victor": {
-                "agents": {"trader": "victor-trader", "payer": "victor-payer", "payer_nogas": None},
-                "listed_address": T.address("VICTOR_LISTED"),
-                "payer_list_scope": "shared",
             },
         },
         "chains": {
@@ -1842,7 +1855,7 @@ class Runner:
     def role_said(self, role: str) -> str:
         """
         The role the agent itself reports, which is not always the role the run file
-        filed its label under: Eitan's first run was consented as a Payer under the
+        filed its label under: Alice's first run was consented as a Payer under the
         Trader's label. A5 asks the question this role can ask (Spec T2 §2).
         """
         role_id = str(self.facts(role).get("role_id") or "").lower()
@@ -1857,7 +1870,7 @@ class Runner:
         What a tester needs to be told the moment a consent lands (Spec T2 §6, §7, §9):
         whether the agent that answered is the one this label is for, and whether its
         wallet is on a chain the product offers. Both were found the hard way on
-        14 September: Eitan consented a Payer under the Trader's label, and Victor's
+        14 September: Alice consented a Payer under the Trader's label, and Bob's
         Trader was on a chain the product no longer offers.
         """
         out: List[str] = []
@@ -2713,7 +2726,7 @@ class Runner:
         judgement, and it is unchanged. The rails are printed as the door names them: none
         stated is a pass with a note naming Spec 49, never a failure; stated, each is
         printed with its chain id, and any rail outside ethereum, arbitrum and base —
-        Eitan's door names aeredium-testnet (2237) — is a note, not a failure. The door is
+        Alice's door names aeredium-testnet (2237) — is a note, not a failure. The door is
         telling the truth about itself.
         """
         role = test.agent or "trader"
@@ -3391,6 +3404,16 @@ def load_run_file(path: str, say: Callable[[str], None]) -> Dict[str, Any]:
     return skeleton
 
 
+def unknown_tester_sentence(path: str, tester: str) -> str:
+    """
+    The refusal for a --tester the run file does not name (Spec T5 §2). It names the file and
+    the entry to add, and never the testers the file holds: a run file may hold names its
+    reader is not entitled to see.
+    """
+    return ("The run file at %s names no tester called %s. Add an entry for %s under `testers`; "
+            "the entry named `%s` shows the fields." % (path, tester, tester, EXAMPLE_TESTER))
+
+
 def dry_lines(series: Sequence[str], run_file: Optional[Dict[str, Any]] = None, tester: str = "dry", start_at: Optional[str] = None) -> List[str]:
     """Every call the harness would make, in order, with no network (Spec T1 §8, §11)."""
     lines: List[str] = []
@@ -3431,7 +3454,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     oauth = Oauth(issuer)
     testers = run_file.get("testers") or {}
     if args.tester not in testers:
-        print("The run file names no tester called %s; the testers are %s." % (args.tester, ", ".join(testers) or "none"))
+        print(unknown_tester_sentence(args.run_file, args.tester))
         return 2
 
     if args.consent:
