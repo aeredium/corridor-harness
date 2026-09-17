@@ -2,7 +2,7 @@
 A4 reads the tokens where the Wallet puts them, and prints the rails as the door names
 them (Spec T3 §2, §3).
 
-Eitan's run of 14 September 15:41: the Wallet (Spec 49) answered get_balances with
+Alice's run of 14 September 15:41: the Wallet (Spec 49) answered get_balances with
 `tokens: {balances: [{asset, chain, contract, decimals, raw, amount, available, source},
 …], chains, road, said}`, stating 2 USDC, 0 USDT and 0 WETH on Arbitrum — the same
 figures the harness read from the chain — and the harness, looking for a LIST under
@@ -11,7 +11,7 @@ not (Spec 49)" while quoting the Wallet's own sentence that states them. Its doo
 names aeredium-testnet (2237) among its rails.
 
 The fixtures carry the Wallet's shape as its code writes it (stablepro-agent-server,
-doorway_wallets.go), with the figures Eitan's run reported and the wallet's own id and
+doorway_wallets.go), with the figures Alice's run reported and the wallet's own id and
 address removed; the token contracts are the public ones the run file names too.
 """
 import json
@@ -60,8 +60,8 @@ def recorded(name):
     return json.loads(envelope["result"]["content"][0]["text"])
 
 
-EITAN_BALANCES = recorded("get-balances-eitan.json")
-EITAN_STATUS = recorded("wallet-status-eitan-rails.json")
+ALICE_BALANCES = recorded("get-balances-alice.json")
+ALICE_STATUS = recorded("wallet-status-alice-rails.json")
 
 
 def row(asset, contract, raw, decimals):
@@ -76,8 +76,8 @@ def tokens_block(rows, road=ROAD):
     return {"road": road, "chains": ["arbitrum"], "balances": rows, "said": "this wallet holds what the rows say"}
 
 
-class EitanDoor(FakeSession):
-    """The fake corridor answering wallet_status and get_balances with Eitan's recorded shapes."""
+class AliceDoor(FakeSession):
+    """The fake corridor answering wallet_status and get_balances with Alice's recorded shapes."""
 
     def __init__(self, status=None, balances=None, **kwargs):
         FakeSession.__init__(self, **kwargs)
@@ -136,9 +136,9 @@ class ChainBase(unittest.TestCase):
 
 
 class TokensWhereTheWalletPutsThemTest(ChainBase):
-    def test_eitans_get_balances_is_a_plain_pass_with_the_three_tokens_compared(self):
+    def test_alices_get_balances_is_a_plain_pass_with_the_three_tokens_compared(self):
         """Spec 49's shape, the three figures agreeing with the chain: no note, and the road in the line."""
-        session = EitanDoor(balances=EITAN_BALANCES, role_id="trader.v1", rails=THREE_RAILS)
+        session = AliceDoor(balances=ALICE_BALANCES, role_id="trader.v1", rails=THREE_RAILS)
         runner, a4 = self.a4(session)
         self.assertEqual(a4.outcome, h.PASS, a4.sentence)
         self.assertIsNone(a4.note)
@@ -154,9 +154,9 @@ class TokensWhereTheWalletPutsThemTest(ChainBase):
         # every contract compared is one the run file names, read once each
         self.assertEqual(sorted(set(self.eth_calls)), sorted({USDC.lower(), USDT.lower(), WETH.lower()}))
 
-    def test_eitans_whole_a4_as_the_harness_now_reads_it(self):
-        """Both of Eitan's recorded answers: the tokens agree, the rails name a chain outside the three, and the only note is that."""
-        session = EitanDoor(status=EITAN_STATUS, balances=EITAN_BALANCES, role_id="trader.v1")
+    def test_alices_whole_a4_as_the_harness_now_reads_it(self):
+        """Both of Alice's recorded answers: the tokens agree, the rails name a chain outside the three, and the only note is that."""
+        session = AliceDoor(status=ALICE_STATUS, balances=ALICE_BALANCES, role_id="trader.v1")
         runner, a4 = self.a4(session)
         self.assertEqual(a4.outcome, h.PASS_NOTE, a4.sentence)
         self.assertNotIn(NOTE_NOT_STATED, json.dumps(a4.note))
@@ -233,14 +233,14 @@ class TokensWhereTheWalletPutsThemTest(ChainBase):
         self.assertIn("8 USDC on base (not compared: the run file names no RPC for base)", a4.line)
 
     def test_the_road_reaches_the_report(self):
-        session = EitanDoor(balances=EITAN_BALANCES, role_id="trader.v1", rails=THREE_RAILS)
+        session = AliceDoor(balances=ALICE_BALANCES, role_id="trader.v1", rails=THREE_RAILS)
         runner = runner_for(session, self.tmp, chains=CHAINS)
         runner.run(["A"])
         self.assertIn(ROAD, runner.report())
         self.assertTrue(runner.series_a_passed, runner.series_a_gate_said)
 
     def test_no_rpc_still_prints_what_the_wallet_states(self):
-        session = EitanDoor(balances=EITAN_BALANCES, role_id="trader.v1", rails=THREE_RAILS)
+        session = AliceDoor(balances=ALICE_BALANCES, role_id="trader.v1", rails=THREE_RAILS)
         runner, a4 = self.a4(session, chains={})
         self.assertEqual(a4.outcome, h.PASS_NOTE)
         self.assertIsNone(runner.a4_native_balance, "no RPC, so the check could not be made")
@@ -273,8 +273,8 @@ class TokensWhereTheWalletPutsThemTest(ChainBase):
 
 
 class TheRailsLineTest(ChainBase):
-    def test_eitans_wallet_status_names_a_rail_outside_the_three_as_a_note(self):
-        session = EitanDoor(status=EITAN_STATUS, role_id="trader.v1")
+    def test_alices_wallet_status_names_a_rail_outside_the_three_as_a_note(self):
+        session = AliceDoor(status=ALICE_STATUS, role_id="trader.v1")
         runner = runner_for(session, self.tmp, chains=CHAINS)
         outcomes = {o.test.id: o for o in runner.run(["A"])}
         a4 = outcomes["A4"]
@@ -309,12 +309,12 @@ class TheRailsLineTest(ChainBase):
 
     def test_a_wallet_off_the_three_chains_still_fails_whatever_its_rails(self):
         """The judgement is unchanged: the rails line notes; the chain guard judges."""
-        runner, a4 = self.a4(FakeSession(role_id="trader.v1", chain="aeredium-testnet", rails=EITAN_STATUS["rails"]))
+        runner, a4 = self.a4(FakeSession(role_id="trader.v1", chain="aeredium-testnet", rails=ALICE_STATUS["rails"]))
         self.assertEqual(a4.outcome, h.FAIL)
         self.assertIn("which the product does not offer", a4.sentence)
 
     def test_rail_names_reads_the_shapes_a_door_may_send(self):
-        self.assertEqual(h.rail_names(EITAN_STATUS["rails"]),
+        self.assertEqual(h.rail_names(ALICE_STATUS["rails"]),
                          [("aeredium-testnet", "2237"), ("arbitrum", "42161"), ("base", "8453"), ("ethereum", "1")])
         self.assertEqual(h.rail_names(["ethereum", "arbitrum"]), [("ethereum", None), ("arbitrum", None)])
         self.assertEqual(h.rail_names({"ethereum": 1, "base": {"chain_id": 8453}, "arbitrum": True}),

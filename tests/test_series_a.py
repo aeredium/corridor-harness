@@ -135,7 +135,7 @@ class A5Test(SeriesABase):
         self.assertEqual(sent["amount_usd_cents"], 500)
 
     def test_a_payer_asks_c1s_question(self):
-        """Eitan's run was consented as a Payer under the Trader's label; A5 asks what it can ask."""
+        """Alice's run was consented as a Payer under the Trader's label; A5 asks what it can ask."""
         session = FakeSession(role_id="payer.v1", chain="arbitrum")
         _, a5 = self.outcome_for("A5", session)
         sent = [c[2] for c in session.calls if c[0] == "A5" and c[1] == "police.check_action"][0]

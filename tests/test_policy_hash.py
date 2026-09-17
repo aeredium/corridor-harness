@@ -22,7 +22,7 @@ except ImportError:  # run as a top-level module by `unittest discover tests`
     from fakes import FakeSession, runner_for
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
-EITAN = "0x5237c7e1b0c4f1a9d8e3b26a5f470c91d2846ebb73f5a0c1e94d6b28fa310577"
+ALICE = "0x5237c7e1b0c4f1a9d8e3b26a5f470c91d2846ebb73f5a0c1e94d6b28fa310577"
 
 
 def answer_from(name):
@@ -34,38 +34,38 @@ def answer_from(name):
 
 class HashReaderTest(unittest.TestCase):
     def test_the_recorded_wallet_status_answer_states_the_hash(self):
-        found = h.wallet_policy_hash(answer_from("wallet-status-eitan.json").data)
+        found = h.wallet_policy_hash(answer_from("wallet-status-alice.json").data)
         self.assertTrue(found.startswith("0x5237c7e1"), found)
-        self.assertEqual(found, EITAN)
+        self.assertEqual(found, ALICE)
 
     def test_the_pact_is_read_whole(self):
-        pact = h.wallet_pact(answer_from("wallet-status-eitan.json").data)
-        self.assertEqual(pact["policy_hash"], EITAN)
+        pact = h.wallet_pact(answer_from("wallet-status-alice.json").data)
+        self.assertEqual(pact["policy_hash"], ALICE)
         self.assertEqual(pact["state"], "active")
         self.assertEqual(pact["policy_generation"], 4)
 
     def test_a_change_between_two_answers_is_seen(self):
-        before = h.wallet_policy_hash(answer_from("wallet-status-eitan.json").data)
-        after = h.wallet_policy_hash(answer_from("wallet-status-eitan-after-save.json").data)
+        before = h.wallet_policy_hash(answer_from("wallet-status-alice.json").data)
+        after = h.wallet_policy_hash(answer_from("wallet-status-alice-after-save.json").data)
         self.assertNotEqual(before, after)
         self.assertTrue(h.hash_moved(before, after), "a save moves the hash")
         self.assertFalse(h.hash_moved(before, before), "an unchanged pact does not")
-        self.assertFalse(h.hash_moved(EITAN, EITAN.upper().replace("0X", "0x")),
+        self.assertFalse(h.hash_moved(ALICE, ALICE.upper().replace("0X", "0x")),
                          "the same hash in another case is the same hash")
 
     def test_get_balances_is_the_second_source(self):
-        balances = {"wallet_id": "w-1", "pact_budget": {"id": "p-1", "policy_hash": EITAN, "spent_usd": 0}}
-        self.assertEqual(h.wallet_policy_hash(balances), EITAN)
+        balances = {"wallet_id": "w-1", "pact_budget": {"id": "p-1", "policy_hash": ALICE, "spent_usd": 0}}
+        self.assertEqual(h.wallet_policy_hash(balances), ALICE)
 
     def test_a_stray_transaction_hash_is_not_the_policy_hash(self):
         """The fallback reads a hash named for the policy, never a bare `hash` key (Spec T2 §1)."""
         self.assertIsNone(h.wallet_policy_hash({"pact": {"id": "p-1"}, "last_tx": {"hash": "0x" + "ab" * 32}}))
-        self.assertEqual(h.wallet_policy_hash({"policy_hash": EITAN}), EITAN, "a flat policy_hash is still read")
+        self.assertEqual(h.wallet_policy_hash({"policy_hash": ALICE}), ALICE, "a flat policy_hash is still read")
 
     def test_a_wallet_that_states_no_hash_reads_as_none(self):
         self.assertIsNone(h.wallet_policy_hash({"wallet_id": "w-1", "chain": "arbitrum"}))
         self.assertIsNone(h.wallet_policy_hash(None))
-        self.assertTrue(h.hash_moved(None, EITAN))
+        self.assertTrue(h.hash_moved(None, ALICE))
 
 
 class PactInTheReportTest(unittest.TestCase):
@@ -81,7 +81,7 @@ class PactInTheReportTest(unittest.TestCase):
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
         self.assertIn("Pact p-1, state active, policy generation 3.", report)
-        self.assertIn("Policy hash at the start %s" % EITAN, report)
+        self.assertIn("Policy hash at the start %s" % ALICE, report)
 
 
 class JudgedBlockTest(unittest.TestCase):
@@ -89,8 +89,8 @@ class JudgedBlockTest(unittest.TestCase):
 
     def test_every_verdict_carries_the_hash(self):
         for verdict in ("allow", "deny", "hold"):
-            data = {"verdict": verdict, "judged": {"pact_id": "p-1", "policy_hash": EITAN}}
-            self.assertEqual(h.judged_policy_hash(data), EITAN, verdict)
+            data = {"verdict": verdict, "judged": {"pact_id": "p-1", "policy_hash": ALICE}}
+            self.assertEqual(h.judged_policy_hash(data), ALICE, verdict)
             self.assertIsNotNone(h.judged_in(data), verdict)
 
     def test_an_answer_without_a_judged_block_reads_as_none(self):
@@ -112,7 +112,7 @@ class SecondSourceTest(unittest.TestCase):
         session = FakeSession(role_id="trader.v1")
         runner = runner_for(session, self.tmp)
         runner.session("trader", "A5")
-        self.assertEqual(runner.read_policy_hash("trader", "A5"), EITAN)
+        self.assertEqual(runner.read_policy_hash("trader", "A5"), ALICE)
         self.assertEqual([c for c in session.calls if c[1] == "wallet.get_balances"], [],
                          "the second source is only reached when the first states none")
 
@@ -120,7 +120,7 @@ class SecondSourceTest(unittest.TestCase):
         session = FakeSession(role_id="trader.v1", pact_in_status=False)
         runner = runner_for(session, self.tmp)
         runner.session("trader", "A5")
-        self.assertEqual(runner.read_policy_hash("trader", "A5"), EITAN)
+        self.assertEqual(runner.read_policy_hash("trader", "A5"), ALICE)
         self.assertEqual(len([c for c in session.calls if c[1] == "wallet.get_balances"]), 1)
         self.assertEqual((runner.pacts.get("trader") or {}).get("pact_id"), "p-1")
 
@@ -160,7 +160,7 @@ class PauseWithNoHashTest(unittest.TestCase):
         # what matters here is that the hash half read the Wallet and did not fail.
         self.assertIn(outcome.outcome, (h.PASS, h.PASS_NOTE), outcome.sentence)
         self.assertIn("the policy hash did not move", outcome.sentence)
-        self.assertIn(EITAN, outcome.sentence)
+        self.assertIn(ALICE, outcome.sentence)
 
 
 class OneHashEverywhereTest(unittest.TestCase):
@@ -181,16 +181,16 @@ class OneHashEverywhereTest(unittest.TestCase):
         return runner.check_one_hash_everywhere(S.BY_ID["F4"], S.Check("one_hash_everywhere", {"test": "D2"}), None)
 
     def test_three_that_agree_pass(self):
-        outcome = self.f4_over(EITAN, EITAN)
+        outcome = self.f4_over(ALICE, ALICE)
         self.assertEqual(outcome.outcome, h.PASS, outcome.sentence)
         self.assertIn("the receipt, the ticket and the Wallet's pact carry one policy hash", outcome.sentence)
-        self.assertIn("wallet_status %s" % EITAN, outcome.line)
+        self.assertIn("wallet_status %s" % ALICE, outcome.line)
 
     def test_one_that_differs_fails_with_all_three_quoted(self):
-        outcome = self.f4_over("0xdead", EITAN)
+        outcome = self.f4_over("0xdead", ALICE)
         self.assertEqual(outcome.outcome, h.FAIL)
         self.assertIn("0xdead", outcome.line)
-        self.assertIn(EITAN, outcome.line)
+        self.assertIn(ALICE, outcome.line)
 
 
 class NumericBalanceTest(unittest.TestCase):

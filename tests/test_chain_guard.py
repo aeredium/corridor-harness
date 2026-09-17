@@ -2,7 +2,7 @@
 The chain guard (Spec T2 §6): a wallet on a chain the product does not offer runs no
 money series, and is told so in words.
 
-Victor's Trader lived on `aeredium-testnet`. That is Victor's to recreate, not the
+Bob's Trader lived on `aeredium-testnet`. That is Bob's to recreate, not the
 harness's — but the harness must refuse the money series for it plainly, and Series A
 must still run and report, because Series A moves nothing.
 """
@@ -129,7 +129,7 @@ class ChainGuardTest(unittest.TestCase):
         self.assertEqual(notes[0], "Note: " + GUARD)
 
     def test_the_consent_says_when_the_wrong_agent_was_consented(self):
-        """Eitan's first run: a Payer consented under the Trader's label, found at consent time."""
+        """Alice's first run: a Payer consented under the Trader's label, found at consent time."""
         session = FakeSession(chain="arbitrum", role_id="payer.v1")
         runner = runner_for(session, self.tmp)
         runner.session("trader", "consent")

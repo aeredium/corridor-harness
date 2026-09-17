@@ -70,24 +70,26 @@ class SeriesIdsTest(unittest.TestCase):
     def test_the_fixture_says_it_is_amended(self):
         self.assertIn("**Amended 14 September 2026: A4, A5, A6 (Spec T2).**", self.document)
         self.assertIn("**Amended 15 September 2026: A4 (Spec T3).**", self.document)
+        self.assertIn("**Amended 17 September 2026: the opening, B4 and H4 name no tester (Spec T5).**", self.document)
         self.assertIn("The token balances are compared with the Wallet's statement where it makes one", self.document)
 
     def test_the_original_in_downloads_agrees_if_present(self):
-        """The fixture is the Series as amended (Spec T2 §8): the three amended paragraphs are the
-        only bytes that changed, and every other paragraph of the original is still in it verbatim."""
+        """The fixture is the Series as amended (Spec T2 §8, Spec T5): the six amended paragraphs are
+        the only bytes that changed, and every other paragraph of the original is still in it verbatim.
+        The opening, B4 and H4 named the two testers; since 17 September 2026 they name them by role."""
         if not os.path.exists(ORIGINAL):
             self.skipTest("the Series document is not in ~/Downloads on this machine")
         original = read(ORIGINAL)
         self.assertEqual(ids_in(original), self.document_ids, "no test id was added, removed or moved")
         amended, kept = [], 0
         for paragraph in original.split("\n\n"):
-            if paragraph.startswith(("**A4.", "**A5.", "**A6.")):
+            if paragraph.startswith(("**A4.", "**A5.", "**A6.", "**B4.", "**H4.", "Two testers run the series independently")):
                 amended.append(paragraph)
                 self.assertNotIn(paragraph, self.document, "an amended paragraph was left unamended")
             else:
                 kept += 1
-                self.assertIn(paragraph, self.document, "the fixture changed a paragraph Spec T2 did not amend")
-        self.assertEqual(len(amended), 3, "A4, A5 and A6 are the three paragraphs amended")
+                self.assertIn(paragraph, self.document, "the fixture changed a paragraph no spec amended")
+        self.assertEqual(len(amended), 6, "A4, A5 and A6 (Spec T2, T3) and the opening, B4 and H4 (Spec T5) are the six paragraphs amended")
         self.assertGreater(kept, 60)
 
 

@@ -46,7 +46,7 @@ def trade_fields():
 
 
 class PoliceSchemaFixtureTest(unittest.TestCase):
-    """The fixture really is the shape Eitan's A5 met: both names, one required, one a decoy."""
+    """The fixture really is the shape Alice's A5 met: both names, one required, one a decoy."""
 
     def test_the_fixture_declares_the_decoy_beside_the_required_field(self):
         schema = police_tool()["inputSchema"]
