@@ -17,19 +17,14 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import corridor_harness as h  # noqa: E402
+import series as S  # noqa: E402
 import tables as T  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FIXTURE = os.path.join("tests", "fixtures", "series-1.0.md")
 
 # The two names the harness used to seed, rot13 so this file does not carry them (Spec T5 §5).
 REAL_NAMES = tuple(codecs.decode(word, "rot13") for word in ("rvgna", "ivpgbe"))
-
-# The Series document names its two testers in its own text, at B4 and H4 and in its opening,
-# and the address table pins one tester's listed destination under his name. Spec T5's fence
-# leaves the series and the address tables untouched, and the fixture is the document byte for
-# byte, so de-naming them is a Series amendment. The guard exempts exactly these three files,
-# and fails the moment one of them is clean, so that the exemption is taken away then.
-THE_SERIES_DOCUMENT = ("series.py", "tables.py", os.path.join("tests", "fixtures", "series-1.0.md"))
 
 THE_REFUSAL = ("The run file at %s names no tester called %s. Add an entry for %s under `testers`; "
                "the entry named `example` shows the fields.")
@@ -156,10 +151,16 @@ class NoRealTesterInTheRepositoryTest(unittest.TestCase):
             found = names_in(path) + names_in(read(path, "rb").decode("utf-8", "replace"))
             if found:
                 carriers[path] = sorted(set(found))
-        exempt = {path: carriers.pop(path) for path in THE_SERIES_DOCUMENT if path in carriers}
         self.assertEqual(carriers, {}, "a file in the repository names a real tester (REAL_NAMES, rot13)")
-        for path in THE_SERIES_DOCUMENT:
-            self.assertIn(path, exempt, "%s no longer names a tester: take it out of THE_SERIES_DOCUMENT so the guard covers it" % path)
+
+    def test_the_series_names_its_two_testers_by_role(self):
+        """The Series document's own words as amended 17 September 2026 (Spec T5), and series.py with them."""
+        document = read(FIXTURE)
+        self.assertIn("**Amended 17 September 2026: the opening, B4 and H4 name no tester (Spec T5).**", document)
+        self.assertIn("Two testers run the series independently, each with one Trader and one Payer", document)
+        self.assertIn("(one tester's listed destination `%s`, and the other tester's equivalent)" % T.address("TESTER_LISTED"), S.BY_ID["B4"].text)
+        self.assertIn("One owner's account page shows no agent of the other's, and Claude connected as that owner's Trader "
+                      "cannot name the other owner's wallet.", S.BY_ID["H4"].text)
 
     def test_the_readme_uses_invented_names_and_says_the_run_file_stays_home(self):
         text = read("README.md")

@@ -91,10 +91,10 @@ PINNED: Dict[str, Pinned] = {
         "the agents' trading-fee address on Arbitrum and Base",
         "Series §8 F2",
     ),
-    # --- a tester's listed destination the Series itself names ---
-    "VICTOR_LISTED": Pinned(
+    # --- the one tester's listed destination the Series itself names, by role (Spec T5) ---
+    "TESTER_LISTED": Pinned(
         "0xfec697fc2D4323aE7618BFF2347C01E29653FB57",
-        "Victor's listed destination, his own wallet (B4)",
+        "one tester's listed destination, the owner's own wallet (B4)",
         "Series §4 B4",
     ),
 }

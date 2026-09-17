@@ -421,7 +421,7 @@ TESTS: List[Test] = [
     Test(
         id="B4", series="B", who=PAUSE, agent="payer", title="The Payer's list",
         rule="Proves Rule 5.",
-        text="**B4. The Payer's list.** For the Payer, write one line: the owner's own wallet address (Victor's listed destination `0xfec697fc2D4323aE7618BFF2347C01E29653FB57`, and Eitan's equivalent). Choose \"one list for all my agents\" for one tester and \"a list for this agent only\" for the other, so both answers are exercised. Proves Rule 5. Evidence: the mandate table reading the list back (Rule 21).",
+        text="**B4. The Payer's list.** For the Payer, write one line: the owner's own wallet address (one tester's listed destination `0xfec697fc2D4323aE7618BFF2347C01E29653FB57`, and the other tester's equivalent). Choose \"one list for all my agents\" for one tester and \"a list for this agent only\" for the other, so both answers are exercised. Proves Rule 5. Evidence: the mandate table reading the list back (Rule 21).",
         steps=[Pause("Open Set limits for the Payer, write one line — the owner's listed address the harness prints below — choose the list scope the run file names for this tester, and save with your passkey; then press Enter.",
                      agent="payer", hash_moves=True)],
         where="Answered by the MCP Wallet's wallet_status under Rule 5; the mandate table is read by hand (Rule 21)",
@@ -824,7 +824,7 @@ TESTS: List[Test] = [
     ),
     Test(
         id="H4", series="H", who=PERSON, title="Two owners do not see each other", rule="Proves Rule 17.",
-        text="**H4. Two owners do not see each other.** Eitan's account page shows no agent of Victor's, and Claude connected as Eitan's Trader cannot name Victor's wallet. Proves Rule 17. Evidence: both pages.",
+        text="**H4. Two owners do not see each other.** One owner's account page shows no agent of the other's, and Claude connected as that owner's Trader cannot name the other owner's wallet. Proves Rule 17. Evidence: both pages.",
     ),
 ]
 

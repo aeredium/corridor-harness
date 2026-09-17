@@ -15,7 +15,7 @@ The Mac's own `python3`, which is Python 3.9.6, and nothing else: the standard l
 - `corridor_harness.py` — the harness: the OAuth road, the MCP session, the chain reader and decoders, the sentence matcher, the classifier, the runner and the report.
 - `series.py` — every test of the Series as data: id, rule, the Series' own text, the words said to Claude, the action, the expected kind, the expected sentence, the pause text. The Owner's Guide §10 table is transcribed here.
 - `tables.py` — every address the harness may ever send, pinned verbatim with the page each was read from.
-- `tests/` — the unit tests; `tests/fixtures/series-1.0.md` is the Series document, amended on 14 September 2026 for A4, A5 and A6 and on 15 September 2026 for A4 again (Spec T3), and otherwise byte for byte, so the tests can prove the ids against it without reaching into anybody's Downloads folder. The amendments are the only difference, and a test proves that every other paragraph is still the document's own.
+- `tests/` — the unit tests; `tests/fixtures/series-1.0.md` is the Series document, amended on 14 September 2026 for A4, A5 and A6, on 15 September 2026 for A4 again (Spec T3), and on 17 September 2026 so that its opening, B4 and H4 name the two testers by role and not by name (Spec T5), and otherwise byte for byte, so the tests can prove the ids against it without reaching into anybody's Downloads folder. The amendments are the only difference, and a test proves that every other paragraph is still the document's own.
 
 ## Running it
 

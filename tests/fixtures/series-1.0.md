@@ -4,6 +4,8 @@
 
 **Amended 15 September 2026: A4 (Spec T3).**
 
+**Amended 17 September 2026: the opening, B4 and H4 name no tester (Spec T5).**
+
 **Version 1.0, 13 September 2026, Melbourne.** Prepared for Albert Dadon. Purpose: to prove, with evidence a customer could read, that the corridor Claude → AER Connect (mcppro.aeredium.io) → MCP Police and MCP Wallet → the access platform → the AERKey policy engine does end to end what the twenty-one restated rules and the three rulings of 13 September say it does, so that the website can be written and the product sold on the strength of the results. Everything below refers to the product as it runs tonight: Wallet through Spec 46, engine library through E4 (template version 6), Police 1.8.0 through Spec 17, connector through Spec 39.
 
 ---
@@ -14,7 +16,7 @@ A test passes when the corridor does what the numbered rule says, and says so in
 
 For every test the tester keeps three things: the words said to Claude and Claude's whole answer, copied as text; every transaction hash Claude reports; and the row the account page's record shows for that action. Where a test moves money, the tester also keeps the block explorer's page for each hash. Results are pasted back as text, in the order of the tests, one heading per test id. I read each result against the rule and the code, and the pass or failure is written into a results edition of this document.
 
-Two testers run the series independently, Eitan Katz and Victor Huang, each with one Trader and one Payer, so that every role is exercised by two people and two wallets. Where the two disagree, the corridor is asked a third time by Albert.
+Two testers run the series independently, each with one Trader and one Payer, so that every role is exercised by two people and two wallets. Where the two disagree, the corridor is asked a third time by Albert.
 
 ## 2. Funds, chains and cost
 
@@ -50,7 +52,7 @@ Before funding, every owner opens Set limits on each agent and saves once (the r
 
 **B3. The Trader's list.** For the Trader, write exactly these lines and save: Uniswap SwapRouter02 on Ethereum and Arbitrum `0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45`, Uniswap on Base `0x2626664c2603336E57B271c5C0b26F421741e481`, PancakeSwap SmartRouter on Ethereum `0x13f4EA83D0bd40E75C8222255bc855a974568Dd4`, on Arbitrum `0x32226588378236Fd0c7c4053999F88aC0e5cAc77`, on Base `0x678Aa4bF4E210cf2166753e054d5b7c31cc7fa86`, Circle CCTP TokenMessengerV2 `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d`, Tether USDT0 on Ethereum `0x6C96dE32CEa08842dcc4058c14d3aaAD7Fa41dee` and on Arbitrum `0x14E4A1B13bf7F943c8ff7C51fb60FA964A298D92`. Choose "a list for this agent only". The save succeeds, the hash moves, and within a minute Claude's `can_sign` prints the new hash. Proves Rule 9 (the mirror refreshes) and Rule 4. Evidence: old hash, new hash, the minute.
 
-**B4. The Payer's list.** For the Payer, write one line: the owner's own wallet address (Victor's listed destination `0xfec697fc2D4323aE7618BFF2347C01E29653FB57`, and Eitan's equivalent). Choose "one list for all my agents" for one tester and "a list for this agent only" for the other, so both answers are exercised. Proves Rule 5. Evidence: the mandate table reading the list back (Rule 21).
+**B4. The Payer's list.** For the Payer, write one line: the owner's own wallet address (one tester's listed destination `0xfec697fc2D4323aE7618BFF2347C01E29653FB57`, and the other tester's equivalent). Choose "one list for all my agents" for one tester and "a list for this agent only" for the other, so both answers are exercised. Proves Rule 5. Evidence: the mandate table reading the list back (Rule 21).
 
 **B5. The template is a floor the owner narrows.** On the Payer's form, try to permit the action *trade*; on the Trader's, try to permit *transfer*. The form offers no such control, or refuses it. Proves Rule 3. Evidence: what the form shows.
 
@@ -160,7 +162,7 @@ These are run by Albert on the boxes, with one tester ready in Claude, and each 
 
 **H3. The period total holds.** Set the period total to 12 dollars, run three five-dollar payments on the Payer; the third is held, not refused. Set it back. Proves Rule 7's second line. Evidence: the hold.
 
-**H4. Two owners do not see each other.** Eitan's account page shows no agent of Victor's, and Claude connected as Eitan's Trader cannot name Victor's wallet. Proves Rule 17. Evidence: both pages.
+**H4. Two owners do not see each other.** One owner's account page shows no agent of the other's, and Claude connected as that owner's Trader cannot name the other owner's wallet. Proves Rule 17. Evidence: both pages.
 
 ## 11. Exit criteria for selling
 
