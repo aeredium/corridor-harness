@@ -90,6 +90,30 @@ class ReadmeTest(unittest.TestCase):
             self.assertNotIn("%s," % test_id, said[0], "%s does not gate money" % test_id)
         self.assertIn("A4's native-balance check", said[0])
 
+    def test_it_names_version_1_2_as_the_series_the_harness_runs(self):
+        """Spec T6 §4: the README names version 1.2, sixty-three tests, and the fixture that carries it."""
+        self.assertIn("version 1.2, 17 September 2026", self.text)
+        self.assertIn("sixty-three tests", self.text)
+        self.assertIn("`tests/fixtures/series-1.2.md`", self.text)
+        self.assertNotIn("series-1.0", self.text)
+        self.assertIn("on 15 September 2026 for A4 again (Spec T3)", self.text)
+        self.assertIn("A hold the Series expected (C5, D13) is a pass.", self.text)
+        self.assertNotIn("H3) is a pass", self.text, "version 1.2's H3 expects a refusal and an allow, not a hold")
+
+    def test_the_three_lists_it_prints_are_series_pys(self):
+        """The README's three lists are read against series.py's own, so they cannot drift (Spec T1 §4, Spec T6 §3)."""
+        def ids_on(prefix):
+            lines = [line for line in self.text.splitlines() if line.startswith(prefix)]
+            self.assertEqual(len(lines), 1, prefix)
+            return set(re.findall(r"\b([A-H]\d{1,2})\b", lines[0]))
+        self.assertEqual(ids_on("Runs by itself: "), set(S.HARNESS_RUNS))
+        self.assertEqual(ids_on("Left to a person, "), set(S.LEFT_TO_A_PERSON))
+        # D7 is named in the same sentence for its one pause, though the spec lists it among those the harness runs.
+        self.assertEqual(ids_on("Pauses for the owner's passkey") - {"D7"}, set(S.PAUSES))
+        self.assertIn("H5", S.HARNESS_RUNS)
+        for test_id in ("H6", "H7"):
+            self.assertIn(test_id, S.LEFT_TO_A_PERSON)
+
 
 if __name__ == "__main__":
     unittest.main()

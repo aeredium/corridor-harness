@@ -4,9 +4,7 @@
 
 **Amended 15 September 2026: A4 (Spec T3).**
 
-**Amended 17 September 2026: the opening, B4 and H4 name no tester (Spec T5).**
-
-**Version 1.0, 13 September 2026, Melbourne.** Prepared for Albert Dadon. Purpose: to prove, with evidence a customer could read, that the corridor Claude → AER Connect (mcppro.aeredium.io) → MCP Police and MCP Wallet → the access platform → the AERKey policy engine does end to end what the twenty-one restated rules and the three rulings of 13 September say it does, so that the website can be written and the product sold on the strength of the results. Everything below refers to the product as it runs tonight: Wallet through Spec 46, engine library through E4 (template version 6), Police 1.8.0 through Spec 17, connector through Spec 39.
+**Version 1.2, 17 September 2026, Melbourne.** Prepared for Albert Dadon. Purpose: to prove, with evidence a customer could read, that the corridor Claude → AER Connect (mcppro.aeredium.io) → MCP Police and MCP Wallet → the access platform → the AERKey policy engine does end to end what the Rules of the AER Connect Corridor, third edition, say it does, so that the website can be written and the product sold on the strength of the results. Everything below refers to the product as it runs tonight: Wallet through Spec 50, engine library through E8 (corpus version 9), platform through Spec 140, Police 1.9.0 through Spec 18, connector through Spec 41 (42 and 43 to ship). Version 1.1 amends version 1.0 for the rulings of 15 September: two figures, per trade and per day, the owner's alone; a day is midnight to midnight UTC and counts the trade in hand; there is no weekly figure; the period hold is optional. Tests B6, D13, H1, H2 and H3 are amended and H5 to H7 are new; the funding note names the new figures. Version 1.2 amends version 1.1 in wording only, so that the document names no tester: the opening of section 2, B4 and H4 speak of one tester and the other, as the public harness's fixture does (Spec T5, corridor-harness PR #3, 17 September 2026). No test changes.
 
 ---
 
@@ -24,7 +22,7 @@ The bulk of the series runs on Arbitrum, where a transaction costs cents. Base i
 
 Each tester's Trader wallet is funded with 30 USDC and 5 USDT on Arbitrum, 8 USDC on Base, and gas: 0.004 ETH on Arbitrum, 0.003 ETH on Base. Each tester's Payer wallet is funded with 10 USDC on Arbitrum and 0.002 ETH on Arbitrum. For Stage 2, one Trader wallet receives 10 USDC and 0.02 ETH on Ethereum. Every trade is for five dollars unless the test says otherwise; every payment is for one dollar. The whole series, both testers, costs under 150 dollars of stablecoin moved between the testers' own wallets and exchanges, plus perhaps 40 dollars of gas, most of it on Ethereum. The five-basis-point fee on trades comes to a few cents in total and lands in the agents' fee address, which Series F reads back.
 
-Before funding, every owner opens Set limits on each agent and saves once (the re-save of 13 September, Guide section 4), sets "ask me first" per transaction at 50 dollars and the period total at 200 dollars so that the five-dollar tests are not held, sets per transaction at 20 dollars, per day at 100, per week at 300, transactions per day at 30, ticks Ethereum, Arbitrum and Base, ticks USDC, USDT and WETH where the form offers it, and writes the destination list of Series B.
+Before funding, every owner opens Set limits on each agent and saves once (the re-save of 15 September, Guide section 4, which also takes the old weekly figure off the document), writes per trade at 20 dollars and per day at 100 dollars (both compulsory), sets "ask me first" at 50 dollars so that the five-dollar tests are not held, sets transactions per day at 30, ticks Ethereum, Arbitrum and Base, ticks USDC, USDT and WETH where the form offers it, and writes the destination list of Series B. There is no weekly box and no period total on the form; a tester who finds one is looking at an unshipped build, and says so.
 
 ## 3. Series A — readiness, no money moves
 
@@ -56,7 +54,7 @@ Before funding, every owner opens Set limits on each agent and saves once (the r
 
 **B5. The template is a floor the owner narrows.** On the Payer's form, try to permit the action *trade*; on the Trader's, try to permit *transfer*. The form offers no such control, or refuses it. Proves Rule 3. Evidence: what the form shows.
 
-**B6. The page reads the document back.** After B3 and B4, read the mandate table aloud with the screen reader: chains, assets, each limit, ask me first, period total, count, and the list. Where a figure was left blank the page says *the document states none*. Proves Rule 21. Evidence: the table as read.
+**B6. The page reads the document back.** After B3 and B4, read the mandate table aloud with the screen reader: chains, assets, per trade, per day, ask me first, transactions per day, and the list. No weekly row and no period total appear; for an agent created before 15 September and not yet re-saved, the old weekly figure appears under recorded-not-enforced and nowhere else. Where a figure was left blank the page says *the document states none*. Proves Rules 21 and 27. Evidence: the table as read.
 
 **B7. Two agents, two lists.** With the shared list of B4 in force for the tester who chose "one list for all my agents", create a second Payer and confirm its mandate table shows the same list without writing it again. Proves the shared-list answer. Evidence: the second table.
 
@@ -106,7 +104,7 @@ Before funding, every owner opens Set limits on each agent and saves once (the r
 
 **D12. Selling a non-stablecoin is refused.** *"Trade 5 dollars of WETH for USDC on Arbitrum on Uniswap v3."* Refused: `asset` must be a stablecoin. Proves the Wallet's stated limit. Evidence: the sentence.
 
-**D13. The hold at the Trader's default.** Clear "ask me first" on the Trader (leave it blank), save, and *"Trade 12 dollars of USDC for WETH on Arbitrum on Uniswap v3."* Held: *"owner approval required before ticket can be minted"* (the template's ten dollars applies). Set it back to 50 and save. Proves Rule 3 (the template's figure applies when the document states none) and Rule 7. Evidence: the hold.
+**D13. The hold at the pre-filled figure.** Set "ask me first" on the Trader to the figure the box opens on, ten dollars, save, and *"Trade 12 dollars of USDC for WETH on Arbitrum on Uniswap v3."* Held: *"owner approval required before ticket can be minted"*. Set it back to 50 and save. Proves Rule 3 (the template pre-fills the form and the owner's figure is the rule) and Rule 7. Evidence: the hold.
 
 **D14. The old Uniswap router is not a road.** Add `0xE592427A0AEce92De3Edee1F18E0157C05861564` to the list, save, and ask for a Uniswap trade with `contract_address` set to it. Refused: the Wallet does not use it. Remove the line. Proves the guide's warning. Evidence: the sentence.
 
@@ -154,19 +152,25 @@ These are run by Albert on the boxes, with one tester ready in Claude, and each 
 
 **G4. A stale oracle.** Set `AGENT_ORACLE_MAX_AGE_SECONDS` to 1 on Virginia and restart; ask for D2. The Wallet refuses because the oracle fact cannot be established, and says so; nothing is signed. Restore. Proves Rule 12. Evidence: the sentence.
 
-## 10. Series H — over a day and a week
+## 10. Series H — the two figures and the UTC day
 
-**H1. The daily count resets.** After Series D, note `my_usage`; the next day, the count is zero and the day's ceiling is whole again. Proves the day boundary. Evidence: the two readings.
+**H1. The day resets at midnight UTC.** After Series D, note `my_usage` before 00:00 UTC (10:00 am Melbourne) and again after it: the count is zero and the day's total is whole again, and not at any other hour. Proves Rule 26's day. Evidence: the two readings with their UTC times.
 
-**H2. The per-day ceiling.** Set per day to 12 dollars on the Trader, run three five-dollar trades; the third is refused, naming the daily figure. Set it back. Proves Rule 6. Evidence: the refusal.
+**H2. The per-day figure counts the trade in hand.** Set per day to 12 dollars on the Trader and run three five-dollar trades within one UTC day. The first two are allowed (the day would total 5, then 10). The third is refused, naming the daily rule: it would carry the day to 15, past 12. Then set per day to exactly 15 dollars and run one more five-dollar trade on a day already at 10: allowed, because a day that lands exactly on the figure is admitted. Set it back to 100. Proves Rules 25 and 26, "the figure is the figure". Evidence: the two refusals or allows with the day's running total.
 
-**H3. The period total holds.** Set the period total to 12 dollars, run three five-dollar payments on the Payer; the third is held, not refused. Set it back. Proves Rule 7's second line. Evidence: the hold.
+**H3. A per-trade figure is the figure.** Set per trade to 4 dollars on the Payer and *"Pay 5 USDC on Arbitrum to <listed>."* Refused on the per-trade rule. Set it to 5 dollars and repeat: allowed. Set it back to 20. Proves Rule 25. Evidence: the refusal and the allow.
 
 **H4. Two owners do not see each other.** One owner's account page shows no agent of the other's, and Claude connected as that owner's Trader cannot name the other owner's wallet. Proves Rule 17. Evidence: both pages.
 
+**H5. Ask me first alone is a complete discretion.** With no period hold on the form (there is none to set), the Payer pays one dollar to a listed address: allowed, nothing held. Proves Rule 7 as amended. Evidence: the hash.
+
+**H6. The weekly figure is gone from every judge.** On an agent created before 15 September and not re-saved, `describe_role` names no budget, the account page shows the old weekly figure under recorded-not-enforced, and ten one-dollar payments in one UTC day (per day 100) are all allowed: nothing derives a floor of one seventh. Re-save once and the weekly figure leaves the page. Proves Rules 27 and 28. Evidence: the ten hashes and the two page readings.
+
+**H7. Police and the engine count alike.** For H2's third trade, `check_action` refuses before the build, in the same terms the engine refuses at mint if the build is attempted anyway. Proves Rule 28. Evidence: both sentences side by side.
+
 ## 11. Exit criteria for selling
 
-The product may be put on the website when: every test in Series A to F passes for both testers, or passes with a note that has been carried into the guide's version 1.2 or a shipped fix; Series G passes as run by Albert; H2 and H3 pass, with H1 and H4 read once. The website's every sentence about the product is taken from the Owner's Guide, and the not-yet-built list of Guide section 12 appears on the site in plain words: no page to answer a hold, no road to return an agent's funds, Curve by pool address, three exchanges, three chains, USDT not to or from Base. A customer who reads the site and then reads a refusal must find the same words in both. That is Rule 13, and it is the thing a sold product is judged on.
+The product may be put on the website when: every test in Series A to F passes for both testers, or passes with a note that has been carried into the guide's version 1.3 or a shipped fix; Series G passes as run by Albert; H2, H3, H5, H6 and H7 pass, with H1 and H4 read once. The website's every sentence about the product is taken from the Owner's Guide, and the not-yet-built list of Guide section 12 appears on the site in plain words: no page to answer a hold, no road to return an agent's funds, Curve by pool address, three exchanges, three chains, USDT not to or from Base. A customer who reads the site and then reads a refusal must find the same words in both. That is Rule 13, and it is the thing a sold product is judged on.
 
 ## 12. Order and timing
 
@@ -174,4 +178,4 @@ Day one, evening: Series A and B (no money), then C on Arbitrum. Day two: Series
 
 ---
 
-*Prepared from the restated Rules of 12 September 2026, the rulings of 13 September (Rule 8 amended, the fee, Rule 23), the Owner's Guide version 1.1, and the code shipped through Wallet PR 39, engine PR 36, Police PR 14 and connector PR 30.*
+*Version 1.1 prepared from the Rules of the AER Connect Corridor, third edition, 15 September 2026, the Owner's Guide version 1.2, and the code shipped through Wallet PR 43, engine PRs 38, 39 and 40, platform PRs 138 and 139, Police PR 15 and connector PR 33, with connector PRs 34 and Spec 43 to ship. Version 1.0 was prepared from the restated Rules of 12 September 2026, the rulings of 13 September, the Owner's Guide version 1.1, and Wallet PR 39, engine PR 36, Police PR 14 and connector PR 30.*
