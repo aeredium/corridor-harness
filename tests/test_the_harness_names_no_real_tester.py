@@ -21,7 +21,7 @@ import series as S  # noqa: E402
 import tables as T  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FIXTURE = os.path.join("tests", "fixtures", "series-1.0.md")
+FIXTURE = os.path.join("tests", "fixtures", "series-1.2.md")
 
 # The two names the harness used to seed, rot13 so this file does not carry them (Spec T5 §5).
 REAL_NAMES = tuple(codecs.decode(word, "rot13") for word in ("rvgna", "ivpgbe"))
@@ -154,9 +154,11 @@ class NoRealTesterInTheRepositoryTest(unittest.TestCase):
         self.assertEqual(carriers, {}, "a file in the repository names a real tester (REAL_NAMES, rot13)")
 
     def test_the_series_names_its_two_testers_by_role(self):
-        """The Series document's own words as amended 17 September 2026 (Spec T5), and series.py with them."""
+        """The Series document's own words: version 1.2 of 17 September 2026 took Spec T5's wording into the document
+        itself, so the fixture carries no amendment line for it (Spec T6); series.py speaks with the document."""
         document = read(FIXTURE)
-        self.assertIn("**Amended 17 September 2026: the opening, B4 and H4 name no tester (Spec T5).**", document)
+        self.assertIn("Version 1.2 amends version 1.1 in wording only, so that the document names no tester", document)
+        self.assertNotIn("**Amended 17 September 2026", document)
         self.assertIn("Two testers run the series independently, each with one Trader and one Payer", document)
         self.assertIn("(one tester's listed destination `%s`, and the other tester's equivalent)" % T.address("TESTER_LISTED"), S.BY_ID["B4"].text)
         self.assertIn("One owner's account page shows no agent of the other's, and Claude connected as that owner's Trader "

@@ -8,9 +8,11 @@ tests the harness leaves to a person (Spec T1 §4), and the unit tests prove tha
 every id here is in the Series document and every id in the document is here.
 
 The document: "AER Connect Corridor Acceptance Test Series before Sale, version
-1.0, 13 September 2026" (the Series). The sentences a refusal is matched against
-come from the AER Connect Owner's Guide v1.1 §10, transcribed below with the
-Guide's own ellipses and angle brackets, which the matcher treats as wildcards.
+1.2, 17 September 2026" (the Series), sixty-three tests; its copy rides in
+tests/fixtures/series-1.2.md with A4, A5 and A6 in the wording of Specs T2 and T3
+(Spec T6). The sentences a refusal is matched against come from the AER Connect
+Owner's Guide v1.1 §10, transcribed below with the Guide's own ellipses and angle
+brackets, which the matcher treats as wildcards.
 
 Nothing here decides a cause. A test carries the party and the rule under which
 its answer can be checked — the "where-to-read" line of a failure — and no more.
@@ -435,8 +437,8 @@ TESTS: List[Test] = [
         where="Answered by the limits form (pages/agentform.ts) under Rule 3",
     ),
     Test(
-        id="B6", series="B", who=PERSON, title="The page reads the document back", rule="Proves Rule 21.",
-        text="**B6. The page reads the document back.** After B3 and B4, read the mandate table aloud with the screen reader: chains, assets, each limit, ask me first, period total, count, and the list. Where a figure was left blank the page says *the document states none*. Proves Rule 21. Evidence: the table as read.",
+        id="B6", series="B", who=PERSON, title="The page reads the document back", rule="Proves Rules 21 and 27.",
+        text="**B6. The page reads the document back.** After B3 and B4, read the mandate table aloud with the screen reader: chains, assets, per trade, per day, ask me first, transactions per day, and the list. No weekly row and no period total appear; for an agent created before 15 September and not yet re-saved, the old weekly figure appears under recorded-not-enforced and nowhere else. Where a figure was left blank the page says *the document states none*. Proves Rules 21 and 27. Evidence: the table as read.",
     ),
     Test(
         id="B7", series="B", who=PERSON, title="Two agents, two lists", rule="Proves the shared-list answer.",
@@ -643,16 +645,16 @@ TESTS: List[Test] = [
         where="Answered by the MCP Wallet (its stated limit that asset must be a stablecoin, Guide §7) or MCP Police at pre-flight",
     ),
     Test(
-        id="D13", series="D", who=PAUSE, agent="trader", title="The hold at the Trader's default",
-        rule="Proves Rule 3 (the template's figure applies when the document states none) and Rule 7.", moves_money=True, figure_usd=12,
-        text="**D13. The hold at the Trader's default.** Clear \"ask me first\" on the Trader (leave it blank), save, and *\"Trade 12 dollars of USDC for WETH on Arbitrum on Uniswap v3.\"* Held: *\"owner approval required before ticket can be minted\"* (the template's ten dollars applies). Set it back to 50 and save. Proves Rule 3 (the template's figure applies when the document states none) and Rule 7. Evidence: the hold.",
+        id="D13", series="D", who=PAUSE, agent="trader", title="The hold at the pre-filled figure",
+        rule="Proves Rule 3 (the template pre-fills the form and the owner's figure is the rule) and Rule 7.", moves_money=True, figure_usd=12,
+        text="**D13. The hold at the pre-filled figure.** Set \"ask me first\" on the Trader to the figure the box opens on, ten dollars, save, and *\"Trade 12 dollars of USDC for WETH on Arbitrum on Uniswap v3.\"* Held: *\"owner approval required before ticket can be minted\"*. Set it back to 50 and save. Proves Rule 3 (the template pre-fills the form and the owner's figure is the rule) and Rule 7. Evidence: the hold.",
         says="Trade 12 dollars of USDC for WETH on Arbitrum on Uniswap v3.",
         steps=[
-            Pause("Open Set limits for the Trader, clear 'ask me first' so it is blank, and save with your passkey; then press Enter.", agent="trader"),
-            Walk(trade("uniswap_v3", "UNISWAP_V3_ARBITRUM", amount=12), HELD, HOLD_SENTENCE, "Owner's Guide v1.1 §10", label="12 dollars at the Trader's default"),
+            Pause("Open Set limits for the Trader, set 'ask me first' to the figure the box opens on, ten dollars, and save with your passkey; then press Enter.", agent="trader"),
+            Walk(trade("uniswap_v3", "UNISWAP_V3_ARBITRUM", amount=12), HELD, HOLD_SENTENCE, "Owner's Guide v1.1 §10", label="12 dollars with ask-me-first at the pre-filled ten"),
             restore("Trader", "set 'ask me first' back to 50 dollars"),
         ],
-        where="Answered by MCP Police (manual_approval_required) or the MCP Wallet's owner-approval sentence under Rule 3 and Rule 7",
+        where="Answered by MCP Police (manual_approval_required) or the MCP Wallet's owner-approval sentence under Rule 3 (the owner's figure is the rule) and Rule 7",
     ),
     Test(
         id="D14", series="D", who=PAUSE, agent="trader", title="The old Uniswap router is not a road",
@@ -789,42 +791,67 @@ TESTS: List[Test] = [
         id="G4", series="G", who=PERSON, title="A stale oracle", rule="Proves Rule 12.",
         text="**G4. A stale oracle.** Set `AGENT_ORACLE_MAX_AGE_SECONDS` to 1 on Virginia and restart; ask for D2. The Wallet refuses because the oracle fact cannot be established, and says so; nothing is signed. Restore. Proves Rule 12. Evidence: the sentence.",
     ),
-    # ---------------- Series H — over a day and a week ----------------
+    # ---------------- Series H — the two figures and the UTC day ----------------
     Test(
-        id="H1", series="H", who=PERSON, title="The daily count resets", rule="Proves the day boundary.",
-        text="**H1. The daily count resets.** After Series D, note `my_usage`; the next day, the count is zero and the day's ceiling is whole again. Proves the day boundary. Evidence: the two readings.",
+        id="H1", series="H", who=PERSON, title="The day resets at midnight UTC", rule="Proves Rule 26's day.",
+        text="**H1. The day resets at midnight UTC.** After Series D, note `my_usage` before 00:00 UTC (10:00 am Melbourne) and again after it: the count is zero and the day's total is whole again, and not at any other hour. Proves Rule 26's day. Evidence: the two readings with their UTC times.",
     ),
     Test(
-        id="H2", series="H", who=PAUSE, agent="trader", title="The per-day ceiling",
-        rule="Proves Rule 6.", moves_money=True, figure_usd=5,
-        text="**H2. The per-day ceiling.** Set per day to 12 dollars on the Trader, run three five-dollar trades; the third is refused, naming the daily figure. Set it back. Proves Rule 6. Evidence: the refusal.",
+        id="H2", series="H", who=PAUSE, agent="trader", title="The per-day figure counts the trade in hand",
+        rule="Proves Rules 25 and 26, \"the figure is the figure\".", moves_money=True, figure_usd=5,
+        text="**H2. The per-day figure counts the trade in hand.** Set per day to 12 dollars on the Trader and run three five-dollar trades within one UTC day. The first two are allowed (the day would total 5, then 10). The third is refused, naming the daily rule: it would carry the day to 15, past 12. Then set per day to exactly 15 dollars and run one more five-dollar trade on a day already at 10: allowed, because a day that lands exactly on the figure is admitted. Set it back to 100. Proves Rules 25 and 26, \"the figure is the figure\". Evidence: the two refusals or allows with the day's running total.",
         says="Trade 5 dollars of USDC for WETH on Arbitrum on Uniswap v3.",
         steps=[
             Pause("Open Set limits for the Trader, set 'per day' to 12 dollars, and save with your passkey; then press Enter.", agent="trader"),
-            Walk(UNISWAP_ARBITRUM_TRADE, ALLOWED, legs=2, fee="expected", label="first of three"),
-            Walk(UNISWAP_ARBITRUM_TRADE, ALLOWED, legs=2, fee="expected", label="second of three"),
-            Walk(UNISWAP_ARBITRUM_TRADE, REFUSED, label="third of three, above the daily figure"),
+            Walk(UNISWAP_ARBITRUM_TRADE, ALLOWED, legs=2, fee="expected", label="first of three; the day would total 5"),
+            Walk(UNISWAP_ARBITRUM_TRADE, ALLOWED, legs=2, fee="expected", label="second of three; the day would total 10"),
+            Walk(UNISWAP_ARBITRUM_TRADE, REFUSED, label="third of three; it would carry the day to 15, past 12"),
+            Pause("Open Set limits for the Trader, set 'per day' to exactly 15 dollars, and save with your passkey; then press Enter.", agent="trader"),
+            Walk(UNISWAP_ARBITRUM_TRADE, ALLOWED, legs=2, fee="expected", label="one more on a day at 10; it lands exactly on the figure, and is admitted"),
             restore("Trader", "set 'per day' back to 100 dollars"),
         ],
-        where="Answered by MCP Police at pre-flight or the MCP Wallet's judge under Rule 6",
+        where="Answered by MCP Police at pre-flight or the MCP Wallet's judge under Rules 25 and 26: the day counts the trade in hand, and a day that lands exactly on the figure is admitted",
     ),
     Test(
-        id="H3", series="H", who=PAUSE, agent="payer", title="The period total holds",
-        rule="Proves Rule 7's second line.", moves_money=True, figure_usd=5,
-        text="**H3. The period total holds.** Set the period total to 12 dollars, run three five-dollar payments on the Payer; the third is held, not refused. Set it back. Proves Rule 7's second line. Evidence: the hold.",
+        id="H3", series="H", who=PAUSE, agent="payer", title="A per-trade figure is the figure",
+        rule="Proves Rule 25.", moves_money=True, figure_usd=5,
+        text="**H3. A per-trade figure is the figure.** Set per trade to 4 dollars on the Payer and *\"Pay 5 USDC on Arbitrum to <listed>.\"* Refused on the per-trade rule. Set it to 5 dollars and repeat: allowed. Set it back to 20. Proves Rule 25. Evidence: the refusal and the allow.",
         says="Pay 5 USDC on Arbitrum to <listed>.",
         steps=[
-            Pause("Open Set limits for the Payer, set the period total to 12 dollars, and save with your passkey; then press Enter.", agent="payer"),
-            Walk(pay(5), ALLOWED, legs=1, label="first of three"),
-            Walk(pay(5), ALLOWED, legs=1, label="second of three"),
-            Walk(pay(5), HELD, HOLD_SENTENCE, "Owner's Guide v1.1 §10", label="third of three, at the period total"),
-            restore("Payer", "set the period total back to 200 dollars"),
+            Pause("Open Set limits for the Payer, set 'per trade' to 4 dollars, and save with your passkey; then press Enter.", agent="payer"),
+            Walk(pay(5), REFUSED, label="5 USDC with per trade at 4"),
+            Pause("Open Set limits for the Payer, set 'per trade' to 5 dollars, and save with your passkey; then press Enter.", agent="payer"),
+            Walk(pay(5), ALLOWED, legs=1, label="5 USDC with per trade at 5; it lands exactly on the figure, and is admitted"),
+            restore("Payer", "set 'per trade' back to 20 dollars"),
         ],
-        where="Answered by MCP Police (manual_approval_required) or the MCP Wallet's owner-approval sentence under Rule 7's second line",
+        where="Answered by MCP Police at pre-flight or the MCP Wallet's judge under Rule 25: a per-trade figure is the figure",
     ),
     Test(
         id="H4", series="H", who=PERSON, title="Two owners do not see each other", rule="Proves Rule 17.",
         text="**H4. Two owners do not see each other.** One owner's account page shows no agent of the other's, and Claude connected as that owner's Trader cannot name the other owner's wallet. Proves Rule 17. Evidence: both pages.",
+    ),
+    # Spec T6: H5, H6 and H7 are placed by the reading that placed H1 to H4. H5 has no form
+    # step ("there is none to set") and is one walk of the corridor as the Payer, C1's own, so
+    # the harness runs it. H6 needs an agent created before 15 September and not re-saved,
+    # which the run file does not name, and two readings of the account page, which the
+    # harness does not read (Spec T1 §9), so it is a person's, as H4 and B6 are. H7's second
+    # sentence is the engine's at mint, read on P0 as F5's is, and the harness never attempts
+    # a build after a refusal (Spec T1 §5), so it is a person's too.
+    Test(
+        id="H5", series="H", who=HARNESS, agent="payer", title="Ask me first alone is a complete discretion",
+        rule="Proves Rule 7 as amended.", moves_money=True, figure_usd=1,
+        text="**H5. Ask me first alone is a complete discretion.** With no period hold on the form (there is none to set), the Payer pays one dollar to a listed address: allowed, nothing held. Proves Rule 7 as amended. Evidence: the hash.",
+        says="Pay 1 USDC on Arbitrum to <the listed address>.",
+        steps=[Walk(pay(1), ALLOWED, legs=1, label="1 USDC to the listed address, with no period hold to set")],
+        where="Answered by MCP Police, the MCP Wallet and the chain under Rule 7 as amended: ask me first alone is the owner's discretion, and the form offers no period hold",
+    ),
+    Test(
+        id="H6", series="H", who=PERSON, title="The weekly figure is gone from every judge", rule="Proves Rules 27 and 28.",
+        text="**H6. The weekly figure is gone from every judge.** On an agent created before 15 September and not re-saved, `describe_role` names no budget, the account page shows the old weekly figure under recorded-not-enforced, and ten one-dollar payments in one UTC day (per day 100) are all allowed: nothing derives a floor of one seventh. Re-save once and the weekly figure leaves the page. Proves Rules 27 and 28. Evidence: the ten hashes and the two page readings.",
+    ),
+    Test(
+        id="H7", series="H", who=PERSON, title="Police and the engine count alike", rule="Proves Rule 28.",
+        text="**H7. Police and the engine count alike.** For H2's third trade, `check_action` refuses before the build, in the same terms the engine refuses at mint if the build is attempted anyway. Proves Rule 28. Evidence: both sentences side by side.",
     ),
 ]
 
