@@ -4,3 +4,4 @@ harness_run.json
 *-trader.json
 *-payer.json
 *-payer_nogas.json
+aer360-harness-*.md
