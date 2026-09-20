@@ -222,14 +222,58 @@ class TheAuditorOnAFixture(unittest.TestCase):
     def test_the_people_register_against_the_invitations(self):
         minted = [{"person": "ada", "role": "author", "invite": {"id": "inv-1", "displayName": "Ada Approver", "email": A.PEOPLE["ada"].email, "role": "author"}}]
         register = {"invites": [{"id": "inv-1", "displayName": "Ada Approver", "email": A.PEOPLE["ada"].email, "role": "author", "state": "redeemed"}]}
-        self.assertEqual(H.audit_people(register, minted, {"harriet": "cred-a", "ada": "cred-b"}), [])
+        findings = lambda out: [f for f in out if not f.get("note")]  # noqa: E731
+        notes = lambda out: [f["said"] for f in out if f.get("note")]  # noqa: E731
+        agreed = H.audit_people(register, minted, {"harriet": "cred-a", "ada": "cred-b"})
+        self.assertEqual(findings(agreed), [])
+        self.assertEqual(notes(agreed), ["the 2 session(s) carry 2 distinct credential id(s), and only the founder's own is the founder's …ed-a: Harriet Founder …ed-a, Ada Approver …ed-b",
+                                         "the register's rows carry no sharesCredentialWith (Spec 91's marker), so it was not read: an estate before Spec 91"])
         shared = H.audit_people(register, minted, {"harriet": "cred-a", "ada": "cred-a", "ben": "cred-a"})
-        self.assertEqual([f["probe"] for f in shared], ["people register: one credential for several people"])
+        self.assertEqual([f["probe"] for f in findings(shared)], ["people register: one credential for several people"])
         self.assertIn("1 distinct credential id(s) for 3 people", shared[0]["said"])
+        self.assertTrue(shared[0]["said"].endswith("; …ed-a is the founder's credential"), shared[0]["said"])
+        no_founder = H.audit_people(register, minted, {"ada": "cred-b", "ben": "cred-c"})
+        self.assertEqual(findings(no_founder), [])
+        self.assertIn("the founder has no session, so whether any is the founder's was not checked", notes(no_founder)[0])
         pending = {"invites": [dict(register["invites"][0], state="pending")]}
-        self.assertEqual([f["probe"] for f in H.audit_people(pending, minted, {"ada": "cred-b"})], ["people register: the invitation of Ada Approver (state)"])
+        self.assertEqual([f["probe"] for f in findings(H.audit_people(pending, minted, {"ada": "cred-b"}))], ["people register: the invitation of Ada Approver (state)"])
         absent = {"invites": []}
-        self.assertEqual([f["probe"] for f in H.audit_people(absent, minted, {})], ["people register: the invitation of Ada Approver"])
+        self.assertEqual([f["probe"] for f in findings(H.audit_people(absent, minted, {}))], ["people register: the invitation of Ada Approver"])
+
+    def test_the_spec_91_marker_is_read_for_each_person_and_expected_absent(self):
+        """Spec T10 §3: a marker on a re-invited person's row is a finding quoting the register and the screen's sentence; the founder's row may name only the passkeys the harness retired."""
+        minted = []
+        rows = [
+            {"id": "inv-h", "displayName": "Harriet", "email": None, "role": None, "state": "redeemed", "credentialId": "cred-a", "sharesCredentialWith": ["Ada Approver", "Ben Signatory"]},
+            {"id": "inv-a", "displayName": "Ada Approver", "email": A.PEOPLE["ada"].email, "role": "author", "state": "redeemed", "credentialId": "cred-b", "sharesCredentialWith": []},
+            {"id": "inv-b", "displayName": "Ben Signatory", "email": A.PEOPLE["ben"].email, "role": "author", "state": "redeemed", "credentialId": "cred-a", "sharesCredentialWith": ["Harriet", "Ada Approver"]},
+            {"id": "inv-c", "displayName": "Cora Clerk", "email": A.PEOPLE["cora"].email, "role": "author", "state": "redeemed", "credentialId": "cred-d", "sharesCredentialWith": []},
+        ]
+        credentials = {"harriet": "cred-a", "ada": "cred-b", "ben": "cred-a", "cora": "cred-d"}
+        retired = [{"person": "ada", "label": "Ada Approver", "aap_credential_id": "cred-a", "path": "ada.json"},
+                   {"person": "ben", "label": "Ben Signatory", "aap_credential_id": "cred-a", "path": "ben.json"}]
+        out = H.audit_people({"invites": rows}, minted, credentials, retired=retired)
+        found = {f["probe"]: f for f in out if not f.get("note")}
+        # Ben still shares: the marker on his row is a finding, in the register's words and the screen's sentence
+        self.assertIn("people register: one credential for several people", found)
+        ben = found["people register: the Spec 91 marker on Ben Signatory's row"]
+        self.assertEqual(ben["expected"], "no marker after the re-invitation: a credential of Ben Signatory's own")
+        self.assertEqual(ben["said"], 'the register says sharesCredentialWith ["Harriet", "Ada Approver"]; on the People screen: "shares a credential with Harriet and Ada Approver; invite them again to give them their own"')
+        # the founder's row names exactly the passkeys the harness retired: a note, not a finding
+        self.assertNotIn("people register: the Spec 91 marker on the founder's row", found)
+        said = [f["said"] for f in out if f.get("note")]
+        self.assertTrue(any(s.startswith("the founder's row (Harriet) carries the marker for the 2 passkey(s) the harness retired, which still speak for the founder's credential …ed-a at the estate: "
+                                         'the register says sharesCredentialWith ["Ada Approver", "Ben Signatory"]; on the People screen: "shares a credential with Ada Approver and Ben Signatory; invite them again to give them their own"') for s in said), said)
+        self.assertIn("the People register marks none of Ada Approver, Cora Clerk as sharing a credential (Spec 91's marker absent on their rows)", said)
+        # a name on the founder's row the harness did not retire is a finding
+        strange = H.audit_people({"invites": rows}, minted, credentials, retired=retired[:1])
+        founder = next(f for f in strange if f["probe"] == "people register: the Spec 91 marker on the founder's row")
+        self.assertEqual(founder["expected"], "no marker, or one naming only the passkeys the harness retired (Ada Approver)")
+        self.assertIn('sharesCredentialWith ["Ada Approver", "Ben Signatory"]', founder["said"])
+        # the sentence is the People screen's, word for word (packages/shared/src/enrolment.ts)
+        self.assertEqual(H.shares_credential_sentence(["Harriet Founder", "Ben Signatory", "Cora Clerk"]), "shares a credential with Harriet Founder, Ben Signatory and Cora Clerk; invite them again to give them their own")
+        self.assertEqual(H.shares_credential_sentence(["Harriet"]), "shares a credential with Harriet; invite them again to give them their own")
+        self.assertEqual(H.names_in_words([]), "")
 
     def test_the_payees_register_against_what_ada_approved(self):
         created = [{"key": "NORTHWIND_ETHEREUM", "name": "Northwind Supplies", "address": T.address("NORTHWIND_ETHEREUM"), "approved": {"whitelistStatus": "whitelisted"}}]
@@ -268,9 +312,12 @@ class TheAttackerAgainstTheDouble(unittest.TestCase):
         self.assertNotIn(H.CSRF_HEADER, json.dumps(step["sent"]))
 
     def test_the_second_session_probe_is_refused_by_name(self):
+        # Spec 91: Ben's session carries a credential of his own, so the founder's passkey is not the confirming credential, which
+        # routes/onboarding.ts checks before the interview's state (STEP_UP_INVALID); on the shared credential it was INTERVIEW_NOT_OPEN
         step = self.step("Ben confirms the policy interview with the founder's passkey")
-        self.assertEqual(step["status"], 409)
-        self.assertIn("INTERVIEW_NOT_OPEN", step["came_back"])
+        self.assertEqual(step["status"], 403)
+        self.assertIn("STEP_UP_INVALID", step["came_back"])
+        self.assertIn("the asserting passkey is not the confirming credential", step["came_back"])
         self.assertEqual(step["who"], "Ben Signatory")
 
     def test_the_viewer_is_refused_at_every_author_route_in_the_room_sentence(self):
@@ -324,18 +371,26 @@ class TheAttackerAgainstTheDouble(unittest.TestCase):
         self.assertFalse(any("venue contract" in probe for probe in findings), "accepted is what the law says; the venue is a finding only if refused")
         self.assertTrue(any(l.startswith("  S11 — accepted, as the law says — a payee address that is a real venue contract") and l.endswith(": HTTP 201") for l in self.said))
 
-    def test_the_clerks_own_approval_is_recorded_as_the_estate_answered_it(self):
+    def test_the_clerks_own_approval_is_refused_at_the_guard_on_a_credential_of_her_own(self):
+        # Spec 91: Cora holds her own credential, which the policy names no approver, so the challenge is refused in the room sentence;
+        # on the shared credential the charter's Yes let her release her own run, and S11 reported the acceptance
         step = self.step("the clerk approving her own payment")
         self.assertEqual(step["who"], "Cora Clerk")
-        self.assertEqual(step["status"], 200, "one credential worn by four people: the charter's Yes lets the clerk release her own run")
-        finding = next(f for f in self.runner.findings if f.probe == "the clerk approving her own payment (S7's P3)")
-        self.assertIn("ACCEPTED", finding.said)
+        self.assertEqual(step["status"], 403)
+        self.assertIn("ROLE_NOT_GRANTED", step["came_back"])
+        self.assertIn("This action needs an approver", step["came_back"])
+        self.assertFalse(any(f.probe == "the clerk approving her own payment (S7's P3)" for f in self.runner.findings))
+        pre_91 = EstateDouble(before_spec_91=True)
+        runner = runner_on(pre_91, tempfile.mkdtemp(), invite=pre_91.mint_founder_link())
+        runner.run()
+        finding = next(f for f in runner.findings if f.probe == "the clerk approving her own payment (S7's P3)")
+        self.assertIn("ACCEPTED", finding.said, "one credential worn by four people: the charter's Yes lets the clerk release her own run")
         self.assertTrue(finding.route.startswith("POST /v1/approvals/"))
 
     def test_findings_are_printed_in_the_failure_form_with_the_probe(self):
         lines = [l for l in self.said if l.startswith("S11 — fail — ") and ": ACCEPTED: " in l]
-        self.assertEqual(len(lines), 2, "the wrong checksum and the clerk's own approval; the venue is accepted, as the law says")
-        self.assertIn("S11 — fail — the attacker: 17 probe(s), 2 finding(s)", self.said)
+        self.assertEqual(len(lines), 1, "the wrong checksum; the venue is accepted, as the law says, and the clerk is refused at the guard")
+        self.assertIn("S11 — fail — the attacker: 17 probe(s), 1 finding(s)", self.said)
 
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
@@ -354,7 +409,7 @@ class TheAttackerAgainstADoubleThatRefusesTheVenue(unittest.TestCase):
         self.assertEqual(finding.route, "POST /v1/payees")
         self.assertTrue(finding.came_back.startswith("HTTP 422 — "), finding.came_back)
         self.assertIn("this double stands in for the day it does", finding.came_back, "the estate's own words travel with the finding")
-        self.assertIn("17 probe(s), 3 finding(s)", outcomes["S11"].line)
+        self.assertIn("17 probe(s), 2 finding(s)", outcomes["S11"].line)
         step = [s for s in runner.evidence["S11"] if "a real venue contract" in str(s.get("probe", ""))][-1]
         self.assertEqual(step["status"], 422)
         self.assertTrue(step["result"].startswith("refused: ADDRESS_PROPOSAL_REFUSED: "), step["result"])
@@ -604,9 +659,7 @@ class TheLastRunColumn(unittest.TestCase):
         first_path = first.write_report()
         self.assertEqual([(f.station, f.probe) for f in first.findings], [
             ("S10", "read-back (policy) of A5"),
-            ("S10", "people register: one credential for several people"),
             ("S11", "a payee address with a wrong checksum"),
-            ("S11", "the clerk approving her own payment (S7's P3)"),
         ])
         # the rerun after a fix: Spec 88 has landed, so the currency is read back as its code; and the questionnaire
         # has gained a stipulation against venue contracts, which the harness has not yet been told is the law
@@ -625,17 +678,16 @@ class TheLastRunColumn(unittest.TestCase):
         self.assertEqual(len(rows), 12)
         self.assertIn("| S1 Enrol | pass | last run pass | ", rows["S1"])
         self.assertIn("| S9 The tour | out of scope | last run out of scope | ", rows["S9"])
-        self.assertIn("| S10 The auditor | fail | last run fail · 1 closed: read-back (policy) of A5 · 1 still open: people register: one credential for several people | ", rows["S10"])
-        self.assertIn("| S11 The attacker | fail | last run fail · 2 still open: a payee address with a wrong checksum; the clerk approving her own payment (S7's P3) · "
+        self.assertIn("| S10 The auditor | pass | last run fail · 1 closed: read-back (policy) of A5 | ", rows["S10"])
+        self.assertIn("| S11 The attacker | fail | last run fail · 1 still open: a payee address with a wrong checksum · "
                       "1 new: a payee address that is a real venue contract (Uniswap v3 SwapRouter02 on Ethereum, read from the corridor's tables.py at run time) | ", rows["S11"])
         self.assertIn("| S12 The optimizer | pass | last run pass | ", rows["S12"])
         since = report.split("Since the last run (", 1)[1]
-        self.assertTrue(since.startswith("%s, started %s): 1 closed, 3 still open, 1 new." % (os.path.basename(first_path), first.started_at)), since[:240])
+        self.assertTrue(since.startswith("%s, started %s): 1 closed, 1 still open, 1 new." % (os.path.basename(first_path), first.started_at)), since[:240])
         self.assertIn("- closed — S10 — read-back (policy) of A5", report)
-        self.assertIn("- still open — S10 — people register: one credential for several people", report)
         self.assertIn("- still open — S11 — a payee address with a wrong checksum", report)
-        self.assertIn("- still open — S11 — the clerk approving her own payment (S7's P3)", report)
         self.assertIn("- new — S11 — a payee address that is a real venue contract", report)
+        self.assertNotIn("one credential for several people", report, "under Spec 91 nobody shares a credential")
         self.assertNotIn("- closed — S11", report)
         # a third run against today's estate again: the venue finding closes, the currency finding is new once more
         third_double = EstateDouble()

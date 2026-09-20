@@ -45,6 +45,19 @@ census, name — role — email. A slow call is a fact to report, never a findin
 report stands in the working folder, the closing table says what closed since it, what is still
 open and what is new.
 
+Spec T10 (20 September 2026, after AER 360 Spec 91, PR #112, deployed to the estate, and the fourth live run,
+aer360-harness-2026-09-20-135419.md, where Ben's press after Ada's was counted as Ada's because the two shared
+one credential): every person is brought in on their own credential. Spec 91 made an `author` invitation mint
+a credential of the person's own; a passkey enrolled before it keeps speaking for the shared credential until
+that credential is revoked at the platform, and a seat bound to the shared credential stays bound until it is
+re-granted. So after each person signs in with their stored passkey, S4 compares the session's credentialId
+with the founder's; where they are equal S4 says so and brings the person in again — the founder mints a new
+author invitation for the same name and email, the person redeems it with a NEW software passkey stored beside
+the old one (<person>-2-<date>.json, never overwriting it), and their session is the new one. Ada's seat is
+granted again where it is enrolled_not_seated or names a credential other than her session's. S10 asserts that
+the sessions carry distinct credential ids, none the founder's, and reads the People register's Spec 91 marker
+("shares a credential with …") for each person. S6 is Spec T9's, unchanged, and reports what the estate answers.
+
 Runs on the Mac's own Python 3.9.6 with the standard library only: urllib.request, http.cookiejar,
 json, hashlib, secrets, base64, struct, subprocess. The one binary it calls is /usr/bin/openssl,
 through aer360_passkey.py. Nothing to install; nothing is shipped to any box.
@@ -97,6 +110,9 @@ VENUE_RULING = "Bear, 20 September 2026: unless the questionnaire stipulates oth
 # Where an invitation's seconds go (Spec T8): routes/invites.ts mints the invitation, awaits the email's
 # dispatch (attemptDispatch), stamps the row, and only then answers 201. A fact to report, not a finding.
 INVITATION_SENDS_FIRST = "the invitation road sends the email before it answers, which is where its four seconds go"
+# Spec T10: the People register's Spec 91 marker, as the People screen speaks it (packages/shared/src/enrolment.ts,
+# sharesCredentialSentence: "shares a credential with <names>; invite them again to give them their own").
+SHARES_CREDENTIAL_MARKER = "shares a credential with"
 # The report's name in the working folder: aer360-harness-<date>.md, and -<HHMMSS> for a later one the same day.
 REPORT_NAME = re.compile(r"^aer360-harness-(\d{4}-\d{2}-\d{2})(?:-(\d{6}))?\.md$")
 
@@ -186,6 +202,19 @@ def token_of_link(link: str) -> str:
     if not fragment:
         raise HarnessError("the invitation link carries no #<token> fragment; the token rides in the fragment of the link")
     return fragment
+
+
+def names_in_words(names: Sequence[Any]) -> str:
+    """`namesInWords` (packages/shared/src/enrolment.ts): "Harriet Founder, Ben Signatory and Cora Clerk"."""
+    spoken = [str(n) for n in names]
+    if len(spoken) <= 1:
+        return spoken[0] if spoken else ""
+    return "%s and %s" % (", ".join(spoken[:-1]), spoken[-1])
+
+
+def shares_credential_sentence(shared_with: Sequence[Any]) -> str:
+    """The People screen's one marker sentence (Spec 91, item 4), word for word as `sharesCredentialSentence` composes it."""
+    return "%s %s; invite them again to give them their own" % (SHARES_CREDENTIAL_MARKER, names_in_words(shared_with))
 
 
 def now_ms() -> int:
@@ -308,6 +337,7 @@ class Person:
         self.csrf: Optional[str] = None
         self.session: Optional[Dict[str, Any]] = None
         self.passkey: Optional[PK.SoftwarePasskey] = None
+        self.key_file: Optional[str] = None  # the file the passkey was loaded from or saved to; a later passkey has a suffixed name (Spec T10)
         self.enrolled_now = False
 
     @property
@@ -388,6 +418,7 @@ class Runner:
             "answers": {"policy": [], "wallet_account": []},  # (questionId, value, prompt, kind) as given
             "readback": {}, "charter": {}, "compile": {}, "interview": {}, "interview_state": {},
             "invites_minted": [], "invites_register": None, "seats": None,
+            "brought_in_again": [], "seat_regrant": None,  # Spec T10: who was brought in again, and Ada's seat before and after
             "payees": [], "payees_register": None, "sets": {}, "sets_register": None,
             "journey": {}, "readiness": None, "workspace": None, "wallets": None, "charter_standing": None,
             "served_twice": {"policy": [], "wallet_account": []},
@@ -401,18 +432,31 @@ class Runner:
 
     # -- the store ----------------------------------------------------------------
     def key_path(self, person: Person) -> str:
+        """The person's first passkey's file; a passkey they are brought in again with is stored beside it, suffixed (Spec T10)."""
         return os.path.join(self.estate_dir, "%s.json" % person.key)
 
+    def stored_key_paths(self, person: Person) -> List[str]:
+        """Every passkey stored for the person at this estate, oldest first: <key>.json, then <key>-2-<date>.json, and so on."""
+        return PK.stored_key_paths(self.key_path(person))
+
+    def next_key_path(self, person: Person) -> str:
+        """Where a passkey the person is brought in again with is stored: beside the old one, suffixed with its ordinal and the date, never over it."""
+        return PK.next_key_path(self.key_path(person), _dt.datetime.now().strftime("%Y-%m-%d"))
+
     def load_passkeys(self) -> None:
+        """Each person signs in with the newest passkey stored for them at this base; an older one is kept and never used to sign (Spec T10)."""
         for person in self.people.values():
-            stored = PK.SoftwarePasskey.load(self.key_path(person), self.openssl)
-            if stored is None:
-                continue
-            if stored.base and stored.base != self.base:
-                self.say("Note: the passkey stored for %s at %s was enrolled at %s, not %s; it is left alone and not used." % (
-                    person.name, self.key_path(person), stored.base, self.base))
-                continue
-            person.passkey = stored
+            for path in reversed(self.stored_key_paths(person)):
+                stored = PK.SoftwarePasskey.load(path, self.openssl)
+                if stored is None:
+                    continue
+                if stored.base and stored.base != self.base:
+                    self.say("Note: the passkey stored for %s at %s was enrolled at %s, not %s; it is left alone and not used." % (
+                        person.name, path, stored.base, self.base))
+                    continue
+                person.passkey = stored
+                person.key_file = path
+                break
 
     def archive_store(self) -> Optional[str]:
         """--fresh: the estate's key folder is set aside, never deleted, so a second estate is a deliberate act."""
@@ -428,7 +472,9 @@ class Runner:
         person.passkey.base = self.base
         person.passkey.display_name = person.passkey.display_name or person.name
         person.passkey.created_at = person.passkey.created_at or now_iso()
-        person.passkey.save(self.key_path(person))
+        path = person.key_file or self.key_path(person)  # the file this passkey came from, or its own suffixed name (Spec T10); never another key's
+        person.passkey.save(path)
+        person.key_file = path
 
     # -- the wire -----------------------------------------------------------------
     def request(self, person: Optional[Person], method: str, path: str, body: Any = None, station: str = "",
@@ -594,6 +640,7 @@ class Runner:
                 self.say("--fresh: the stored passkeys were set aside at %s" % archived)
             for person in self.people.values():
                 person.passkey = None
+                person.key_file = None
         start_index = 0
         if self.start_at:
             if self.start_at not in STATION_IDS:
@@ -806,6 +853,17 @@ class Runner:
         return Outcome("S3", PASS, detail)
 
     # -- S4 People --------------------------------------------------------------------
+    # Spec T10 (20 September 2026): every person is brought in on their own credential. AER 360 Spec 91 (aeredium/AERAccounts,
+    # commit 9964205, PR #112) made an `author` invitation mint a credential of the person's own on the account's role-bearing
+    # policy entry (services/invites.ts, mintAuthorCredential), bound to their passkey on redemption. Two things Spec 91 did not
+    # do, and said so: a passkey enrolled before it keeps speaking for the shared credential until that credential is revoked
+    # at the platform, and a roster seat bound to the shared credential stays bound until the seat is re-granted. The harness's
+    # three people were enrolled before Spec 91 and Ada's seat was granted before it; the fourth live run
+    # (aer360-harness-2026-09-20-135419.md) counted Ben's press after Ada's as Ada's, because the two shared one credential.
+    # So S4 reads Ada's seat as it finds it, compares each session's credentialId with the founder's, brings the person in
+    # again where they are equal, and grants Ada's seat again where it does not name her own credential.
+    OWN_CREDENTIAL_EXPECTED = "a credential of %s's own, not the founder's"
+
     def mint_invite(self, station: str, person: Person, role: str) -> Answer:
         founder = self.founder()
         body = {"displayName": person.name, "email": person.email, "role": role}
@@ -837,35 +895,215 @@ class Runner:
         seat = (verified.json or {}).get("approverSeat")
         return "enrolled as %s%s" % (role, (", seat on redemption: %s" % json.dumps(seat)) if seat else "")
 
+    def bring_in_on_own_credential(self, station: str, person: Person, founder: Person) -> str:
+        """
+        Spec T10 §1. Sign the person in with their stored passkey (or enrol them by a fresh invitation where none is stored),
+        then compare the session's credentialId with the founder's. Equal is the shared credential of S10's finding: S4 says
+        so and brings the person in again (`bring_in_again`). Different is "already on their own credential", and nothing is
+        minted. The step's expectation is the one line `a credential of <name>'s own, not the founder's`; its result names the
+        last four characters of both credentials.
+        """
+        expected = self.OWN_CREDENTIAL_EXPECTED % person.name
+        answer: Optional[Answer] = None
+        fresh = False
+        if person.signed_in:
+            how = "already signed in"
+        elif person.passkey is not None:
+            verified, _ = self.sign_in(person, station)
+            if not verified.ok:
+                self.step(station, verified, "a session for %s" % person.name, verified.sentence(), None, person.name)
+                return "the stored passkey was refused: %s" % verified.sentence()
+            how = "signed in with the stored passkey"
+            answer = verified
+        else:
+            minted = self.mint_invite(station, person, "author")
+            if not minted.ok or not isinstance(minted.json, dict) or not minted.json.get("url"):
+                return "no invitation: %s" % minted.sentence()
+            verified = self.enrol_by_invite(person, str(minted.json["url"]), station)
+            if not verified.ok:
+                return "the enrolment was refused: %s" % verified.sentence()
+            seat = (verified.json or {}).get("approverSeat")
+            how = "enrolled as author%s" % ((", seat on redemption: %s" % json.dumps(seat)) if seat else "")
+            answer = verified
+            fresh = True
+        if not person.credential_id or not founder.credential_id:
+            said = "%s; not compared with the founder's credential: %s names no credentialId" % (
+                how, "the session" if not person.credential_id else "the founder's session")
+            if answer is not None:
+                self.step(station, answer, expected, said, None, person.name)
+            return said
+        if person.credential_id != founder.credential_id:
+            result = "already on their own credential: %s, not the founder's %s" % (last4(person.credential_id), last4(founder.credential_id))
+            if answer is not None:
+                self.step(station, answer, expected, result, None, person.name)
+            return "%s; %s" % (how, result)
+        result = "on the shared credential %s, the founder's" % last4(founder.credential_id)
+        if answer is not None:
+            self.step(station, answer, expected, result + ("" if fresh else "; brought in again below"), None, person.name)
+        if fresh:
+            # A fresh invitation on this estate enrolled the founder's credential just now (the estate before Spec 91), so a
+            # second one would too; S10 reports the one credential worn by several people.
+            return "%s; %s — a fresh invitation on this estate enrolled the founder's credential, so no second one was minted" % (how, result)
+        self.say("  %s: %s's session carries the founder's credential %s (a passkey enrolled before Spec 91 keeps speaking for it); bringing %s in again on a credential of their own" % (
+            station, person.name, last4(founder.credential_id), person.name))
+        return "%s; %s; %s" % (how, result, self.bring_in_again(station, person, founder))
+
+    def bring_in_again(self, station: str, person: Person, founder: Person) -> str:
+        """
+        Spec T10 §1: the founder mints a new `author` invitation for the same name and email (`mint_invite`); the person
+        redeems it with a NEW software passkey (`enrol_by_invite`), stored beside the old one under a suffixed name
+        (`<person>-2-<date>.json`, `next_key_path`) and never over it; the person's session is the new one. The old passkey
+        is kept, because the estate's audit trail names it and a later station may need to prove it no longer signs. A
+        refusal anywhere on the road is told in the estate's words, and the person keeps the session and the passkey they had.
+        """
+        expected = self.OWN_CREDENTIAL_EXPECTED % person.name
+        old_passkey = person.passkey
+        old_file = person.key_file or self.key_path(person)
+        record: Dict[str, Any] = {"person": person.key, "old_credential": person.credential_id, "old_key_file": old_file,
+                                  "new_credential": None, "new_key_file": None, "seat": None, "ok": False, "said": None}
+        self.facts["brought_in_again"].append(record)
+        minted = self.mint_invite(station, person, "author")
+        if not minted.ok or not isinstance(minted.json, dict) or not minted.json.get("url"):
+            record["said"] = "not brought in again: the invitation answered %s" % minted.sentence()
+            return record["said"]
+        person.key_file = self.next_key_path(person)
+        verified: Optional[Answer] = None
+        stopped = ""
+        try:
+            verified = self.enrol_by_invite(person, str(minted.json["url"]), station)
+        except StationStop as err:
+            stopped = str(err)
+        finally:
+            if person.passkey is old_passkey:  # no new passkey was adopted, so the old one keeps its own file
+                person.key_file = old_file
+        if verified is None or not verified.ok:
+            record["said"] = "not brought in again: %s" % (stopped if verified is None else "the enrolment answered %s" % verified.sentence())
+            return record["said"]
+        record["new_credential"] = person.credential_id
+        record["new_key_file"] = person.key_file
+        record["seat"] = (verified.json or {}).get("approverSeat")
+        if person.credential_id == founder.credential_id:
+            result = "still the founder's %s after the re-invitation" % last4(person.credential_id)
+        else:
+            record["ok"] = True
+            result = "brought in again on %s, not the founder's %s" % (last4(person.credential_id), last4(founder.credential_id))
+        self.step(station, verified, expected, result, None, person.name)
+        seat_said = (", seat on redemption: %s" % json.dumps(record["seat"])) if record["seat"] else ""
+        record["said"] = "%s (the new passkey stored at %s, the old one kept at %s%s)" % (result, person.key_file, old_file, seat_said)
+        return record["said"]
+
+    def read_seats(self, station: str, founder: Person, expected: str) -> Optional[Dict[str, Any]]:
+        seats = self.request(founder, "GET", "/v1/approver-seats", None, station)
+        self.step(station, seats, expected, "answered" if seats.ok else seats.sentence(), None, founder.name)
+        view = seats.json if isinstance(seats.json, dict) else None
+        if view is not None:
+            self.facts["seats"] = view
+        return view
+
+    @staticmethod
+    def seat_of(view: Optional[Dict[str, Any]], email: str) -> Optional[Dict[str, Any]]:
+        if not isinstance(view, dict):
+            return None
+        return next((s for s in view.get("seats") or [] if str(s.get("email", "")).lower() == email.lower()), None)
+
+    @staticmethod
+    def seat_words(row: Optional[Dict[str, Any]], view: Optional[Dict[str, Any]]) -> str:
+        """A seat as the line speaks it: its state and the credential it names, or that it is not in the seats at all."""
+        if view is None:
+            return "no seats view"
+        if row is None:
+            return "not in the charter's seats"
+        named = last4(row["credentialId"]) if row.get("credentialId") else ("no credential (ambiguous: several answer to the address)" if row.get("ambiguous") else "no credential")
+        return "%s, naming %s" % (row.get("state"), named)
+
+    def seat_on_own_credential(self, station: str, founder: Person, ada: Person, found_words: str) -> str:
+        """
+        Spec T10 §2. After Ada is brought in again, read the seats; where Ada's seat is enrolled_not_seated or names a credential
+        other than her session's, grant it again (POST /v1/approver-seats/grant) and expect the seat to name her own credential.
+        The step says which credential the seat named before and after; a grant the estate refuses is a finding in the estate's
+        words. `found_words` is Ada's seat as this run found it, before anybody was brought in again.
+        """
+        own = ada.credential_id if ada.signed_in else None
+        view = self.read_seats(station, founder, "the charter's approver seats after the people were brought in; %s's seat naming %s" % (
+            ada.name, ("%s's own credential %s" % (ada.name, last4(own))) if own else "a credential of %s's own" % ada.name))
+        row = self.seat_of(view, ada.email)
+        stood_words = self.seat_words(row, view)
+        record: Dict[str, Any] = {"found": found_words, "stood": row, "granted": None, "after": None, "refusal": None}
+        self.facts["seat_regrant"] = record
+        said = ["%s's seat: found %s" % (ada.name, found_words)]
+        if stood_words != found_words:
+            said.append("after the people were brought in %s" % stood_words)
+        if row is None:
+            return "; ".join(said)
+        before = row.get("credentialId")
+        names_own = own is not None and before is not None and str(before) == str(own)
+        if row.get("state") != "enrolled_not_seated" and (own is None or names_own):
+            if names_own:
+                said.append("%s's own credential, so no grant was needed" % ada.name)
+            return "; ".join(said)
+        body = {"email": ada.email}
+        expected = "the seat seated, naming %s (before the grant: %s)" % (
+            ("%s's own credential %s" % (ada.name, last4(own))) if own else "%s's credential" % ada.name, stood_words)
+        granted = self.request(founder, "POST", "/v1/approver-seats/grant", body, station)
+        if granted.ok and isinstance(granted.json, dict):
+            self.facts["seats"] = granted.json
+            after = self.seat_of(granted.json, ada.email)
+            after_words = self.seat_words(after, granted.json)
+            record.update(granted=True, after=after)
+            self.step(station, granted, expected, "granted: %s" % after_words, body, founder.name)
+            said.append("granted again by the founder: %s" % after_words)
+            if own is not None and (after is None or str(after.get("credentialId")) != str(own)):
+                self.finding(station, "approver seat: %s's seat after the grant" % ada.name, body, granted, expected,
+                             "the seat is %s, not %s's own %s" % (after_words, ada.name, last4(own)))
+            return "; ".join(said)
+        record.update(granted=False, refusal=granted.sentence())
+        self.step(station, granted, expected, granted.sentence(), body, founder.name)
+        self.finding(station, "approver seat: the grant of %s's seat" % ada.name, body, granted, expected, "refused: %s" % granted.sentence())
+        said.append("the grant answered %s" % granted.sentence())
+        return "; ".join(said)
+
+    def retired_passkeys(self) -> List[Dict[str, Any]]:
+        """
+        Every passkey stored for the estate's people other than the one each now signs with (Spec T10 §1): kept, never used to
+        sign, and still bound at the estate to the credential it enrolled — which is why the People register's Spec 91 marker on
+        the founder's row names them (S10). Read from the store, so a run after the re-invitation knows them too.
+        """
+        out: List[Dict[str, Any]] = []
+        for person in self.people.values():
+            for path in self.stored_key_paths(person):
+                if person.key_file and os.path.realpath(path) == os.path.realpath(person.key_file):
+                    continue
+                try:
+                    with open(path, "r", encoding="utf-8") as handle:
+                        data = json.load(handle)
+                except (OSError, ValueError):
+                    continue
+                if not isinstance(data, dict) or (data.get("base") and data["base"] != self.base):
+                    continue
+                out.append({"person": person.key, "label": data.get("display_name") or person.name,
+                            "aap_credential_id": data.get("aap_credential_id"), "path": path})
+        return out
+
     def station_s4(self) -> Outcome:
         founder = self.founder()
+        ada = self.people[A.PAYMENT_APPROVER]
+        findings_before = len(self.findings)
+        found_view = self.read_seats("S4", founder, "the charter's approver seats as this run finds them: which credential %s's seat names before anybody is brought in again" % ada.name)
+        found_words = self.seat_words(self.seat_of(found_view, ada.email), found_view)
         said: List[str] = []
         for key in A.AUTHORS_INVITED:
             person = self.people[key]
-            said.append("%s %s" % (person.name, self.bring_in("S4", person, "author")))
-        seats = self.request(founder, "GET", "/v1/approver-seats", None, "S4")
-        self.step("S4", seats, "the charter's approver seats and where each stands", "answered" if seats.ok else seats.sentence(), None, founder.name)
-        self.facts["seats"] = seats.json if isinstance(seats.json, dict) else None
-        ada = self.people[A.PAYMENT_APPROVER]
-        seat_said = "no seats view"
-        if isinstance(seats.json, dict):
-            row = next((s for s in seats.json.get("seats") or [] if str(s.get("email", "")).lower() == ada.email.lower()), None)
-            seat_said = "Ada's seat %s" % (row.get("state") if row else "not in the charter's seats")
-            if row and row.get("state") == "enrolled_not_seated":
-                granted = self.request(founder, "POST", "/v1/approver-seats/grant", {"email": ada.email}, "S4")
-                self.step("S4", granted, "the seats view with Ada seated", "answered" if granted.ok else granted.sentence(), {"email": ada.email}, founder.name)
-                if granted.ok and isinstance(granted.json, dict):
-                    self.facts["seats"] = granted.json
-                    row = next((s for s in granted.json.get("seats") or [] if str(s.get("email", "")).lower() == ada.email.lower()), None)
-                    seat_said = "Ada's seat granted by the founder: %s" % (row.get("state") if row else "not in the seats")
-                else:
-                    seat_said = "Ada's seat grant answered %s" % granted.sentence()
+            said.append("%s %s" % (person.name, self.bring_in_on_own_credential("S4", person, founder)))
+        seat_said = self.seat_on_own_credential("S4", founder, ada, found_words)
         register = self.request(founder, "GET", "/v1/invites", None, "S4")
-        self.step("S4", register, "the invitation register: who was invited, as what, and how it went", "answered" if register.ok else register.sentence(), None, founder.name)
+        self.step("S4", register, "the invitation register: who was invited, as what, and how it went; each row's sharesCredentialWith (Spec 91's marker) is read by S10",
+                  "answered" if register.ok else register.sentence(), None, founder.name)
         self.facts["invites_register"] = register.json if isinstance(register.json, dict) else None
         rows = (register.json or {}).get("invites") if isinstance(register.json, dict) else None
         detail = "people: %s; %s; %s invitation(s) in the register" % ("; ".join(said), seat_said, len(rows) if isinstance(rows, list) else "?")
-        if all(self.people[k].signed_in for k in A.AUTHORS_INVITED):
+        signed_in = all(self.people[k].signed_in for k in A.AUTHORS_INVITED)
+        brought_in = all(r["ok"] for r in self.facts["brought_in_again"])
+        if signed_in and brought_in and len(self.findings) == findings_before:
             return Outcome("S4", PASS, detail)
         return Outcome("S4", FAIL, detail)
 
@@ -1292,8 +1530,12 @@ class Runner:
             }
             for f in audit_journey(journey, registers):
                 self.finding("S10", f["probe"], f["sent"], None, f["expected"], f["said"])
-            for f in audit_people(self.facts.get("invites_register"), self.facts["invites_minted"], {k: p.credential_id for k, p in self.people.items() if p.signed_in}):
-                self.finding("S10", f["probe"], f["sent"], None, f["expected"], f["said"])
+            for f in audit_people(self.facts.get("invites_register"), self.facts["invites_minted"], {k: p.credential_id for k, p in self.people.items() if p.signed_in},
+                                  retired=self.retired_passkeys()):
+                if f.get("note"):
+                    self.note("S10", f["said"])
+                else:
+                    self.finding("S10", f["probe"], f["sent"], None, f["expected"], f["said"])
             for f in audit_payees(self.facts.get("payees_register"), self.facts["payees"], self.facts["charter"].get("wallet_account")):
                 self.finding("S10", f["probe"], f["sent"], None, f["expected"], f["said"])
         else:
@@ -1990,12 +2232,25 @@ def audit_refusals(calls: Sequence[Call]) -> List[Dict[str, Any]]:
     return findings
 
 
-def audit_people(register: Optional[Dict[str, Any]], minted: Sequence[Dict[str, Any]], credentials: Dict[str, Optional[str]]) -> List[Dict[str, Any]]:
-    """The People register compared with the invitations sent, and the credentials the sessions carry."""
+def audit_people(register: Optional[Dict[str, Any]], minted: Sequence[Dict[str, Any]], credentials: Dict[str, Optional[str]],
+                 founder_key: str = A.FOUNDER, retired: Sequence[Dict[str, Any]] = ()) -> List[Dict[str, Any]]:
+    """
+    The People register compared with the invitations sent, and the credentials the sessions carry.
+
+    Spec T10 §3: the audit also asserts, after S4, that the sessions carry distinct credential ids and none but the founder's
+    is the founder's, and says so when they do — an entry with `note` is a fact for S10 to report, not a finding, so the
+    closing table can say the finding closed. And it reads the register's Spec 91 marker, `sharesCredentialWith` (spoken on
+    the People screen as "shares a credential with …; invite them again to give them their own"), for each of the harness's
+    people: expected absent after the re-invitation, and a finding where it stands. The founder's row is the one marker the
+    harness expects: the passkeys it retired (`retired`, each with its label and the credential it enrolled) still speak for
+    the founder's credential at the estate, which does nothing to them by itself (Spec 91, item 4), so a marker naming exactly
+    those labels is reported and not a finding — any other name on it is.
+    """
     findings: List[Dict[str, Any]] = []
     if register is None:
         return findings
-    rows = {str(r.get("id")): r for r in register.get("invites") or []}
+    all_rows = [r for r in register.get("invites") or [] if isinstance(r, dict)]
+    rows = {str(r.get("id")): r for r in all_rows}
     for m in minted:
         invite = m["invite"]
         row = rows.get(str(invite.get("id")))
@@ -2011,14 +2266,75 @@ def audit_people(register: Optional[Dict[str, Any]], minted: Sequence[Dict[str, 
                              "said": "the register says %r" % row.get("state")})
     held = {k: v for k, v in credentials.items() if v}
     distinct = set(held.values())
+    founder_credential = held.get(founder_key)
     if len(held) > 1 and len(distinct) < len(held):
         by_credential: Dict[str, List[str]] = {}
         for k, v in held.items():
             by_credential.setdefault(str(v), []).append(A.PEOPLE[k].name)
         shared = {last4(c): names for c, names in by_credential.items() if len(names) > 1}
+        said = "the sessions carry %d distinct credential id(s) for %d people: %s" % (len(distinct), len(held), json.dumps(shared, ensure_ascii=False))
+        if founder_credential and len(by_credential.get(str(founder_credential), [])) > 1:
+            said += "; %s is the founder's credential" % last4(founder_credential)
         findings.append({"probe": "people register: one credential for several people", "sent": None,
                          "expected": "one credential id per person, so the register and every approval can tell them apart",
-                         "said": "the sessions carry %d distinct credential id(s) for %d people: %s" % (len(distinct), len(held), json.dumps(shared, ensure_ascii=False))})
+                         "said": said})
+    elif held:
+        each = ", ".join("%s %s" % (A.PEOPLE[k].name, last4(v)) for k, v in held.items())
+        if founder_credential is None:
+            said = "the %d session(s) carry %d distinct credential id(s) (%s); the founder has no session, so whether any is the founder's was not checked" % (len(held), len(distinct), each)
+        else:
+            said = "the %d session(s) carry %d distinct credential id(s), and only the founder's own is the founder's %s: %s" % (len(held), len(distinct), last4(founder_credential), each)
+        findings.append({"note": True, "probe": "people register: one credential per person", "said": said})
+    # The register's Spec 91 marker, for each of the harness's people.
+    with_field = [r for r in all_rows if "sharesCredentialWith" in r]
+    if all_rows and not with_field:
+        findings.append({"note": True, "probe": "people register: the Spec 91 marker",
+                         "said": "the register's rows carry no sharesCredentialWith (Spec 91's marker), so it was not read: an estate before Spec 91"})
+        return findings
+    by_email = {A.PEOPLE[k].email.lower(): k for k in A.PEOPLE}
+
+    def person_of(row: Dict[str, Any]) -> Optional[str]:
+        email = str(row.get("email") or "").strip().lower()
+        if email:
+            return by_email.get(email)
+        if founder_credential and str(row.get("credentialId")) == str(founder_credential):
+            return founder_key
+        return None
+
+    retired_on_founders = sorted({str(r.get("label")) for r in retired if founder_credential and str(r.get("aap_credential_id")) == str(founder_credential)})
+    marked: List[str] = []
+    read: List[str] = []
+    for row in with_field:
+        who = person_of(row)
+        if who is not None and row.get("state") == "redeemed" and who not in read:
+            read.append(who)
+        names = row.get("sharesCredentialWith")
+        if not isinstance(names, list) or not names:
+            continue
+        spoken = shares_credential_sentence(names)
+        register_says = 'the register says sharesCredentialWith %s; on the People screen: "%s"' % (json.dumps(names, ensure_ascii=False), spoken)
+        if who == founder_key:
+            if retired_on_founders and sorted(str(n) for n in names) == retired_on_founders:
+                marked.append(who)
+                findings.append({"note": True, "probe": "people register: the Spec 91 marker on the founder's row",
+                                 "said": "the founder's row (%s) carries the marker for the %d passkey(s) the harness retired, which still speak for the founder's credential %s at the estate: %s" % (
+                                     row.get("displayName"), len(names), last4(founder_credential), register_says)})
+            else:
+                marked.append(who)
+                findings.append({"probe": "people register: the Spec 91 marker on the founder's row", "sent": None,
+                                 "expected": "no marker, or one naming only the passkeys the harness retired (%s)" % (", ".join(retired_on_founders) or "none"),
+                                 "said": register_says})
+        elif who is not None:
+            marked.append(who)
+            findings.append({"probe": "people register: the Spec 91 marker on %s's row" % A.PEOPLE[who].name, "sent": None,
+                             "expected": "no marker after the re-invitation: a credential of %s's own" % A.PEOPLE[who].name, "said": register_says})
+        else:
+            findings.append({"note": True, "probe": "people register: the Spec 91 marker on a row that is not the harness's",
+                             "said": "the register marks %s (%s): %s" % (row.get("displayName"), row.get("email"), register_says)})
+    unmarked = [A.PEOPLE[k].name for k in A.PEOPLE if k in read and k not in marked]
+    if unmarked:
+        findings.append({"note": True, "probe": "people register: the Spec 91 marker absent",
+                         "said": "the People register marks none of %s as sharing a credential (Spec 91's marker absent on their rows)" % ", ".join(unmarked)})
     return findings
 
 
@@ -2229,7 +2545,9 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     line("S3", "POST /v1/onboarding/interviews/<policy interview>/compile {} → expect 200: charter (name, quorum 1, signers, recordedChains, allowedChains aeredium-testnet), receipt, seat")
     line("S3", "GET /v1/onboarding/charter → expect standsWritten true")
     line("S3", "GET /v1/journey → expect currentStage 2 of %d" % JOURNEY_STAGE_COUNT)
-    # S4
+    # S4 — Spec T10: every person is brought in on their own credential
+    approver = A.PEOPLE[A.PAYMENT_APPROVER]
+    line("S4", "GET /v1/approver-seats (as %s) → expect the charter's seats as this run finds them: which credential %s's seat names before anybody is brought in again" % (founder.name, approver.name))
     for key in A.AUTHORS_INVITED:
         person = A.PEOPLE[key]
         line("S4", "POST /v1/invites %s (as %s, x-csrf-token) → expect 201: url %s/invite#<token>, said once" % (_j({"displayName": person.name, "email": person.email, "role": "author"}), founder.name, origin))
@@ -2237,9 +2555,18 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
         line("S4", "POST /v1/auth/invite/verify %s → expect 200: a session for %s, roles author and viewer%s" % (
             _j({"token": "<token>", "issuedAtMs": "<issuedAtMs>", "response": "<RegistrationResponseJSON with a new passkey>"}), person.name,
             "; approverSeat on redemption where the charter names them" if key == A.PAYMENT_APPROVER else ""))
-    line("S4", "GET /v1/approver-seats (as %s) → expect the charter's seats; %s seated or enrolled_not_seated" % (founder.name, A.PEOPLE[A.PAYMENT_APPROVER].name))
-    line("S4", "POST /v1/approver-seats/grant %s (as %s) — only if the seat is enrolled_not_seated → expect the seat seated" % (_j({"email": A.PEOPLE[A.PAYMENT_APPROVER].email}), founder.name))
-    line("S4", "GET /v1/invites (as %s) → expect the register: three authors, redeemed" % founder.name)
+        line("S4", "[compare] %s's session credentialId with the founder's (where a passkey is stored for %s: POST /v1/auth/login/options {} and /verify first) → expect a credential of %s's own, not the founder's; equal is the shared credential of S10's finding, and %s is brought in again" % (
+            person.name, person.name, person.name, person.name))
+        line("S4", "POST /v1/invites %s (as %s, x-csrf-token) — only if %s's session carries the founder's credential → expect 201: a fresh invitation for the same name and email, minting a credential of %s's own (Spec 91)" % (
+            _j({"displayName": person.name, "email": person.email, "role": "author"}), founder.name, person.name, person.name))
+        line("S4", "POST /v1/auth/invite/options %s — only if %s is brought in again → expect 200: options for %s" % (
+            _j({"token": "<token from the fresh url>", "issuedAtMs": "<now>", "response": {}}), person.name, person.name))
+        line("S4", "POST /v1/auth/invite/verify %s — only if %s is brought in again → expect 200: a session for %s on a credential of %s's own, not the founder's; the new key stored beside the old at ~/.aer360-harness/%s/%s-2-<date>.json mode 0600, the old one untouched" % (
+            _j({"token": "<token>", "issuedAtMs": "<issuedAtMs>", "response": "<RegistrationResponseJSON with a NEW passkey>"}), person.name, person.name, person.name, A.ESTATE["client_id"], person.key))
+    line("S4", "GET /v1/approver-seats (as %s) → expect the charter's seats after the people were brought in; %s seated or enrolled_not_seated, and which credential the seat names" % (founder.name, approver.name))
+    line("S4", "POST /v1/approver-seats/grant %s (as %s) — only if the seat is enrolled_not_seated or names a credential other than %s's session's → expect the seat seated, naming %s's own credential (Spec 91); a refusal is a finding in the estate's words" % (
+        _j({"email": approver.email}), founder.name, approver.name, approver.name))
+    line("S4", "GET /v1/invites (as %s) → expect the register: three authors, redeemed; each row's sharesCredentialWith (Spec 91's marker) read for S10, expected absent after the re-invitation" % founder.name)
     # S5
     line("S5", "POST /v1/onboarding/interviews %s → expect 200: the interview id and its first page" % _j({"interviewType": "wallet_account"}))
     for q in A.expected_walk("wallet_account"):

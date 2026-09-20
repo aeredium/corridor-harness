@@ -74,12 +74,46 @@ and three dials: `pending_approval_says_why=False` is the estate of 20 September
 press answered `{"whitelistStatus": "pending_promotion"}` and nothing else; `whitelist_roster=("ada",)`
 seats only the people named, so a roster smaller than its quorum can be met; `platform_never_activates=True`
 is a platform that counts every signature and never activates the address, so the count is met and the
-status never moves. One choice is the double's own and is said here: a press is counted for the seat of the
-PERSON pressing, found by the email their invitation was written with — the estate's press says whose seat
-it is (`user_id`, read from the invitation the credential redeemed) — because on this estate one credential
-is worn by four people, and a double that matched by credential first, as the platform's own double does,
-could never let Ben's press count after Ada's. The live estate may count differently; the harness reports
-what it meets.
+status never moves.
+
+Spec T10 (20 September 2026) taught the double AER 360 Spec 91 (aeredium/AERAccounts, commit 9964205, PR #112),
+and corrected one choice Spec T9 had made its own: T9 counted a press for the seat of the PERSON pressing,
+found by email, so that Ben's press could count after Ada's on the one credential four people wore. The
+fourth live run proved the platform counts otherwise, and Spec 91's builder established the rule from the
+platform's source (aegiskey-access-platform, internal/access/pending_transaction_v2.go,
+`validateMultisigSigner`; the estate's own double of it, apps/server/src/test/aapDouble.ts, the signatures
+road): a signature counts for an ACTIVE seat of the roster matched by CREDENTIAL; a press that says whose seat
+it is (`user_id`) binds the caller's credential to that person's EMPTY seat; a seat already bound to a
+different key refuses, with the platform's bare "not authorized"; and a credential is counted once per
+ceremony. So on the shared credential Ben's press matches Ada's bound seat and counts nothing, as the live
+run met, and two distinct credentials make two of two. The estate's press says whose seat it is only where
+the estate can attach the credential to ONE address that no other person's key shares
+(services/payees.ts, signAsPresser → signerEmailOf → emailOfCredential; Spec 91's addressOfCredential).
+
+  services/invites.ts, mintAuthorCredential          an `author` invitation mints a credential of the person's own on
+                                                     the ONE in-force policy entry bearing `sign` that a credential holds
+                                                     (several are INVITE_INVALID, listing entries and credentials);
+                                                     redemption binds the passkey to it
+  routes/auth.ts, services/invites.ts               a re-invitation's redemption retires the bindings an earlier redeemed
+  (earlierBindingsOf, person.credential_replaced)    invitation of the same address enrolled
+  services/approverseats.ts (enrolmentRecords,       a credential no passkey here speaks for is nobody's; a retired binding
+  credentialHolders, othersHolding)                  is dropped from the address; a credential other people's passkeys also
+                                                     speak for is refused a seat (APPROVER_SEAT_CREDENTIAL_SHARED, 409) and
+                                                     never seated by the redemption road; several credentials on one address
+                                                     are APPROVER_SEAT_AMBIGUOUS (409), never guessed between
+  routes/invites.ts, services/invites.ts             GET /v1/invites marks each person's newest redeemed row with the other
+  (markSharedCredentials)                            names whose passkeys speak for its credential: `sharesCredentialWith`
+  services/onboardingcompiler.ts (establishGovernance) the change governance — the rosters — is established once; a later
+  test/aapDouble.ts (/v1/mutation-governance/establish) compile leaves it (`governanceAlreadyStood`), so a seat once bound at
+                                                     the platform stays bound
+
+and the knobs: `before_spec_91=True` is the estate of the four live runs — an author invitation enrols the founder's
+credential, nothing is retired, the register carries no marker, the seat road unions and refuses nothing for sharing;
+`seat_completes_on_redemption=False` is an estate before Spec 58's count 3, whose redemption says nothing of a seat;
+`second_authorship_entry=True` gives the account a second policy entry bearing authorship (a CFO's credential), so an
+author invitation is refused, listing both, as Spec 91's own test has it; `platform_names_approver=("ben",)` is an
+operator at the platform's own console naming a person's minted credential a second approver on the entry — outside
+the estate's seat road, which refuses them (APPROVER_SEAT_NOT_IN_CHARTER), and read live by the estate (roles.ts).
 """
 from __future__ import annotations
 
@@ -121,6 +155,7 @@ STATUS = {
     "INTERNAL_ERROR": 500, "APPROVER_SEAT_NOT_ENROLLED": 422, "APPROVER_SEAT_NOT_IN_CHARTER": 422,
     "ONE_OFF_NOT_DECLARED": 422, "AMOUNT_MALFORMED": 400, "ASSET_UNKNOWN": 422, "WORKSPACE_NOT_PROVISIONED": 503,
     "SET_NOT_EDITABLE": 409, "BASE_CURRENCY_UNSET": 422, "ADDRESS_PROPOSAL_REFUSED": 422, "SIGNATURE_NOT_COUNTED": 403,
+    "APPROVER_SEAT_AMBIGUOUS": 409, "APPROVER_SEAT_CREDENTIAL_SHARED": 409,
 }
 MESSAGES = {
     "NOT_AUTHENTICATED": "You are not signed in.",
@@ -155,6 +190,8 @@ MESSAGES = {
     "BASE_CURRENCY_UNSET": "Choose the currency your books reconcile to before entering payments. Every figure is valued in it.",
     "ADDRESS_PROPOSAL_REFUSED": "The access platform would not accept this address for approval, so it was not sent. Nothing was changed. The platform’s own words are below.",
     "SIGNATURE_NOT_COUNTED": "The access platform did not count your approval: it does not recognise your key as one of this wallet’s signatories. The address stays exactly as it was — nothing was approved, and nothing was changed.",
+    "APPROVER_SEAT_AMBIGUOUS": "This email address matches more than one enrolled credential, so which one to seat cannot be told from the record. Nothing was changed. Withdraw or revoke the credentials that are no longer this person’s, and grant the seat again.",
+    "APPROVER_SEAT_CREDENTIAL_SHARED": "This person’s passkey speaks for a credential that other people in this estate also hold, so there is no credential of their own to seat, and seating the one they hold would seat everyone who holds it. Nothing was changed. Invite this person again to give them their own; their seat completes itself when they bind their passkey.",
 }
 ESTATE_KEY_CURE = ("If you meant a different estate, sign out and choose that estate’s key when your device offers the picker — "
                    "each key is labelled with its estate’s name.")
@@ -233,6 +270,13 @@ PLATFORM_NOT_AUTHORIZED = "not authorized"
 A_PAYEE_ADDRESS = "a payee address onto the approved list"  # services/payees.ts: what the approve road is deciding about
 
 
+def approver_seat_shared_sentence(name: str, shared_with: Sequence[str]) -> str:
+    """`approverSeatSharedSentence` (packages/shared/src/enrolment.ts, Spec 91, item 2), word for word: the seat law with the names in it."""
+    return ("%s shares a credential with %s, so there is no credential of their own to seat, and seating the one they hold would seat everyone who "
+            "holds it. Nothing was changed. Invite %s again to give them their own; their seat completes itself when they bind their passkey." % (
+                name, H.names_in_words(shared_with), name))
+
+
 def spelled(n: int) -> str:
     """Small counts as words, the way the estate's sentence speaks them (services/payees.ts, `spelled`)."""
     return ["No", "One", "Two", "Three", "Four", "Five"][n] if 0 <= n <= 5 else str(n)
@@ -283,7 +327,9 @@ class EstateDouble:
     def __init__(self, base: str = BASE, source_account: Optional[str] = "0x0000000000000000000000000000000000000abc",
                  company: str = A.ESTATE["company"], catalog_version: int = 12, currency_spoken_as_code: bool = False,
                  refuses_venue_contract: bool = False, invite_seconds: float = 0.0, clock: Optional[Clock] = None,
-                 pending_approval_says_why: bool = True, whitelist_roster: Optional[Sequence[str]] = None, platform_never_activates: bool = False):
+                 pending_approval_says_why: bool = True, whitelist_roster: Optional[Sequence[str]] = None, platform_never_activates: bool = False,
+                 before_spec_91: bool = False, seat_completes_on_redemption: bool = True, second_authorship_entry: bool = False,
+                 platform_names_approver: Sequence[str] = ()):
         self.currency_spoken_as_code = currency_spoken_as_code  # False: main's default arm (JSON); True: Spec 88's code
         self.refuses_venue_contract = refuses_venue_contract  # the day the questionnaire stipulates against venue contracts
         self.invite_seconds = invite_seconds  # how long POST /v1/invites takes on the shared clock, the email awaited
@@ -294,9 +340,22 @@ class EstateDouble:
         self.whitelist_roster = tuple(whitelist_roster) if whitelist_roster is not None else None
         # True: a platform that counts every signature and never activates the address, so the count is met and nothing moves.
         self.platform_never_activates = platform_never_activates
-        # The whitelist_mutation roster as the compiler writes it, seated when the policy charter compiles (governanceSignersFor).
+        # Spec T10's dials. True: the estate of the four live runs, before Spec 91 — an author invitation enrols the founder's
+        # credential, a redemption retires nothing, the register carries no marker, and the seat road refuses nothing for sharing.
+        self.before_spec_91 = before_spec_91
+        # False: an estate before Spec 58's count 3, whose redemption says nothing of a seat, so the founder must grant it.
+        self.seat_completes_on_redemption = seat_completes_on_redemption
+        # True: a second policy entry bearing authorship (a CFO's credential), so an author invitation is refused, listing both.
+        self.second_authorship_entry = second_authorship_entry
+        # The census keys whose minted credential an operator names a second approver at the platform's own console.
+        self.platform_names_approver = tuple(platform_names_approver)
+        # The whitelist_mutation roster as the compiler writes it, established when the policy charter first compiles
+        # (governanceSignersFor, establishGovernance) and left standing by every compile after (governanceAlreadyStood).
         self.whitelist_seats: List[Dict[str, Any]] = []
         self.whitelist_threshold: Optional[int] = None
+        self.governance_established = False
+        # The bindings a re-invitation's redemption retired: (address, credential) pairs from person.credential_replaced.
+        self.retired: set = set()
         self.base = base.rstrip("/")
         parsed = urllib.parse.urlparse(self.base)
         self.origin = "%s://%s" % (parsed.scheme, parsed.netloc)
@@ -307,9 +366,11 @@ class EstateDouble:
                           "baseCurrency": "USD", "displayCurrency": "AUD", "status": "active", "provisioning": "provisioned",
                           "rateSource": "double", "createdAt": "2026-09-19T00:00:00.000Z"}
         self.source_account = source_account
-        # The account's ONE role-bearing credential (the founder's author token drawn up by the birth script).
+        # The account's ONE role-bearing credential (the founder's author token drawn up by the birth script), on the account's
+        # one policy entry bearing authorship — the entry an author invitation mints on since Spec 91.
+        self.authorship_entry = {"id": "pe-author-" + secrets.token_hex(4), "name": "Founder (author)"}
         self.founder_credential = "cred-founder-" + secrets.token_hex(4)
-        self.credentials: Dict[str, Dict[str, Any]] = {self.founder_credential: {"access": "sign+audit", "name": "Founder (author)"}}
+        self.credentials: Dict[str, Dict[str, Any]] = {self.founder_credential: {"access": "sign+audit", "name": "Founder (author)", "entry": self.authorship_entry["id"]}}
         self.second_approvers: List[str] = []
         self.invites: Dict[str, Dict[str, Any]] = {}
         self.passkeys: Dict[str, Dict[str, Any]] = {}  # webauthnId → row
@@ -557,10 +618,19 @@ class EstateDouble:
         row["redeemedAt"] = self._now_iso()
         row["state"] = "redeemed"
         credential_id = row["credentialId"]
+        row["_redeemedEpoch"] = time.time()
         self.passkeys[body["response"]["id"]] = {"credentialId": credential_id, "publicKey": stored["public_key"], "signCount": stored["sign_count"],
                                                  "label": row["displayName"], "lastAuthAtMs": body["issuedAtMs"], "email": row.get("email")}
         self.audit.append("passkey.registered %s via invite" % credential_id)
-        seat = self.complete_seat_on_redemption(credential_id, row.get("email"))
+        if not self.before_spec_91 and row.get("email"):
+            # THE OLD BINDING IS RETIRED (Spec 91, item 4; routes/auth.ts at the binding): every credential an earlier redeemed,
+            # not withdrawn invitation of the same address enrolled, other than this one, on the trail with both ids.
+            replaced = self.earlier_bindings_of(row)
+            if replaced:
+                for old in replaced:
+                    self.retired.add((row["email"].strip().lower(), old))
+                self.audit.append("person.credential_replaced %s: %s -> %s via invite_redemption" % (row["email"].strip().lower(), ",".join(replaced), credential_id))
+        seat = self.complete_seat_on_redemption(credential_id, row.get("email"), row["displayName"])
         roles = self.roles_of(credential_id)
         if not roles:
             raise Refusal("ROLE_NOT_GRANTED", detail={"required": "any", "held": "none"}, provenance={"source": "aap_policy"})
@@ -991,11 +1061,20 @@ class EstateDouble:
             raise Refusal("INTERVIEW_NOT_OPEN", detail={"state": iv["state"], "cause": "the compiler reads only confirmed interviews"})
         latest = {qid: row["value"] for qid, row in self.latest(interview_id).items()}
         charter = self.compile_charter(iv["interviewType"], latest)
+        already_stood = False
         if iv["interviewType"] == "policy":
-            self.seat_whitelist_roster(charter, latest)
+            # THE CHANGE GOVERNANCE IS ESTABLISHED ONCE (services/onboardingcompiler.ts, establishGovernance; the platform's
+            # /v1/mutation-governance/establish refuses an account that already holds a whitelist_mutation roster). A later
+            # compile leaves the rosters as they stand — and a seat bound at the platform by a press stays bound.
+            if self.governance_established:
+                already_stood = True
+            else:
+                self.seat_whitelist_roster(charter, latest)
+                self.governance_established = True
         iv["compiledCharter"] = charter
         iv["state"] = "written"
-        iv["writeReceipt"] = {"aapAccountId": AAP_ACCOUNT_ID, "policyEntryId": "pe-" + secrets.token_hex(4), "completedAt": self._now_iso()}
+        iv["writeReceipt"] = {"aapAccountId": AAP_ACCOUNT_ID, "policyEntryId": "pe-" + secrets.token_hex(4), "completedAt": self._now_iso(),
+                              "governanceAlreadyStood": already_stood}
         iv["updatedAt"] = time.time()
         seat = self.complete_seat_on_charter_write(caller["credentialId"])
         return 200, {"charter": charter, "receipt": iv["writeReceipt"], "seat": seat}
@@ -1098,24 +1177,139 @@ class EstateDouble:
                 out.append({"name": name, "email": email})
         return out
 
-    def enrolled_by_email(self) -> Dict[str, List[str]]:
+    def credential_holders(self) -> Dict[str, List[str]]:
+        """`credentialHolders` (services/approverseats.ts): every passkey bound here, by the credential it speaks for, as the distinct labels the keys were enrolled under, oldest first."""
+        holders: Dict[str, List[str]] = {}
+        for row in self.passkeys.values():
+            names = holders.setdefault(row["credentialId"], [])
+            if row["label"] not in names:
+                names.append(row["label"])
+        return holders
+
+    def names_by_email(self) -> Dict[str, List[str]]:
+        """The display names an address's redeemed invitations were minted in: the labels of this person's OWN keys, by construction."""
         out: Dict[str, List[str]] = {}
         for row in self.invites.values():
-            if row["redeemedAt"] and row.get("email"):
-                out.setdefault(row["email"].strip().lower(), [])
-                if row["credentialId"] not in out[row["email"].strip().lower()]:
-                    out[row["email"].strip().lower()].append(row["credentialId"])
+            if row["redeemedAt"] and row["revokedAt"] is None and row.get("email"):
+                names = out.setdefault(row["email"].strip().lower(), [])
+                if row["displayName"] not in names:
+                    names.append(row["displayName"])
         return out
 
-    def complete_seat_on_redemption(self, credential_id: str, email: Optional[str]) -> Optional[Dict[str, Any]]:
+    def enrolled_by_email(self) -> Dict[str, List[str]]:
+        """
+        `enrolmentRecords(...).byEmail` (services/approverseats.ts): every credential this estate can honestly attach to an address —
+        a redeemed, not withdrawn invitation's, that a passkey bound here speaks for (Spec 58), and not one the estate recorded as
+        replaced (Spec 91, item 4, unless the estate is the one before Spec 91). One person invited twice onto one credential is one.
+        """
+        holders = self.credential_holders()
+        out: Dict[str, List[str]] = {}
+        for row in sorted(self.invites.values(), key=lambda r: r.get("_redeemedEpoch") or 0):
+            if not row["redeemedAt"] or row["revokedAt"] is not None or not row.get("email"):
+                continue
+            email = row["email"].strip().lower()
+            credential_id = row["credentialId"]
+            if not credential_id or credential_id not in holders:
+                continue
+            if not self.before_spec_91 and (email, credential_id) in self.retired:
+                continue
+            held = out.setdefault(email, [])
+            if credential_id not in held:
+                held.append(credential_id)
+        return out
+
+    def others_holding(self, credential_id: str, email: str) -> List[str]:
+        """`othersHolding` (services/approverseats.ts, Spec 91): the other people whose keys speak for a credential; empty means the person's own."""
+        names = self.credential_holders().get(credential_id, [])
+        own = self.names_by_email().get(email.strip().lower(), [])
+        invited_onto_it = credential_id in self.enrolled_by_email().get(email.strip().lower(), [])
+        if own and invited_onto_it:
+            return [n for n in names if n not in own]
+        return names[1:] if len(names) > 1 else []
+
+    def signer_email_of(self, credential_id: str) -> Optional[str]:
+        """
+        Whose seat a press says it is (services/payees.ts, signAsPresser → signerEmailOf → emailOfCredential). Before Spec 91: the first
+        address the register attached the credential to. Since Spec 91 (addressOfCredential): ONE address, and nobody else's key on the
+        credential — else null, and the platform judges the credential alone.
+        """
+        by_email = self.enrolled_by_email()
+        addresses = [email for email, held in by_email.items() if credential_id in held]
+        if self.before_spec_91:
+            return addresses[0] if addresses else None
+        if len(addresses) != 1:
+            return None
+        return addresses[0] if not self.others_holding(credential_id, addresses[0]) else None
+
+    def earlier_bindings_of(self, claimed: Dict[str, Any]) -> List[str]:
+        """`earlierBindingsOf` (services/invites.ts, Spec 91): the credentials earlier redeemed, not withdrawn invitations of the same address enrolled, other than this one's."""
+        wanted = (claimed.get("email") or "").strip().lower()
+        if not wanted:
+            return []
+        replaced: List[str] = []
+        for row in sorted(self.invites.values(), key=lambda r: r.get("_redeemedEpoch") or 0):
+            if row["id"] == claimed["id"] or not row["redeemedAt"] or row["revokedAt"] is not None:
+                continue
+            if (row.get("email") or "").strip().lower() != wanted:
+                continue
+            credential_id = row["credentialId"]
+            if not credential_id or credential_id == claimed["credentialId"] or credential_id in replaced:
+                continue
+            replaced.append(credential_id)
+        return replaced
+
+    def mark_shared_credentials(self, rows: Sequence[Dict[str, Any]]) -> Dict[str, List[str]]:
+        """
+        `markSharedCredentials` (services/invites.ts, Spec 91, item 4): one mark per person, on the newest redeemed invitation of each
+        address (an invitation with no address is its own person), naming every other label on its credential; nothing on a row not
+        redeemed or naming no credential.
+        """
+        holders = self.credential_holders()
+
+        def person_of(row: Dict[str, Any]) -> str:
+            address = (row.get("email") or "").strip().lower()
+            return address or "#%s" % row["id"]
+
+        redeemed = [r for r in rows if r["state"] == "redeemed" and r.get("credentialId")]
+        own_names: Dict[str, List[str]] = {}
+        for row in redeemed:
+            names = own_names.setdefault(person_of(row), [])
+            if row["displayName"] not in names:
+                names.append(row["displayName"])
+        marks: Dict[str, List[str]] = {}
+        seen: set = set()
+        for row in sorted(redeemed, key=lambda r: r.get("_redeemedEpoch") or 0, reverse=True):
+            person = person_of(row)
+            if person in seen:
+                continue
+            seen.add(person)
+            others = [n for n in holders.get(row["credentialId"], []) if n not in own_names.get(person, [])]
+            if others:
+                marks[row["id"]] = others
+        return marks
+
+    def complete_seat_on_redemption(self, credential_id: str, email: Optional[str], display_name: str = "") -> Optional[Dict[str, Any]]:
+        """
+        `completeSeatOnRedemption` → `seatCompletesItself` (services/approverseats.ts): the charter names them or it does not; since
+        Spec 91 a credential other people's keys speak for is not seated by a road nobody pressed, and the page says the road on. An
+        estate before Spec 58's count 3 says nothing of a seat at all.
+        """
+        if not self.seat_completes_on_redemption:
+            return None
         if not email:
             return {"charterNamedThem": False, "granted": False, "note": None}
         charter = self.newest_written_charter()
         if not charter:
             return {"charterNamedThem": False, "granted": False, "note": None}
         wanted = email.strip().lower()
-        if not any(p["email"].lower() == wanted for p in self.parse_roster(charter["signers"])):
+        person = next((p for p in self.parse_roster(charter["signers"]) if p["email"].lower() == wanted), None)
+        if person is None:
             return {"charterNamedThem": False, "granted": False, "note": None}
+        if not self.before_spec_91:
+            shared = self.others_holding(credential_id, wanted)
+            if shared:
+                self.audit.append("approver_seat.grant_refused %s APPROVER_SEAT_CREDENTIAL_SHARED via invite_redemption" % credential_id)
+                return {"charterNamedThem": True, "granted": False, "note": approver_seat_shared_sentence(person["name"] or display_name, shared)}
         if credential_id not in self.second_approvers:
             self.second_approvers.append(credential_id)
             self.audit.append("approver_seat.granted %s via invite_redemption" % credential_id)
@@ -1136,10 +1330,11 @@ class EstateDouble:
         seats = []
         for person in self.parse_roster(charter["signers"]):
             candidates = by_email.get(person["email"].lower(), [])
-            seated = any(c in self.second_approvers for c in candidates)
-            state = "seated" if seated else ("enrolled_not_seated" if candidates else "not_enrolled")
-            seats.append({"name": person["name"], "email": person["email"], "state": state, "credentialId": candidates[0] if len(candidates) == 1 else None,
-                          "ambiguous": len(candidates) > 1, "invitation": None, "selfSeatable": False})
+            held = next((c for c in candidates if c in self.second_approvers), None)
+            state = "seated" if held is not None else ("enrolled_not_seated" if candidates else "not_enrolled")
+            seats.append({"name": person["name"], "email": person["email"], "state": state,
+                          "credentialId": held if held is not None else (candidates[0] if len(candidates) == 1 else None),
+                          "ambiguous": held is None and len(candidates) > 1, "invitation": None, "selfSeatable": False})
         return {"charterStands": True, "seats": seats, "summary": "%d seated" % sum(1 for s in seats if s["state"] == "seated"), "policyEntryId": "pe-estate"}
 
     def grant_seat(self, headers: Dict[str, str], body: Any) -> Tuple[int, Any]:
@@ -1154,8 +1349,18 @@ class EstateDouble:
         candidates = self.enrolled_by_email().get(email.lower(), [])
         if not candidates:
             raise Refusal("APPROVER_SEAT_NOT_ENROLLED", detail={"email": email.lower()})
-        if candidates[0] not in self.second_approvers:
-            self.second_approvers.append(candidates[0])
+        if len(candidates) > 1:
+            raise Refusal("APPROVER_SEAT_AMBIGUOUS", detail={"email": email.lower(), "credentials": str(len(candidates))})
+        credential_id = candidates[0]
+        if not self.before_spec_91:
+            # THEIR OWN, OR NOBODY'S (Spec 91, item 2): a credential other people's keys speak for is refused a seat, by name.
+            shared = self.others_holding(credential_id, email)
+            if shared:
+                raise Refusal("APPROVER_SEAT_CREDENTIAL_SHARED", approver_seat_shared_sentence(person["name"], shared),
+                              {"email": email.lower(), "sharedWith": ", ".join(shared)}, provenance={"source": "enrollment_invites"})
+        if credential_id not in self.second_approvers:
+            self.second_approvers.append(credential_id)
+            self.audit.append("approver_seat.granted %s via people_room" % credential_id)
         return 200, self.seats_view(caller)
 
     # -- invites (routes/invites.ts) -----------------------------------------------------------------------
@@ -1180,21 +1385,39 @@ class EstateDouble:
                           {"inviteId": standing["id"], "invitedEmail": standing["email"], "invitedName": standing["displayName"], "expiresAt": standing["expiresAt"]})
         if role == "viewer":
             credential_id = "cred-viewer-" + secrets.token_hex(4)
-            self.credentials[credential_id] = {"access": "audit", "name": "Viewer — read only — %s" % display_name}
-        else:
-            # An author invitation enrols the ONE role-bearing credential the account carries (services/invites.ts).
+            self.credentials[credential_id] = {"access": "audit", "name": "Viewer — read only — %s" % display_name, "entry": "pe-viewer"}
+        elif self.before_spec_91:
+            # Before Spec 91: an author invitation enrols the ONE role-bearing credential the account carries (services/invites.ts at e651616).
             role_bearing = [c for c, e in self.credentials.items() if "sign" in e["access"] or "audit" in e["access"]]
             role_bearing = [c for c in role_bearing if c not in (cv for cv in self.credentials if self.credentials[cv]["access"] == "audit")]
             if len(role_bearing) != 1:
                 raise Refusal("INVITE_INVALID", detail={"cause": "the account carries several role-bearing credentials; this invite must name which one it enrols", "candidates": ", ".join(role_bearing)})
             credential_id = role_bearing[0]
+        else:
+            # Spec 91 (services/invites.ts, authorshipEntry, mintAuthorCredential): a credential of the person's own on the ONE in-force
+            # policy entry bearing `sign` that an active credential holds; several are a refusal listing entries and credentials.
+            entries = [(self.authorship_entry["id"], self.authorship_entry["name"], [c for c, e in self.credentials.items() if e.get("entry") == self.authorship_entry["id"] and "sign" in e["access"]])]
+            if self.second_authorship_entry:
+                entries.append(("pe-cfo", "Casey CFO (author)", ["cred-cfo"]))
+            if len(entries) != 1:
+                raise Refusal("INVITE_INVALID", detail={
+                    "cause": "the account carries several policy entries bearing authorship; this invite must name which credential it enrols",
+                    "candidates": ", ".join(c for _, _, held in entries for c in held), "entries": ", ".join("%s (%s)" % (eid, name) for eid, name, _ in entries)},
+                    provenance={"source": "aap_policy"})
+            entry_id, entry_name, _ = entries[0]
+            credential_id = "cred-author-" + secrets.token_hex(4)
+            self.credentials[credential_id] = {"access": "sign+audit", "name": "%s — %s" % (entry_name, display_name), "entry": entry_id}
+            invited_key = next((k for k, p in A.PEOPLE.items() if p.email.lower() == email.lower()), None)
+            if invited_key in self.platform_names_approver and credential_id not in self.second_approvers:
+                self.second_approvers.append(credential_id)  # an operator at the platform's console, outside the estate's seat road
         token = secrets.token_urlsafe(32)
         row = {"id": "inv-" + secrets.token_hex(6), "displayName": display_name, "email": email, "phone": body.get("phone"), "role": role, "note": body.get("note"),
                "state": "pending", "credentialId": credential_id, "createdAt": self._now_iso(), "expiresAt": self._iso(time.time() + 72 * 3600),
                "redeemedAt": None, "revokedAt": None, "revokedByCredentialId": None, "dispatchedAt": None,
                "dispatchDetail": "This deployment has no mail lane, so nothing was sent. Copy the link and send it to this person yourself."}
         self.invites[hashlib.sha256(token.encode()).hexdigest()] = row
-        self.audit.append("invite.minted %s %s by %s" % (role, email, caller["credentialId"]))
+        self.audit.append("invite.minted %s %s by %s enrolsCredentialId %s mintedCredentialId %s" % (
+            role, email, caller["credentialId"], credential_id, "null" if (role == "author" and self.before_spec_91) else credential_id))
         if self.clock is not None and self.invite_seconds:
             # routes/invites.ts: the invitation is minted first, then the email's dispatch is awaited, then the route answers
             self.clock.sleep(self.invite_seconds)
@@ -1209,7 +1432,12 @@ class EstateDouble:
             raise Refusal("ROLE_NOT_GRANTED", role_not_granted_sentence(self.workspace["name"], held, "author or approver"),
                           {"workspace": self.workspace["name"], "held": ",".join(held), "required": "author or approver",
                            "cause": "the invitation register names the people your organisation has let in, and who let them in. An author or an approver may read it."})
-        return 200, {"invites": [dict(r) for r in sorted(self.invites.values(), key=lambda r: r["createdAt"], reverse=True)]}
+        rows = sorted(self.invites.values(), key=lambda r: (r["createdAt"], r["id"]), reverse=True)
+        wire = [{k: v for k, v in r.items() if not k.startswith("_")} for r in rows]
+        if self.before_spec_91:
+            return 200, {"invites": wire}
+        marks = self.mark_shared_credentials(rows)
+        return 200, {"invites": [dict(view, sharesCredentialWith=marks.get(view["id"], [])) for view in wire]}
 
     # -- payees (routes/payees.ts, payeeaddress.ts) -----------------------------------------------------------
     def create_payee(self, headers: Dict[str, str], body: Any) -> Tuple[int, Any]:
@@ -1339,30 +1567,36 @@ class EstateDouble:
         refused with the platform's bare "not authorized", which the estate relays as SIGNATURE_NOT_COUNTED with the
         platform's status and words. The press that meets the count answers whitelisted and nothing about waiting; a press
         that leaves it short answers the count, who may still approve, and the sentence — or, before Spec 89, the status alone.
-        The seat is found by the presser's email first (see the module docstring for why, and what the live estate may do).
+        The seat is found by the platform's rule (Spec T10): by credential first, then an empty seat bound by the address the
+        estate's press names; see the module docstring.
         """
         ceremony = row["ceremony"]
         active = [s for s in self.whitelist_seats if s["status"] == "active"]
-        email = (caller.get("email") or "").lower()
-        if email:
-            seat = next((s for s in active if s["user_id"].lower() == email), None)
-        else:
-            seat = next((s for s in active if s["credential_id"] and s["credential_id"] == caller["credentialId"]), None)
+        credential_id = caller["credentialId"]
+        # THE PLATFORM'S RULE (Spec T10, from Spec 91's builder; test/aapDouble.ts, the signatures road): a signature counts for an
+        # active seat matched by CREDENTIAL; a press that says whose seat it is binds the caller's credential to that person's
+        # EMPTY seat; a seat already bound to a different key refuses; a credential is counted once. The estate's press says whose
+        # seat it is only where it can attach the credential to one address nobody else's key shares (signAsPresser → signerEmailOf).
+        user_id = self.signer_email_of(credential_id)
+        seat = next((s for s in active if s["credential_id"] and s["credential_id"] == credential_id), None)
+        if seat is None and user_id:
+            named = next((s for s in active if s["user_id"].lower() == user_id.lower()), None)
+            if named is not None and not named["credential_id"]:
+                named["credential_id"] = credential_id  # the enrolment bind (spec 76)
+                seat = named
         if seat is None:
-            raise Refusal("SIGNATURE_NOT_COUNTED", detail={"payeeAddressId": row["id"], "credentialId": caller["credentialId"],
+            raise Refusal("SIGNATURE_NOT_COUNTED", detail={"payeeAddressId": row["id"], "credentialId": credential_id,
                                                            "platformStatus": "403", "platformSaid": PLATFORM_NOT_AUTHORIZED},
                           provenance={"source": "aap_whitelist", "reference": ceremony["pendingTxId"]})
-        if not seat["credential_id"]:
-            seat["credential_id"] = caller["credentialId"]  # the enrolment bind (spec 76)
-        if seat["user_id"] not in ceremony["signatures"]:
-            ceremony["signatures"].append(seat["user_id"])  # only once either way
+        if credential_id not in ceremony["signatures"]:
+            ceremony["signatures"].append(credential_id)  # only once either way
         required, collected = ceremony["requiredSignatures"], len(ceremony["signatures"])
         if collected >= required and not self.platform_never_activates:
             row["whitelistStatus"] = "whitelisted"
             row["promotedAt"] = self._now_iso()
             self.audit.append("payee.address.whitelisted %s by %s" % (row["id"], seat["user_id"]))
             return {"whitelistStatus": "whitelisted"}
-        may_still = [s["display_name"] for s in active if s["user_id"] not in ceremony["signatures"]]
+        may_still = [s["display_name"] for s in active if not s["credential_id"] or s["credential_id"] not in ceremony["signatures"]]
         self.audit.append("payee.address.promotion_pending_quorum %s requiredSignatures %d, signaturesCollected %d, mayStillApprove %s" % (
             row["id"], required, collected, ", ".join(may_still) or "nobody"))
         if not self.pending_approval_says_why:
@@ -1666,14 +1900,26 @@ class TheDoubleTellsTheTruth(unittest.TestCase):
         self.assertEqual(answer.refusal["code"], "INVITE_ROLE_NOT_AVAILABLE")
         self.assertEqual(answer.refusal["message"], "That role cannot be invited yet. Choose one of the roles this centre offers today.")
 
-    def test_an_author_invitation_enrols_the_one_role_bearing_credential(self):
+    def test_an_author_invitation_mints_a_credential_of_the_persons_own_and_the_estate_before_spec_91_enrolled_the_founders(self):
         self.runner.enrol_by_invite(self.founder, self.link, "test")
         ada = self.runner.people["ada"]
         minted = self.request(self.founder, "POST", "/v1/invites", {"displayName": ada.name, "email": ada.email, "role": "author"})
         self.assertEqual(minted.status, 201)
-        self.assertEqual(minted.json["credentialId"], self.founder.credential_id, "the invite enrols the founder's own credential, as services/invites.ts resolves it")
+        self.assertNotEqual(minted.json["credentialId"], self.founder.credential_id, "Spec 91: the invite mints a credential of the person's own (services/invites.ts, mintAuthorCredential)")
+        self.assertEqual(minted.json["invite"]["credentialId"], minted.json["credentialId"])
+        self.assertEqual(self.double.credentials[minted.json["credentialId"]], {"access": "sign+audit", "name": "Founder (author) — Ada Approver", "entry": self.double.authorship_entry["id"]},
+                         "on the entry the founder's author credential is bound to, named for the entry and the person")
         self.runner.enrol_by_invite(ada, minted.json["url"], "test")
-        self.assertEqual(ada.credential_id, self.founder.credential_id)
+        self.assertEqual(ada.credential_id, minted.json["credentialId"], "redemption binds the passkey to that invitation's credential")
+        self.assertEqual(ada.roles, ["author", "viewer"], "the entry's powers, and no seat: the redemption seats only whom a written charter names")
+        # the estate of the four live runs, behind the knob
+        before = EstateDouble(before_spec_91=True)
+        link = before.mint_founder_link()
+        runner = runner_on(before, self.tmp, invite=link)
+        founder = runner.people[A.FOUNDER]
+        runner.enrol_by_invite(founder, link, "test")
+        minted = runner.request(founder, "POST", "/v1/invites", {"displayName": ada.name, "email": ada.email, "role": "author"}, "test")
+        self.assertEqual(minted.json["credentialId"], founder.credential_id, "before Spec 91 the invite enrolled the founder's own credential, as services/invites.ts at e651616 resolved it")
 
     def test_a_replayed_challenge_and_a_wrong_rp_id_are_refused_in_the_servers_words(self):
         self.runner.enrol_by_invite(self.founder, self.link, "test")
@@ -1828,10 +2074,13 @@ class TheWhitelistRoadMeetsItsQuorum(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.double = EstateDouble()
+        # Spec T10: every person holds a credential of their own, and the charter seats Ada alone — so for Ben's press to reach the
+        # platform an operator at the platform's console names his credential a second approver (the estate's seat road refuses him:
+        # APPROVER_SEAT_NOT_IN_CHARTER). Without it the approve route's guard refuses him (TheFoundersRoad in test_aer360_stations).
+        cls.double = EstateDouble(platform_names_approver=("ben",))
         cls.tmp = tempfile.mkdtemp()
         cls.runner = runner_on(cls.double, cls.tmp, invite=cls.double.mint_founder_link())
-        cls.runner.run()  # S1–S6 compile the policy (seating the whitelist roster) and seat Ada
+        cls.runner.run()  # S1–S6 compile the policy (establishing the whitelist roster) and seat Ada
         cls.founder = cls.runner.people["harriet"]
         cls.ada = cls.runner.people["ada"]
         cls.ben = cls.runner.people["ben"]
@@ -1869,6 +2118,11 @@ class TheWhitelistRoadMeetsItsQuorum(unittest.TestCase):
         second = self.press(self.ben, address_id)
         self.assertEqual(second.status, 200, second.text)
         self.assertEqual(second.json, {"whitelistStatus": "whitelisted"}, "the second signature meets the quorum; nothing about waiting")
+        # the platform's rule (Spec T10): each press bound the presser's own credential to the seat the estate named, and counted it once
+        seats = {s["user_id"]: s["credential_id"] for s in self.double.whitelist_seats}
+        self.assertEqual(seats[self.ada.email], self.ada.credential_id)
+        self.assertEqual(seats[self.ben.email], self.ben.credential_id)
+        self.assertNotEqual(self.ada.credential_id, self.ben.credential_id)
 
     def test_the_same_person_pressing_again_is_told_the_same_thing_the_platform_counts_a_signature_once(self):
         # Spec 89's code (routes/payees.test.ts): 200 with the same pending body, NOT a refusal. See the class docstring.
@@ -1891,9 +2145,9 @@ class TheWhitelistRoadMeetsItsQuorum(unittest.TestCase):
         self.assertEqual(first.json, {"whitelistStatus": "pending_promotion"}, "the estate of 20 September 2026, before Spec 89: the status alone")
 
     def test_a_press_by_a_key_on_no_seat_is_the_platforms_refusal_relayed(self):
-        # A roster of one (Ada). Ben is an approver on this estate (the shared credential Ada's seat carries), but his
+        # A roster of one (Ada). Ben is an approver on this estate (named at the platform's console), but his
         # key is on no seat of this roster, so the platform declines his signature and the estate relays it (Rule 13).
-        double = EstateDouble(whitelist_roster=("ada",))
+        double = EstateDouble(whitelist_roster=("ada",), platform_names_approver=("ben",))
         runner = runner_on(double, tempfile.mkdtemp(), invite=double.mint_founder_link())
         runner.run()
         created = runner.request(runner.people["harriet"], "POST", "/v1/payees",
@@ -1907,6 +2161,203 @@ class TheWhitelistRoadMeetsItsQuorum(unittest.TestCase):
         self.assertEqual(refused.refusal["code"], "SIGNATURE_NOT_COUNTED")
         self.assertEqual(refused.refusal["detail"]["platformSaid"], "not authorized")
         self.assertIsNone(H.refusal_without_why(refused.status, refused.text), "the refusal says who declined and why")
+
+
+@unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
+class TheDoubleLearnsSpec91(unittest.TestCase):
+    """
+    Spec T10 §6: the double mints a distinct credential per author invitation, binds the redeemed passkey to it, counts ceremony
+    presses by credential_id (the platform's rule), carries the shared-credential marker on the People register for a person
+    enrolled before Spec 91, refuses to seat a shared credential by name, retires the old binding on a re-invitation, and goes
+    back to the pre-91 shape behind a knob.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def estate(self, **kwargs):
+        double = EstateDouble(**kwargs)
+        link = double.mint_founder_link()
+        runner = runner_on(double, self.tmp, invite=link)
+        founder = runner.people[A.FOUNDER]
+        runner.enrol_by_invite(founder, link, "test")
+        return double, runner, founder
+
+    def invite(self, runner, founder, person, role="author"):
+        minted = runner.request(founder, "POST", "/v1/invites", {"displayName": person.name, "email": person.email, "role": role}, "test")
+        self.assertEqual(minted.status, 201, minted.text)
+        return minted
+
+    def test_three_author_invitations_mint_three_distinct_credentials_on_the_authorship_entry_none_the_founders(self):
+        double, runner, founder = self.estate()
+        minted = [self.invite(runner, founder, runner.people[k]).json["credentialId"] for k in A.AUTHORS_INVITED]
+        self.assertEqual(len(set(minted)), 3)
+        self.assertNotIn(founder.credential_id, minted)
+        for credential_id in minted:
+            self.assertEqual(double.credentials[credential_id]["entry"], double.authorship_entry["id"], "the same entry: the same powers and not one more")
+        self.assertEqual([a for a in double.audit if a.startswith("invite.minted author")][0].split(" enrolsCredentialId ")[1].split(" ")[0], minted[0])
+        self.assertIn("mintedCredentialId %s" % minted[0], double.audit[-3])
+
+    def test_redemption_binds_the_passkey_to_that_credential_and_the_register_shows_three_distinct_unmarked(self):
+        double, runner, founder = self.estate()
+        for key in A.AUTHORS_INVITED:
+            person = runner.people[key]
+            minted = self.invite(runner, founder, person)
+            verified = runner.enrol_by_invite(person, minted.json["url"], "test")
+            self.assertEqual(verified.json["credentialId"], minted.json["credentialId"])
+            session = runner.request(person, "GET", "/v1/auth/session", None, "test")
+            self.assertEqual(session.json["credentialId"], minted.json["credentialId"], "the session opened by the redemption carries the person's own credential")
+        register = runner.request(founder, "GET", "/v1/invites", None, "test").json["invites"]
+        authors = [r for r in register if r["role"] == "author"]
+        self.assertEqual(len(authors), 3)
+        self.assertEqual(len({r["credentialId"] for r in authors}), 3)
+        for row in authors:
+            self.assertEqual(row["state"], "redeemed")
+            self.assertNotEqual(row["credentialId"], founder.credential_id)
+            self.assertEqual(row["sharesCredentialWith"], [], "their own: nobody to share with")
+        self.assertTrue(all(not k.startswith("_") for r in register for k in r), "the wire carries no private field")
+
+    def test_two_policy_entries_bearing_authorship_are_refused_listing_both_and_nothing_is_minted(self):
+        double, runner, founder = self.estate(second_authorship_entry=True)
+        ada = runner.people["ada"]
+        before = dict(double.credentials)
+        refused = runner.request(founder, "POST", "/v1/invites", {"displayName": ada.name, "email": ada.email, "role": "author"}, "test")
+        self.assertEqual(refused.status, 401)
+        self.assertEqual(refused.refusal["code"], "INVITE_INVALID")
+        self.assertEqual(refused.refusal["detail"]["cause"], "the account carries several policy entries bearing authorship; this invite must name which credential it enrols")
+        self.assertIn(founder.credential_id, refused.refusal["detail"]["candidates"])
+        self.assertIn("cred-cfo", refused.refusal["detail"]["candidates"])
+        self.assertIn("%s (Founder (author))" % double.authorship_entry["id"], refused.refusal["detail"]["entries"])
+        self.assertIn("pe-cfo (Casey CFO (author))", refused.refusal["detail"]["entries"])
+        self.assertEqual(double.credentials, before, "nothing minted, the refusal came first")
+        self.assertEqual([r for r in double.invites.values() if r.get("email") == ada.email], [], "no row")
+
+    def test_a_press_is_counted_to_the_credential_that_made_it(self):
+        """
+        The platform's rule (Spec 91's builder, validateMultisigSigner; test/aapDouble.ts): on the shared credential, Ada's press binds
+        her seat to it and Ben's press matches that seat by credential — one signature, as the fourth live run met. On credentials of
+        their own, two presses are two of two.
+        """
+        # the estate of the four live runs: four people, one credential
+        double = EstateDouble(before_spec_91=True)
+        runner = runner_on(double, self.tmp, invite=double.mint_founder_link())
+        runner.run()
+        founder, ada, ben = runner.people["harriet"], runner.people["ada"], runner.people["ben"]
+        self.assertEqual(ada.credential_id, founder.credential_id)
+        address_id = self.fresh_address(runner, founder)
+        first = runner.request(ada, "POST", "/v1/payees/addresses/%s/approve" % address_id, {}, "test")
+        self.assertEqual(first.json["approvals"], {"required": 2, "collected": 1, "remaining": 1})
+        self.assertEqual(first.json["may_still_approve"], ["Harriet Founder", "Ben Signatory", "Cora Clerk"])
+        ada_seat = next(s for s in double.whitelist_seats if s["user_id"] == ada.email)
+        self.assertEqual(ada_seat["credential_id"], founder.credential_id, "Ada's press bound her seat to the credential she wore: the founder's")
+        second = runner.request(ben, "POST", "/v1/payees/addresses/%s/approve" % address_id, {}, "test")
+        self.assertEqual(second.status, 200)
+        self.assertEqual(second.json, first.json, "Ben's press matched Ada's seat by credential and counted nothing: the fourth live run's answer, word for word")
+        self.assertEqual(next(s for s in double.whitelist_seats if s["user_id"] == ben.email)["credential_id"], "", "Ben's own seat stays empty")
+        # credentials of their own, and Ben named an approver at the platform's console: two of two
+        double = EstateDouble(platform_names_approver=("ben",))
+        runner = runner_on(double, tempfile.mkdtemp(), invite=double.mint_founder_link())
+        runner.run()
+        founder, ada, ben = runner.people["harriet"], runner.people["ada"], runner.people["ben"]
+        address_id = self.fresh_address(runner, founder)
+        runner.request(ada, "POST", "/v1/payees/addresses/%s/approve" % address_id, {}, "test")
+        second = runner.request(ben, "POST", "/v1/payees/addresses/%s/approve" % address_id, {}, "test")
+        self.assertEqual(second.json, {"whitelistStatus": "whitelisted"})
+        ceremony = double.addresses[address_id]["ceremony"]
+        self.assertEqual(ceremony["signatures"], [ada.credential_id, ben.credential_id])
+
+    def test_a_seat_bound_to_the_shared_credential_refuses_the_persons_own_credential(self):
+        """The prediction for the rerun: the roster stands (governance established once), Ada's seat is bound to the founder's credential, and her own is "not authorized"."""
+        double = EstateDouble(before_spec_91=True)
+        runner = runner_on(double, self.tmp, invite=double.mint_founder_link())
+        runner.run()  # Ada's press in S6 bound her seat to the shared credential
+        founder = runner.people["harriet"]
+        self.assertEqual(next(s for s in double.whitelist_seats if s["user_id"] == A.PEOPLE["ada"].email)["credential_id"], founder.credential_id)
+        double.before_spec_91 = False
+        again = runner_on(double, self.tmp, invite=runner.invite)
+        outcomes = {o.station: o for o in again.run()}
+        self.assertIs(again.facts["compile"]["policy"]["receipt"]["governanceAlreadyStood"], True, "a recompile leaves the rosters as they stand")
+        ada = again.people["ada"]
+        self.assertNotEqual(ada.credential_id, founder.credential_id, "brought in again on her own")
+        self.assertIn("approver", ada.roles, "seated on redemption")
+        press = [c for c in again.calls if c.station == "S6" and c.route.endswith("/approve") and c.who == "Ada Approver"][0]
+        self.assertEqual(press.status, 403)
+        body = json.loads(press.text)
+        self.assertEqual(body["error"]["code"], "SIGNATURE_NOT_COUNTED")
+        self.assertEqual(body["error"]["detail"]["platformSaid"], PLATFORM_NOT_AUTHORIZED)
+        self.assertEqual(body["error"]["detail"]["platformStatus"], "403")
+        self.assertEqual(outcomes["S6"].outcome, H.FAIL)
+
+    def test_people_already_on_a_shared_credential_are_marked_refused_a_seat_and_given_their_own_by_a_fresh_invitation(self):
+        """Spec 91's own scenario (owncredential.test.ts, 'marks them on the register...'), against this double."""
+        double, runner, founder = self.estate(before_spec_91=True, seat_completes_on_redemption=False)
+        for station in ("station_s2", "station_s3"):
+            getattr(runner, station)()
+        ada, ben = runner.people["ada"], runner.people["ben"]
+        for person in (ada, ben):
+            runner.enrol_by_invite(person, self.invite(runner, founder, person).json["url"], "test")
+            self.assertEqual(person.credential_id, founder.credential_id)
+        double.before_spec_91 = False
+        # THE REGISTER SAYS IT, naming the others from the estate's own passkey rows — the founder among them
+        rows = {r["displayName"]: r for r in runner.request(founder, "GET", "/v1/invites", None, "test").json["invites"]}
+        self.assertEqual(rows["Ada Approver"]["sharesCredentialWith"], ["Harriet", "Ben Signatory"])
+        self.assertEqual(rows["Ben Signatory"]["sharesCredentialWith"], ["Harriet", "Ada Approver"])
+        self.assertEqual(rows["Harriet"]["sharesCredentialWith"], ["Ada Approver", "Ben Signatory"], "the operator's invitation is its own person")
+        self.assertEqual(H.shares_credential_sentence(rows["Ada Approver"]["sharesCredentialWith"]), "shares a credential with Harriet and Ben Signatory; invite them again to give them their own")
+        # THE SEAT ROAD REFUSES BY NAME and writes nothing
+        refused = runner.request(founder, "POST", "/v1/approver-seats/grant", {"email": ada.email}, "test")
+        self.assertEqual(refused.status, 409)
+        self.assertEqual(refused.refusal["code"], "APPROVER_SEAT_CREDENTIAL_SHARED")
+        self.assertEqual(refused.refusal["message"], approver_seat_shared_sentence("", ["Harriet", "Ben Signatory"]))
+        self.assertEqual(refused.refusal["detail"]["sharedWith"], "Harriet, Ben Signatory")
+        self.assertEqual(double.second_approvers, [])
+        seats = runner.request(founder, "GET", "/v1/approver-seats", None, "test").json
+        seat = next(s for s in seats["seats"] if s["email"] == ada.email)
+        self.assertEqual((seat["state"], seat["credentialId"]), ("enrolled_not_seated", founder.credential_id), "the panel still tells the truth")
+        # A FRESH INVITATION mints her own; the redemption retires the old binding and seats her
+        double.seat_completes_on_redemption = True
+        again = self.invite(runner, founder, ada)
+        own = again.json["credentialId"]
+        self.assertNotEqual(own, founder.credential_id)
+        verified = runner.enrol_by_invite(ada, again.json["url"], "test")
+        self.assertEqual(verified.json["credentialId"], own)
+        self.assertEqual(verified.json["approverSeat"], {"charterNamedThem": True, "granted": True, "note": None})
+        self.assertEqual(double.second_approvers, [own])
+        self.assertIn((ada.email.lower(), founder.credential_id), double.retired)
+        self.assertTrue(any(a.startswith("person.credential_replaced %s: %s -> %s" % (ada.email.lower(), founder.credential_id, own)) for a in double.audit))
+        rows = runner.request(founder, "GET", "/v1/invites", None, "test").json["invites"]
+        adas = [r for r in rows if r["email"] == ada.email]
+        self.assertEqual(len(adas), 2)
+        self.assertEqual(next(r for r in adas if r["credentialId"] == own)["sharesCredentialWith"], [], "her newest invitation is her own and unmarked")
+        self.assertEqual(next(r for r in adas if r["credentialId"] == founder.credential_id)["sharesCredentialWith"], [], "her earlier one is history")
+        self.assertEqual(next(r for r in rows if r["email"] == ben.email)["sharesCredentialWith"], ["Harriet", "Ada Approver"], "Ben still shares, with the founder and the key Ada's earlier invitation bound")
+        seat = next(s for s in runner.request(founder, "GET", "/v1/approver-seats", None, "test").json["seats"] if s["email"] == ada.email)
+        self.assertEqual((seat["state"], seat["credentialId"], seat["ambiguous"]), ("seated", own, False))
+        # a second seat road would be refused too: BEN IS STILL REFUSED (not in the charter's roster at all, here)
+        ben_refused = runner.request(founder, "POST", "/v1/approver-seats/grant", {"email": ben.email}, "test")
+        self.assertEqual(ben_refused.refusal["code"], "APPROVER_SEAT_NOT_IN_CHARTER")
+
+    def test_the_pre_91_knob_puts_the_double_back_to_the_estates_old_shape(self):
+        double, runner, founder = self.estate(before_spec_91=True)
+        for station in ("station_s2", "station_s3"):
+            getattr(runner, station)()
+        ada = runner.people["ada"]
+        runner.enrol_by_invite(ada, self.invite(runner, founder, ada).json["url"], "test")
+        register = runner.request(founder, "GET", "/v1/invites", None, "test").json["invites"]
+        self.assertTrue(all("sharesCredentialWith" not in r for r in register), "no marker before Spec 91")
+        self.assertEqual(ada.credential_id, founder.credential_id)
+        self.assertIn("approver", ada.roles, "the redemption seated the shared credential, as the first live run's did")
+        self.assertIn("mintedCredentialId null", [a for a in double.audit if a.startswith("invite.minted author")][0])
+
+    def fresh_address(self, runner, founder):
+        created = runner.request(founder, "POST", "/v1/payees",
+                                 {"displayName": "Spec T10 payee", "defaultAsset": "USDC", "defaultChain": "ethereum",
+                                  "addresses": [{"chain": "ethereum", "address": T.address("CHECKSUM_PROBE_ETHEREUM")}]}, "test")
+        self.assertEqual(created.status, 201, created.text)
+        address_id = created.json["payee"]["addresses"][0]["id"]
+        promoted = runner.request(founder, "POST", "/v1/payees/addresses/%s/promote" % address_id, {}, "test")
+        self.assertEqual(promoted.status, 200, promoted.text)
+        return address_id
 
 
 if __name__ == "__main__":

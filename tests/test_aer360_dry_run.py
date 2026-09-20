@@ -1,7 +1,9 @@
 """
 --dry prints the twelve stations' calls in order with no network, the probes of S10 to S12 included (Spec T7).
 Spec T8 changed what the harness expects, not what it sends: the calls are frozen in tests/fixtures/aer360-dry-calls.txt
-from the dry run at main after PR #5, and the venue probe's expectation is the law's.
+from the dry run at main after PR #5, and the venue probe's expectation is the law's. Spec T9 added S6's second press;
+Spec T10 added, under S4, the seats as the run finds them, the conditional re-invitation for each author, and the seat
+re-grant's condition (121 → 134 lines).
 """
 import contextlib
 import io
@@ -78,10 +80,10 @@ class DryRunTest(unittest.TestCase):
     def test_s4_to_s8_walk_the_people_the_account_the_payees_and_the_payments(self):
         lines = H.dry_lines()
         s4 = [l for l in lines if l.startswith("S4 — ")]
-        self.assertEqual(len([l for l in s4 if "POST /v1/invites {" in l]), 3)
+        self.assertEqual(len([l for l in s4 if "POST /v1/invites {" in l]), 6, "a first invitation for each author, and the conditional re-invitation (Spec T10)")
         for key in A.AUTHORS_INVITED:
             self.assertTrue(any(A.PEOPLE[key].email in l for l in s4), key)
-        self.assertTrue(any("GET /v1/approver-seats" in l for l in s4))
+        self.assertEqual(len([l for l in s4 if "GET /v1/approver-seats" in l]), 2, "the seats as the run finds them, and after the people were brought in")
         s5 = [l for l in lines if l.startswith("S5 — POST /v1/onboarding/interviews/<account interview>/answers")]
         self.assertEqual(len(s5), len(A.expected_walk("wallet_account")))
         self.assertTrue(any('"questionId": "O2"' in l and A.MONEY["per_payment_cents"] in l for l in s5))
@@ -124,8 +126,35 @@ class DryRunTest(unittest.TestCase):
         """Spec T8: --dry unchanged in its calls. The fixture is the dry run at main after PR #5, its expectations cut off at the arrow."""
         with open(FROZEN_CALLS, "r", encoding="utf-8") as handle:
             frozen = handle.read().splitlines()
-        self.assertEqual(len(frozen), 121, "Spec T9 added a second approve press per payee to S6, and nothing else")
+        self.assertEqual(len(frozen), 134, "Spec T9 added a second approve press per payee to S6; Spec T10 added thirteen lines under S4 and reworded the seat re-grant's condition, and nothing else")
         self.assertEqual(calls_of(H.dry_lines()), frozen)
+
+    def test_s4_carries_the_conditional_re_invitation_for_each_author_and_the_seat_re_grant(self):
+        """Spec T10 §5: for each author the comparison and the conditional fresh invitation, options and verify with a NEW passkey stored beside the old; for Ada the seat re-grant."""
+        s4 = [l for l in H.dry_lines() if l.startswith("S4 — ")]
+        self.assertEqual(len(s4), 25)
+        self.assertIn("GET /v1/approver-seats (as Harriet Founder) → expect the charter's seats as this run finds them: which credential Ada Approver's seat names before anybody is brought in again", s4[0])
+        for key in A.AUTHORS_INVITED:
+            person = A.PEOPLE[key]
+            mine = [l for l in s4 if person.name in l]
+            compare = [l for l in mine if l.startswith("S4 — [compare] %s's session credentialId with the founder's" % person.name)]
+            self.assertEqual(len(compare), 1, key)
+            self.assertIn("→ expect a credential of %s's own, not the founder's; equal is the shared credential of S10's finding, and %s is brought in again" % (person.name, person.name), compare[0])
+            again = [l for l in mine if "— only if %s's session carries the founder's credential" % person.name in l]
+            self.assertEqual(len(again), 1, key)
+            self.assertTrue(again[0].startswith("S4 — POST /v1/invites {\"displayName\": \"%s\", \"email\": \"%s\", \"role\": \"author\"} (as Harriet Founder, x-csrf-token) — only if" % (person.name, person.email)), again[0])
+            self.assertIn("→ expect 201: a fresh invitation for the same name and email, minting a credential of %s's own (Spec 91)" % person.name, again[0])
+            conditional = [l for l in mine if "— only if %s is brought in again" % person.name in l]
+            self.assertEqual([l.split(" ", 4)[3] for l in conditional], ["/v1/auth/invite/options", "/v1/auth/invite/verify"], key)
+            self.assertIn("<RegistrationResponseJSON with a NEW passkey>", conditional[1])
+            self.assertIn("the new key stored beside the old at ~/.aer360-harness/harness-holdings/%s-2-<date>.json mode 0600, the old one untouched" % key, conditional[1])
+            self.assertIn("→ expect 200: a session for %s on a credential of %s's own, not the founder's" % (person.name, person.name), conditional[1])
+        grant = [l for l in s4 if "POST /v1/approver-seats/grant" in l]
+        self.assertEqual(len(grant), 1)
+        self.assertIn("— only if the seat is enrolled_not_seated or names a credential other than Ada Approver's session's → expect the seat seated, naming Ada Approver's own credential (Spec 91); a refusal is a finding in the estate's words", grant[0])
+        self.assertIn("GET /v1/invites (as Harriet Founder) → expect the register: three authors, redeemed; each row's sharesCredentialWith (Spec 91's marker) read for S10, expected absent after the re-invitation", s4[-1])
+        # the other stations are as Spec T9 left them
+        self.assertEqual(len([l for l in H.dry_lines() if l.startswith("S6 — ") and "/approve" in l]), 4)
 
     def test_the_venue_probes_expectation_is_the_law(self):
         s11 = [l for l in H.dry_lines() if l.startswith("S11 — ") and "Venue probe" in l]
