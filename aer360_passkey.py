@@ -26,7 +26,10 @@ signature). The verifier is proven against a published vector (RFC 6979 A.2.5) a
 a signature openssl produced.
 
 The key is kept by the harness under ~/.aer360-harness/<estate>/<person>.json, mode 0600:
-a test key for a sandbox estate that never leaves the Mac. Nothing here prints a key.
+a test key for a sandbox estate that never leaves the Mac. Nothing here prints a key. A person
+brought in again on a credential of their own (Spec T10, 20 September 2026) registers a NEW key,
+stored beside the old one as <person>-2-<date>.json and never over it: `stored_key_paths` and
+`next_key_path` below name the files, oldest first.
 """
 from __future__ import annotations
 
@@ -34,6 +37,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import secrets
 import struct
 import subprocess
@@ -643,6 +647,57 @@ def write_private(path: str, data: Any) -> None:
         os.write(fd, json.dumps(data, indent=2, sort_keys=True).encode("utf-8"))
     finally:
         os.close(fd)
+
+
+# ---------------------------------------------------------------------------
+# A SECOND PASSKEY BESIDE THE FIRST (Spec T10, 20 September 2026).
+#
+# A person brought in again on a credential of their own registers a NEW passkey; the old one is
+# kept, because the estate's audit trail names it and a later station may need to prove it no
+# longer signs. So the new key is stored under a suffixed name beside the old — <person>-2-<date>.json
+# beside <person>.json, then -3-, and so on — and no key file is ever overwritten by another key's.
+# `stored_key_paths` lists a person's keys oldest first, so a run signs in with the newest and leaves
+# the earlier ones untouched.
+# ---------------------------------------------------------------------------
+KEY_FILE_SUFFIX = re.compile(r"^(?P<stem>.+)-(?P<ordinal>\d+)-(?P<date>\d{4}-\d{2}-\d{2})\.json$")
+
+
+def stored_key_paths(path: str) -> List[str]:
+    """
+    The key file at `path` (the person's first passkey) and every suffixed sibling beside it, oldest
+    first: the bare file, then by ordinal, then by date. A file that does not exist is not listed.
+    """
+    folder, name = os.path.split(path)
+    stem, ext = os.path.splitext(name)
+    found: List[Tuple[int, str, str]] = []
+    if os.path.exists(path):
+        found.append((1, "", path))
+    if ext == ".json" and os.path.isdir(folder):
+        for entry in os.listdir(folder):
+            match = KEY_FILE_SUFFIX.match(entry)
+            if match and match.group("stem") == stem:
+                found.append((int(match.group("ordinal")), match.group("date"), os.path.join(folder, entry)))
+    return [stored for _, _, stored in sorted(found)]
+
+
+def next_key_path(path: str, date: str) -> str:
+    """
+    Where the person's next passkey is stored: `<stem>-<n>-<date>.json` beside `path`, n one more than
+    the highest ordinal already stored (the bare file is 1, so a second passkey is `-2`), and never a
+    file that exists.
+    """
+    folder, name = os.path.split(path)
+    stem, ext = os.path.splitext(name)
+    highest = 1
+    for stored in stored_key_paths(path):
+        match = KEY_FILE_SUFFIX.match(os.path.basename(stored))
+        highest = max(highest, int(match.group("ordinal")) if match else 1)
+    ordinal = highest + 1
+    candidate = os.path.join(folder, "%s-%d-%s%s" % (stem, ordinal, date, ext))
+    while os.path.exists(candidate):  # never overwrite: a name already taken moves the ordinal on
+        ordinal += 1
+        candidate = os.path.join(folder, "%s-%d-%s%s" % (stem, ordinal, date, ext))
+    return candidate
 
 
 def _host_of(origin: str) -> str:

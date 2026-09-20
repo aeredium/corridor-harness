@@ -30,17 +30,30 @@ S3 — POST /v1/onboarding/interviews/<policy interview>/confirm {"issuedAtMs": 
 S3 — POST /v1/onboarding/interviews/<policy interview>/compile {}
 S3 — GET /v1/onboarding/charter
 S3 — GET /v1/journey
+S4 — GET /v1/approver-seats (as Harriet Founder)
 S4 — POST /v1/invites {"displayName": "Ada Approver", "email": "harness+ada@aeredium.io", "role": "author"} (as Harriet Founder, x-csrf-token)
 S4 — POST /v1/auth/invite/options {"token": "<token from the url>", "issuedAtMs": "<now>", "response": {}}
 S4 — POST /v1/auth/invite/verify {"token": "<token>", "issuedAtMs": "<issuedAtMs>", "response": "<RegistrationResponseJSON with a new passkey>"}
+S4 — [compare] Ada Approver's session credentialId with the founder's (where a passkey is stored for Ada Approver: POST /v1/auth/login/options {} and /verify first)
+S4 — POST /v1/invites {"displayName": "Ada Approver", "email": "harness+ada@aeredium.io", "role": "author"} (as Harriet Founder, x-csrf-token) — only if Ada Approver's session carries the founder's credential
+S4 — POST /v1/auth/invite/options {"token": "<token from the fresh url>", "issuedAtMs": "<now>", "response": {}} — only if Ada Approver is brought in again
+S4 — POST /v1/auth/invite/verify {"token": "<token>", "issuedAtMs": "<issuedAtMs>", "response": "<RegistrationResponseJSON with a NEW passkey>"} — only if Ada Approver is brought in again
 S4 — POST /v1/invites {"displayName": "Ben Signatory", "email": "harness+ben@aeredium.io", "role": "author"} (as Harriet Founder, x-csrf-token)
 S4 — POST /v1/auth/invite/options {"token": "<token from the url>", "issuedAtMs": "<now>", "response": {}}
 S4 — POST /v1/auth/invite/verify {"token": "<token>", "issuedAtMs": "<issuedAtMs>", "response": "<RegistrationResponseJSON with a new passkey>"}
+S4 — [compare] Ben Signatory's session credentialId with the founder's (where a passkey is stored for Ben Signatory: POST /v1/auth/login/options {} and /verify first)
+S4 — POST /v1/invites {"displayName": "Ben Signatory", "email": "harness+ben@aeredium.io", "role": "author"} (as Harriet Founder, x-csrf-token) — only if Ben Signatory's session carries the founder's credential
+S4 — POST /v1/auth/invite/options {"token": "<token from the fresh url>", "issuedAtMs": "<now>", "response": {}} — only if Ben Signatory is brought in again
+S4 — POST /v1/auth/invite/verify {"token": "<token>", "issuedAtMs": "<issuedAtMs>", "response": "<RegistrationResponseJSON with a NEW passkey>"} — only if Ben Signatory is brought in again
 S4 — POST /v1/invites {"displayName": "Cora Clerk", "email": "harness+cora@aeredium.io", "role": "author"} (as Harriet Founder, x-csrf-token)
 S4 — POST /v1/auth/invite/options {"token": "<token from the url>", "issuedAtMs": "<now>", "response": {}}
 S4 — POST /v1/auth/invite/verify {"token": "<token>", "issuedAtMs": "<issuedAtMs>", "response": "<RegistrationResponseJSON with a new passkey>"}
+S4 — [compare] Cora Clerk's session credentialId with the founder's (where a passkey is stored for Cora Clerk: POST /v1/auth/login/options {} and /verify first)
+S4 — POST /v1/invites {"displayName": "Cora Clerk", "email": "harness+cora@aeredium.io", "role": "author"} (as Harriet Founder, x-csrf-token) — only if Cora Clerk's session carries the founder's credential
+S4 — POST /v1/auth/invite/options {"token": "<token from the fresh url>", "issuedAtMs": "<now>", "response": {}} — only if Cora Clerk is brought in again
+S4 — POST /v1/auth/invite/verify {"token": "<token>", "issuedAtMs": "<issuedAtMs>", "response": "<RegistrationResponseJSON with a NEW passkey>"} — only if Cora Clerk is brought in again
 S4 — GET /v1/approver-seats (as Harriet Founder)
-S4 — POST /v1/approver-seats/grant {"email": "harness+ada@aeredium.io"} (as Harriet Founder) — only if the seat is enrolled_not_seated
+S4 — POST /v1/approver-seats/grant {"email": "harness+ada@aeredium.io"} (as Harriet Founder) — only if the seat is enrolled_not_seated or names a credential other than Ada Approver's session's
 S4 — GET /v1/invites (as Harriet Founder)
 S5 — POST /v1/onboarding/interviews {"interviewType": "wallet_account"}
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "W0", "value": {"acknowledged": true}}

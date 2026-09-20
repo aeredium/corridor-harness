@@ -99,6 +99,26 @@ class EstateHarnessReadmeTest(unittest.TestCase):
         self.assertIn("WHITELIST_ROSTER", self.section)
         self.assertIn("WHITELIST_QUORUM", self.section)
 
+    def test_it_says_every_person_is_brought_in_on_their_own_credential_since_spec_t10(self):
+        self.assertIn("Spec T10, 20 September 2026", self.section)
+        self.assertIn("compares the session's `credentialId` with the founder's", self.section)
+        self.assertIn("brings them in again", self.section)
+        self.assertIn("`~/.aer360-harness/<estate>/<person>-2-<date>.json`", self.section)
+        self.assertIn("never over it", self.section)
+        self.assertIn("a credential of <name>'s own, not the founder's", self.section)
+        self.assertIn("already on their own credential", self.section)
+        self.assertIn("`enrolled_not_seated` or names a credential other than her session's", self.section)
+        self.assertIn("a grant the estate refuses is a finding in the estate's words", self.section)
+        self.assertIn("`sharesCredentialWith`", self.section)
+        self.assertIn("shares a credential with …; invite them again to give them their own", self.section)
+        self.assertIn("the frozen fixture is 134 lines", self.section)
+        self.assertIn("S6 is Spec T9's, unchanged", self.section)
+        self.assertIn("requires the `approver` standing", self.section)
+        self.assertIn("`SIGNATURE_NOT_COUNTED`", self.section)
+        self.assertIn("`validateMultisigSigner`", self.section)
+        self.assertIn("`before_spec_91=True`", self.section)
+        self.assertIn("until Spec 91; see Spec T10 below", self.section)
+
 
 class ChangelogTest(unittest.TestCase):
     def test_the_changelog_records_spec_t7_and_its_files(self):
@@ -107,6 +127,22 @@ class ChangelogTest(unittest.TestCase):
         for name in ("aer360_harness.py", "aer360_answers.py", "aer360_tables.py", "aer360_passkey.py", "tests/fixtures/aer360-questioncatalog.v11.ts"):
             self.assertIn(name, text, name)
         self.assertIn("corridor_harness.py, series.py, tables.py and the corridor's tests are not touched", text)
+
+    def test_the_changelog_records_spec_t10_before_t9_and_names_every_change(self):
+        text = read("CHANGELOG.md")
+        self.assertIn("## Spec T10 — Every person is brought in on their own credential, and the harness proves the quorum (20 September 2026)", text)
+        self.assertLess(text.index("## Spec T10"), text.index("## Spec T9"))
+        t10 = text.split("## Spec T10", 1)[1].split("## Spec T9", 1)[0]
+        for words in ("aer360-harness-2026-09-20-135419.md", "commit 9964205, PR #112", "compares the session's `credentialId` with the founder's",
+                      "`<person>-2-<date>.json`", "`next_key_path`", "a credential of <name>'s own, not the founder's", "already on their own credential",
+                      "`POST /v1/approver-seats/grant`", "`Person.key_file`", "`stored_key_paths`", "`retired_passkeys`", "`audit_people`",
+                      "`sharesCredentialWith`", "`shares_credential_sentence`", "121 → 134 lines", "`APPROVER_SEAT_CREDENTIAL_SHARED`", "`APPROVER_SEAT_AMBIGUOUS`",
+                      "`person.credential_replaced`", "`governanceAlreadyStood`", "`validateMultisigSigner`", "`before_spec_91`", "`seat_completes_on_redemption=False`",
+                      "`second_authorship_entry`", "`platform_names_approver`", "A DISAGREEMENT CARRIED TO BEAR, NOT SILENTLY RESOLVED", "`routes/payees.ts:221`",
+                      "This action needs an approver", "not authorized", "`SIGNATURE_NOT_COUNTED`",
+                      "S6's press loop, the founder's enrolment, the answers to every interview and every figure",
+                      "corridor_harness.py, series.py, tables.py, aer360_tables.py and the corridor's tests are not touched"):
+            self.assertIn(words, t10, words)
 
     def test_the_changelog_records_spec_t9_before_t8_and_names_every_change(self):
         text = read("CHANGELOG.md")
