@@ -46,6 +46,40 @@ questionnaire gains a stipulation against venue contracts (the estate has no suc
 it; the double borrows ADDRESS_PROPOSAL_REFUSED, the code the estate uses for an address it will not
 propose, and says in its detail what it stands in for), and `invite_seconds` makes POST /v1/invites take
 that long on a clock the runner shares, the way the live road does while it awaits the email's dispatch.
+
+Spec T9 (20 September 2026) held the double to the whitelist road as Spec 89 (aeredium/AERAccounts,
+commit 7d809e1) left it, because the second live run pressed once and met an answer that said nothing:
+
+  services/onboardingcompiler.ts, governanceSignersFor   the `whitelist_mutation` roster is the census (A8),
+  and governanceRecordsFor                               one seat per person named by email with the credential
+                                                         slot empty until a press binds it, at C12's number
+                                                         (each family's own behind a Yes on C12A); seated here
+                                                         when the policy charter compiles (`whitelist_seats`)
+  routes/payees.ts, services/payees.ts                   a press that leaves the address pending answers
+  (pendingApprovalStanding, pendingApprovalSentence)     approvals {required, collected, remaining},
+                                                         may_still_approve (the unsigned, by display name) and
+                                                         the sentence, composed word for word as the estate
+                                                         composes it (`pending_approval_sentence`); the press
+                                                         that meets the count answers whitelisted and nothing
+                                                         about waiting; the same person pressing again is told
+                                                         the same thing, because the platform counts a
+                                                         signature once (routes/payees.test.ts, "the same
+                                                         person pressing again is told the same thing")
+  test/aapDouble.ts, the signatures road                 a press by somebody with no seat on the roster is the
+  services/payees.ts, signAsPresser                      platform's bare "not authorized", relayed as
+                                                         SIGNATURE_NOT_COUNTED with the platform's status and
+                                                         words in the detail
+
+and three dials: `pending_approval_says_why=False` is the estate of 20 September 2026 before Spec 89, whose
+press answered `{"whitelistStatus": "pending_promotion"}` and nothing else; `whitelist_roster=("ada",)`
+seats only the people named, so a roster smaller than its quorum can be met; `platform_never_activates=True`
+is a platform that counts every signature and never activates the address, so the count is met and the
+status never moves. One choice is the double's own and is said here: a press is counted for the seat of the
+PERSON pressing, found by the email their invitation was written with — the estate's press says whose seat
+it is (`user_id`, read from the invitation the credential redeemed) — because on this estate one credential
+is worn by four people, and a double that matched by credential first, as the platform's own double does,
+could never let Ben's press count after Ada's. The live estate may count differently; the harness reports
+what it meets.
 """
 from __future__ import annotations
 
@@ -57,6 +91,7 @@ import os
 import re
 import secrets
 import sys
+import tempfile
 import time
 import unittest
 import urllib.parse
@@ -85,7 +120,7 @@ STATUS = {
     "APPROVER_ALREADY_SIGNED": 409, "GAS_PREFLIGHT_UNAVAILABLE": 503, "REQUEST_MALFORMED": 400,
     "INTERNAL_ERROR": 500, "APPROVER_SEAT_NOT_ENROLLED": 422, "APPROVER_SEAT_NOT_IN_CHARTER": 422,
     "ONE_OFF_NOT_DECLARED": 422, "AMOUNT_MALFORMED": 400, "ASSET_UNKNOWN": 422, "WORKSPACE_NOT_PROVISIONED": 503,
-    "SET_NOT_EDITABLE": 409, "BASE_CURRENCY_UNSET": 422, "ADDRESS_PROPOSAL_REFUSED": 422,
+    "SET_NOT_EDITABLE": 409, "BASE_CURRENCY_UNSET": 422, "ADDRESS_PROPOSAL_REFUSED": 422, "SIGNATURE_NOT_COUNTED": 403,
 }
 MESSAGES = {
     "NOT_AUTHENTICATED": "You are not signed in.",
@@ -119,6 +154,7 @@ MESSAGES = {
     "SET_NOT_EDITABLE": "This run can no longer be edited.",
     "BASE_CURRENCY_UNSET": "Choose the currency your books reconcile to before entering payments. Every figure is valued in it.",
     "ADDRESS_PROPOSAL_REFUSED": "The access platform would not accept this address for approval, so it was not sent. Nothing was changed. The platform’s own words are below.",
+    "SIGNATURE_NOT_COUNTED": "The access platform did not count your approval: it does not recognise your key as one of this wallet’s signatories. The address stays exactly as it was — nothing was approved, and nothing was changed.",
 }
 ESTATE_KEY_CURE = ("If you meant a different estate, sign out and choose that estate’s key when your device offers the picker — "
                    "each key is labelled with its estate’s name.")
@@ -191,6 +227,41 @@ def load_v11_prompts() -> Dict[str, Dict[str, str]]:
 V11 = load_v11_prompts()
 LEVELS_BENEATH = set(A.LEVELS_BENEATH)
 VENUE_STIPULATION = "This estate’s questionnaire stipulates that a venue contract is not a payee, so this address was not saved. Nothing was changed."
+# What the platform says to a signature it will not count (apps/server/src/test/aapDouble.ts: "`validateMultisigSigner`
+# returns `ErrNotAuthorized` unwrapped, and 'not authorized' is exactly the body a live client saw on 31 August 2026").
+PLATFORM_NOT_AUTHORIZED = "not authorized"
+A_PAYEE_ADDRESS = "a payee address onto the approved list"  # services/payees.ts: what the approve road is deciding about
+
+
+def spelled(n: int) -> str:
+    """Small counts as words, the way the estate's sentence speaks them (services/payees.ts, `spelled`)."""
+    return ["No", "One", "Two", "Three", "Four", "Five"][n] if 0 <= n <= 5 else str(n)
+
+
+def names_joined(names: Sequence[str], last_joiner: str = "and") -> str:
+    """`namesJoined` (services/onboardingcompiler.ts): "A, B or C"."""
+    if len(names) <= 1:
+        return names[0] if names else ""
+    return "%s %s %s" % (", ".join(names[:-1]), last_joiner, names[-1])
+
+
+def pending_approval_sentence(required: int, collected: int, may_still_approve: Sequence[str], members: Sequence[str]) -> str:
+    """
+    `pendingApprovalSentence` (services/payees.ts, Spec 89, count 1), word for word, for a roster the platform did read and
+    whose every signature was pressed here (so nothing is "not pressed here"): the count, who is still needed, and that the
+    address is not payable until then; where the count is met, that the platform has not yet activated the address; where
+    nobody is left to sign, that the count can never be met as the roster stands.
+    """
+    remaining = max(required - collected, 0)
+    recorded = "%d of %d %s recorded for this address." % (collected, required, "approval" if required == 1 else "approvals")
+    if remaining == 0:
+        return recorded + " The count is met and the access platform has not yet activated the address. It is not payable until it does."
+    needed = "%s more %s needed" % (spelled(remaining), "is" if remaining == 1 else "are")
+    if not may_still_approve:
+        who = ("the roster that approves it has nobody on it" if not members
+               else "everyone on the roster that approves it (%s) has already approved" % names_joined(list(members)))
+        return "%s %s, but %s: as the roster stands, the count can never be met. The address is not payable as the roster stands." % (recorded, needed, who)
+    return "%s %s, from %s. The address is not payable until then." % (recorded, needed, names_joined(list(may_still_approve), "or"))
 
 
 class Clock:
@@ -211,11 +282,21 @@ class EstateDouble:
 
     def __init__(self, base: str = BASE, source_account: Optional[str] = "0x0000000000000000000000000000000000000abc",
                  company: str = A.ESTATE["company"], catalog_version: int = 12, currency_spoken_as_code: bool = False,
-                 refuses_venue_contract: bool = False, invite_seconds: float = 0.0, clock: Optional[Clock] = None):
+                 refuses_venue_contract: bool = False, invite_seconds: float = 0.0, clock: Optional[Clock] = None,
+                 pending_approval_says_why: bool = True, whitelist_roster: Optional[Sequence[str]] = None, platform_never_activates: bool = False):
         self.currency_spoken_as_code = currency_spoken_as_code  # False: main's default arm (JSON); True: Spec 88's code
         self.refuses_venue_contract = refuses_venue_contract  # the day the questionnaire stipulates against venue contracts
         self.invite_seconds = invite_seconds  # how long POST /v1/invites takes on the shared clock, the email awaited
         self.clock = clock
+        # Spec T9's dials. False: the estate of 20 September 2026 before Spec 89, whose press answered only the status.
+        self.pending_approval_says_why = pending_approval_says_why
+        # The census keys seated on the whitelist_mutation roster; None seats the census the charter compiles (A8).
+        self.whitelist_roster = tuple(whitelist_roster) if whitelist_roster is not None else None
+        # True: a platform that counts every signature and never activates the address, so the count is met and nothing moves.
+        self.platform_never_activates = platform_never_activates
+        # The whitelist_mutation roster as the compiler writes it, seated when the policy charter compiles (governanceSignersFor).
+        self.whitelist_seats: List[Dict[str, Any]] = []
+        self.whitelist_threshold: Optional[int] = None
         self.base = base.rstrip("/")
         parsed = urllib.parse.urlparse(self.base)
         self.origin = "%s://%s" % (parsed.scheme, parsed.netloc)
@@ -327,9 +408,11 @@ class EstateDouble:
         view.update(extra or {})
         return view
 
-    def open_session(self, credential_id: str, display_name: str, set_cookie: List[Tuple[str, str]]) -> Dict[str, Any]:
+    def open_session(self, credential_id: str, display_name: str, set_cookie: List[Tuple[str, str]], email: Optional[str] = None) -> Dict[str, Any]:
+        # `email` is the address the person's invitation was written with (None for the founder's birth key): what the
+        # estate's whitelist press says about whose seat it is (services/payees.ts, signerEmailOf → emailOfCredential).
         session = {"id": secrets.token_urlsafe(24), "credentialId": credential_id, "displayName": display_name, "csrfToken": secrets.token_urlsafe(24),
-                   "workspaceId": WORKSPACE_ID}
+                   "workspaceId": WORKSPACE_ID, "email": email}
         self.sessions[session["id"]] = session
         set_cookie.append(("Set-Cookie", "%s=%s; HttpOnly; SameSite=Strict; Secure; Path=/; Max-Age=43200" % (H.SESSION_COOKIE, session["id"])))
         return session
@@ -475,13 +558,13 @@ class EstateDouble:
         row["state"] = "redeemed"
         credential_id = row["credentialId"]
         self.passkeys[body["response"]["id"]] = {"credentialId": credential_id, "publicKey": stored["public_key"], "signCount": stored["sign_count"],
-                                                 "label": row["displayName"], "lastAuthAtMs": body["issuedAtMs"]}
+                                                 "label": row["displayName"], "lastAuthAtMs": body["issuedAtMs"], "email": row.get("email")}
         self.audit.append("passkey.registered %s via invite" % credential_id)
         seat = self.complete_seat_on_redemption(credential_id, row.get("email"))
         roles = self.roles_of(credential_id)
         if not roles:
             raise Refusal("ROLE_NOT_GRANTED", detail={"required": "any", "held": "none"}, provenance={"source": "aap_policy"})
-        session = self.open_session(credential_id, row["displayName"], set_cookie)
+        session = self.open_session(credential_id, row["displayName"], set_cookie, row.get("email"))
         return 200, self.session_view(session, {"approverSeat": seat} if seat else None)
 
     def login_options(self) -> Tuple[int, Any]:
@@ -520,7 +603,7 @@ class EstateDouble:
         roles = self.roles_of(stored["credentialId"])
         if not roles:
             raise Refusal("ROLE_NOT_GRANTED", detail={"required": "any", "held": "none"}, provenance={"source": "aap_policy"})
-        session = self.open_session(stored["credentialId"], stored["label"], set_cookie)
+        session = self.open_session(stored["credentialId"], stored["label"], set_cookie, stored.get("email"))
         return 200, self.session_view(session)
 
     # -- the interviews --------------------------------------------------------------------------------
@@ -908,6 +991,8 @@ class EstateDouble:
             raise Refusal("INTERVIEW_NOT_OPEN", detail={"state": iv["state"], "cause": "the compiler reads only confirmed interviews"})
         latest = {qid: row["value"] for qid, row in self.latest(interview_id).items()}
         charter = self.compile_charter(iv["interviewType"], latest)
+        if iv["interviewType"] == "policy":
+            self.seat_whitelist_roster(charter, latest)
         iv["compiledCharter"] = charter
         iv["state"] = "written"
         iv["writeReceipt"] = {"aapAccountId": AAP_ACCOUNT_ID, "policyEntryId": "pe-" + secrets.token_hex(4), "completedAt": self._now_iso()}
@@ -918,6 +1003,23 @@ class EstateDouble:
     @staticmethod
     def roster_of(value: Optional[Dict[str, Any]]) -> List[str]:
         return list((value or {}).get("people") or [])
+
+    def seat_whitelist_roster(self, charter: Dict[str, Any], latest: Dict[str, Dict[str, Any]]) -> None:
+        """
+        The whitelist_mutation roster as the compiler writes it (services/onboardingcompiler.ts): the members are
+        governanceSignersFor's — the census (A8, `changeApprovers`) where it names anyone with a work email, else C11's
+        people (`signers`) — one seat per person, named by email, the credential slot empty until a press binds it; the
+        threshold is governanceRecordsFor's — C12's number over every family, or C12D's own behind a Yes on C12A. The
+        `whitelist_roster` dial seats only the census keys named, so a roster smaller than its quorum can be met.
+        """
+        people = self.parse_roster(charter.get("changeApprovers") or charter.get("signers") or [])
+        if self.whitelist_roster is not None:
+            wanted = {A.PEOPLE[k].email.lower() for k in self.whitelist_roster}
+            people = [p for p in people if p["email"].lower() in wanted]
+        choice = lambda qid: (latest.get(qid) or {}).get("choice")  # noqa: E731
+        threshold = choice("C12D") if choice("C12A") == "Yes" and choice("C12D") else choice("C12")
+        self.whitelist_seats = [{"user_id": p["email"], "display_name": p["name"], "credential_id": "", "status": "active"} for p in people]
+        self.whitelist_threshold = int(threshold) if threshold else 1
 
     def compile_charter(self, interview_type: str, latest: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
         is_account = interview_type == "wallet_account"
@@ -1206,19 +1308,69 @@ class EstateDouble:
         if not row:
             raise Refusal("ADDRESS_NOT_WHITELISTED", detail={"cause": "no such address"})
         if action == "promote":
+            # routes/payees.ts, promote (spec 79): the platform holds the entry pending on the wallet's own whitelist_mutation
+            # ceremony, and the honest answer is the ceremony's own numbers; a second send finds the ceremony that stands.
+            ceremony = row.get("ceremony") or {"pendingTxId": "ptx-" + secrets.token_hex(4), "requiredSignatures": self.whitelist_threshold or 1, "signatures": []}
+            row["ceremony"] = ceremony
             row["whitelistStatus"] = "pending_promotion"
-            row["platformMembershipId"] = None
-            return 200, {"status": "pending_promotion", "platformMembershipId": None, "ceremony": {"pendingTxId": "ptx-" + secrets.token_hex(4), "requiredSignatures": 1, "signaturesCollected": 0}}
-        if row["whitelistStatus"] != "pending_promotion":
-            raise Refusal("ADDRESS_PROMOTION_PENDING", detail={"cause": "this address has not been proposed for promotion"})
+            row["platformMembershipId"] = row.get("platformMembershipId") or ("mem-" + secrets.token_hex(4))
+            self.audit.append("payee.address.promotion_pending_quorum %s requiredSignatures %d, signaturesCollected %d" % (
+                address_id, ceremony["requiredSignatures"], len(ceremony["signatures"])))
+            return 200, {"status": "pending_promotion", "platformMembershipId": row["platformMembershipId"],
+                         "ceremony": {"pendingTxId": ceremony["pendingTxId"], "requiredSignatures": ceremony["requiredSignatures"], "signaturesCollected": len(ceremony["signatures"])}}
+        if row["whitelistStatus"] != "pending_promotion" or not row.get("ceremony"):
+            raise Refusal("ADDRESS_PROMOTION_PENDING", detail={"cause": "this address has not been proposed to the platform whitelist yet"})
         facts = self.charter_facts(caller)
         may, cause = self.may_approve(facts, row["proposedBy"], caller["credentialId"])
         if not may:
-            raise self.approval_refusal(cause or "charter_silent", facts, "this address", caller["roles"])
-        row["whitelistStatus"] = "whitelisted" if action == "approve" else "rejected"
-        row["promotedAt"] = self._now_iso()
-        row["platformMembershipId"] = "mem-" + secrets.token_hex(4)
-        return 200, {"whitelistStatus": row["whitelistStatus"]}
+            raise self.approval_refusal(cause or "charter_silent", facts, A_PAYEE_ADDRESS, caller["roles"])
+        if action == "reject":
+            row["whitelistStatus"] = "rejected"
+            row["promotedAt"] = self._now_iso()
+            return 200, {"whitelistStatus": "rejected"}
+        return 200, self.sign_whitelist_ceremony(row, caller)
+
+    def sign_whitelist_ceremony(self, row: Dict[str, Any], caller: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        The press performs the act (services/payees.ts, signAsPresser; Spec 89 says what it left standing). The platform's
+        law, as the estate's own double of it states it (test/aapDouble.ts, the signatures road): a signature counts only
+        for an active seat of the ceremony's roster; a press that says whose seat it is binds the caller's credential to that
+        person's empty seat; a seat signs once, so a quorum of two is never met by one person pressing twice; anybody else is
+        refused with the platform's bare "not authorized", which the estate relays as SIGNATURE_NOT_COUNTED with the
+        platform's status and words. The press that meets the count answers whitelisted and nothing about waiting; a press
+        that leaves it short answers the count, who may still approve, and the sentence — or, before Spec 89, the status alone.
+        The seat is found by the presser's email first (see the module docstring for why, and what the live estate may do).
+        """
+        ceremony = row["ceremony"]
+        active = [s for s in self.whitelist_seats if s["status"] == "active"]
+        email = (caller.get("email") or "").lower()
+        if email:
+            seat = next((s for s in active if s["user_id"].lower() == email), None)
+        else:
+            seat = next((s for s in active if s["credential_id"] and s["credential_id"] == caller["credentialId"]), None)
+        if seat is None:
+            raise Refusal("SIGNATURE_NOT_COUNTED", detail={"payeeAddressId": row["id"], "credentialId": caller["credentialId"],
+                                                           "platformStatus": "403", "platformSaid": PLATFORM_NOT_AUTHORIZED},
+                          provenance={"source": "aap_whitelist", "reference": ceremony["pendingTxId"]})
+        if not seat["credential_id"]:
+            seat["credential_id"] = caller["credentialId"]  # the enrolment bind (spec 76)
+        if seat["user_id"] not in ceremony["signatures"]:
+            ceremony["signatures"].append(seat["user_id"])  # only once either way
+        required, collected = ceremony["requiredSignatures"], len(ceremony["signatures"])
+        if collected >= required and not self.platform_never_activates:
+            row["whitelistStatus"] = "whitelisted"
+            row["promotedAt"] = self._now_iso()
+            self.audit.append("payee.address.whitelisted %s by %s" % (row["id"], seat["user_id"]))
+            return {"whitelistStatus": "whitelisted"}
+        may_still = [s["display_name"] for s in active if s["user_id"] not in ceremony["signatures"]]
+        self.audit.append("payee.address.promotion_pending_quorum %s requiredSignatures %d, signaturesCollected %d, mayStillApprove %s" % (
+            row["id"], required, collected, ", ".join(may_still) or "nobody"))
+        if not self.pending_approval_says_why:
+            return {"whitelistStatus": "pending_promotion"}  # the live estate's whole answer on 20 September 2026, before Spec 89
+        return {"whitelistStatus": "pending_promotion",
+                "approvals": {"required": required, "collected": collected, "remaining": max(required - collected, 0)},
+                "may_still_approve": may_still,
+                "sentence": pending_approval_sentence(required, collected, may_still, [s["display_name"] for s in active])}
 
     # -- sets (routes/sets.ts, setgates.ts, roles.ts, destinationlaw.ts) ------------------------------------------
     def review_or_create(self, headers: Dict[str, str], body: Any, create: bool) -> Tuple[int, Any]:
@@ -1450,7 +1602,6 @@ class TheDoubleTellsTheTruth(unittest.TestCase):
 
     def setUp(self):
         self.double = EstateDouble()
-        import tempfile
         self.tmp = tempfile.mkdtemp()
         self.link = self.double.mint_founder_link()
         self.runner = runner_on(self.double, self.tmp, invite=self.link)
@@ -1656,6 +1807,106 @@ class TheDoubleTellsTheTruth(unittest.TestCase):
         self.assertEqual(answer.status, 503)
         self.assertEqual(answer.refusal["code"], "GAS_PREFLIGHT_UNAVAILABLE")
         self.assertEqual(answer.refusal["message"], NO_FUNDING_ACCOUNT)
+
+
+@unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
+class TheWhitelistRoadMeetsItsQuorum(unittest.TestCase):
+    """
+    Spec T9 §6: the double's approve answers as the estate does after Spec 89 (aeredium/AERAccounts, commit 7d809e1,
+    routes/payees.ts, services/payees.ts): the first press is pending with the count, the unsigned by name, and the
+    sentence; the press by a different roster member meets the count and whitelists; a press by an approver whose key
+    is on no seat of the roster is the platform's refusal, relayed with its words.
+
+    A NOTE ON SPEC.md §6 AND THE CODE. §6 also says "a second press by the same person is refused as the platform
+    refuses a repeated signature." The shipped Spec 89 code does NOT refuse it: routes/payees.test.ts ("the same
+    person pressing again is told the same thing: the platform counts a signature once") answers 200 with the SAME
+    pending body, and test/aapDouble.ts records a repeated signature idempotently. §6's own governing clause is
+    "answers as the estate does after Spec 89", and APPROVER_ALREADY_SIGNED (refusals.ts) is the payments road's
+    refusal, never the whitelist road's. So the double answers as the code does — 200, counted once — and this test
+    asserts that; the disagreement is carried to Bear in the PR, not silently resolved in the double.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.double = EstateDouble()
+        cls.tmp = tempfile.mkdtemp()
+        cls.runner = runner_on(cls.double, cls.tmp, invite=cls.double.mint_founder_link())
+        cls.runner.run()  # S1–S6 compile the policy (seating the whitelist roster) and seat Ada
+        cls.founder = cls.runner.people["harriet"]
+        cls.ada = cls.runner.people["ada"]
+        cls.ben = cls.runner.people["ben"]
+
+    def fresh_address(self):
+        """A payee the founder creates and promotes now, so a fresh ceremony stands waiting for its two signatures."""
+        created = self.runner.request(self.founder, "POST", "/v1/payees",
+                                      {"displayName": "Spec T9 payee", "defaultAsset": "USDC", "defaultChain": "ethereum",
+                                       "addresses": [{"chain": "ethereum", "address": T.address("CHECKSUM_PROBE_ETHEREUM")}]}, "test")
+        self.assertEqual(created.status, 201, created.text)
+        address_id = created.json["payee"]["addresses"][0]["id"]
+        promoted = self.runner.request(self.founder, "POST", "/v1/payees/addresses/%s/promote" % address_id, {}, "test")
+        self.assertEqual(promoted.status, 200, promoted.text)
+        self.assertEqual(promoted.json["status"], "pending_promotion")
+        self.assertEqual(promoted.json["ceremony"]["requiredSignatures"], 2)
+        return address_id
+
+    def press(self, who, address_id):
+        return self.runner.request(who, "POST", "/v1/payees/addresses/%s/approve" % address_id, {}, "test")
+
+    def test_the_first_press_is_pending_with_the_count_the_unsigned_and_the_sentence(self):
+        first = self.press(self.ada, self.fresh_address())
+        self.assertEqual(first.status, 200, first.text)
+        self.assertEqual(first.json, {
+            "whitelistStatus": "pending_promotion",
+            "approvals": {"required": 2, "collected": 1, "remaining": 1},
+            "may_still_approve": ["Harriet Founder", "Ben Signatory", "Cora Clerk"],
+            "sentence": "1 of 2 approvals recorded for this address. One more is needed, from Harriet Founder, Ben Signatory or Cora Clerk. "
+                        "The address is not payable until then.",
+        })
+
+    def test_a_press_by_a_different_roster_member_meets_the_count_and_whitelists(self):
+        address_id = self.fresh_address()
+        self.press(self.ada, address_id)
+        second = self.press(self.ben, address_id)
+        self.assertEqual(second.status, 200, second.text)
+        self.assertEqual(second.json, {"whitelistStatus": "whitelisted"}, "the second signature meets the quorum; nothing about waiting")
+
+    def test_the_same_person_pressing_again_is_told_the_same_thing_the_platform_counts_a_signature_once(self):
+        # Spec 89's code (routes/payees.test.ts): 200 with the same pending body, NOT a refusal. See the class docstring.
+        address_id = self.fresh_address()
+        first = self.press(self.ada, address_id)
+        again = self.press(self.ada, address_id)
+        self.assertEqual(again.status, 200, again.text)
+        self.assertEqual(again.json, first.json, "the platform counts a signature once; the answer is unchanged")
+
+    def test_the_pre_spec_89_knob_answers_the_status_alone(self):
+        double = EstateDouble(pending_approval_says_why=False)
+        runner = runner_on(double, tempfile.mkdtemp(), invite=double.mint_founder_link())
+        runner.run()
+        created = runner.request(runner.people["harriet"], "POST", "/v1/payees",
+                                 {"displayName": "pre-89", "defaultAsset": "USDC", "defaultChain": "ethereum",
+                                  "addresses": [{"chain": "ethereum", "address": T.address("CHECKSUM_PROBE_ETHEREUM")}]}, "test")
+        address_id = created.json["payee"]["addresses"][0]["id"]
+        runner.request(runner.people["harriet"], "POST", "/v1/payees/addresses/%s/promote" % address_id, {}, "test")
+        first = runner.request(runner.people["ada"], "POST", "/v1/payees/addresses/%s/approve" % address_id, {}, "test")
+        self.assertEqual(first.json, {"whitelistStatus": "pending_promotion"}, "the estate of 20 September 2026, before Spec 89: the status alone")
+
+    def test_a_press_by_a_key_on_no_seat_is_the_platforms_refusal_relayed(self):
+        # A roster of one (Ada). Ben is an approver on this estate (the shared credential Ada's seat carries), but his
+        # key is on no seat of this roster, so the platform declines his signature and the estate relays it (Rule 13).
+        double = EstateDouble(whitelist_roster=("ada",))
+        runner = runner_on(double, tempfile.mkdtemp(), invite=double.mint_founder_link())
+        runner.run()
+        created = runner.request(runner.people["harriet"], "POST", "/v1/payees",
+                                 {"displayName": "roster of one", "defaultAsset": "USDC", "defaultChain": "ethereum",
+                                  "addresses": [{"chain": "ethereum", "address": T.address("CHECKSUM_PROBE_ETHEREUM")}]}, "test")
+        address_id = created.json["payee"]["addresses"][0]["id"]
+        runner.request(runner.people["harriet"], "POST", "/v1/payees/addresses/%s/promote" % address_id, {}, "test")
+        runner.request(runner.people["ada"], "POST", "/v1/payees/addresses/%s/approve" % address_id, {}, "test")
+        refused = runner.request(runner.people["ben"], "POST", "/v1/payees/addresses/%s/approve" % address_id, {}, "test")
+        self.assertEqual(refused.status, 403)
+        self.assertEqual(refused.refusal["code"], "SIGNATURE_NOT_COUNTED")
+        self.assertEqual(refused.refusal["detail"]["platformSaid"], "not authorized")
+        self.assertIsNone(H.refusal_without_why(refused.status, refused.text), "the refusal says who declined and why")
 
 
 if __name__ == "__main__":

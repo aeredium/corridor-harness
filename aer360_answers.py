@@ -109,6 +109,30 @@ def census_entries() -> List[Dict[str, str]]:
 
 
 # ---------------------------------------------------------------------------
+# The roster that whitelists a payee, and its quorum (Spec T9, 20 September 2026).
+# ---------------------------------------------------------------------------
+# Read from the compiler's own line, not guessed: aeredium/AERAccounts apps/server/src/services/
+# onboardingcompiler.ts at 7d809e1 (Spec 89), the block "SPEC 89, COUNT 2 — A QUORUM NEVER EXCEEDS
+# ITS ROSTER", which answers which people form the `whitelist_mutation` roster the policy charter
+# writes and at what number:
+#
+#   THE MEMBERS are `governanceSignersFor`'s — the census (A8, as `changeApprovers`) where it names
+#   anyone with a work email, else C11's people (`signers`). Harness Holdings' charter names four at
+#   A8, so its roster is Harriet Founder, Ada Approver, Ben Signatory and Cora Clerk.
+#
+#   THE THRESHOLD is `governanceRecordsFor`'s — C12's number over every family where C12A was not
+#   answered Yes, else each family's own (C12B, C12C, C12D). Harness Holdings answered C12 = 2 and
+#   C12A = No, so the threshold is two.
+#
+# So a payee is whitelisted when two of these four have approved it, and S6 presses until they have.
+# The roster is the census people in A8's order; the quorum is the figure answered at C12. A test
+# (tests/test_aer360_answers.py) proves the two agree with the answers given at A8 and C12, so the
+# harness's expectation is the charter's and cannot drift from it unnoticed.
+WHITELIST_ROSTER = tuple(PEOPLE[k].name for k in CENSUS_ORDER)
+WHITELIST_QUORUM = 2
+
+
+# ---------------------------------------------------------------------------
 # The money and the payments.
 # ---------------------------------------------------------------------------
 MONEY = {
