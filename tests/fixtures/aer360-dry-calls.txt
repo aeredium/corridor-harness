@@ -1,0 +1,119 @@
+S1 — POST /v1/auth/invite/options {"token": "<token from --invite>", "issuedAtMs": "<now>", "response": {}}
+S1 — [passkey] a new P-256 key for Harriet Founder (openssl ecparam -genkey -name prime256v1), attestation none, flags UP|UV|AT, COSE ES256
+S1 — POST /v1/auth/invite/verify {"token": "<token>", "issuedAtMs": "<issuedAtMs from options>", "response": "<RegistrationResponseJSON>"}
+S2 — GET /v1/journey
+S3 — POST /v1/onboarding/interviews {"interviewType": "policy"}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "A1", "value": {"text": "Harness Holdings Pty Ltd"}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "A4", "value": {"text": "Australia"}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "A5", "value": {"text": "AUD"}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "A8", "value": {"entries": [{"name": "Harriet Founder", "email": "harness+harriet@aeredium.io", "role": "Authorise payments"}, {"name": "Ada Approver", "email": "harness+ada@aeredium.io", "role": "Release payments"}, {"name": "Ben Signatory", "email": "harness+ben@aeredium.io", "role": "Authorise payments"}, {"name": "Cora Clerk", "email": "harness+cora@aeredium.io", "role": "Enter payments"}]}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "A9", "value": {"choice": "No — this company stands alone"}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "A11", "value": {"choice": "No"}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "B1", "value": {"acknowledged": true}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "B2", "value": {"acknowledged": true}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "B3", "value": {"acknowledged": true}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C9S", "value": {"acknowledged": true}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C9", "value": {"choices": ["Ethereum"]}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C10", "value": {"choice": "1"}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C11", "value": {"people": ["harness+ada@aeredium.io"]}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C15", "value": {"choice": "Yes"}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C18", "value": {"entries": [{"name": "Harriet Founder", "email": "harness+harriet@aeredium.io"}]}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C12", "value": {"choice": "2"}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C12A", "value": {"choice": "No"}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "D0", "value": {"acknowledged": true}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "R0", "value": {"acknowledged": true}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "R1", "value": {"choice": "No"}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "G1", "value": {"acknowledged": true}}
+S3 — GET /v1/onboarding/interviews/<policy interview>/readback
+S3 — POST /v1/onboarding/interviews/<policy interview>/confirm/options {}
+S3 — POST /v1/onboarding/interviews/<policy interview>/confirm {"issuedAtMs": "<issuedAtMs>", "response": "<assertion by the founder's passkey over the challenge>"}
+S3 — POST /v1/onboarding/interviews/<policy interview>/compile {}
+S3 — GET /v1/onboarding/charter
+S3 — GET /v1/journey
+S4 — POST /v1/invites {"displayName": "Ada Approver", "email": "harness+ada@aeredium.io", "role": "author"} (as Harriet Founder, x-csrf-token)
+S4 — POST /v1/auth/invite/options {"token": "<token from the url>", "issuedAtMs": "<now>", "response": {}}
+S4 — POST /v1/auth/invite/verify {"token": "<token>", "issuedAtMs": "<issuedAtMs>", "response": "<RegistrationResponseJSON with a new passkey>"}
+S4 — POST /v1/invites {"displayName": "Ben Signatory", "email": "harness+ben@aeredium.io", "role": "author"} (as Harriet Founder, x-csrf-token)
+S4 — POST /v1/auth/invite/options {"token": "<token from the url>", "issuedAtMs": "<now>", "response": {}}
+S4 — POST /v1/auth/invite/verify {"token": "<token>", "issuedAtMs": "<issuedAtMs>", "response": "<RegistrationResponseJSON with a new passkey>"}
+S4 — POST /v1/invites {"displayName": "Cora Clerk", "email": "harness+cora@aeredium.io", "role": "author"} (as Harriet Founder, x-csrf-token)
+S4 — POST /v1/auth/invite/options {"token": "<token from the url>", "issuedAtMs": "<now>", "response": {}}
+S4 — POST /v1/auth/invite/verify {"token": "<token>", "issuedAtMs": "<issuedAtMs>", "response": "<RegistrationResponseJSON with a new passkey>"}
+S4 — GET /v1/approver-seats (as Harriet Founder)
+S4 — POST /v1/approver-seats/grant {"email": "harness+ada@aeredium.io"} (as Harriet Founder) — only if the seat is enrolled_not_seated
+S4 — GET /v1/invites (as Harriet Founder)
+S5 — POST /v1/onboarding/interviews {"interviewType": "wallet_account"}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "W0", "value": {"acknowledged": true}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WN", "value": {"text": "Operating account"}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "W1", "value": {"choice": "Operations — day-to-day business payments"}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "O1", "value": {"cents": "5000000"}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "O2", "value": {"cents": "1000000"}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "O3", "value": {"choice": "Yes"}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "O4", "value": {"people": ["harness+cora@aeredium.io"]}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "PN0", "value": {"acknowledged": true}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "PN1", "value": {"choice": "No"}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WQ", "value": {"choice": "1"}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WA1", "value": {"entries": [{"name": "Ada Approver", "email": "harness+ada@aeredium.io"}]}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WA2", "value": {"choice": "Yes — one person can both submit and release, where the quorum allows it"}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WCW", "value": {"acknowledged": true}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WG1", "value": {"acknowledged": true}}
+S5 — GET /v1/onboarding/interviews/<account interview>/readback
+S5 — POST /v1/onboarding/interviews/<account interview>/confirm/options {}
+S5 — POST /v1/onboarding/interviews/<account interview>/confirm {"issuedAtMs": "<issuedAtMs>", "response": "<assertion>"}
+S5 — POST /v1/onboarding/interviews/<account interview>/compile {}
+S5 — GET /v1/aer360/wallets
+S5 — GET /v1/journey
+S6 — POST /v1/payees {"displayName": "Northwind Supplies", "defaultAsset": "USDC", "defaultChain": "ethereum", "addresses": [{"chain": "ethereum", "address": "0x2664Ecbb1C6002774752c190812bde2F2BFCC46D"}]} (as Harriet Founder)
+S6 — POST /v1/payees/addresses/<address of Northwind Supplies>/promote {} (as Harriet Founder)
+S6 — POST /v1/payees/addresses/<address of Northwind Supplies>/approve {} (as Ada Approver)
+S6 — POST /v1/payees {"displayName": "Contoso Legal", "defaultAsset": "USDC", "defaultChain": "ethereum", "addresses": [{"chain": "ethereum", "address": "0x705974299eCF4F1b7DCA6F120b95DC896aB8718C"}]} (as Harriet Founder)
+S6 — POST /v1/payees/addresses/<address of Contoso Legal>/promote {} (as Harriet Founder)
+S6 — POST /v1/payees/addresses/<address of Contoso Legal>/approve {} (as Ada Approver)
+S6 — GET /v1/payees
+S7 — GET /v1/workspace (as Cora Clerk)
+S7 — POST /v1/sets/review {"pays": [{"payeeAddressId": "<address of Northwind Supplies>", "asset": "USDC", "chain": "ethereum", "amountMinor": "1250000000", "invoiceRef": "HH-0001"}], "duplicatesAcknowledged": false} (as Cora Clerk)
+S7 — POST /v1/sets {"pays": [{"payeeAddressId": "<address of Northwind Supplies>", "asset": "USDC", "chain": "ethereum", "amountMinor": "1250000000", "invoiceRef": "HH-0001"}], "duplicatesAcknowledged": false, "idempotencyKey": "aer360-harness-<run>-P1", "reference": "Harness payment P1"} (as Cora Clerk)
+S7 — POST /v1/sets/<run P1>/submit {}
+S7 — GET /v1/sets/<run P1>
+S7 — POST /v1/sets/review {"pays": [{"oneOff": {"chain": "ethereum", "address": "0xe339BC5946CAc81EB598C743Fd129ac6254b9493", "declared": true, "payeeName": "Unlisted destination"}, "asset": "USDC", "chain": "ethereum", "amountMinor": "4999990000", "invoiceRef": "HH-0002"}], "duplicatesAcknowledged": false} (as Cora Clerk)
+S7 — POST /v1/sets {"pays": [{"oneOff": {"chain": "ethereum", "address": "0xe339BC5946CAc81EB598C743Fd129ac6254b9493", "declared": true, "payeeName": "Unlisted destination"}, "asset": "USDC", "chain": "ethereum", "amountMinor": "4999990000", "invoiceRef": "HH-0002"}], "duplicatesAcknowledged": false, "idempotencyKey": "aer360-harness-<run>-P2", "reference": "Harness payment P2"} (as Cora Clerk)
+S7 — POST /v1/sets/<run P2>/submit {}
+S7 — GET /v1/sets/<run P2>
+S7 — POST /v1/sets/review {"pays": [{"payeeAddressId": "<address of Contoso Legal>", "asset": "USDC", "chain": "ethereum", "amountMinor": "12000000000", "invoiceRef": "HH-0003"}], "duplicatesAcknowledged": false} (as Cora Clerk)
+S7 — POST /v1/sets {"pays": [{"payeeAddressId": "<address of Contoso Legal>", "asset": "USDC", "chain": "ethereum", "amountMinor": "12000000000", "invoiceRef": "HH-0003"}], "duplicatesAcknowledged": false, "idempotencyKey": "aer360-harness-<run>-P3", "reference": "Harness payment P3"} (as Cora Clerk)
+S7 — POST /v1/sets/<run P3>/submit {}
+S7 — GET /v1/sets/<run P3>
+S7 — POST /v1/approvals/<run P1>/challenge {} (as Ada Approver)
+S7 — POST /v1/approvals/<run P1>/approve {"response": "<assertion over the challenge>"} (as Ada Approver)
+S8 — GET /v1/journey
+S8 — GET /v1/workspace/readiness
+S9 — [out of scope] the tour's answers as Claude would see them: the harness is the founder, not Claude
+S10 — [compare] the read-back of each interview word for word with the answers given, as readback() spells them
+S10 — [compare] the compiled charter (the compile answer) with the read-back: the figures, the rosters, the networks; GET /v1/onboarding/charter for its standing
+S10 — GET /v1/journey, GET /v1/onboarding/charter, GET /v1/payees, GET /v1/sets, GET /v1/invites
+S10 — [check] every money figure the server returned against the minor-unit law (money.ts): an integer string of minor units, never a float
+S10 — [check] every refusal met in S1 to S9 for Rule 13: it names what happened and who refused; a bare status or a generic sentence is a finding
+S10 — [compare] the People register with the invitations sent, and the credential id each session carries
+S10 — [compare] the payees register with the whitelist the charter enforces and with what Ada approved
+S11 — POST /v1/workspace/display-currency {"displayCurrency": "AUD"} without x-csrf-token
+S11 — POST /v1/onboarding/interviews/<policy interview>/confirm/options {} then /confirm as Ben with the founder's passkey
+S11 — POST /v1/invites {"displayName": "Olive Overseer", "email": "harness+olive@aeredium.io", "role": "viewer"} (as Harriet Founder)
+S11 — POST /v1/payees (as Olive Overseer, a viewer)
+S11 — POST /v1/sets (as Olive Overseer, a viewer)
+S11 — POST /v1/invites (as Olive Overseer, a viewer)
+S11 — POST /v1/onboarding/interviews/<policy interview>/answers (as Olive Overseer, a viewer)
+S11 — POST /v1/invites {"displayName": "Principal probe", "email": "harness+principal@aeredium.io", "role": "principal"}
+S11 — POST /v1/onboarding/interviews {"interviewType": "policy"}
+S11 — POST /v1/onboarding/interviews/<policy draft>/compile {}
+S11 — POST /v1/onboarding/interviews {"interviewType": "wallet_account"}
+S11 — POST /v1/auth/login/options then /verify twice with the same nonce, issuedAtMs and challenge
+S11 — POST /v1/auth/login/verify with an assertion whose rpIdHash is SHA-256('not-the-estate.invalid')
+S11 — POST /v1/payees {"displayName": "Checksum probe", "addresses": [{"chain": "ethereum", "address": "0x557831919Da17cf9F838c4868476Ab9Da00D3A52"}]}
+S11 — POST /v1/payees {"displayName": "Venue probe", "addresses": [{"chain": "ethereum", "address": "<the corridor's tables.py UNISWAP_V3_ETHEREUM, read at run time>"}]}
+S11 — [check] S7's P3 (12000.00 USDC, above the per-payment limit) was not released without approval
+S11 — POST /v1/approvals/<run P3>/challenge {} then /approve (as Cora Clerk, who entered it)
+S11 — POST /v1/onboarding/interviews/<policy interview>/confirm/options {} then /confirm (as Harriet Founder)
+S11 — DELETE /v1/onboarding/interviews/<policy draft>, DELETE /v1/onboarding/interviews/<account draft>
+S12 — [measure] every call's wall time; every call over 2 seconds; the ten slowest with their routes
+S12 — [measure] the calls the interviews needed, and how many were reads a browser would not make (a question served twice, a read-back fetched twice)
+S12 — [measure] the size of the largest answer; any 5xx retried once after 2 seconds, both answers kept

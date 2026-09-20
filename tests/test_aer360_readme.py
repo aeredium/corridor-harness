@@ -71,6 +71,24 @@ class EstateHarnessReadmeTest(unittest.TestCase):
             self.assertFalse(any(l.startswith(prefix) for l in self.section.splitlines()), prefix)
 
 
+    def test_it_says_what_the_law_says_and_what_the_harness_expects_since_spec_t8(self):
+        self.assertIn("Spec T8, 20 September 2026", self.section)
+        self.assertIn("Unless it is stipulated explicitly in the questionnaire, it must be accepted", self.section)
+        self.assertIn("accepted, as the law says (Bear, 20 September 2026: unless the questionnaire stipulates otherwise, an address is accepted)", self.section)
+        self.assertIn("a finding only if refused", self.section)
+        self.assertIn("compared by content", self.section)
+        self.assertIn("`name — role — email`", self.section)
+        self.assertIn("`jsonb`", self.section)
+        self.assertIn("not compared: no rendering for kind <k>", self.section)
+        self.assertIn("the invitation road sends the email before it answers, which is where its four seconds go", self.section)
+        self.assertIn("reported and not judged", self.section)
+        self.assertIn("*last run* column", self.section)
+        self.assertIn("closed, still open or new", self.section)
+        self.assertIn("The Python confirms what was fixed.", self.section)
+        self.assertIn("`tests/fixtures/aer360-dry-calls.txt`", self.section)
+        self.assertNotIn("the read-back word for word against the answers given", self.section, "the comparison is by content now")
+
+
 class ChangelogTest(unittest.TestCase):
     def test_the_changelog_records_spec_t7_and_its_files(self):
         text = read("CHANGELOG.md")
@@ -78,6 +96,17 @@ class ChangelogTest(unittest.TestCase):
         for name in ("aer360_harness.py", "aer360_answers.py", "aer360_tables.py", "aer360_passkey.py", "tests/fixtures/aer360-questioncatalog.v11.ts"):
             self.assertIn(name, text, name)
         self.assertIn("corridor_harness.py, series.py, tables.py and the corridor's tests are not touched", text)
+
+    def test_the_changelog_records_spec_t8_before_t7_and_names_every_change(self):
+        text = read("CHANGELOG.md")
+        self.assertIn("## Spec T8 — The harness expects what the law says (20 September 2026)", text)
+        self.assertLess(text.index("## Spec T8"), text.index("## Spec T7"))
+        t8 = text.split("## Spec T8", 1)[1].split("## Spec T7", 1)[0]
+        for words in ("the venue probe expects acceptance", "compared by content", "as_the_estate_stores", "`jsonb`", "name — role — email",
+                      "the invitation road sends the email before it answers", "*last run* column", "closed, still open or new",
+                      "tests/fixtures/aer360-dry-calls.txt", "currency_spoken_as_code", "refuses_venue_contract", "ADDRESS_PROPOSAL_REFUSED",
+                      "corridor_harness.py, series.py, tables.py, aer360_passkey.py, aer360_tables.py and the corridor's tests are not touched"):
+            self.assertIn(words, t8, words)
 
 
 class GitignoreTest(unittest.TestCase):

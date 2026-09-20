@@ -28,6 +28,24 @@ this double is a re-statement, route by route, of aeredium/AERAccounts at e65161
 
 It is a transport for aer360_harness.Runner: a callable taking a urllib Request and answering
 (status, headers, text), so the harness's own cookie jar, CSRF header and recording are exercised.
+
+Spec T8 (20 September 2026) held the double to two more of the estate's ways, because a double that
+speaks what the service does not is how a wrong comparison ships with a green suite:
+
+  db/onboardingschema.ts `value: jsonb('value')`   an answer is stored as jsonb stores it — keys shortest
+                                                   first, then in byte order — so the read-back speaks the
+                                                   census as `name — role — email`, as the live estate did
+  services/onboarding.ts, the `spoken` switch      on main (dff4c9a, e651616) the currency kind has no arm
+                                                   and falls to `default: JSON.stringify(v)`: A5 is read back
+                                                   as '{"text":"AUD"}', as the live run heard it. Spec 88's
+                                                   `spokenAnswer` (35cdc6f, not yet merged) speaks the code;
+                                                   `currency_spoken_as_code=True` is that estate
+
+and gave it two dials the harness's tests need: `refuses_venue_contract=True` stands in for the day the
+questionnaire gains a stipulation against venue contracts (the estate has no such road and so no word for
+it; the double borrows ADDRESS_PROPOSAL_REFUSED, the code the estate uses for an address it will not
+propose, and says in its detail what it stands in for), and `invite_seconds` makes POST /v1/invites take
+that long on a clock the runner shares, the way the live road does while it awaits the email's dispatch.
 """
 from __future__ import annotations
 
@@ -67,7 +85,7 @@ STATUS = {
     "APPROVER_ALREADY_SIGNED": 409, "GAS_PREFLIGHT_UNAVAILABLE": 503, "REQUEST_MALFORMED": 400,
     "INTERNAL_ERROR": 500, "APPROVER_SEAT_NOT_ENROLLED": 422, "APPROVER_SEAT_NOT_IN_CHARTER": 422,
     "ONE_OFF_NOT_DECLARED": 422, "AMOUNT_MALFORMED": 400, "ASSET_UNKNOWN": 422, "WORKSPACE_NOT_PROVISIONED": 503,
-    "SET_NOT_EDITABLE": 409, "BASE_CURRENCY_UNSET": 422,
+    "SET_NOT_EDITABLE": 409, "BASE_CURRENCY_UNSET": 422, "ADDRESS_PROPOSAL_REFUSED": 422,
 }
 MESSAGES = {
     "NOT_AUTHENTICATED": "You are not signed in.",
@@ -100,6 +118,7 @@ MESSAGES = {
     "WORKSPACE_NOT_PROVISIONED": "This workspace has not finished being set up from your AEGISKey account yet. Nothing can be paid until it has.",
     "SET_NOT_EDITABLE": "This run can no longer be edited.",
     "BASE_CURRENCY_UNSET": "Choose the currency your books reconcile to before entering payments. Every figure is valued in it.",
+    "ADDRESS_PROPOSAL_REFUSED": "The access platform would not accept this address for approval, so it was not sent. Nothing was changed. The platform’s own words are below.",
 }
 ESTATE_KEY_CURE = ("If you meant a different estate, sign out and choose that estate’s key when your device offers the picker — "
                    "each key is labelled with its estate’s name.")
@@ -171,13 +190,32 @@ def load_v11_prompts() -> Dict[str, Dict[str, str]]:
 
 V11 = load_v11_prompts()
 LEVELS_BENEATH = set(A.LEVELS_BENEATH)
+VENUE_STIPULATION = "This estate’s questionnaire stipulates that a venue contract is not a payee, so this address was not saved. Nothing was changed."
+
+
+class Clock:
+    """Time that moves only when somebody sleeps on it, so a four-second invitation costs the suite nothing."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def sleep(self, seconds: float) -> None:
+        self.now += seconds
+
+    def __call__(self) -> float:
+        return self.now
 
 
 class EstateDouble:
     """The estate, in memory. Strict as the code; every answer is the code's own shape."""
 
     def __init__(self, base: str = BASE, source_account: Optional[str] = "0x0000000000000000000000000000000000000abc",
-                 company: str = A.ESTATE["company"], catalog_version: int = 12):
+                 company: str = A.ESTATE["company"], catalog_version: int = 12, currency_spoken_as_code: bool = False,
+                 refuses_venue_contract: bool = False, invite_seconds: float = 0.0, clock: Optional[Clock] = None):
+        self.currency_spoken_as_code = currency_spoken_as_code  # False: main's default arm (JSON); True: Spec 88's code
+        self.refuses_venue_contract = refuses_venue_contract  # the day the questionnaire stipulates against venue contracts
+        self.invite_seconds = invite_seconds  # how long POST /v1/invites takes on the shared clock, the email awaited
+        self.clock = clock
         self.base = base.rstrip("/")
         parsed = urllib.parse.urlparse(self.base)
         self.origin = "%s://%s" % (parsed.scheme, parsed.netloc)
@@ -755,15 +793,17 @@ class EstateDouble:
             if code and code not in ("AUD", "EUR", "GBP", "USD"):
                 raise Refusal("ANSWER_INVALID", detail={"questionId": "A5", "cause": '"%s" is not one of the currencies AER 360 reports in.' % code}, provenance={"source": "supported_currencies"})
         self.validate_value(q, body["value"])
+        # stored as jsonb stores it (db/onboardingschema.ts `value: jsonb('value')`): keys shortest first, then in byte order
+        stored = A.as_the_estate_stores(body["value"])
         # a quorum may never exceed the roster that must meet it, judged before the answer is committed
         trial = dict(latest)
-        trial[qid] = {"questionId": qid, "value": body["value"]}
+        trial[qid] = {"questionId": qid, "value": stored}
         violation = self.standing_violation(iv["interviewType"], trial)
         if violation and violation["quorumQuestionId"] == qid:
             raise Refusal("ANSWER_INVALID", violation["sentence"], {"questionId": qid, "quorum": str(violation["quorum"]), "namedIn": violation["rosterQuestionId"], "named": str(violation["named"])},
                           walkBackTo={"questionId": violation["quorumQuestionId"]})
         prior = latest.get(qid)
-        self.answers[interview_id].append({"questionId": qid, "value": body["value"], "revision": (prior["revision"] + 1) if prior else 1,
+        self.answers[interview_id].append({"questionId": qid, "value": stored, "revision": (prior["revision"] + 1) if prior else 1,
                                            "promptAsAsked": V11.get(qid, {}).get("prompt", qid), "credentialId": caller["credentialId"]})
         page = self.page(iv, serve_truth=False)
         if page["question"] is None:
@@ -775,9 +815,13 @@ class EstateDouble:
             page["state"] = "at_read_back"
         return 200, page
 
-    def readback(self, iv: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def readback_lines_for_test(self, interview_id: str) -> List[Dict[str, Any]]:
+        """The renderer alone, for a test: the lines as readback() would speak them, the standing checks set aside."""
+        return self.readback(self.load_interview(interview_id), check_standing=False)
+
+    def readback(self, iv: Dict[str, Any], check_standing: bool = True) -> List[Dict[str, Any]]:
         latest = self.latest(iv["id"])
-        violation = self.standing_violation(iv["interviewType"], latest)
+        violation = self.standing_violation(iv["interviewType"], latest) if check_standing else None
         if violation:
             raise Refusal("ANSWER_INVALID", violation["sentence"], {"questionId": violation["quorumQuestionId"]}, walkBackTo={"questionId": violation["quorumQuestionId"]})
         lines = [{"questionId": "REALM", "prompt": "Where this estate opens", "spoken": SANDBOX_SENTENCE, "synthetic": True}]
@@ -795,8 +839,12 @@ class EstateDouble:
                 spoken = ", ".join(choices) if choices else (
                     "No grants made — each level below you sees only its own level, and you see every level. The safest answer, and the one that stands until you change it."
                     if q.id == "B4" else "None chosen.")
-            elif kind in ("text", "currency"):
+            elif kind == "text":
                 spoken = (v.get("text") or "").strip() or "Left blank."
+            elif kind == "currency":
+                # main (dff4c9a, e651616): no arm for the kind, so `default: JSON.stringify(v)` — '{"text":"AUD"}', as the
+                # live run of 20 September 2026 heard it. Spec 88's spokenAnswer speaks the code.
+                spoken = ((v.get("text") or "").strip() or "Left blank.") if self.currency_spoken_as_code else json.dumps(v, separators=(",", ":"), ensure_ascii=False)
             elif kind == "list":
                 spoken = "; ".join(" — ".join(str(x) for x in e.values()) for e in (v.get("entries") or [])) or "No entries."
             elif kind == "money":
@@ -1045,6 +1093,9 @@ class EstateDouble:
                "dispatchDetail": "This deployment has no mail lane, so nothing was sent. Copy the link and send it to this person yourself."}
         self.invites[hashlib.sha256(token.encode()).hexdigest()] = row
         self.audit.append("invite.minted %s %s by %s" % (role, email, caller["credentialId"]))
+        if self.clock is not None and self.invite_seconds:
+            # routes/invites.ts: the invitation is minted first, then the email's dispatch is awaited, then the route answers
+            self.clock.sleep(self.invite_seconds)
         return 201, {"invite": {k: row[k] for k in ("id", "displayName", "email", "phone", "role", "state", "credentialId", "expiresAt")},
                      "url": "%s/invite#%s" % (self.origin, token), "expiresAt": row["expiresAt"], "credentialId": credential_id, "accountName": self.workspace["name"],
                      "dispatch": {"sent": False, "at": None, "reason": row["dispatchDetail"]}}
@@ -1084,6 +1135,11 @@ class EstateDouble:
                             else "an address is 32 to 44 base58 characters, and base58 leaves out the digit zero, capital O, capital I and lower-case L")
                 raise Refusal("ADDRESS_MALFORMED", "That is not an address %s can pay, so nothing was saved. On %s, %s." % (named, named, expected),
                               {"field": "address", "chain": a["chain"], "address": address, "expected": expected}, provenance={"source": "chain_registry", "reference": a["chain"]})
+            if self.refuses_venue_contract and address.lower() == T.venue_address_for_probe()["address"].lower():
+                raise Refusal("ADDRESS_PROPOSAL_REFUSED", VENUE_STIPULATION,
+                              {"chain": a["chain"], "address": address,
+                               "cause": "a stipulation the live questionnaire does not carry today; this double stands in for the day it does"},
+                              provenance={"source": "charter"})
             stored.append({"chain": a["chain"], "address": address if a["chain"] == "solana" else address.lower()})
         payee = {"id": "payee-" + secrets.token_hex(6), "displayName": display_name, "defaultAsset": body.get("defaultAsset"), "defaultChain": body.get("defaultChain"),
                  "references": body.get("references") or {}, "labels": body.get("labels") or [], "createdAt": self._now_iso()}
@@ -1523,6 +1579,72 @@ class TheDoubleTellsTheTruth(unittest.TestCase):
         accepted = self.request(self.founder, "POST", "/v1/payees", {"displayName": "x", "addresses": [{"chain": "ethereum", "address": broken}]})
         self.assertEqual(accepted.status, 201, "payeeaddress.ts lower-cases; the mixed-case form is a checksum, not an identity")
         self.assertEqual(accepted.json["payee"]["addresses"][0]["address"], broken.lower())
+
+    def test_the_read_back_speaks_a_list_entry_in_the_order_jsonb_stores_it(self):
+        """The live estate, 20 September 2026: 'Harriet Founder — Authorise payments — harness+harriet@aeredium.io', for an entry sent as name, email, role."""
+        self.runner.enrol_by_invite(self.founder, self.link, "test")
+        started = self.request(self.founder, "POST", "/v1/onboarding/interviews", {"interviewType": "policy"})
+        iv = started.json["interview"]["id"]
+        for qid in ("A1", "A4", "A5", "A8"):
+            answer = self.request(self.founder, "POST", "/v1/onboarding/interviews/%s/answers" % iv, {"questionId": qid, "value": A.POLICY_ANSWERS[qid]})
+            self.assertEqual(answer.status, 200, answer.text)
+        self.assertEqual(list(A.POLICY_ANSWERS["A8"]["entries"][0].keys()), ["name", "email", "role"], "the book sends the entry as the wizard does")
+        stored = self.double.latest(iv)["A8"]["value"]["entries"][0]
+        self.assertEqual(list(stored.keys()), ["name", "role", "email"], "jsonb: shortest key first, then byte order")
+        self.assertEqual(self.request(self.founder, "POST", "/v1/onboarding/interviews/%s/answers" % iv, {"questionId": "A9", "value": A.POLICY_ANSWERS["A9"]}).status, 200)
+        page = self.request(self.founder, "GET", "/v1/onboarding/interviews/%s" % iv)
+        self.assertEqual(page.json["question"]["questionId"], "A11")
+        # the read-back is refused before the questions are done, so the spoken form is read off the double's own renderer
+        lines = self.double.readback_lines_for_test(iv)
+        a8 = next(l for l in lines if l["questionId"] == "A8")
+        self.assertEqual(a8["spoken"], "Harriet Founder — Authorise payments — harness+harriet@aeredium.io; Ada Approver — Release payments — harness+ada@aeredium.io; "
+                                       "Ben Signatory — Authorise payments — harness+ben@aeredium.io; Cora Clerk — Enter payments — harness+cora@aeredium.io")
+
+    def test_the_currency_is_read_back_as_main_speaks_it_and_as_spec_88_will(self):
+        self.runner.enrol_by_invite(self.founder, self.link, "test")
+        started = self.request(self.founder, "POST", "/v1/onboarding/interviews", {"interviewType": "policy"})
+        iv = started.json["interview"]["id"]
+        for qid in ("A1", "A4", "A5"):
+            self.request(self.founder, "POST", "/v1/onboarding/interviews/%s/answers" % iv, {"questionId": qid, "value": A.POLICY_ANSWERS[qid]})
+        a5 = next(l for l in self.double.readback_lines_for_test(iv) if l["questionId"] == "A5")
+        self.assertEqual(a5["spoken"], '{"text":"AUD"}', "main: the currency kind falls to the switch's default arm, JSON.stringify")
+        self.double.currency_spoken_as_code = True
+        a5 = next(l for l in self.double.readback_lines_for_test(iv) if l["questionId"] == "A5")
+        self.assertEqual(a5["spoken"], "AUD", "Spec 88: a currency is read back as its code")
+
+    def test_a_double_told_the_questionnaire_stipulates_against_venue_contracts_refuses_them_by_name(self):
+        self.runner.enrol_by_invite(self.founder, self.link, "test")
+        venue = T.venue_address_for_probe()["address"]
+        body = {"displayName": "Venue probe", "addresses": [{"chain": "ethereum", "address": venue}]}
+        accepted = self.request(self.founder, "POST", "/v1/payees", body)
+        self.assertEqual(accepted.status, 201, "today's estate: an address is accepted unless the questionnaire stipulates otherwise")
+        strict = EstateDouble(refuses_venue_contract=True)
+        link = strict.mint_founder_link()
+        runner = runner_on(strict, self.tmp, invite=link)
+        founder = runner.people[A.FOUNDER]
+        runner.enrol_by_invite(founder, link, "test")
+        refused = runner.request(founder, "POST", "/v1/payees", body, "test")
+        self.assertEqual(refused.status, 422)
+        self.assertEqual(refused.refusal["code"], "ADDRESS_PROPOSAL_REFUSED")
+        self.assertEqual(refused.refusal["message"], VENUE_STIPULATION)
+        self.assertIn("this double stands in for the day it does", refused.refusal["detail"]["cause"])
+        self.assertIsNone(H.refusal_without_why(refused.status, refused.text), "a refusal that says why")
+        other = runner.request(founder, "POST", "/v1/payees", {"displayName": "x", "addresses": [{"chain": "ethereum", "address": T.address("CHECKSUM_PROBE_ETHEREUM")}]}, "test")
+        self.assertEqual(other.status, 201, "only the venue contract is stipulated against")
+
+    def test_an_invitation_takes_its_seconds_on_the_shared_clock(self):
+        clock = Clock()
+        slow = EstateDouble(invite_seconds=4.0, clock=clock)
+        link = slow.mint_founder_link()
+        runner = runner_on(slow, self.tmp, invite=link, clock=clock)
+        founder = runner.people[A.FOUNDER]
+        runner.enrol_by_invite(founder, link, "test")
+        ada = runner.people["ada"]
+        minted = runner.request(founder, "POST", "/v1/invites", {"displayName": ada.name, "email": ada.email, "role": "author"}, "test")
+        self.assertEqual(minted.status, 201)
+        self.assertEqual(minted.elapsed_ms, 4000)
+        self.assertEqual([c.elapsed_ms for c in runner.calls if c.route == "POST /v1/invites"], [4000])
+        self.assertTrue(all(c.elapsed_ms == 0 for c in runner.calls if c.route != "POST /v1/invites"))
 
     def test_a_run_without_a_funding_account_is_refused_in_the_routes_words(self):
         double = EstateDouble(source_account=None)

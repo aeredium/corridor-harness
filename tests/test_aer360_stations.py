@@ -108,13 +108,20 @@ class TheFoundersRoad(unittest.TestCase):
     def test_s9_is_out_of_scope(self):
         self.assertEqual(self.outcomes["S9"].outcome, H.OUT_OF_SCOPE)
 
-    def test_s10_finds_the_one_credential_four_people_share_and_nothing_else(self):
+    def test_s10_finds_mains_json_currency_and_the_one_credential_four_people_share_and_nothing_else(self):
         o = self.outcomes["S10"]
         findings = [f for f in self.runner.findings if f.station == "S10"]
-        self.assertEqual([f.probe for f in findings], ["people register: one credential for several people"], o.line)
-        self.assertIn("4 people", findings[0].said)
+        self.assertEqual([f.probe for f in findings], ["read-back (policy) of A5", "people register: one credential for several people"], o.line)
+        self.assertEqual(findings[0].expected, "AUD", "a currency is read back as its code (Spec 88); main's default arm speaks JSON, which is the estate's finding")
+        self.assertEqual(findings[0].said, "the read-back says '{\"text\":\"AUD\"}'")
+        self.assertIn("4 people", findings[1].said)
         self.assertEqual(o.outcome, H.FAIL)
-        self.assertIn("1 finding(s)", o.line)
+        self.assertIn("2 finding(s)", o.line)
+        # the census the double speaks as jsonb stores it — name — role — email — against the book's name, email, role: no finding (Spec T8)
+        a8 = next(l for l in self.runner.facts["readback"]["policy"]["lines"] if l["questionId"] == "A8")
+        self.assertTrue(a8["spoken"].startswith("Harriet Founder — Authorise payments — harness+harriet@aeredium.io; "), a8["spoken"])
+        self.assertFalse(any(f.probe.startswith("read-back (policy) of A8") for f in findings))
+        self.assertFalse(any("not compared" in n for n in self.runner.notes["S10"]), "every kind the catalog serves has a rendering")
 
     def test_s11_finds_the_acceptances_the_code_makes_and_nothing_else(self):
         o = self.outcomes["S11"]
@@ -122,13 +129,18 @@ class TheFoundersRoad(unittest.TestCase):
         probes = [f.probe for f in findings]
         self.assertEqual(probes, [
             "a payee address with a wrong checksum",
-            "a payee address that is a real venue contract (Uniswap v3 SwapRouter02 on Ethereum, read from the corridor's tables.py at run time)",
             "the clerk approving her own payment (S7's P3)",
         ], o.line)
         for f in findings:
             self.assertTrue(f.said.startswith("ACCEPTED:"), f.said)
             self.assertTrue(f.came_back.startswith("HTTP 20"), f.came_back)
-        self.assertIn("17 probe(s), 3 finding(s)", o.line)
+        self.assertIn("17 probe(s), 2 finding(s)", o.line)
+        # the venue contract is accepted, as the law says (Spec T8): the probe is made, HTTP 201 is the expectation, and it is no finding
+        venue = [s for s in self.runner.evidence["S11"] if "a real venue contract" in str(s.get("probe", ""))]
+        self.assertEqual(len(venue), 1)
+        self.assertEqual(venue[0]["status"], 201)
+        self.assertEqual(venue[0]["result"], "accepted, as the law says (%s)" % H.VENUE_RULING)
+        self.assertTrue(any(l.startswith("  S11 — accepted, as the law says — a payee address that is a real venue contract") for l in self.said))
         refused = [l for l in self.said if l.startswith("  S11 — refused as expected — ")]
         for expected in ("without the x-csrf-token header", "Ben confirms", "a viewer's session at an author route: POST /v1/payees", "POST /v1/sets", "POST /v1/invites",
                          "/answers", "principal", "did not serve", "compile before confirm", "wrong kind", "replayed", "wrong rpId", "second confirm"):
@@ -147,6 +159,7 @@ class TheFoundersRoad(unittest.TestCase):
         self.assertIn("0 over 2 seconds", o.line)
         self.assertIn("0 retried after a 5xx", o.line)
         self.assertIn("0 of them reads a browser would not make", o.line)
+        self.assertNotIn(H.INVITATION_SENDS_FIRST, "\n".join(self.runner.facts["optimizer"]["lines"]), "no slow invitation, no sentence about one")
 
     def test_every_line_is_one_line_for_a_screen_reader(self):
         for station in H.STATION_IDS:
@@ -160,8 +173,11 @@ class TheFoundersRoad(unittest.TestCase):
         for station, title in H.STATIONS:
             self.assertIn("| %s %s |" % (station, title), self.report)
             self.assertIn("## %s — %s" % (station, title), self.report)
-        self.assertEqual(len(self.runner.findings), 4)
+        self.assertEqual(len(self.runner.findings), 4, "A5 as JSON, one credential for four people, the wrong checksum accepted, the clerk's own approval")
         self.assertIn("Findings under S10 and S11: 4.", self.report)
+        self.assertIn("| Station | Outcome | Line |", self.report)
+        self.assertNotIn("Last run", self.report, "no previous report in this run's folder, so no last-run column")
+        self.assertIn("Specs T7 and T8, 19 and 20 September 2026.", self.report)
         self.assertIn("### Evidence, call by call", self.report)
         self.assertIn("Came back, verbatim:", self.report)
         token = H.token_of_link(self.link)

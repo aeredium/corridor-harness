@@ -34,6 +34,17 @@ from memory:
   apps/server/src/http.ts                  the error body {error: {code, message, detail…}} and the status per code
   packages/shared/src/refusals.ts, money.ts, payeeaddress.ts, journey.ts
 
+Spec T8 (20 September 2026, from the first live run and Bear's rulings of that morning) taught the
+harness to expect what the law says. The venue-contract probe expects acceptance: "Unless it is
+stipulated explicitly in the questionnaire, it must be accepted" — the questionnaire decides policy,
+and a contract is an address. The read-back is compared by content, rendered in the estate's own
+spoken forms (services/onboarding.ts, readback(), the `spoken` switch, read at main after PR #108,
+commit dff4c9a, where that file is e651616's byte for byte): a list entry's values in the order the
+estate stores them, which is jsonb's (db/onboardingschema.ts, `value: jsonb('value')`) — for the
+census, name — role — email. A slow call is a fact to report, never a finding. And when a previous
+report stands in the working folder, the closing table says what closed since it, what is still
+open and what is new.
+
 Runs on the Mac's own Python 3.9.6 with the standard library only: urllib.request, http.cookiejar,
 json, hashlib, secrets, base64, struct, subprocess. The one binary it calls is /usr/bin/openssl,
 through aer360_passkey.py. Nothing to install; nothing is shipped to any box.
@@ -79,6 +90,15 @@ USER_AGENT = "aer360-harness/1.0 (python-stdlib)"
 SLOW_CALL_SECONDS = 2.0  # S12: every call over two seconds is listed
 RETRY_AFTER_5XX_SECONDS = 2.0  # S12: a 5xx is retried once after two seconds, both answers kept
 HTTP_TIMEOUT_SECONDS = 60.0
+# Bear's ruling of 20 September 2026 on S11's venue probe (Spec T8). The questionnaire decides policy and a
+# contract is an address; the day the questionnaire gains a stipulation against venue contracts, the
+# probe's expectation flips to a refusal. Until then a refusal is the finding, with this ruling quoted.
+VENUE_RULING = "Bear, 20 September 2026: unless the questionnaire stipulates otherwise, an address is accepted"
+# Where an invitation's seconds go (Spec T8): routes/invites.ts mints the invitation, awaits the email's
+# dispatch (attemptDispatch), stamps the row, and only then answers 201. A fact to report, not a finding.
+INVITATION_SENDS_FIRST = "the invitation road sends the email before it answers, which is where its four seconds go"
+# The report's name in the working folder: aer360-harness-<date>.md, and -<HHMMSS> for a later one the same day.
+REPORT_NAME = re.compile(r"^aer360-harness-(\d{4}-\d{2}-\d{2})(?:-(\d{6}))?\.md$")
 
 STATIONS: List[Tuple[str, str]] = [
     ("S1", "Enrol"), ("S2", "Journey"), ("S3", "Policy Interview"), ("S4", "People"),
@@ -373,6 +393,8 @@ class Runner:
             "served_twice": {"policy": [], "wallet_account": []},
         }
         self.started_at = now_iso()
+        self.last_run_report: Optional[Dict[str, Any]] = None
+        self._last_run_looked_for = False
         # The run's own mark, in every idempotency key it sends: the clock to the second and four
         # random hex digits, so two runs a second apart never share a key.
         self.run_stamp = "%s-%s" % (_dt.datetime.now().strftime("%Y%m%d-%H%M%S"), secrets.token_hex(2))
@@ -1090,7 +1112,10 @@ class Runner:
             answers = self.facts["answers"].get(interview_type) or []
             if readback and answers:
                 for f in audit_readback(interview_type, answers, readback.get("lines") or []):
-                    self.finding("S10", f["probe"], f["sent"], None, f["expected"], f["said"])
+                    if f.get("not_compared"):
+                        self.note("S10", "%s: %s" % (f["probe"], f["said"]))
+                    else:
+                        self.finding("S10", f["probe"], f["sent"], None, f["expected"], f["said"])
             else:
                 self.note("S10", "no read-back and answers recorded for the %s interview in this run; the read-back comparison was not made" % interview_type)
             charter = self.facts["charter"].get(interview_type)
@@ -1149,9 +1174,41 @@ class Runner:
         self.say("  S11 — refused as expected — %s: %s" % (probe, answer.sentence()))
         return True
 
-    def probe_step(self, probe: str, answer: Answer, sent: Any, expected: str, who: str) -> None:
-        self.step("S11", answer, expected, ("accepted (%s)" if answer.ok else "refused: %s") % answer.sentence(), sent, who)
+    def probe_step(self, probe: str, answer: Answer, sent: Any, expected: str, who: str, result: Optional[str] = None) -> None:
+        said = result if result is not None else (("accepted (%s)" if answer.ok else "refused: %s") % answer.sentence())
+        self.step("S11", answer, expected, said, sent, who)
         self.evidence["S11"][-1]["probe"] = probe
+
+    def accepted_or_finding(self, probe: str, sent: Any, answer: Answer, expected: str, law: str) -> bool:
+        """The mirror of refused_or_finding, for a probe the law expects accepted: a refusal is the finding, with the ruling quoted."""
+        if answer.ok:
+            self.say("  S11 — accepted, as the law says — %s: HTTP %d" % (probe, answer.status))
+            return True
+        self.finding("S11", probe, sent, answer, expected, "REFUSED: %s — %s" % (answer.sentence(), law))
+        return False
+
+    def probe_venue_contract(self, founder: Person) -> None:
+        """
+        S11's venue probe: a payee whose address is a real venue contract, read from the corridor's tables.py at
+        run time and never from a table of the harness's own.
+
+        THE EXPECTATION IS ACCEPTANCE (Spec T8). The first live run, 20 September 2026, called the estate's
+        HTTP 201 a failure; Bear ruled the same morning: "Unless it is stipulated explicitly in the questionnaire,
+        it must be accepted." The questionnaire decides policy, and a contract is an address — no question of the
+        charter asks whether a venue contract may be a payee, so the estate has nothing to refuse it under, and
+        an estate that accepted it did what the law says. The probe stays, because the expectation FLIPS the day
+        the questionnaire gains such a stipulation: then a refusal in the charter's words is what the law says,
+        and an acceptance becomes the finding. Until that day HTTP 201 is reported as accepted, as the law says,
+        and a refusal is the finding, with the ruling quoted beside the estate's own sentence.
+        """
+        venue = T.venue_address_for_probe()
+        probe = "a payee address that is a real venue contract (%s, read from the corridor's tables.py at run time)" % venue["what"]
+        body = {"displayName": "Venue probe", "addresses": [{"chain": T.PAYEE_CHAIN, "address": venue["address"]}]}
+        answer = self.request(founder, "POST", "/v1/payees", body, "S11")
+        expected = "HTTP 201: accepted, as the law says (%s)" % VENUE_RULING
+        result = ("accepted, as the law says (%s)" % VENUE_RULING) if answer.ok else "refused: %s" % answer.sentence()
+        self.probe_step(probe, answer, body, expected, founder.name, result=result)
+        self.accepted_or_finding(probe, body, answer, expected, "the law says otherwise (%s; a contract is an address)" % VENUE_RULING)
 
     def station_s11(self) -> Outcome:
         before = len(self.findings)
@@ -1274,7 +1331,8 @@ class Runner:
             self.refused_or_finding(probe, {"rpId": "not-the-estate.invalid"}, wrong, "refused: an assertion for another relying party is not this estate's")
         else:
             self.note("S11", "the passkey probes were not made: the founder holds no passkey in this run")
-        # 9 and 10. A payee address with a wrong checksum; a payee address that is a real venue contract.
+        # 9 and 10. A payee address with a wrong checksum (a refusal expected); a payee address that is a real
+        # venue contract (acceptance expected: the questionnaire decides policy, and a contract is an address).
         probes += 1
         probe = "a payee address with a wrong checksum"
         broken = T.wrong_checksum(T.address("CHECKSUM_PROBE_ETHEREUM"))
@@ -1283,12 +1341,7 @@ class Runner:
         self.probe_step(probe, answer, body, "a refusal (ADDRESS_MALFORMED), or the estate's acceptance recorded as it is", founder.name)
         self.refused_or_finding(probe, body, answer, "refused: an address whose checksum is wrong is not an address")
         probes += 1
-        venue = T.venue_address_for_probe()
-        probe = "a payee address that is a real venue contract (%s, read from the corridor's tables.py at run time)" % venue["what"]
-        body = {"displayName": "Venue probe", "addresses": [{"chain": T.PAYEE_CHAIN, "address": venue["address"]}]}
-        answer = self.request(founder, "POST", "/v1/payees", body, "S11")
-        self.probe_step(probe, answer, body, "a refusal, or the estate's acceptance recorded as it is", founder.name)
-        self.refused_or_finding(probe, body, answer, "refused: a venue contract is not a payee")
+        self.probe_venue_contract(founder)  # expects acceptance, as the law says (Spec T8); a refusal is the finding
         # 11. A payment above the per-payment limit from the clerk (S7's P3), not released without approval.
         probes += 1
         probe = "the clerk's payment above the per-payment limit (S7's P3) released without approval?"
@@ -1343,6 +1396,11 @@ class Runner:
 
     # -- S12 The optimizer --------------------------------------------------------------
     def station_s12(self) -> Outcome:
+        """
+        The optimizer measures and never judges (Spec T8): every call over two seconds is listed with its route,
+        and the station passes with its numbers. A slow invitation is explained where it is listed — the
+        invitation road sends the email before it answers — rather than counted against anybody.
+        """
         measure = optimizer_measures(self.calls, self.facts["served_twice"])
         self.facts["optimizer"] = measure
         for line in measure["lines"]:
@@ -1356,18 +1414,36 @@ class Runner:
         lines: List[str] = []
         lines.append("# AER 360 estate harness run — %s — %s" % (A.ESTATE["company"], self.started_at))
         lines.append("")
-        lines.append("Spec T7, 19 September 2026. Base URL %s. The harness is the founder, not a judge; a failure below is evidence, not a verdict: "
+        lines.append("Specs T7 and T8, 19 and 20 September 2026. Base URL %s. The harness is the founder, not a judge; a failure below is evidence, not a verdict: "
                      "what was sent (secrets and passkey material redacted to their last four characters), what came back word for word, the route, the expectation and the result. "
                      "This report names no real person and no real company: the estate and its people are the harness's own." % self.base)
         lines.append("")
+        last = self.last_run()
+        fates = compare_findings(last["findings"], self.findings) if last else None
         lines.append("## The closing table")
         lines.append("")
-        lines.append("| Station | Outcome | Line |")
-        lines.append("|---|---|---|")
+        if last:
+            lines.append("| Station | Outcome | Last run | Line |")
+            lines.append("|---|---|---|---|")
+        else:
+            lines.append("| Station | Outcome | Line |")
+            lines.append("|---|---|---|")
         for o in self.outcomes:
-            lines.append("| %s %s | %s | %s |" % (o.station, dict(STATIONS).get(o.station, ""), o.outcome, o.line.replace("|", "\\|")))
+            cells = ["%s %s" % (o.station, dict(STATIONS).get(o.station, "")), o.outcome]
+            if last and fates is not None:
+                cells.append(self.last_run_cell(last, fates, o.station))
+            cells.append(o.line)
+            lines.append("| " + " | ".join(c.replace("|", "\\|") for c in cells) + " |")
         lines.append("")
         lines.append("Findings under S10 and S11: %d." % len(self.findings))
+        if last and fates is not None:
+            lines.append("")
+            lines.append("Since the last run (%s, started %s): %d closed, %d still open, %d new. A finding is closed when the last run raised it and this run did not, "
+                         "still open when both did, new when only this run did; findings are matched by station and probe, with the ids a run mints set aside." % (
+                             last["name"], last.get("started_at") or "time unknown", len(fates["closed"]), len(fates["still_open"]), len(fates["new"])))
+            for word, key in (("closed", "closed"), ("still open", "still_open"), ("new", "new")):
+                for f in fates[key]:
+                    lines.append("- %s — %s — %s" % (word, f["station"], f["probe"]))
         if self.evidence.get("resume"):
             lines.append("")
             lines.append("## Resume")
@@ -1413,6 +1489,24 @@ class Runner:
             lines.append("| %s | %s | %s | %s | %d | %d | %d |" % (c.at, c.station, c.who, c.route, c.status, c.elapsed_ms, c.size))
         return "\n".join(lines) + "\n"
 
+    def last_run(self) -> Optional[Dict[str, Any]]:
+        """The previous report in the working folder, looked for once per run, so a rerun after a fix can say what closed (Spec T8)."""
+        if not self._last_run_looked_for:
+            self._last_run_looked_for = True
+            self.last_run_report = find_last_report(self.out_dir, self.started_at)
+        return self.last_run_report
+
+    @staticmethod
+    def last_run_cell(last: Dict[str, Any], fates: Dict[str, List[Dict[str, Any]]], station: str) -> str:
+        """The closing table's last-run cell: the station's previous outcome, then its findings' fates by probe."""
+        previous = last["outcomes"].get(station)
+        parts = ["last run %s" % previous if previous else "not in the last run"]
+        for word, key in (("closed", "closed"), ("still open", "still_open"), ("new", "new")):
+            probes = [f["probe"] for f in fates[key] if f["station"] == station]
+            if probes:
+                parts.append("%d %s: %s" % (len(probes), word, "; ".join(probes)))
+        return " · ".join(parts)
+
     def render_steps(self, steps: List[Dict[str, Any]]) -> List[str]:
         out: List[str] = []
         for index, s in enumerate(steps, 1):
@@ -1436,16 +1530,45 @@ class Runner:
         path = os.path.join(self.out_dir, "aer360-harness-%s.md" % date)
         if os.path.exists(path):
             path = os.path.join(self.out_dir, "aer360-harness-%s-%s.md" % (date, _dt.datetime.now().strftime("%H%M%S")))
+        text = self.report()  # rendered before the file exists, so the previous report is found and this one is never its own last run
         with open(path, "w", encoding="utf-8") as handle:
-            handle.write(self.report())
+            handle.write(text)
         return path
 
 
 # ---------------------------------------------------------------------------
 # The auditor's comparisons (S10), as functions over recorded facts so a fixture can prove them.
 # ---------------------------------------------------------------------------
-def spoken_for(kind: str, question_id: str, value: Dict[str, Any]) -> str:
-    """The sentence the read-back speaks for an answer, as services/onboarding.ts readback() spells it."""
+def spoken_entry(entry: Dict[str, Any]) -> str:
+    """One list entry as the read-back speaks it: its values in the order the estate stores them, joined by ' — '."""
+    stored = A.as_the_estate_stores(entry) if isinstance(entry, dict) else {}
+    return " — ".join("" if v is None else str(v) for v in stored.values())
+
+
+def spoken_for(kind: str, question_id: str, value: Dict[str, Any]) -> Optional[str]:
+    """
+    The sentence the read-back speaks for an answer, in the estate's own forms (Spec T8) — services/onboarding.ts,
+    readback(), the `spoken` switch, read from the code at main after PR #108 (commit dff4c9a, where that file is
+    e651616's byte for byte), not guessed:
+
+      statement      'Stated and acknowledged.'
+      single_choice  the choice
+      multi_choice   the choices joined by ', '; none chosen: B4's fail-closed sentence, otherwise 'None chosen.'
+      text           the text, trimmed, or 'Left blank.'
+      currency       its code — the text, trimmed (Spec 88's `spokenAnswer` arm, commit 35cdc6f). On main the kind
+                     has no arm and falls to the switch's default, JSON.stringify, which the live run of 20 September
+                     2026 heard as '{"text":"AUD"}'; that stays a finding of the estate's until Spec 88 lands
+      list           each entry's values in the order the estate stores them — jsonb's: shortest key first, then byte
+                     order (A.as_the_estate_stores) — joined by ' — ', the entries joined by '; '; none: 'No entries.'
+                     For the census that reads name — role — email
+      money          'US$<whole, grouped> and <cents, two digits> cents.'; left empty: the no-limit sentence
+      percent        '<figure> per cent.'; left empty: T4's own sentence, otherwise 'Left empty — no share is set.'
+      count          '<figure, grouped> payment(s) in a day.'; left empty: 'Left empty — no limit on how many.'
+      roster_*       the people joined by ', ', or 'No one chosen.'
+
+    A kind not listed has no rendering here, and None is returned: the comparison then says 'not compared: no
+    rendering for kind <k>' rather than calling a difference it cannot judge a finding.
+    """
     if kind == "statement":
         return "Stated and acknowledged."
     if kind == "single_choice":
@@ -1463,7 +1586,7 @@ def spoken_for(kind: str, question_id: str, value: Dict[str, Any]) -> str:
         return text or "Left blank."
     if kind == "list":
         entries = value.get("entries") or []
-        return "; ".join(" — ".join(str(v) for v in e.values()) for e in entries) or "No entries."
+        return "; ".join(spoken_entry(e) for e in entries) or "No entries."
     if kind == "money":
         cents = value.get("cents")
         if cents is None:
@@ -1474,7 +1597,8 @@ def spoken_for(kind: str, question_id: str, value: Dict[str, Any]) -> str:
         percent = value.get("percent")
         if percent is None:
             return "Left empty — never halts on pace." if question_id == "T4" else "Left empty — no share is set."
-        return "%s per cent." % (("%g" % percent) if isinstance(percent, float) else percent)
+        figure = str(int(percent)) if isinstance(percent, float) and percent.is_integer() else str(percent)
+        return "%s per cent." % figure
     if kind == "count":
         count = value.get("count")
         if count is None:
@@ -1482,11 +1606,40 @@ def spoken_for(kind: str, question_id: str, value: Dict[str, Any]) -> str:
         return "%s %s in a day." % ("{:,}".format(count), "payment" if count == 1 else "payments")
     if kind in ("roster_single", "roster_multi"):
         return ", ".join(str(p) for p in value.get("people") or []) or "No one chosen."
-    return json.dumps(value)
+    return None
+
+
+def readback_disagreements(probe: str, kind: str, value: Dict[str, Any], expected: str, said: str) -> List[Dict[str, Any]]:
+    """
+    What differs between the line the estate spoke and the answer given, by content. A list is compared entry by
+    entry, and each finding names the entry that differs — its place and its first value, the name — so a moved
+    word in one census row is one finding about that row. Anything else, or a list whose entry count differs, is
+    one finding carrying both lines whole.
+    """
+    if kind == "list":
+        entries = [e for e in (value.get("entries") or []) if isinstance(e, dict)]
+        given = [spoken_entry(e) for e in entries]
+        heard = said.split("; ") if said and said != "No entries." else []
+        if given and len(given) == len(heard):
+            out: List[Dict[str, Any]] = []
+            for index, (g, h) in enumerate(zip(given, heard), 1):
+                if g != h:
+                    named = g.split(" — ", 1)[0] or ("entry %d" % index)
+                    out.append({"probe": "%s, entry %d (%s)" % (probe, index, named), "sent": entries[index - 1], "expected": g,
+                                "said": "the read-back says %r for this entry" % h})
+            if out:
+                return out
+    return [{"probe": probe, "sent": value, "expected": expected, "said": "the read-back says %r" % said}]
 
 
 def audit_readback(interview_type: str, answers: Sequence[Tuple[str, Dict[str, Any], str, str]], lines: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """The read-back compared word for word with the answers the harness gave."""
+    """
+    The read-back compared with the answers the harness gave, by content (Spec T8): each answer rendered in the
+    estate's own spoken form (spoken_for) and compared with the line the estate spoke, a list entry by entry so a
+    finding names the entry. An answer of a kind the harness has no rendering for is not compared: its entry
+    carries not_compared=True and says so, and S10 records it as a note, never a finding. A line for a question
+    the harness did not answer, a missing line, and a moved prompt are findings as before.
+    """
     findings: List[Dict[str, Any]] = []
     spoken = {str(l.get("questionId")): l for l in lines if not l.get("synthetic")}
     for qid, value, prompt, kind in answers:
@@ -1494,10 +1647,15 @@ def audit_readback(interview_type: str, answers: Sequence[Tuple[str, Dict[str, A
         line = spoken.get(qid)
         probe = "read-back (%s) of %s" % (interview_type, qid)
         if line is None:
-            findings.append({"probe": probe, "sent": value, "expected": expected, "said": "the read-back has no line for %s, which was answered" % qid})
+            findings.append({"probe": probe, "sent": value, "expected": expected if expected is not None else json.dumps(value, ensure_ascii=False),
+                             "said": "the read-back has no line for %s, which was answered" % qid})
             continue
-        if str(line.get("spoken")) != expected:
-            findings.append({"probe": probe, "sent": value, "expected": expected, "said": "the read-back says %r" % line.get("spoken")})
+        said = str(line.get("spoken"))
+        if expected is None:
+            findings.append({"probe": probe, "sent": value, "expected": None, "not_compared": True,
+                             "said": "not compared: no rendering for kind %s (the read-back says %r)" % (kind, said)})
+        elif said != expected:
+            findings.extend(readback_disagreements(probe, kind, value, expected, said))
         if prompt and str(line.get("prompt")) != prompt:
             findings.append({"probe": probe + " (the prompt)", "sent": prompt, "expected": prompt, "said": "the read-back's prompt is %r" % line.get("prompt")})
     answered = {qid for qid, _, _, _ in answers}
@@ -1765,10 +1923,128 @@ def optimizer_measures(calls: Sequence[Call], served_twice: Dict[str, List[str]]
         "the largest answer: %s" % ("%s, %d bytes (%s)" % (largest.route, largest.size, largest.station) if largest else "none"),
         "5xx answers retried once after %.0f seconds: %s" % (RETRY_AFTER_5XX_SECONDS, ", ".join("%s (%d then %d)" % (c.route, c.retry_of.status, c.status) for c in retried) or "none"),
     ]
+    slow_invitations = [c for c in slow if c.route == "POST /v1/invites"]
     if slow:
-        lines.append("every call over %.0f seconds: %s" % (SLOW_CALL_SECONDS, ", ".join("%s %d ms (%s)" % (c.route, c.elapsed_ms, c.station) for c in slow)))
+        lines.append("every call over %.0f seconds, reported and not judged: %s" % (
+            SLOW_CALL_SECONDS, ", ".join("%s %d ms (%s)" % (c.route, c.elapsed_ms, c.station) for c in slow)))
+    if slow_invitations:
+        # Spec T8: a fact to report, not a finding. routes/invites.ts mints the invitation, awaits the email's
+        # dispatch, stamps the row, and only then answers 201; a future estate spec may move the send off the road.
+        lines.append("%s — %s (routes/invites.ts: the invitation is minted, the email's dispatch is awaited, the row is stamped, and only then does the route answer 201)" % (
+            INVITATION_SENDS_FIRST, ", ".join("%d ms (%s)" % (c.elapsed_ms, c.station) for c in slow_invitations)))
     return {"calls": len(calls), "slow": slow, "slowest": slowest, "largest": {"route": largest.route, "size": largest.size} if largest else None,
-            "retried": retried, "interview_calls": len(interview_calls), "wasted_reads": wasted, "lines": lines}
+            "retried": retried, "interview_calls": len(interview_calls), "wasted_reads": wasted, "slow_invitations": slow_invitations, "lines": lines}
+
+
+# ---------------------------------------------------------------------------
+# The last run (Spec T8): the previous report in the working folder, read back, so a rerun after a fix
+# says each finding's fate — closed, still open, new. The Python confirms what was fixed.
+# ---------------------------------------------------------------------------
+UUID_TEXT = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+PATH_ID_TEXT = re.compile(r"/[a-z]+-[0-9a-f]{6,}(?=/|\b)")
+REPORT_TITLE = "# AER 360 estate harness run — "
+FINDING_LINE = re.compile(r"^- \*\*(.+?)\*\* — (.*)$")
+STATION_HEADING = re.compile(r"^## (S\d+) — ")
+
+
+def finding_key(probe: str) -> str:
+    """A finding's identity across runs: its probe with the ids a run mints (uuids; the double's `addr-…`) set aside."""
+    return PATH_ID_TEXT.sub("/<id>", UUID_TEXT.sub("<id>", probe))
+
+
+def _table_cells(line: str) -> List[str]:
+    inner = line.strip()
+    if inner.startswith("|"):
+        inner = inner[1:]
+    if inner.endswith("|"):
+        inner = inner[:-1]
+    return [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", inner)]
+
+
+def read_report(path: str) -> Dict[str, Any]:
+    """
+    A report this harness wrote, read back: when the run started, each station's outcome from the closing table
+    (three columns, Spec T7, or four with the last-run column), and every finding under its station heading.
+    """
+    with open(path, "r", encoding="utf-8") as handle:
+        text = handle.read()
+    started_at: Optional[str] = None
+    outcomes: Dict[str, str] = {}
+    findings: List[Dict[str, Any]] = []
+    header: Optional[List[str]] = None
+    in_table = False
+    station: Optional[str] = None
+    for raw in text.splitlines():
+        line = raw.rstrip()
+        if started_at is None and line.startswith(REPORT_TITLE):
+            started_at = line.rsplit(" — ", 1)[-1].strip()
+        if line.startswith("| Station |"):
+            header = _table_cells(line)
+            in_table = True
+            continue
+        if in_table:
+            if not line.startswith("|"):
+                in_table = False
+            elif not line.startswith("|---"):
+                cells = _table_cells(line)
+                outcome_at = header.index("Outcome") if header and "Outcome" in header else 1
+                if len(cells) > outcome_at:
+                    outcomes[cells[0].split(" ", 1)[0]] = cells[outcome_at]
+            continue
+        heading = STATION_HEADING.match(line)
+        if heading:
+            station = heading.group(1)
+            continue
+        if line.startswith("## "):
+            station = None
+            continue
+        found = FINDING_LINE.match(line)
+        if found and station:
+            findings.append({"station": station, "probe": found.group(1), "said": found.group(2)})
+    return {"path": path, "name": os.path.basename(path), "started_at": started_at, "outcomes": outcomes, "findings": findings}
+
+
+def find_last_report(out_dir: str, own_started_at: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """
+    The newest report in the working folder, read; None when there is none. The bare-dated name is the first
+    report of its day and the -HHMMSS names come after it; a report of this very run is never its own last run.
+    """
+    try:
+        names = os.listdir(out_dir)
+    except OSError:
+        return None
+    dated: List[Tuple[Tuple[str, str], str]] = []
+    for name in names:
+        match = REPORT_NAME.match(name)
+        if match:
+            dated.append(((match.group(1), match.group(2) or "000000"), name))
+    for _, name in sorted(dated, reverse=True):
+        try:
+            report = read_report(os.path.join(out_dir, name))
+        except (OSError, UnicodeDecodeError):
+            continue
+        if own_started_at and report["started_at"] == own_started_at:
+            continue
+        return report
+    return None
+
+
+def compare_findings(previous: Sequence[Dict[str, Any]], current: Sequence[Any]) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Each finding's fate between two runs, matched by station and probe (finding_key): closed — the last run
+    raised it and this one did not; still open — both did; new — only this run did. In order of appearance.
+    """
+    def keyed(items: Sequence[Any]) -> Dict[Tuple[str, str], Dict[str, Any]]:
+        out: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        for f in items:
+            station = f.station if isinstance(f, Finding) else str(f["station"])
+            probe = f.probe if isinstance(f, Finding) else str(f["probe"])
+            out.setdefault((station, finding_key(probe)), {"station": station, "probe": probe})
+        return out
+    before, now = keyed(previous), keyed(current)
+    return {"closed": [before[k] for k in before if k not in now],
+            "still_open": [now[k] for k in now if k in before],
+            "new": [now[k] for k in now if k not in before]}
 
 
 # ---------------------------------------------------------------------------
@@ -1878,7 +2154,8 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     line("S11", "POST /v1/auth/login/options then /verify twice with the same nonce, issuedAtMs and challenge → expect the second refused 403 STEP_UP_STALE: challenge already used")
     line("S11", "POST /v1/auth/login/verify with an assertion whose rpIdHash is SHA-256('not-the-estate.invalid') → expect 403 STEP_UP_INVALID")
     line("S11", "POST /v1/payees %s → expect a refusal, or the estate's acceptance recorded" % _j({"displayName": "Checksum probe", "addresses": [{"chain": T.PAYEE_CHAIN, "address": T.wrong_checksum(T.address("CHECKSUM_PROBE_ETHEREUM"))}]}))
-    line("S11", "POST /v1/payees %s → expect a refusal, or the estate's acceptance recorded" % _j({"displayName": "Venue probe", "addresses": [{"chain": T.PAYEE_CHAIN, "address": "<the corridor's tables.py UNISWAP_V3_ETHEREUM, read at run time>"}]}))
+    line("S11", "POST /v1/payees %s → expect 201, accepted, as the law says (%s); a refusal is the finding" % (
+        _j({"displayName": "Venue probe", "addresses": [{"chain": T.PAYEE_CHAIN, "address": "<the corridor's tables.py UNISWAP_V3_ETHEREUM, read at run time>"}]}), VENUE_RULING))
     line("S11", "[check] S7's P3 (%s %s, above the per-payment limit) was not released without approval" % (A.PAYMENTS[2].amount, T.PAYMENT_ASSET))
     line("S11", "POST /v1/approvals/<run P3>/challenge {} then /approve (as %s, who entered it) → expect a refusal in the charter's words" % clerk.name)
     line("S11", "POST /v1/onboarding/interviews/<policy interview>/confirm/options {} then /confirm (as %s) → expect 409 INTERVIEW_NOT_OPEN: confirm happens at the read-back" % founder.name)
