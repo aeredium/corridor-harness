@@ -366,6 +366,35 @@ ACCOUNT_ANSWERS: Dict[str, Dict[str, Any]] = {
 ANSWERS: Dict[str, Dict[str, Dict[str, Any]]] = {"policy": POLICY_ANSWERS, "wallet_account": ACCOUNT_ANSWERS}
 
 
+# ---------------------------------------------------------------------------
+# The shape an answer takes once the estate has stored it (Spec T8).
+# ---------------------------------------------------------------------------
+def _stored_key(key: str) -> tuple:
+    encoded = key.encode("utf-8")
+    return (len(encoded), encoded)
+
+
+def as_the_estate_stores(value: Any) -> Any:
+    """
+    An answer as the estate holds it once written, which is the order the read-back speaks it in.
+
+    `answers.value` is a jsonb column (`apps/server/src/db/onboardingschema.ts`, `value: jsonb('value')`),
+    and PostgreSQL's jsonb does not keep the order an object's keys arrived in: it stores them shortest
+    key first and, at equal length, in byte order (jsonb_util.c, lengthCompareJsonbStringValue), and a
+    driver reading the column back hands the estate an object in that order. The read-back speaks a
+    list entry's values in the order it finds them (`services/onboarding.ts`, the `spoken` switch:
+    `Object.values(e).join(' — ')`), so the census the harness sends as name, email, role is spoken as
+    `name — role — email` — which is what the estate said on 20 September 2026 and what the harness's
+    own rendering, in the order it had sent, called a disagreement. Nested objects are reordered the
+    same way; lists keep their order, as jsonb keeps it; scalars are returned as they are.
+    """
+    if isinstance(value, dict):
+        return {key: as_the_estate_stores(value[key]) for key in sorted(value.keys(), key=_stored_key)}
+    if isinstance(value, list):
+        return [as_the_estate_stores(item) for item in value]
+    return value
+
+
 class UnknownQuestion(Exception):
     """The estate served a question the book does not know. The run stops at the station and prints it."""
 

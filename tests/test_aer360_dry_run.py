@@ -1,4 +1,8 @@
-"""--dry prints the twelve stations' calls in order with no network, the probes of S10 to S12 included (Spec T7)."""
+"""
+--dry prints the twelve stations' calls in order with no network, the probes of S10 to S12 included (Spec T7).
+Spec T8 changed what the harness expects, not what it sends: the calls are frozen in tests/fixtures/aer360-dry-calls.txt
+from the dry run at main after PR #5, and the venue probe's expectation is the law's.
+"""
 import contextlib
 import io
 import os
@@ -14,6 +18,18 @@ import aer360_tables as T  # noqa: E402
 
 def no_network(*args, **kwargs):
     raise AssertionError("the dry run reached for the network: %r" % (args[:1],))
+
+
+FROZEN_CALLS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "aer360-dry-calls.txt")
+
+
+def calls_of(lines):
+    """Each dry line without its expectation: the station and the call, which is what --dry must keep unchanged."""
+    out = []
+    for line in lines:
+        station, _, rest = line.partition(" — ")
+        out.append("%s — %s" % (station, rest.split(" → ", 1)[0] if " → " in rest else rest))
+    return out
 
 
 class DryRunTest(unittest.TestCase):
@@ -103,6 +119,21 @@ class DryRunTest(unittest.TestCase):
         self.assertTrue(any("two seconds" in l or "2 seconds" in l for l in s12))
         self.assertTrue(any("ten slowest" in l for l in s12))
         self.assertTrue(any("5xx" in l for l in s12))
+
+    def test_the_calls_are_unchanged_since_spec_t7(self):
+        """Spec T8: --dry unchanged in its calls. The fixture is the dry run at main after PR #5, its expectations cut off at the arrow."""
+        with open(FROZEN_CALLS, "r", encoding="utf-8") as handle:
+            frozen = handle.read().splitlines()
+        self.assertEqual(len(frozen), 119)
+        self.assertEqual(calls_of(H.dry_lines()), frozen)
+
+    def test_the_venue_probes_expectation_is_the_law(self):
+        s11 = [l for l in H.dry_lines() if l.startswith("S11 — ") and "Venue probe" in l]
+        self.assertEqual(len(s11), 1)
+        self.assertIn("→ expect 201, accepted, as the law says (%s); a refusal is the finding" % H.VENUE_RULING, s11[0])
+        self.assertNotIn("expect a refusal", s11[0])
+        checksum = [l for l in H.dry_lines() if l.startswith("S11 — ") and "Checksum probe" in l]
+        self.assertIn("→ expect a refusal, or the estate's acceptance recorded", checksum[0], "the checksum probe still expects a refusal")
 
     def test_no_line_carries_a_secret_or_a_venue_address_of_our_own(self):
         lines = H.dry_lines()
