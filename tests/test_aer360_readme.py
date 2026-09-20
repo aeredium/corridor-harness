@@ -88,6 +88,17 @@ class EstateHarnessReadmeTest(unittest.TestCase):
         self.assertIn("`tests/fixtures/aer360-dry-calls.txt`", self.section)
         self.assertNotIn("the read-back word for word against the answers given", self.section, "the comparison is by content now")
 
+    def test_it_says_a_payee_is_whitelisted_at_its_quorum_since_spec_t9(self):
+        self.assertIn("Spec T9, 20 September 2026", self.section)
+        self.assertIn("S6 presses until the quorum is met", self.section)
+        self.assertIn("governanceSignersFor", self.section)
+        self.assertIn("may_still_approve", self.section)
+        self.assertIn("1 of 2 approvals recorded for this address. One more is needed, from", self.section)
+        self.assertIn("a quorum that exceeds its roster", self.section)
+        self.assertIn("read from the row whose `id` is this run's `payee_id`, never by address", self.section)
+        self.assertIn("WHITELIST_ROSTER", self.section)
+        self.assertIn("WHITELIST_QUORUM", self.section)
+
 
 class ChangelogTest(unittest.TestCase):
     def test_the_changelog_records_spec_t7_and_its_files(self):
@@ -96,6 +107,18 @@ class ChangelogTest(unittest.TestCase):
         for name in ("aer360_harness.py", "aer360_answers.py", "aer360_tables.py", "aer360_passkey.py", "tests/fixtures/aer360-questioncatalog.v11.ts"):
             self.assertIn(name, text, name)
         self.assertIn("corridor_harness.py, series.py, tables.py and the corridor's tests are not touched", text)
+
+    def test_the_changelog_records_spec_t9_before_t8_and_names_every_change(self):
+        text = read("CHANGELOG.md")
+        self.assertIn("## Spec T9 — A payee is whitelisted when its quorum is met, and the harness presses for the quorum (20 September 2026)", text)
+        self.assertLess(text.index("## Spec T9"), text.index("## Spec T8"))
+        t9 = text.split("## Spec T9", 1)[1].split("## Spec T8", 1)[0]
+        for words in ("presses until the quorum is met", "governanceSignersFor", "WHITELIST_ROSTER", "WHITELIST_QUORUM",
+                      "may_still_approve", "a quorum that exceeds its roster", "this run's `payee_id`",
+                      "aer360-dry-calls.txt", "119 → 121 lines", "SIGNATURE_NOT_COUNTED",
+                      "a second press by the same person is refused", "answers as the estate does after Spec 89",
+                      "corridor_harness.py, series.py, tables.py, aer360_passkey.py, aer360_tables.py and the corridor's tests are not touched"):
+            self.assertIn(words, t9, words)
 
     def test_the_changelog_records_spec_t8_before_t7_and_names_every_change(self):
         text = read("CHANGELOG.md")

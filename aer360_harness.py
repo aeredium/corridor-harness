@@ -900,7 +900,37 @@ class Runner:
         return Outcome("S5", PASS, detail)
 
     # -- S6 Payees ----------------------------------------------------------------------
+    # Spec T9 (20 September 2026): who presses after Ada, and how a count is spoken. Ben Signatory, who signs
+    # changes to the rules, is the presser the harness falls back to when the estate's answer names nobody for
+    # whom it holds a session; the count words are the ones the estate's own sentence uses ("One more is needed").
+    FALLBACK_PRESSER = "ben"
+    COUNT_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
+
     def station_s6(self) -> Outcome:
+        """
+        Two payees, each created and promoted by the founder, then approved until the whitelist roster's quorum
+        is met (Spec T9, 20 September 2026, from the second live run, report aer360-harness-2026-09-20-103245.md).
+
+        The charter Harness Holdings confirmed answered C12 = 2 and C12A = No, so the `whitelist_mutation`
+        roster's threshold is two and its members are the census of A8 (`governanceSignersFor`,
+        onboardingcompiler.ts): Harriet Founder, Ada Approver, Ben Signatory, Cora Clerk — the answer book's
+        WHITELIST_ROSTER at WHITELIST_QUORUM. The second live run pressed once, as Ada, and called the estate's
+        honest `pending_promotion` a failure; the audit row said why: requiredSignatures 2, signaturesCollected 1.
+        Under Spec 89 (aeredium/AERAccounts, commit 7d809e1, routes/payees.ts and services/payees.ts) the first
+        approval's answer says so itself — `approvals {required, collected, remaining}`, `may_still_approve` with
+        the roster's unsigned names, and the sentence "1 of 2 approvals recorded for this address. One more is
+        needed, from …" — and the harness presses on (§1): after Ada, the first name in may_still_approve for whom
+        it holds a signed-in session, else Ben Signatory, else the founder, until whitelisted, a refusal, or
+        approvals.required presses, whichever is first, and never more times than the roster has names (§3). An
+        estate before Spec 89 answers without approvals; one further press is made as Ben, on the charter's quorum
+        of two, and the report says so.
+
+        The first approval's answer is audited (§2): a pending answer that does not say why is a finding of S10's
+        kind raised here, and so is a quorum that exceeds its roster, or a sentence that does not begin with its
+        count. Each step says what it expects (§3), and the register's status is read from the row whose id is
+        this run's payee id, never by address: every run creates its payees afresh, the register is ordered by
+        display name (routes/payees.ts), and earlier runs leave rows with the same addresses still pending.
+        """
         founder = self.founder()
         ada = self.people[A.PAYMENT_APPROVER]
         said: List[str] = []
@@ -918,37 +948,153 @@ class Runner:
             row = created.json.get("payee") or {}
             addresses = row.get("addresses") or []
             address_id = str(addresses[0].get("id")) if addresses else None
-            record = {"key": payee["key"], "name": payee["name"], "payee_id": row.get("id"), "address_id": address_id, "address": address, "chain": payee["chain"], "promoted": None, "approved": None}
+            record = {"key": payee["key"], "name": payee["name"], "payee_id": row.get("id"), "address_id": address_id, "address": address, "chain": payee["chain"],
+                      "promoted": None, "approved": None, "presses": []}
             self.facts["payees"].append(record)
             if not address_id:
                 said.append("%s: created with no address id" % payee["name"])
                 all_whitelisted = False
                 continue
             promoted = self.request(founder, "POST", "/v1/payees/addresses/%s/promote" % address_id, {}, "S6")
-            self.step("S6", promoted, "the platform's answer: status, membership id, ceremony", "answered" if promoted.ok else promoted.sentence(), {}, founder.name)
+            self.step("S6", promoted, "a ceremony: status pending_promotion, platformMembershipId, ceremony", "answered" if promoted.ok else promoted.sentence(), {}, founder.name)
             record["promoted"] = promoted.json if promoted.ok else promoted.sentence()
-            approve_said = "Ada has no session, so the approval was not asked"
-            if ada.signed_in:
-                approved = self.request(ada, "POST", "/v1/payees/addresses/%s/approve" % address_id, {}, "S6")
-                self.step("S6", approved, "whitelistStatus whitelisted", "answered" if approved.ok else approved.sentence(), {}, ada.name)
-                record["approved"] = approved.json if approved.ok else approved.sentence()
-                approve_said = ("approved by Ada: %s" % (approved.json or {}).get("whitelistStatus")) if approved.ok else ("Ada's approval answered %s" % approved.sentence())
-            said.append("%s: %s; promote %s; %s" % (payee["name"], "created", ("status %s" % (promoted.json or {}).get("status")) if promoted.ok else promoted.sentence(), approve_said))
+            promote_said = "promoted" if promoted.ok else "promote answered %s" % promoted.sentence()
+            said.append("%s: created; %s; %s" % (payee["name"], promote_said, self.approve_to_quorum(record, ada)))
         register = self.request(founder, "GET", "/v1/payees", None, "S6")
-        self.step("S6", register, "the payees register with both addresses whitelisted", "answered" if register.ok else register.sentence(), None, founder.name)
+        self.step("S6", register, "the payees register with both addresses whitelisted, read by this run's payee ids", "answered" if register.ok else register.sentence(), None, founder.name)
         self.facts["payees_register"] = register.json if isinstance(register.json, dict) else None
-        statuses: Dict[str, str] = {}
-        if isinstance(register.json, dict):
-            for row in register.json.get("payees") or []:
-                for addr in row.get("addresses") or []:
-                    statuses[str(addr.get("address", "")).lower()] = str(addr.get("whitelistStatus"))
         for record in self.facts["payees"]:
-            status = statuses.get(record["address"].lower(), "absent from the register")
+            status = self.register_status_of(register.json, record)
             record["register_status"] = status
             if status != "whitelisted":
                 all_whitelisted = False
         detail = "payees: %s; register: %s" % ("; ".join(said), ", ".join("%s %s" % (r["name"], r.get("register_status")) for r in self.facts["payees"]) or "none")
         return Outcome("S6", PASS if all_whitelisted and self.facts["payees"] else FAIL, detail)
+
+    def approve_to_quorum(self, record: Dict[str, Any], first: Person) -> str:
+        """
+        Press approve as Ada, then as the next roster member the answer names, until the address is whitelisted, a press
+        is refused, or approvals.required presses were made — and never more than the roster has names (Spec T9 §1, §3).
+        Returns the presses as the station's line speaks them: "approved by Ada Approver (1 of 2), by Ben Signatory (2 of 2): whitelisted".
+        """
+        if not first.signed_in:
+            return "%s has no session, so the approval was not asked" % first.name
+        quorum = A.WHITELIST_QUORUM
+        cap = len(A.WHITELIST_ROSTER)
+        required: Optional[int] = None  # the estate's own figure, read from the first answer; the charter's quorum until then
+        says_why = True                 # False once the first answer carried no approvals: an estate before Spec 89
+        presser = first
+        spoken: List[str] = []
+        outcome = "not answered"
+        count = 0
+        while True:
+            count += 1
+            answer = self.request(presser, "POST", "/v1/payees/addresses/%s/approve" % record["address_id"], {}, "S6")
+            self.step("S6", answer, self.press_expectation(count, required if required is not None else quorum), "answered" if answer.ok else answer.sentence(), {}, presser.name)
+            body = answer.json if answer.ok and isinstance(answer.json, dict) else None
+            record["presses"].append({"who": presser.name, "status": answer.status, "answer": body if body is not None else answer.sentence()})
+            if body is None:
+                spoken.append("by %s" % presser.name)
+                outcome = ("refused %s" % answer.sentence()) if not answer.ok else ("answered HTTP %d without a body" % answer.status)
+                break
+            record["approved"] = body
+            status = body.get("whitelistStatus")
+            approvals = body.get("approvals") if isinstance(body.get("approvals"), dict) else None
+            if count == 1 and status == "pending_promotion":
+                self.audit_first_approval(record, answer, body)
+                says_why = approvals is not None
+                if approvals is not None and isinstance(approvals.get("required"), int) and approvals["required"] > 0:
+                    required = approvals["required"]
+            collected = approvals["collected"] if approvals is not None and isinstance(approvals.get("collected"), int) else count
+            spoken.append("by %s (%s of %s)" % (presser.name, collected, required if required is not None else quorum))
+            if status != "pending_promotion":
+                outcome = str(status)
+                break
+            outcome = "pending_promotion"
+            if not says_why:
+                # An estate before Spec 89 says nothing of the count: one further press, on the charter's quorum, and no more.
+                if count >= 2:
+                    break
+                self.note("S6", "the answer carried no approvals count; one more press was made on the charter's quorum of %s" % self.COUNT_WORDS.get(quorum, str(quorum)))
+                presser = self.next_presser(None)
+                continue
+            remaining = approvals.get("remaining") if approvals is not None else None
+            if not (isinstance(remaining, int) and remaining > 0):
+                break
+            if count >= min(required if required is not None else quorum, cap):
+                break
+            presser = self.next_presser(body.get("may_still_approve"))
+        return "approved %s: %s" % (", ".join(spoken), outcome)
+
+    def press_expectation(self, press: int, required: int) -> str:
+        """What the n-th press should answer (Spec T9 §3): pending with the count and the sentence until the quorum's press, then whitelisted."""
+        if press >= required:
+            return "whitelistStatus whitelisted"
+        remaining = required - press
+        return ("whitelistStatus pending_promotion with %s more needed (%d of %d approvals recorded): approvals {required, collected, remaining}, "
+                "may_still_approve naming the unsigned, and the sentence (Spec 89)" % (self.COUNT_WORDS.get(remaining, str(remaining)), press, required))
+
+    def next_presser(self, may_still_approve: Any) -> Person:
+        """
+        The first roster member in may_still_approve for whom the harness holds a signed-in session, else Ben Signatory,
+        else the founder (Spec T9 §1). The founder is not the primary pick and is the last resort: on this estate the
+        four authors share the ONE role-bearing credential, so the founder's press carries no distinct seat email and
+        the platform cannot tell it from the press that already stands (the "one credential worn by four people" fact
+        S10 reports); a distinct author's press is what moves the count, which is why §1, §3 and §5 all name Ben second.
+        """
+        if isinstance(may_still_approve, list):
+            for name in may_still_approve:
+                key = next((k for k, p in self.people.items() if p.name == name and k != A.FOUNDER), None)
+                if key is not None and self.people[key].signed_in:
+                    return self.people[key]
+        ben = self.people[self.FALLBACK_PRESSER]
+        return ben if ben.signed_in else self.founder()
+
+    def audit_first_approval(self, record: Dict[str, Any], answer: Answer, body: Dict[str, Any]) -> None:
+        """
+        Spec T9 §2: a pending first approval must say why (Spec 89) — approvals, may_still_approve and sentence beside its status —
+        name a roster that can meet its quorum, and begin its sentence with its count. Each failing is a finding of S10's kind, raised
+        here, carrying the answer verbatim. A null may_still_approve is the estate's honest answer where the platform's roster could
+        not be read, and is not a missing field.
+        """
+        missing = [key for key in ("approvals", "may_still_approve", "sentence") if key not in body]
+        if missing:
+            self.finding("S6", "a pending approval that did not say why (Spec 89): %s" % record["name"], {}, answer,
+                         "approvals {required, collected, remaining}, may_still_approve and sentence beside whitelistStatus pending_promotion (Spec 89)",
+                         "the answer carried no %s" % " and no ".join(missing))
+            return
+        approvals = body.get("approvals")
+        names = body.get("may_still_approve")
+        sentence = body.get("sentence")
+        required = approvals.get("required") if isinstance(approvals, dict) else None
+        collected = approvals.get("collected") if isinstance(approvals, dict) else None
+        if isinstance(required, int) and isinstance(collected, int) and isinstance(names, list) and required > len(names) + collected:
+            self.finding("S6", "a quorum that exceeds its roster: %s" % record["name"], {}, answer,
+                         "approvals.required no greater than the names in may_still_approve plus approvals.collected",
+                         "approvals.required is %d, may_still_approve names %d and approvals.collected is %d, so the count can never be met" % (required, len(names), collected))
+        if isinstance(required, int) and isinstance(collected, int) and isinstance(sentence, str):
+            opening = "%d of %d %s recorded for this address." % (collected, required, "approval" if required == 1 else "approvals")
+            if not sentence.startswith(opening):
+                self.finding("S6", "a sentence that does not begin with its count (Spec 89): %s" % record["name"], {}, answer,
+                             'a sentence beginning "%s"' % opening, 'the sentence is "%s"' % sentence)
+
+    @staticmethod
+    def register_status_of(register: Any, record: Dict[str, Any]) -> str:
+        """The status of this run's own row — the payee whose id is this run's payee_id — never a lookup by address (Spec T9 §3)."""
+        if not isinstance(register, dict):
+            return "no register was read"
+        for row in register.get("payees") or []:
+            if str(row.get("id")) != str(record.get("payee_id")):
+                continue
+            addresses = row.get("addresses") or []
+            for addr in addresses:
+                if str(addr.get("id")) == str(record.get("address_id")):
+                    return str(addr.get("whitelistStatus"))
+            for addr in addresses:
+                if str(addr.get("address", "")).lower() == str(record.get("address", "")).lower():
+                    return str(addr.get("whitelistStatus"))
+            return "in the register without its address"
+        return "absent from the register"
 
     # -- S7 Payments --------------------------------------------------------------------
     def clerk(self) -> Person:
@@ -2105,13 +2251,17 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
         A.WALLET_ACCOUNT_NAME, A.MONEY["per_payment_cents"], A.MONEY["per_day_cents"]))
     line("S5", "GET /v1/aer360/wallets → expect the Wallets register with %s, or its absence sentence before the first close" % A.WALLET_ACCOUNT_NAME)
     line("S5", "GET /v1/journey → expect currentStage 3 of %d, working_the_sandbox" % JOURNEY_STAGE_COUNT)
-    # S6
+    # S6 — Spec T9: pressed until the whitelist roster's quorum (A.WHITELIST_QUORUM) is met
+    quorum = A.WHITELIST_QUORUM
     for payee in T.PAYEES:
         line("S6", "POST /v1/payees %s (as %s) → expect 201: the payee with its address proposed" % (
             _j({"displayName": payee["name"], "defaultAsset": T.PAYMENT_ASSET, "defaultChain": payee["chain"], "addresses": [{"chain": payee["chain"], "address": T.address(payee["key"])}]}), founder.name))
-        line("S6", "POST /v1/payees/addresses/<address of %s>/promote {} (as %s) → expect the platform's answer: status, platformMembershipId, ceremony" % (payee["name"], founder.name))
-        line("S6", "POST /v1/payees/addresses/<address of %s>/approve {} (as %s) → expect whitelistStatus whitelisted" % (payee["name"], A.PEOPLE[A.PAYMENT_APPROVER].name))
-    line("S6", "GET /v1/payees → expect both addresses whitelisted")
+        line("S6", "POST /v1/payees/addresses/<address of %s>/promote {} (as %s) → expect a ceremony: status pending_promotion, platformMembershipId, ceremony" % (payee["name"], founder.name))
+        line("S6", "POST /v1/payees/addresses/<address of %s>/approve {} (as %s) → expect whitelistStatus pending_promotion with %s more needed: approvals {required %d, collected 1, remaining %d}, may_still_approve, sentence (Spec 89)" % (
+            payee["name"], A.PEOPLE[A.PAYMENT_APPROVER].name, Runner.COUNT_WORDS.get(quorum - 1, str(quorum - 1)), quorum, quorum - 1))
+        line("S6", "POST /v1/payees/addresses/<address of %s>/approve {} (as the next roster member the first answer names, expected %s) → expect whitelistStatus whitelisted" % (
+            payee["name"], A.PEOPLE[Runner.FALLBACK_PRESSER].name))
+    line("S6", "GET /v1/payees → expect both addresses whitelisted, read by this run's payee ids")
     # S7
     clerk = A.PEOPLE[A.PAYMENT_CLERK]
     line("S7", "GET /v1/workspace (as %s) → expect the funding account (sourceAccount) the runs leave from; the founder's browser offers no control for one" % clerk.name)

@@ -79,12 +79,29 @@ class TheFoundersRoad(unittest.TestCase):
         self.assertIn("journey stage 3 of 7 (working_the_sandbox)", o.line)
         self.assertIn("No daily close has completed yet", o.line)
 
-    def test_s6_whitelists_both_payees_with_adas_approval(self):
+    def test_s6_presses_to_the_quorum_and_whitelists_both_payees(self):
+        """Spec T9: two presses per payee — Ada, then the next roster member the answer names (Ben) — and the line of §3."""
         o = self.outcomes["S6"]
         self.assertEqual(o.outcome, H.PASS, o.line)
-        self.assertIn("Northwind Supplies whitelisted, Contoso Legal whitelisted", o.line)
+        # the station's line names each payee's presses in order (Spec T9 §3), verbatim
+        self.assertIn("Northwind Supplies: created; promoted; approved by Ada Approver (1 of 2), by Ben Signatory (2 of 2): whitelisted", o.line)
+        self.assertIn("Contoso Legal: created; promoted; approved by Ada Approver (1 of 2), by Ben Signatory (2 of 2): whitelisted", o.line)
+        self.assertIn("register: Northwind Supplies whitelisted, Contoso Legal whitelisted", o.line)
         for record in self.runner.facts["payees"]:
-            self.assertEqual(record["approved"], {"whitelistStatus": "whitelisted"})
+            self.assertEqual(record["approved"], {"whitelistStatus": "whitelisted"}, "the last press answered whitelisted")
+            self.assertEqual([p["who"] for p in record["presses"]], ["Ada Approver", "Ben Signatory"])
+            first = record["presses"][0]["answer"]
+            # the first approval's answer says why it is still pending (Spec 89)
+            self.assertEqual(first["whitelistStatus"], "pending_promotion")
+            self.assertEqual(first["approvals"], {"required": 2, "collected": 1, "remaining": 1})
+            self.assertEqual(first["may_still_approve"], ["Harriet Founder", "Ben Signatory", "Cora Clerk"])
+            self.assertEqual(first["sentence"],
+                             "1 of 2 approvals recorded for this address. One more is needed, from Harriet Founder, Ben Signatory or Cora Clerk. "
+                             "The address is not payable until then.")
+        # the run reads the register by this run's payee ids, not by address
+        self.assertTrue(all(r.get("register_status") == "whitelisted" for r in self.runner.facts["payees"]))
+        # no finding was raised in S6: the estate said why, at a quorum its roster can meet
+        self.assertEqual([f for f in self.runner.findings if f.station == "S6"], [])
 
     def test_s7_makes_the_three_payments_as_the_clerk_and_reads_each_state_against_its_expectation(self):
         o = self.outcomes["S7"]
@@ -204,6 +221,50 @@ class TheFoundersRoad(unittest.TestCase):
         self.assertEqual(stored["aap_credential_id"], self.runner.people["harriet"].credential_id)
         self.assertGreaterEqual(stored["sign_count"], 3, "the counter moved with every assertion and was saved")
         self.assertEqual(oct(os.stat(self.runner.key_path(self.runner.people["harriet"])).st_mode & 0o777), "0o600")
+
+
+@unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
+class S6AgainstDoublesThatAnswerDifferently(unittest.TestCase):
+    """Spec T9: the knobs on the whitelist road — the estate before Spec 89, a roster below its quorum, a platform that never activates."""
+
+    def run_s6(self, **double_kwargs):
+        double = EstateDouble(**double_kwargs)
+        runner = runner_on(double, tempfile.mkdtemp(), invite=double.mint_founder_link())
+        outcomes = {o.station: o for o in runner.run()}
+        return double, runner, outcomes
+
+    def test_an_estate_before_spec_89_gets_one_further_press_by_ben_the_note_and_still_whitelists(self):
+        """Spec T9 §1: where the answer carries no approvals count, one more press is made as Ben on the charter's quorum, and the note says so."""
+        double, runner, outcomes = self.run_s6(pending_approval_says_why=False)
+        self.assertEqual(outcomes["S6"].outcome, H.PASS, outcomes["S6"].line)
+        for record in runner.facts["payees"]:
+            self.assertEqual([p["who"] for p in record["presses"]], ["Ada Approver", "Ben Signatory"])
+            self.assertEqual(record["register_status"], "whitelisted")
+        self.assertTrue(any("the answer carried no approvals count; one more press was made on the charter's quorum of two" in n
+                            for n in runner.notes["S6"]))
+        # §2: a pending first approval that did not say why is a finding of S10's kind, raised in S6, carrying the answer verbatim
+        findings = [f for f in runner.findings if f.station == "S6" and "did not say why" in f.probe]
+        self.assertEqual(len(findings), 2, "one per payee")
+        self.assertIn("the answer carried no approvals and no may_still_approve and no sentence", findings[0].said)
+        self.assertIn("pending_promotion", findings[0].came_back)
+
+    def test_a_roster_smaller_than_its_quorum_is_the_finding_a_quorum_that_exceeds_its_roster(self):
+        """Spec T9 §2: an answer whose approvals.required exceeds the names in may_still_approve plus collected is a finding."""
+        double, runner, outcomes = self.run_s6(whitelist_roster=("ada",))
+        findings = [f for f in runner.findings if f.station == "S6" and "a quorum that exceeds its roster" in f.probe]
+        self.assertEqual(len(findings), 2, "one per payee: two required, only Ada on the roster")
+        self.assertIn("approvals.required is 2, may_still_approve names 0 and approvals.collected is 1", findings[0].said)
+        self.assertEqual(outcomes["S6"].outcome, H.FAIL, "the register never reaches whitelisted")
+
+    def test_a_platform_that_never_activates_fails_s6_with_the_register_statuses(self):
+        """Spec T9: the second press still answers pending_promotion after the required presses, so S6 fails as it did before."""
+        double, runner, outcomes = self.run_s6(platform_never_activates=True)
+        self.assertEqual(outcomes["S6"].outcome, H.FAIL, outcomes["S6"].line)
+        self.assertIn("register: Northwind Supplies pending_promotion, Contoso Legal pending_promotion", outcomes["S6"].line)
+        for record in runner.facts["payees"]:
+            self.assertEqual(len(record["presses"]), 2, "the loop stops after approvals.required presses")
+            self.assertEqual(record["register_status"], "pending_promotion")
+        self.assertEqual([f for f in runner.findings if f.station == "S6"], [], "a platform that has not activated yet is not a finding; the estate said why")
 
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")

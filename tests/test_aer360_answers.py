@@ -145,6 +145,18 @@ class TheBookIsTheSpecsEstate(unittest.TestCase):
                          ["W0", "WN", "W1", "O1", "O2", "O3", "O4", "PN0", "PN1", "WQ", "WA1", "WA2", "WCW", "WG1"])
         self.assertNotIn("C16", [q.id for q in A.expected_walk("policy")], "version 12 never serves the retired pair")
 
+    def test_the_whitelist_roster_is_the_a8_census_and_its_quorum_is_c12(self):
+        """Spec T9 §4: WHITELIST_ROSTER is the A8 census names and WHITELIST_QUORUM is the C12 answer, so the harness's expectation is the charter's."""
+        census_names = [e["name"] for e in A.POLICY_ANSWERS["A8"]["entries"]]
+        self.assertEqual(list(A.WHITELIST_ROSTER), census_names)
+        self.assertEqual(list(A.WHITELIST_ROSTER), [A.PEOPLE[k].name for k in A.CENSUS_ORDER])
+        self.assertEqual(A.WHITELIST_QUORUM, int(A.POLICY_ANSWERS["C12"]["choice"]))
+        self.assertEqual(A.WHITELIST_QUORUM, 2)
+        # a roster of four at a quorum of two can meet its quorum: the finding of the second live run was the harness's, not the estate's
+        self.assertGreaterEqual(len(A.WHITELIST_ROSTER), A.WHITELIST_QUORUM)
+        # C12A is No, so C12's one number governs every change family (onboardingcompiler.ts, governanceRecordsFor)
+        self.assertEqual(A.POLICY_ANSWERS["C12A"]["choice"], "No")
+
     def test_the_payments_the_spec_decided(self):
         self.assertEqual([(p.key, p.amount, p.expect) for p in A.PAYMENTS],
                          [("P1", "1250.00", "proceeds to approval"), ("P2", "4999.99", "waits"), ("P3", "12000.00", "held")])

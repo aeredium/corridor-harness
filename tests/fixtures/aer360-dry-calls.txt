@@ -66,9 +66,11 @@ S5 — GET /v1/journey
 S6 — POST /v1/payees {"displayName": "Northwind Supplies", "defaultAsset": "USDC", "defaultChain": "ethereum", "addresses": [{"chain": "ethereum", "address": "0x2664Ecbb1C6002774752c190812bde2F2BFCC46D"}]} (as Harriet Founder)
 S6 — POST /v1/payees/addresses/<address of Northwind Supplies>/promote {} (as Harriet Founder)
 S6 — POST /v1/payees/addresses/<address of Northwind Supplies>/approve {} (as Ada Approver)
+S6 — POST /v1/payees/addresses/<address of Northwind Supplies>/approve {} (as the next roster member the first answer names, expected Ben Signatory)
 S6 — POST /v1/payees {"displayName": "Contoso Legal", "defaultAsset": "USDC", "defaultChain": "ethereum", "addresses": [{"chain": "ethereum", "address": "0x705974299eCF4F1b7DCA6F120b95DC896aB8718C"}]} (as Harriet Founder)
 S6 — POST /v1/payees/addresses/<address of Contoso Legal>/promote {} (as Harriet Founder)
 S6 — POST /v1/payees/addresses/<address of Contoso Legal>/approve {} (as Ada Approver)
+S6 — POST /v1/payees/addresses/<address of Contoso Legal>/approve {} (as the next roster member the first answer names, expected Ben Signatory)
 S6 — GET /v1/payees
 S7 — GET /v1/workspace (as Cora Clerk)
 S7 — POST /v1/sets/review {"pays": [{"payeeAddressId": "<address of Northwind Supplies>", "asset": "USDC", "chain": "ethereum", "amountMinor": "1250000000", "invoiceRef": "HH-0001"}], "duplicatesAcknowledged": false} (as Cora Clerk)

@@ -91,7 +91,7 @@ class DryRunTest(unittest.TestCase):
         self.assertTrue(any(T.address("NORTHWIND_ETHEREUM") in l for l in s6))
         self.assertTrue(any(T.address("CONTOSO_ETHEREUM") in l for l in s6))
         self.assertEqual(len([l for l in s6 if "/promote" in l]), 2)
-        self.assertEqual(len([l for l in s6 if "/approve" in l]), 2)
+        self.assertEqual(len([l for l in s6 if "/approve" in l]), 4, "two presses per payee: Ada, then the next roster member (Spec T9)")
         s7 = [l for l in lines if l.startswith("S7 — ")]
         self.assertEqual(len([l for l in s7 if "POST /v1/sets/review" in l]), 3)
         self.assertEqual(len([l for l in s7 if "POST /v1/sets {" in l]), 3)
@@ -124,7 +124,7 @@ class DryRunTest(unittest.TestCase):
         """Spec T8: --dry unchanged in its calls. The fixture is the dry run at main after PR #5, its expectations cut off at the arrow."""
         with open(FROZEN_CALLS, "r", encoding="utf-8") as handle:
             frozen = handle.read().splitlines()
-        self.assertEqual(len(frozen), 119)
+        self.assertEqual(len(frozen), 121, "Spec T9 added a second approve press per payee to S6, and nothing else")
         self.assertEqual(calls_of(H.dry_lines()), frozen)
 
     def test_the_venue_probes_expectation_is_the_law(self):
@@ -134,6 +134,25 @@ class DryRunTest(unittest.TestCase):
         self.assertNotIn("expect a refusal", s11[0])
         checksum = [l for l in H.dry_lines() if l.startswith("S11 — ") and "Checksum probe" in l]
         self.assertIn("→ expect a refusal, or the estate's acceptance recorded", checksum[0], "the checksum probe still expects a refusal")
+
+    def test_the_second_press_is_carried_with_its_expectation(self):
+        """Spec T9 §5: S6's second press names the next roster member (expected Ben Signatory) and expects whitelisted; the first press expects the quorum's pending answer."""
+        s6 = [l for l in H.dry_lines() if l.startswith("S6 — ")]
+        approves = [l for l in s6 if "/approve" in l]
+        self.assertEqual(len(approves), 4)
+        first = [l for l in approves if "(as Ada Approver)" in l]
+        self.assertEqual(len(first), 2)
+        for l in first:
+            self.assertIn("expect whitelistStatus pending_promotion with one more needed", l)
+            self.assertIn("approvals {required 2, collected 1, remaining 1}", l)
+            self.assertIn("may_still_approve", l)
+            self.assertIn("sentence (Spec 89)", l)
+        second = [l for l in approves if "the next roster member the first answer names, expected Ben Signatory" in l]
+        self.assertEqual(len(second), 2, "one second press per payee, expected Ben Signatory")
+        for l in second:
+            self.assertIn("→ expect whitelistStatus whitelisted", l)
+        self.assertEqual(len([l for l in s6 if "/promote" in l and "pending_promotion" in l]), 2)
+        self.assertTrue(any("read by this run's payee ids" in l for l in s6))
 
     def test_no_line_carries_a_secret_or_a_venue_address_of_our_own(self):
         lines = H.dry_lines()
