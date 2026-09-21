@@ -73,6 +73,23 @@ and reports an acceptance as the finding; an estate whose C19 is Yes, or was nev
 S7 keeps its three amounts and says in its expectation column what the tiers would do with each (P1 within the holder's own
 figure, P2 two signatures, P3 three); it still cannot run until the workspace has a funding account, and says so.
 
+Spec T13 (22 September 2026, from the run of 23:44 the night before, aer360-harness-2026-09-21-234438.md, against the estate at
+AER 360 Spec 98, and from the faucet's mechanism as Bear recorded it the same night): the harness presses for the funding wallet,
+funds it from the faucet as the founder would, and reads the payee register back after the count. S5 ends by reading GET
+/v1/workspace; where `fundingWalletAbsence` stands it presses for the wallet as Harriet — the options road first, whose challenge the
+estate derives from `funding-wallet:<workspace id>:<issuedAtMs>` under the purpose `workspace.funding_wallet` (routes/workspace.ts,
+FUNDING_WALLET_PURPOSE; services/stepup.ts, deriveChallenge), then POST /v1/workspace/funding-wallet with issuedAtMs and the passkey's
+assertion — reads the workspace again and reports "funding wallet: <address> on <home stack>, key <id>". A refusal is reported in the
+estate's words (WALLET_BIRTH_REFUSED carries the gateway's sentence; GATEWAY_UNAVAILABLE is a fault) and S5 fails naming it; a wallet
+already born is reported and never pressed for again. Where the wallet's native balance on the AEREDIUM testnet reads below 0.1 SEAR —
+eth_getBalance through the chain's public RPC named in the faucet record (aer360_tables.py), because the estate offers a browser no live
+balance of its funding wallet — the harness POSTs the address to the faucet once, exactly as the faucet page does, and reports the answer
+verbatim; it never asks twice in one run and never invents a balance. S6 judges the register, not the press: GET /v1/payees decides, and
+a register that reads `proposed` after the platform counted 2 of 2 fails S6 with the mirror sentence, the truth until AER 360 Spec 100.
+S7, with a wallet present, names each refusal verbatim and adds one line saying what the three payments need together — US$18,249.99
+of USDC — so Bear can fund the wallet by hand; the harness never mints or moves the asset. S8 reads `transactable True` once the wallet
+exists, and the report's summary carries the wallet's address.
+
 Runs on the Mac's own Python 3.9.6 with the standard library only: urllib.request, http.cookiejar,
 json, hashlib, secrets, base64, struct, subprocess. The one binary it calls is /usr/bin/openssl,
 through aer360_passkey.py. Nothing to install; nothing is shipped to any box.
@@ -152,6 +169,23 @@ INVITATION_SENDS_FIRST = "the invitation road sends the email before it answers,
 SHARES_CREDENTIAL_MARKER = "shares a credential with"
 # The report's name in the working folder: aer360-harness-<date>.md, and -<HHMMSS> for a later one the same day.
 REPORT_NAME = re.compile(r"^aer360-harness-(\d{4}-\d{2}-\d{2})(?:-(\d{6}))?\.md$")
+# Spec T13 (22 September 2026): the funding wallet, as AER 360 Spec 98 built it (aeredium/AERAccounts, commit 56582b8;
+# routes/workspace.ts, services/fundingwallet.ts, services/stepup.ts), and the faucet (aer360_tables.py, from the cabinet's faucet
+# record). The press is a step-up like the interviews' confirm: the options road answers a challenge the estate derives —
+# HMAC(secret, setDigest|credentialId|purpose) with setDigest `funding-wallet:<workspace id>:<issuedAtMs>` — and the press carries
+# issuedAtMs and the passkey's assertion over it. The harness reads the workspace before it presses, so a wallet already born is
+# reported and FUNDING_WALLET_ALREADY_BORN is never met.
+FUNDING_WALLET_OPTIONS_ROUTE = "/v1/workspace/funding-wallet/options"
+FUNDING_WALLET_ROUTE = "/v1/workspace/funding-wallet"
+FUNDING_WALLET_PURPOSE = "workspace.funding_wallet"  # routes/workspace.ts FUNDING_WALLET_PURPOSE
+FUNDING_WALLET_BINDING = "funding-wallet:%s:%s"  # the setDigest half of the binding: the workspace id, then issuedAtMs
+NO_FUNDING_WALLET_REASON = "no funding wallet"  # services/fundingwallet.ts NO_FUNDING_WALLET_REASON: the readiness answer's reason
+WALLET_BIRTH_REFUSED = "WALLET_BIRTH_REFUSED"  # 502: the gateway answered, and the answer was no — its words travel in detail.gatewaySaid
+GATEWAY_UNAVAILABLE = "GATEWAY_UNAVAILABLE"  # 503: not configured, not reached, or reached and not now — a fault, not a judgment
+FUNDING_WALLET_ALREADY_BORN = "FUNDING_WALLET_ALREADY_BORN"  # 409: never met by this harness, which reads before it presses
+# S6's mirror sentence (Spec T13 §3): the platform counted the quorum and the estate's register still reads proposed — the truth
+# until AER 360 Spec 100 fixes the mirror; S6 passes after it, when the register reads whitelisted on the next GET /v1/payees.
+MIRROR_DISAGREES = "the platform counted %s of %s and the register reads %s; the estate's mirror disagrees with the platform"
 
 STATIONS: List[Tuple[str, str]] = [
     ("S1", "Enrol"), ("S2", "Journey"), ("S3", "Policy Interview"), ("S4", "People"),
@@ -357,7 +391,7 @@ class Call:
     """One call, as recorded: who sent what where, what came back, how long it took."""
 
     def __init__(self, station: str, who: str, method: str, path: str, sent: Any, answer: Answer, at: str,
-                 retry_of: Optional["Call"] = None):
+                 retry_of: Optional["Call"] = None, outside: bool = False):
         self.station = station
         self.who = who
         self.method = method
@@ -369,6 +403,9 @@ class Call:
         self.at = at
         self.retry_of = retry_of
         self.size = len(answer.text.encode("utf-8"))
+        # Spec T13: a call to the chain's public RPC or the faucet — not the estate's, so its answer is recorded and measured and
+        # never judged as the estate's (the minor-unit law and Rule 13 are the estate's; `path` is the whole URL)
+        self.outside = outside
 
     @property
     def route(self) -> str:
@@ -505,6 +542,9 @@ class Runner:
             "payees": [], "payees_register": None, "sets": {}, "sets_register": None,
             "journey": {}, "readiness": None, "workspace": None, "wallets": None, "charter_standing": None,
             "served_twice": {"policy": [], "wallet_account": []},
+            # Spec T13: the funding wallet as GET /v1/workspace answers it, the press, the gas balance read from the chain, and the
+            # faucet's one answer per run
+            "funding_wallet": None, "funding_wallet_absence": None, "funding_press": None, "gas_balance": None, "faucet": None,
         }
         self.started_at = now_iso()
         self.last_run_report: Optional[Dict[str, Any]] = None
@@ -561,11 +601,13 @@ class Runner:
 
     # -- the wire -----------------------------------------------------------------
     def request(self, person: Optional[Person], method: str, path: str, body: Any = None, station: str = "",
-                csrf: bool = True, headers: Optional[Dict[str, str]] = None, who: Optional[str] = None) -> Answer:
+                csrf: bool = True, headers: Optional[Dict[str, str]] = None, who: Optional[str] = None, retry: bool = True) -> Answer:
         """
         One call as the browser would make it: the person's cookie jar, JSON in and out, the session's
         x-csrf-token on every state-changing request (guards.ts). A 5xx is retried once after two seconds
-        and both answers are kept (S12). Everything is recorded, redacted.
+        and both answers are kept (S12) — except where `retry` is False: a press carrying a passkey assertion
+        (Spec T13, the funding wallet) cannot be sent twice, so its 5xx is reported as the estate said it.
+        Everything is recorded, redacted.
         """
         url = self.base + path
         sent_headers = {"Accept": "application/json", "User-Agent": USER_AGENT}
@@ -579,7 +621,7 @@ class Runner:
         answer = self._send(person, method, url, data, sent_headers, path)
         who_said = who or (person.name if person else "nobody (no session)")
         call = self.record(station, who_said, method, path, body, answer)
-        if 500 <= answer.status < 600:
+        if retry and 500 <= answer.status < 600:
             self.say("  (%s %s answered %d; retrying once after %d seconds, both answers kept)" % (method, path, answer.status, int(RETRY_AFTER_5XX_SECONDS)))
             self.sleep(RETRY_AFTER_5XX_SECONDS)
             second = self._send(person, method, url, data, sent_headers, path)
@@ -602,8 +644,30 @@ class Runner:
                     self.secrets.add(value.split(";", 1)[0].split("=", 1)[-1])
         return Answer(method, path, status, {k: v for k, v in answer_headers}, text, elapsed)
 
+    def request_outside(self, who: str, method: str, url: str, body: Any, station: str) -> Answer:
+        """
+        Spec T13: one call to a road that is not the estate's — the chain's public RPC, the faucet — made as the faucet page
+        makes it: JSON in and out, no cookie, no CSRF token, and never retried (the faucet is asked once per run). A road that
+        cannot be reached is recorded as a fault, status 0 and the fault's words, and never raised: the estate is not the one
+        that failed, so no station is judged on it.
+        """
+        sent_headers = {"Accept": "application/json", "User-Agent": USER_AGENT}
+        data: Optional[bytes] = None
+        if body is not None:
+            data = json.dumps(body, ensure_ascii=False).encode("utf-8")
+            sent_headers["Content-Type"] = "application/json"
+        request = urllib.request.Request(url, data=data, method=method, headers=sent_headers)
+        started = self.clock()
+        try:
+            status, answer_headers, text = self.transport(request)
+        except Unreachable as err:
+            status, answer_headers, text = 0, [], str(err)
+        answer = Answer(method, url, status, {k: v for k, v in answer_headers}, text, int((self.clock() - started) * 1000))
+        self.record(station, who, method, url, body, answer, outside=True)
+        return answer
+
     def record(self, station: str, who: str, method: str, path: str, body: Any, answer: Answer,
-               retry_of: Optional[Call] = None) -> Call:
+               retry_of: Optional[Call] = None, outside: bool = False) -> Call:
         parsed = answer.json
         if isinstance(parsed, dict):
             for key in ("csrfToken", "token"):
@@ -613,7 +677,7 @@ class Runner:
                 self.secrets.add(parsed["url"].split("#", 1)[1])
         redacted_text = self.secrets.redact_text(answer.text) if parsed is None else json.dumps(self.secrets.redact(parsed), ensure_ascii=False)
         redacted_answer = Answer(method, path, answer.status, answer.headers, redacted_text, answer.elapsed_ms)
-        call = Call(station, who, method, path, self.secrets.redact(body), redacted_answer, now_iso(), retry_of)
+        call = Call(station, who, method, path, self.secrets.redact(body), redacted_answer, now_iso(), retry_of, outside)
         self.calls.append(call)
         return call
 
@@ -1301,11 +1365,207 @@ class Runner:
         detail = "wallet account: %d questions answered, charter compiled (%s, purpose %s, per payment hold %s cents, daily %s cents, destinations %s); %s; journey stage %s of %s (%s)" % (
             answered, charter.get("name"), charter.get("purpose"), (charter.get("amountsUsdCents") or {}).get("holdOverPerTx"),
             (charter.get("amountsUsdCents") or {}).get("dailyTotal"), charter.get("whitelistMode"), register_said, current, view.get("stageCount"), current_id)
+        # Spec T13 §1 and §2: S5 ends by giving the estate its funding wallet, and funding it from the faucet as the founder would
+        funding_said, wallet_failed = self.give_the_estate_its_funding_wallet("S5", founder)
+        detail += "; %s; %s" % (funding_said, self.fund_the_wallet_from_the_faucet("S5", founder))
         if not isinstance(current, int) or current < 3:
             return Outcome("S5", FAIL, detail + "; expected stage 3 of %d, working_the_sandbox" % JOURNEY_STAGE_COUNT)
         if current > 3:
             detail += " (beyond stage 3: this estate had walked further before this run)"
+        if wallet_failed:
+            return Outcome("S5", FAIL, detail)
         return Outcome("S5", PASS, detail)
+
+    # -- S5's tail: the funding wallet and the faucet (Spec T13) -----------------------------------
+    def give_the_estate_its_funding_wallet(self, station: str, founder: Person) -> Tuple[str, bool]:
+        """
+        Spec T13 §1. GET /v1/workspace first: a wallet already born is reported and never pressed for again, so
+        FUNDING_WALLET_ALREADY_BORN is never met. Where `fundingWalletAbsence` stands, the founder presses: the options road
+        answers the challenge the estate derives from `funding-wallet:<workspace id>:<issuedAtMs>` under the purpose
+        `workspace.funding_wallet`, the passkey signs it, and POST /v1/workspace/funding-wallet carries issuedAtMs and the
+        assertion — once, never retried, because an assertion cannot be sent twice. The workspace is read again and the line says
+        "funding wallet: <address> on <home stack>, key <id>". A refusal is told in the estate's words — WALLET_BIRTH_REFUSED
+        carries the gateway's sentence; GATEWAY_UNAVAILABLE is a fault — and S5 fails naming it. An estate before Spec 98, whose
+        workspace answers neither field, has no press to make; that is reported and S5 is not failed for it.
+        Returns the line and whether S5 fails.
+        """
+        workspace = self.request(founder, "GET", "/v1/workspace", None, station)
+        self.step(station, workspace, "the workspace with fundingWallet (address, keyId, homeStack, bornAt, sentence) or fundingWalletAbsence (Spec 98)",
+                  "answered" if workspace.ok else workspace.sentence(), None, founder.name)
+        self.facts["workspace"] = workspace.json if isinstance(workspace.json, dict) else None
+        if not workspace.ok or not isinstance(workspace.json, dict):
+            return "funding wallet: not read — GET /v1/workspace answered %s" % workspace.sentence(), True
+        wallet = workspace.json.get("fundingWallet")
+        absence = workspace.json.get("fundingWalletAbsence")
+        if isinstance(wallet, dict) and wallet.get("address"):
+            self.facts["funding_wallet"] = wallet
+            return "%s (already born; not pressed for again)" % self.funding_wallet_words(wallet), False
+        if "fundingWallet" not in workspace.json and "fundingWalletAbsence" not in workspace.json:
+            said = ("funding wallet: the workspace answers neither fundingWallet nor fundingWalletAbsence — an estate before AER 360 Spec 98, "
+                    "with no press for a funding wallet; sourceAccount %s" % json.dumps(workspace.json.get("sourceAccount")))
+            self.note(station, said)
+            return said, False
+        self.facts["funding_wallet_absence"] = absence
+        options = self.request(founder, "POST", FUNDING_WALLET_OPTIONS_ROUTE, {}, station)
+        self.step(station, options, "200 with options (the challenge the estate derives from %s under the purpose %s) and issuedAtMs" % (
+            FUNDING_WALLET_BINDING % ("<workspace id>", "<issuedAtMs>"), FUNDING_WALLET_PURPOSE), "answered" if options.ok else options.sentence(), {}, founder.name)
+        if not options.ok or not isinstance(options.json, dict) or not isinstance(options.json.get("options"), dict):
+            self.facts["funding_press"] = {"route": FUNDING_WALLET_OPTIONS_ROUTE, "status": options.status, "answer": options.sentence(),
+                                           "refusal_code": (options.refusal or {}).get("code") if options.refusal else None}
+            return "funding wallet: not born — the options road answered %s" % options.sentence(), True
+        challenge = str(options.json["options"].get("challenge"))
+        body = {"issuedAtMs": options.json.get("issuedAtMs"), "response": self.assertion_for(founder, challenge, station)}
+        pressed = self.request(founder, "POST", FUNDING_WALLET_ROUTE, body, station, retry=False)
+        self.step(station, pressed, "200: born true, fundingWallet {address, keyId, homeStack, bornAt, sentence}; a refusal in the estate's words "
+                  "(%s carries the gateway's sentence; %s is a fault)" % (WALLET_BIRTH_REFUSED, GATEWAY_UNAVAILABLE),
+                  "born" if pressed.ok else pressed.sentence(), body, founder.name)
+        refusal = pressed.refusal or {}
+        code = refusal.get("code") if pressed.refusal else None
+        detail_of_refusal = refusal.get("detail") if isinstance(refusal.get("detail"), dict) else {}
+        self.facts["funding_press"] = {"route": FUNDING_WALLET_ROUTE, "status": pressed.status, "issuedAtMs": body["issuedAtMs"],
+                                       "answer": pressed.json if pressed.ok and isinstance(pressed.json, dict) else pressed.sentence(),
+                                       "refusal_code": code, "gateway_said": detail_of_refusal.get("gatewaySaid")}
+        if not pressed.ok:
+            kind = "a fault" if code == GATEWAY_UNAVAILABLE else "refused"
+            return "funding wallet: not born — %s: %s" % (kind, pressed.sentence()), True
+        pressed_wallet = pressed.json.get("fundingWallet") if isinstance(pressed.json, dict) and isinstance(pressed.json.get("fundingWallet"), dict) else {}
+        again = self.request(founder, "GET", "/v1/workspace", None, station)
+        self.step(station, again, "the workspace with the funding wallet just born: %s" % self.funding_wallet_words(pressed_wallet),
+                  "answered" if again.ok else again.sentence(), None, founder.name)
+        self.facts["workspace"] = again.json if isinstance(again.json, dict) else self.facts["workspace"]
+        read_back = again.json.get("fundingWallet") if again.ok and isinstance(again.json, dict) else None
+        if not isinstance(read_back, dict) or not read_back.get("address"):
+            self.finding(station, "the funding wallet read back after the press", {"issuedAtMs": body["issuedAtMs"], "response": "<assertion>"}, again,
+                         "fundingWallet carrying the address the press answered (%s)" % pressed_wallet.get("address"),
+                         "GET /v1/workspace after the press answers %s" % (again.sentence() if not again.ok else json.dumps(
+                             {k: again.json.get(k) for k in ("fundingWallet", "fundingWalletAbsence")}, ensure_ascii=False)))
+            self.facts["funding_wallet"] = pressed_wallet or None
+            return "%s — the press answered born and the workspace read back does not carry it" % self.funding_wallet_words(pressed_wallet), True
+        if pressed_wallet.get("address") and str(pressed_wallet["address"]).lower() != str(read_back["address"]).lower():
+            self.finding(station, "the funding wallet read back after the press", None, again, "the address the press answered, %s" % pressed_wallet["address"],
+                         "the workspace reads back %s" % read_back["address"])
+        self.facts["funding_wallet"] = read_back
+        return "%s (born by this run's press)" % self.funding_wallet_words(read_back), False
+
+    @staticmethod
+    def funding_wallet_words(wallet: Dict[str, Any]) -> str:
+        """The spec's line, funding wallet: <address> on <home stack>, key <id>; a record naming no stack says so, as the estate's own sentence does."""
+        stack = wallet.get("homeStack")
+        return "funding wallet: %s on %s, key %s" % (wallet.get("address"), stack if stack else "a stack the record does not name", wallet.get("keyId"))
+
+    @staticmethod
+    def outside_sentence(answer: Answer) -> str:
+        """What a road that is not the estate's answered: a fault's words at status 0, else the status and the body verbatim."""
+        if answer.status == 0:
+            return "could not be reached: %s" % answer.text
+        return "HTTP %d: %s" % (answer.status, answer.text[:300] or "<empty>")
+
+    def read_native_balance(self, station: str, founder: Person, address: str) -> Tuple[Optional[int], str]:
+        """
+        Spec T13 §2: the funding wallet's native balance on the AEREDIUM testnet, in wei. The estate offers a browser no live
+        balance of its funding wallet (routes/*.ts carry no such road; GET /v1/aer360/wallets is the daily close's record, in the
+        base currency), so the chain's public RPC named in the faucet record is read — eth_getBalance, as the corridor reads a
+        chain. A fault is reported in the RPC's own words and answers None: the harness never invents a balance.
+        """
+        body = {"jsonrpc": "2.0", "id": 1, "method": "eth_getBalance", "params": [address, "latest"]}
+        answer = self.request_outside(founder.name, "POST", T.TESTNET_RPC_URL, body, station)
+        self.step(station, answer, "a hex quantity: the funding wallet's native balance in wei on %s (chain %d, %s); a fault is reported and the faucet is not asked" % (
+            T.TESTNET_NAME, T.TESTNET_CHAIN_ID, T.NATIVE_COIN), "answered" if answer.ok else self.outside_sentence(answer), body, founder.name)
+        if answer.status == 0:
+            return None, "the RPC at %s could not be reached: %s" % (T.TESTNET_RPC_URL, answer.text)
+        parsed = answer.json
+        if not isinstance(parsed, dict):
+            return None, "the RPC at %s answered HTTP %d without JSON: %s" % (T.TESTNET_RPC_URL, answer.status, answer.text[:200] or "<empty>")
+        if parsed.get("error") is not None:
+            return None, "the RPC at %s refused eth_getBalance: %s" % (T.TESTNET_RPC_URL, json.dumps(parsed["error"], ensure_ascii=False))
+        result = parsed.get("result")
+        if not isinstance(result, str) or not result.startswith("0x"):
+            return None, "the RPC at %s answered %r for eth_getBalance, which is not a hex quantity" % (T.TESTNET_RPC_URL, result)
+        try:
+            wei = int(result, 16)
+        except ValueError:
+            return None, "the RPC at %s answered %r for eth_getBalance, which is not a number" % (T.TESTNET_RPC_URL, result[:80])
+        return wei, "%s %s (%d wei) read from %s" % (T.coin_amount(wei), T.NATIVE_COIN, wei, T.TESTNET_RPC_URL)
+
+    def fund_the_wallet_from_the_faucet(self, station: str, founder: Person) -> str:
+        """
+        Spec T13 §2: with the wallet present and its native balance below GAS_FLOOR_SEAR, the wallet's address is POSTed to the
+        faucet as JSON {"address": …}, exactly as the faucet page does, once per run, and the answer is reported verbatim — paid
+        and tx_hash, or the faucet's own refusal sentence. Never twice in one run; never on a balance the harness did not read.
+        This is gas only: what the payments move is S7's question.
+        """
+        wallet = self.facts.get("funding_wallet")
+        if not isinstance(wallet, dict) or not wallet.get("address"):
+            return "faucet: not asked — the estate has no funding wallet to fund"
+        if self.facts.get("faucet") is not None:
+            return "faucet: asked once already in this run — %s" % self.facts["faucet"]["said"]
+        address = str(wallet["address"])
+        wei, balance_said = self.read_native_balance(station, founder, address)
+        self.facts["gas_balance"] = {"wei": wei, "said": balance_said, "address": address}
+        if wei is None:
+            self.note(station, "gas: %s; the faucet was not asked, because the harness never invents a balance" % balance_said)
+            return "gas: %s; the faucet was not asked (the harness never invents a balance)" % balance_said
+        if wei >= T.GAS_FLOOR_WEI:
+            return "gas: %s, at or above %s %s; the faucet was not asked" % (balance_said, T.GAS_FLOOR_SEAR, T.NATIVE_COIN)
+        body = {"address": address}
+        answer = self.request_outside("%s (at the faucet page)" % founder.name, "POST", T.FAUCET_REQUEST_URL, body, station)
+        said = self.faucet_words(answer)
+        self.step(station, answer, "paid true and tx_hash (%s %s), or the faucet's own refusal sentence — verbatim, once per run (its limits: %s)" % (
+            T.FAUCET_PAYS_SEAR, T.NATIVE_COIN, T.FAUCET_LIMITS), said, body, "%s (at the faucet page)" % founder.name)
+        self.facts["faucet"] = {"status": answer.status, "answer": answer.json if isinstance(answer.json, dict) else answer.text, "said": said, "address": address, "at": now_iso()}
+        return "gas: %s, below %s %s; %s" % (balance_said, T.GAS_FLOOR_SEAR, T.NATIVE_COIN, said)
+
+    @staticmethod
+    def faucet_words(answer: Answer) -> str:
+        """
+        The faucet's answer in its own words, read as its page reads them (aeredium/faucet, internal/faucet/server_manual.go:
+        handleRequest and autoPayRequest): ok and paid with tx_hash; ok and queued where a send failed and the row waits for the
+        admin queue; ok alone in manual mode; else `error`, the faucet's plain-language reason, at its status.
+        """
+        if answer.status == 0:
+            return "the faucet could not be reached: %s" % answer.text
+        body = answer.json if isinstance(answer.json, dict) else None
+        if body is not None and answer.ok and body.get("ok") is True:
+            if body.get("paid") is True and body.get("tx_hash"):
+                return "the faucet paid: paid true, tx_hash %s%s" % (body["tx_hash"], (", times_paid %s" % body["times_paid"]) if "times_paid" in body else "")
+            return "the faucet saved the request without paying (%s): %s" % ("queued for its admin queue" if body.get("queued") else "manual mode", json.dumps(body, ensure_ascii=False))
+        if body is not None and body.get("error"):
+            return "the faucet refused (HTTP %d): %s" % (answer.status, body["error"])
+        return "the faucet answered HTTP %d: %s" % (answer.status, answer.text[:300] or "<empty>")
+
+    def funding_summary_lines(self) -> List[str]:
+        """Spec T13 §5: the report's summary names the funding wallet, so the faucet and the asset can be checked by eye."""
+        wallet = self.facts.get("funding_wallet")
+        press = self.facts.get("funding_press")
+        lines: List[str] = []
+        if isinstance(wallet, dict) and wallet.get("address"):
+            lines.append("%s (GET /v1/workspace; %s/address/%s)." % (self.funding_wallet_words(wallet).replace("funding wallet:", "Funding wallet:", 1), T.TESTNET_EXPLORER_URL, wallet["address"]))
+        elif self.facts.get("funding_wallet_absence"):
+            lines.append("Funding wallet: none — %s%s" % (self.facts["funding_wallet_absence"],
+                                                        (" The press answered %s." % press["answer"]) if isinstance(press, dict) and not isinstance(press.get("answer"), dict) else ""))
+        else:
+            lines.append("Funding wallet: not read in this run.")
+        gas = self.facts.get("gas_balance")
+        faucet = self.facts.get("faucet")
+        if isinstance(gas, dict):
+            lines.append("Gas: %s%s" % (gas["said"], ("; %s." % faucet["said"]) if isinstance(faucet, dict) else "; the faucet was not asked."))
+        lines.append("The asset: the three payments together need %s of %s; the harness never mints or moves it." % (self.payments_need()[1], T.PAYMENT_ASSET))
+        return lines
+
+    @staticmethod
+    def payments_need() -> Tuple[str, str]:
+        """What the three payments need together: the plain total of the asset, and the same figure as US dollars (USDC is the dollar-pegged asset, Spec T11 §4)."""
+        total = T.payments_total([p.amount for p in A.PAYMENTS], T.ASSET_DECIMALS[T.PAYMENT_ASSET])
+        return total, usd(int(T.minor_units(total, 2)))
+
+    def payments_need_line(self, wallet: Dict[str, Any]) -> str:
+        """
+        Spec T13 §4: with a funding wallet present and a payment refused, one line says what the three payments need together —
+        the wallet's address, the asset and the amount — so Bear can fund it by hand. The harness never mints or moves the asset.
+        """
+        total, dollars = self.payments_need()
+        return "funding wallet %s: the three payments together need %s of %s on %s (%s = %s %s) — the harness never mints or moves the asset; fund it by hand" % (
+            wallet.get("address"), dollars, T.PAYMENT_ASSET, T.PAYEE_CHAIN, " + ".join(p.amount for p in A.PAYMENTS), total, T.PAYMENT_ASSET)
 
     # -- S6 Payees ----------------------------------------------------------------------
     # Spec T9 (20 September 2026): who presses after Ada, and how a count is spoken. Ben Signatory, who signs
@@ -1367,16 +1627,35 @@ class Runner:
             record["promoted"] = promoted.json if promoted.ok else promoted.sentence()
             promote_said = "promoted" if promoted.ok else "promote answered %s" % promoted.sentence()
             said.append("%s: created; %s; %s" % (payee["name"], promote_said, self.approve_to_quorum(record)))
+        # Spec T13 §3: the register is the judge, not the press. After the presses, GET /v1/payees decides each payee on its
+        # whitelistStatus; a register that reads proposed after the platform counted the quorum fails with the mirror sentence.
         register = self.request(founder, "GET", "/v1/payees", None, "S6")
-        self.step("S6", register, "the payees register with both addresses whitelisted, read by this run's payee ids", "answered" if register.ok else register.sentence(), None, founder.name)
+        self.step("S6", register, "the payees register with both addresses whitelisted, read by this run's payee ids — the judgement is the register's, not the press's (Spec T13 §3)",
+                  "answered" if register.ok else register.sentence(), None, founder.name)
         self.facts["payees_register"] = register.json if isinstance(register.json, dict) else None
         for record in self.facts["payees"]:
             status = self.register_status_of(register.json, record)
             record["register_status"] = status
+            record["mirror"] = self.mirror_sentence(record, status)
             if status != "whitelisted":
                 all_whitelisted = False
-        detail = "payees: %s; register: %s" % ("; ".join(said), ", ".join("%s %s" % (r["name"], r.get("register_status")) for r in self.facts["payees"]) or "none")
+        detail = "payees: %s; register: %s" % ("; ".join(said), ", ".join(
+            "%s %s%s" % (r["name"], r.get("register_status"), (" (%s)" % r["mirror"]) if r.get("mirror") else "") for r in self.facts["payees"]) or "none")
         return Outcome("S6", PASS if all_whitelisted and self.facts["payees"] else FAIL, detail)
+
+    @staticmethod
+    def mirror_sentence(record: Dict[str, Any], register_status: str) -> Optional[str]:
+        """
+        Spec T13 §3: the register reads proposed after the platform counted the quorum — the estate's mirror disagrees with the
+        platform, which is the truth until AER 360 Spec 100 ships and the register reads whitelisted on the next GET /v1/payees.
+        """
+        count = record.get("count")
+        if register_status != "proposed" or not isinstance(count, dict):
+            return None
+        collected, required = count.get("collected"), count.get("required")
+        if isinstance(collected, int) and isinstance(required, int) and required > 0 and collected >= required:
+            return MIRROR_DISAGREES % (collected, required, register_status)
+        return None
 
     def approve_to_quorum(self, record: Dict[str, Any]) -> str:
         """
@@ -1420,6 +1699,7 @@ class Runner:
                 required = approvals["required"]
             counted.append(presser.name)
             collected = approvals["collected"] if approvals is not None and isinstance(approvals.get("collected"), int) else len(counted)
+            record["count"] = {"collected": collected, "required": required if required is not None else quorum}  # Spec T13 §3: what the platform counted
             spoken.append("%s counted (%s of %s)" % (presser.name, collected, required if required is not None else quorum))
             if status != "pending_promotion":
                 outcome = str(status)
@@ -1551,10 +1831,17 @@ class Runner:
         ada = self.people[A.PAYMENT_APPROVER]
         holder_alone, two_signatures, tiers_read_from = self.tiers()
         workspace = self.request(clerk, "GET", "/v1/workspace", None, "S7")
-        self.step("S7", workspace, "the workspace, its funding account (sourceAccount) and the offered currencies", "answered" if workspace.ok else workspace.sentence(), None, clerk.name)
-        source_account = (workspace.json or {}).get("sourceAccount") if isinstance(workspace.json, dict) else None
+        self.step("S7", workspace, "the workspace, its funding wallet (fundingWallet; sourceAccount is the account the runs leave from, Spec 98) and the offered currencies",
+                  "answered" if workspace.ok else workspace.sentence(), None, clerk.name)
+        view = workspace.json if isinstance(workspace.json, dict) else {}
+        source_account = view.get("sourceAccount")
+        funding = view.get("fundingWallet") if isinstance(view.get("fundingWallet"), dict) and view["fundingWallet"].get("address") else None
+        if funding and not self.facts.get("funding_wallet"):
+            self.facts["funding_wallet"] = funding  # a run resumed past S5 still names the wallet in S8 and the summary
         if not source_account:
-            self.note("S7", "the workspace names no funding account (sourceAccount null); the founder's browser offers no control for one, and routes/sets.ts refuses a run without it — the payments below record the estate's own sentence")
+            absence = view.get("fundingWalletAbsence")
+            self.note("S7", "the workspace names no funding account (sourceAccount null)%s; routes/sets.ts refuses a run without one — the payments below record the estate's own sentence" % (
+                (" and no funding wallet — %s S5's press did not give the estate one; see S5" % absence) if absence else ""))
         said: List[str] = []
         failures = 0
         for payment in A.PAYMENTS:
@@ -1598,6 +1885,12 @@ class Runner:
             said.append("%s (%s USDC, expected to %s): %s; %s" % (payment.key, payment.amount, payment.expect, sentence, tier_words))
             if payment.key == "P1":
                 said.append(self.approve_first(record, set_id, status, ada))
+        # Spec T13 §4: with a funding wallet present and a payment refused at creation, the refusal stands verbatim above and one
+        # line says what the three payments need together, so the wallet can be funded by hand
+        if funding and any(record.get("refusal") for record in self.facts["sets"].values()):
+            need = self.payments_need_line(funding)
+            self.note("S7", need)
+            said.append(need)
         detail = "payments as %s: %s" % (clerk.name, "; ".join(said))
         return Outcome("S7", FAIL if failures else PASS, detail)
 
@@ -1647,8 +1940,16 @@ class Runner:
         if not readiness.ok:
             raise StationStop("GET /v1/workspace/readiness answered %s" % readiness.sentence())
         done = [s.get("id") for s in view.get("stages") or [] if s.get("done")]
-        return Outcome("S8", PASS, "journey stage %s of %s (%s); done: %s; readiness: transactable %s, reason %s" % (
-            current, view.get("stageCount"), current_id, ", ".join(done) or "none", readiness.json.get("transactable"), readiness.json.get("reason")))
+        # Spec T13 §5: the line names the funding wallet as the workspace last answered it, beside the readiness it decides
+        wallet = self.facts.get("funding_wallet")
+        if isinstance(wallet, dict) and wallet.get("address"):
+            wallet_words = self.funding_wallet_words(wallet)
+        elif self.facts.get("funding_wallet_absence"):
+            wallet_words = "funding wallet: none — %s" % self.facts["funding_wallet_absence"]
+        else:
+            wallet_words = "funding wallet: not read in this run"
+        return Outcome("S8", PASS, "journey stage %s of %s (%s); done: %s; readiness: transactable %s, reason %s; %s" % (
+            current, view.get("stageCount"), current_id, ", ".join(done) or "none", readiness.json.get("transactable"), readiness.json.get("reason"), wallet_words))
 
     # -- S9 The tour -----------------------------------------------------------------------
     def station_s9(self) -> Outcome:
@@ -1722,7 +2023,7 @@ class Runner:
         for f in audit_refusals(self.calls):
             self.finding("S10", f["probe"], f["sent"], None, f["expected"], f["said"])
         found = len(self.findings) - before
-        refusals_met = len([c for c in self.calls if c.status >= 400 and c.station not in ("S10", "S11")])
+        refusals_met = len([c for c in self.calls if c.status >= 400 and c.station not in ("S10", "S11") and not c.outside])
         return Outcome("S10", PASS if found == 0 else FAIL, "the auditor: %d finding(s); %d refusal(s) met in S1 to S9 checked for Rule 13; %d call(s) checked for the minor-unit law" % (
             found, refusals_met, len(self.calls)))
 
@@ -2082,6 +2383,8 @@ class Runner:
             lines.append("| " + " | ".join(c.replace("|", "\\|") for c in cells) + " |")
         lines.append("")
         lines.append("Findings under S10 and S11: %d." % len(self.findings))
+        lines.append("")
+        lines.extend(self.funding_summary_lines())  # Spec T13 §5: the funding wallet, the gas and the asset, by eye
         if last and fates is not None:
             lines.append("")
             lines.append("Since the last run (%s, started %s): %d closed, %d still open, %d new. A finding is closed when the last run raised it and this run did not, "
@@ -2546,6 +2849,8 @@ def audit_money(calls: Sequence[Call]) -> List[Dict[str, Any]]:
                 walk(inner, "%s[%d]" % (path, index), call)
 
     for call in calls:
+        if call.outside:
+            continue  # Spec T13: the chain's RPC and the faucet answer in their own shapes; the minor-unit law is the estate's
         try:
             body = json.loads(call.text) if call.text.strip() else None
         except ValueError:
@@ -2582,8 +2887,8 @@ def audit_refusals(calls: Sequence[Call]) -> List[Dict[str, Any]]:
     """Every refusal met in S1 to S9, checked for Rule 13. S10 and S11 judge their own refusals."""
     findings: List[Dict[str, Any]] = []
     for call in calls:
-        if call.station in ("S10", "S11") or call.status < 400:
-            continue
+        if call.station in ("S10", "S11") or call.status < 400 or call.outside:
+            continue  # an outside call (Spec T13: the RPC, the faucet) is reported verbatim where it was made, never judged as the estate's
         why = refusal_without_why(call.status, call.text)
         if why:
             findings.append({"probe": "Rule 13 at %s (%s)" % (call.route, call.station), "sent": call.sent, "expected": "a refusal that names what happened and who refused",
@@ -2938,6 +3243,17 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
         A.WALLET_ACCOUNT_NAME, A.MONEY["per_payment_cents"], A.MONEY["per_day_cents"]))
     line("S5", "GET /v1/aer360/wallets → expect the Wallets register with %s, or its absence sentence before the first close" % A.WALLET_ACCOUNT_NAME)
     line("S5", "GET /v1/journey → expect currentStage 3 of %d, working_the_sandbox" % JOURNEY_STAGE_COUNT)
+    # S5's tail — Spec T13: the funding wallet (AER 360 Spec 98) and the faucet, as the founder at the Wallets screen and the faucet page
+    line("S5", "GET /v1/workspace → expect fundingWallet (address, keyId, homeStack, bornAt, sentence) or fundingWalletAbsence (Spec 98); a wallet already born is reported and not pressed for again")
+    line("S5", "POST %s {} — only where fundingWalletAbsence stands → expect 200: options with the challenge the estate derives from %s under the purpose %s, and issuedAtMs" % (
+        FUNDING_WALLET_OPTIONS_ROUTE, FUNDING_WALLET_BINDING % ("<workspace id>", "<issuedAtMs>"), FUNDING_WALLET_PURPOSE))
+    line("S5", "POST %s %s → expect 200: born true, fundingWallet {address, keyId, homeStack}; %s (the gateway's sentence) or %s (a fault) is reported in the estate's words and S5 fails naming it" % (
+        FUNDING_WALLET_ROUTE, _j({"issuedAtMs": "<issuedAtMs>", "response": "<assertion by %s's passkey over the challenge>" % founder.name}), WALLET_BIRTH_REFUSED, GATEWAY_UNAVAILABLE))
+    line("S5", "GET /v1/workspace → expect the funding wallet just born, reported as \"funding wallet: <address> on <home stack>, key <id>\"")
+    line("S5", "POST %s %s → expect a hex quantity, the wallet's native balance in wei on %s (chain %d, %s); the estate offers a browser no live balance of its funding wallet, so the chain's public RPC named in the faucet record is read; a fault is reported and the faucet is not asked" % (
+        T.TESTNET_RPC_URL, _j({"jsonrpc": "2.0", "id": 1, "method": "eth_getBalance", "params": ["<funding wallet>", "latest"]}), T.TESTNET_NAME, T.TESTNET_CHAIN_ID, T.NATIVE_COIN))
+    line("S5", "POST %s %s — once per run, only where the balance reads below %s %s → expect paid true and tx_hash (%s %s), or the faucet's own refusal sentence, verbatim (its limits: %s)" % (
+        T.FAUCET_REQUEST_URL, _j({"address": "<funding wallet>"}), T.GAS_FLOOR_SEAR, T.NATIVE_COIN, T.FAUCET_PAYS_SEAR, T.NATIVE_COIN, T.FAUCET_LIMITS))
     # S6 — Spec T12: since AER 360 Spec 95 the whitelist door admits any active roster signer; the harness presses the roster
     # people it holds a passkey for, in order (the founder last), until the estate answers whitelisted or nobody is left. A press
     # refused SIGNATURE_NOT_COUNTED (its seat bound to a retired credential, Spec 95/99) is recorded and the next person presses.
@@ -2950,10 +3266,10 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
         for key in roster_pressers:
             line("S6", "POST /v1/payees/addresses/<address of %s>/approve {} (as %s, the roster in order, the founder last) → expect the estate to count it toward the quorum of %s (approvals, may_still_approve, sentence; Spec 89), or refuse SIGNATURE_NOT_COUNTED where the seat is bound to a retired credential (Spec 95/99); the harness presses on until whitelisted or nobody is left" % (
                 payee["name"], A.PEOPLE[key].name, Runner.COUNT_WORDS.get(quorum, str(quorum))))
-    line("S6", "GET /v1/payees → expect both addresses whitelisted, read by this run's payee ids")
+    line("S6", "GET /v1/payees → expect both addresses whitelisted, read by this run's payee ids; the judgement is the register's, not the press's — a register reading proposed after the platform counted %s of %s fails with the mirror sentence (Spec T13 §3)" % (quorum, quorum))
     # S7
     clerk = A.PEOPLE[A.PAYMENT_CLERK]
-    line("S7", "GET /v1/workspace (as %s) → expect the funding account (sourceAccount) the runs leave from; the founder's browser offers no control for one" % clerk.name)
+    line("S7", "GET /v1/workspace (as %s) → expect the funding wallet S5 gave the estate (fundingWallet; sourceAccount is the account the runs leave from, Spec 98)" % clerk.name)
     holder_named = (A.ACCOUNT_ANSWERS.get("WO1") or {}).get("choice") == A.HOLDER_PERSON
     tier_alone = (A.ACCOUNT_ANSWERS.get("WO3") or {}).get("cents") if holder_named else None
     tier_two = (A.ACCOUNT_ANSWERS.get("WO4") or {}).get("cents")
@@ -2971,9 +3287,11 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
         line("S7", "GET /v1/sets/<run %s> → expect the run's state as the register shows it" % payment.key)
     line("S7", "POST /v1/approvals/<run P1>/challenge {} (as %s) → expect the digest-bound challenge" % A.PEOPLE[A.PAYMENT_APPROVER].name)
     line("S7", "POST /v1/approvals/<run P1>/approve %s (as %s) → expect status approved, approvalsGiven 1 of 1" % (_j({"response": "<assertion over the challenge>"}), A.PEOPLE[A.PAYMENT_APPROVER].name))
+    line("S7", "[report] where a payment is refused with the funding wallet present, the refusal verbatim and one line: the funding wallet's address and what the three payments need together — %s of %s — so it can be funded by hand; the harness never mints or moves the asset" % (
+        Runner.payments_need()[1], T.PAYMENT_ASSET))
     # S8
     line("S8", "GET /v1/journey → printed: the stage, the stages done")
-    line("S8", "GET /v1/workspace/readiness → printed: transactable, reason")
+    line("S8", "GET /v1/workspace/readiness → printed: transactable True once the wallet exists (False, reason \"%s\", before it), and the funding wallet's address" % NO_FUNDING_WALLET_REASON)
     # S9
     line("S9", "[out of scope] the tour's answers as Claude would see them: the harness is the founder, not Claude")
     # S10

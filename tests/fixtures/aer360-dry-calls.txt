@@ -82,6 +82,12 @@ S5 — POST /v1/onboarding/interviews/<account interview>/confirm {"issuedAtMs":
 S5 — POST /v1/onboarding/interviews/<account interview>/compile {}
 S5 — GET /v1/aer360/wallets
 S5 — GET /v1/journey
+S5 — GET /v1/workspace
+S5 — POST /v1/workspace/funding-wallet/options {} — only where fundingWalletAbsence stands
+S5 — POST /v1/workspace/funding-wallet {"issuedAtMs": "<issuedAtMs>", "response": "<assertion by Harriet Founder's passkey over the challenge>"}
+S5 — GET /v1/workspace
+S5 — POST https://testnet.rpc.aeredium.io {"jsonrpc": "2.0", "id": 1, "method": "eth_getBalance", "params": ["<funding wallet>", "latest"]}
+S5 — POST https://aeredium.io/faucet-api/request {"address": "<funding wallet>"} — once per run, only where the balance reads below 0.1 SEAR
 S6 — POST /v1/payees {"displayName": "Northwind Supplies", "defaultAsset": "USDC", "defaultChain": "ethereum", "addresses": [{"chain": "ethereum", "address": "0x2664Ecbb1C6002774752c190812bde2F2BFCC46D"}]} (as Harriet Founder)
 S6 — POST /v1/payees/addresses/<address of Northwind Supplies>/promote {} (as Harriet Founder)
 S6 — POST /v1/payees/addresses/<address of Northwind Supplies>/approve {} (as Ada Approver, the roster in order, the founder last)
@@ -108,6 +114,7 @@ S7 — POST /v1/sets/<run P3>/submit {}
 S7 — GET /v1/sets/<run P3>
 S7 — POST /v1/approvals/<run P1>/challenge {} (as Ada Approver)
 S7 — POST /v1/approvals/<run P1>/approve {"response": "<assertion over the challenge>"} (as Ada Approver)
+S7 — [report] where a payment is refused with the funding wallet present, the refusal verbatim and one line: the funding wallet's address and what the three payments need together — US$18,249.99 of USDC — so it can be funded by hand; the harness never mints or moves the asset
 S8 — GET /v1/journey
 S8 — GET /v1/workspace/readiness
 S9 — [out of scope] the tour's answers as Claude would see them: the harness is the founder, not Claude

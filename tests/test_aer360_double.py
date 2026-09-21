@@ -144,6 +144,31 @@ and the venue dial is redrawn: `refuses_venue_contract=None` (the default) is th
 `True` is the stand-in of Spec T8 — a door that refuses the probe address regardless of its charter, under ADDRESS_PROPOSAL_REFUSED,
 which now stands for an estate refusing against a charter that says accepted; `False` is a door that saves the address regardless,
 an estate whose door never learned C19. `catalog_version` below 14 leaves the seven out, the estate of the runs before 21 September.
+
+Spec T13 (22 September 2026) taught the double AER 360 Spec 98 (aeredium/AERAccounts, commit 56582b8), the faucet and the chain, read from
+their own code, because the run of 23:44 met an estate with no funding wallet and a register that lagged the platform:
+
+  routes/workspace.ts, services/fundingwallet.ts     GET /v1/workspace answers fundingWallet {address, keyId, homeStack, bornAt, sentence}
+                                                     or fundingWalletAbsence (NO_FUNDING_WALLET_SENTENCE); the founder's press is two steps —
+                                                     POST /v1/workspace/funding-wallet/options, whose challenge is derived from the binding
+                                                     `funding-wallet:<workspace id>:<issuedAtMs>` | credential | `workspace.funding_wallet`
+                                                     (services/stepup.ts, deriveChallenge), refusing FUNDING_WALLET_ALREADY_BORN (409) where a
+                                                     key stands; and POST /v1/workspace/funding-wallet with issuedAtMs and the assertion, which
+                                                     births the wallet (born true) or refuses WALLET_BIRTH_REFUSED (502, the gateway's words in
+                                                     detail.gatewaySaid — tonight “PermissionDenied: not authorized”) or GATEWAY_UNAVAILABLE
+                                                     (503, a deployment fault named with its setting); readiness reads transactable false with
+                                                     the reason `no funding wallet` until both columns stand
+  services/payees.ts, the mirror (`mirror_lags`)     the press that meets the count may answer the row's stale `proposed` while the platform
+                                                     counted 2 of 2; `register_corrects` (Spec 100) is whether GET /v1/payees reads whitelisted
+                                                     on the next read or still `proposed`
+  services/setgates.ts gasPreflight, chains.ts       `asset_short`: the gas pre-flight's estimate of the USDC transfer reverts at the RPC, so
+  wrapRpc                                            the run is refused GAS_PREFLIGHT_UNAVAILABLE with the RPC's words as the cause
+  aeredium/faucet, server_manual.go (FaucetDouble)   POST /faucet-api/request {"address"} → ok, paid and tx_hash; ok and queued; or the
+                                                     handler's own refusal sentence under `error` at its status (400, 409, 429)
+  the chain's public RPC (TestnetRpcDouble)          eth_getBalance answers the balance this double is told, as a hex quantity; eth_chainId 0x8bd
+
+and the knobs: `funding_wallet="press"` (the default) is an estate whose wallet the press births; `"born"` already holds it; `"refused"` is
+the estate of 23:44, whose gateway refuses the credential; `"unavailable"` a deployment with no gateway configured.
 """
 from __future__ import annotations
 
@@ -187,6 +212,7 @@ STATUS = {
     "ONE_OFF_NOT_DECLARED": 422, "AMOUNT_MALFORMED": 400, "ASSET_UNKNOWN": 422, "WORKSPACE_NOT_PROVISIONED": 503,
     "SET_NOT_EDITABLE": 409, "BASE_CURRENCY_UNSET": 422, "ADDRESS_PROPOSAL_REFUSED": 422, "SIGNATURE_NOT_COUNTED": 403,
     "APPROVER_SEAT_AMBIGUOUS": 409, "APPROVER_SEAT_CREDENTIAL_SHARED": 409, "PAYEE_IS_VENUE_CONTRACT": 422,
+    "WALLET_BIRTH_REFUSED": 502, "GATEWAY_UNAVAILABLE": 503, "FUNDING_WALLET_ALREADY_BORN": 409, "GAS_SHORTFALL": 422,
 }
 MESSAGES = {
     "NOT_AUTHENTICATED": "You are not signed in.",
@@ -225,6 +251,11 @@ MESSAGES = {
     "APPROVER_SEAT_CREDENTIAL_SHARED": "This person’s passkey speaks for a credential that other people in this estate also hold, so there is no credential of their own to seat, and seating the one they hold would seat everyone who holds it. Nothing was changed. Invite this person again to give them their own; their seat completes itself when they bind their passkey.",
     # the default sentence only (Spec 92); every raise composes its own through payee_is_venue_contract_sentence, naming the venue and the chain
     "PAYEE_IS_VENUE_CONTRACT": "This address is the contract of a known trading venue. Your charter says a payee must be a wallet held by a person or a company. Nothing was saved.",
+    # Spec 98 (refusals.ts): the base sentence; the road that meets the refusal appends the gateway's own words to it
+    "WALLET_BIRTH_REFUSED": "The signing gateway would not allocate a key for this estate’s funding wallet, so the estate still has none. Nothing was written.",
+    "FUNDING_WALLET_ALREADY_BORN": "This estate already holds its funding wallet. A key is allocated once for an estate; nothing was changed.",
+    "GATEWAY_UNAVAILABLE": "The signing service could not be reached. Nothing was signed.",
+    "GAS_SHORTFALL": "The funding account does not hold enough of the chain’s native asset to cover the network fees for this run.",
 }
 ESTATE_KEY_CURE = ("If you meant a different estate, sign out and choose that estate’s key when your device offers the picker — "
                    "each key is labelled with its estate’s name.")
@@ -235,6 +266,21 @@ HELD_PAYMENT_WAITS = ("A held payment waits until an approver answers it. Only t
                       "and whoever submitted the payment can cancel it instead.")
 WALLETS_ABSENCE = "No daily close has completed yet. The Wallets view reads the record; the record begins with the first close."
 NO_FUNDING_ACCOUNT = "No funding account has been set for this workspace, so network fees cannot be checked."
+# Spec T13 — the funding wallet (services/fundingwallet.ts, routes/workspace.ts at 56582b8), word for word
+NO_FUNDING_WALLET_SENTENCE = "This estate has no funding wallet yet; its payments cannot leave until it has one."
+NO_FUNDING_WALLET_REASON = "no funding wallet"
+FUNDING_WALLET_PURPOSE = "workspace.funding_wallet"
+GATEWAY_SAID_ON_21_SEPTEMBER = "PermissionDenied: not authorized"  # the gateway's words in the 23:44 run's receipt
+WALLET_BIRTH_REFUSED_ON_21_SEPTEMBER = (MESSAGES["WALLET_BIRTH_REFUSED"] + " It refused this estate’s credential. The gateway said: “%s”. "
+                                        "The answer will be the same until what it named is resolved." % GATEWAY_SAID_ON_21_SEPTEMBER)
+GATEWAY_NOT_CONFIGURED = ("This deployment has no signing gateway configured, so no key can be allocated and the estate’s funding wallet cannot be born. "
+                          "Nothing was written.")
+ALREADY_BORN_CAUSE = "this estate already carries a custody key; a key is allocated once"
+# The gas pre-flight (setgates.ts gasPreflight → chains.ts estimateTransfer → wrapRpc): the RPC's own words for an ERC-20 transfer the wallet
+# cannot cover travel as the cause, err.message[:200]; the reason string is the token contract's, and this is the common one.
+ESTIMATE_REVERTED = 'execution reverted: "ERC20: transfer amount exceeds balance"'
+FAUCET_HOST = urllib.parse.urlparse(T.FAUCET_REQUEST_URL).netloc
+RPC_HOST = urllib.parse.urlparse(T.TESTNET_RPC_URL).netloc
 STEPUP_MAX_AGE_MS = 120 * 1000
 KNOWN_CHAINS = ("ethereum", "polygon", "arbitrum", "optimism", "base", "avalanche", "bsc", "solana", "anvil")
 KNOWN_ASSETS = ("AERX", "AVAX", "BNB", "DAI", "ETH", "MATIC", "POL", "SOL", "USDC", "USDT", "WBTC", "WETH")
@@ -427,15 +473,106 @@ class Clock:
         return self.now
 
 
+class FaucetDouble:
+    """
+    THE FAUCET AS ITS OWN CODE ANSWERS (aeredium/faucet, internal/faucet/server_manual.go — handleRequest and autoPayRequest, the
+    auto-pay mode the cabinet's record names): POST {"address": "0x…"} → 200 {"ok": true, "paid": true, "tx_hash", "times_requested",
+    "times_paid"}; a send that failed → 200 {"ok": true, "queued": true, …} and the row waits for the admin queue; over a window limit
+    → 429 {"ok": false, "error": <the handler's sentence>}; a request already waiting → 409; a malformed body or address → 400. Every
+    sentence below is the handler's own. `down` is a faucet that cannot be reached; `malformed_answer` a proxy answering HTML.
+    """
+
+    PAID, QUEUED, WALLET_LIMIT, IP_LIMIT, BUDGET, WAITING, DOWN, MALFORMED_ANSWER = "paid", "queued", "wallet_limit", "ip_limit", "budget", "waiting", "down", "malformed_answer"
+    SENTENCES = {
+        WALLET_LIMIT: (429, "this wallet has already received 4 payments in the last 24 hours — try again tomorrow"),
+        IP_LIMIT: (429, "too many payments from this network today — try again tomorrow"),
+        BUDGET: (429, "the faucet has reached its daily budget — try again tomorrow"),
+        WAITING: (409, "this address already has a request waiting — it will be reviewed shortly"),
+    }
+
+    def __init__(self, answer: str = PAID, times_paid: int = 0):
+        self.answer = answer
+        self.times_paid = times_paid
+        self.tx_hash = "0x" + secrets.token_hex(32)
+        self.requests: List[Dict[str, Any]] = []
+
+    def __call__(self, request: urllib.request.Request) -> Tuple[int, List[Tuple[str, str]], str]:
+        method = request.get_method()
+        headers = {k.lower(): v for k, v in request.header_items()}
+        body: Any = None
+        malformed = False
+        if request.data:
+            try:
+                body = json.loads(request.data.decode("utf-8"))
+            except ValueError:
+                malformed = True
+        self.requests.append({"method": method, "path": urllib.parse.urlparse(request.full_url).path, "body": body, "headers": headers})
+        if self.answer == self.DOWN:
+            raise H.Unreachable("%s %s could not be reached: [Errno 61] Connection refused" % (method, request.full_url))
+        if method != "POST":
+            return self._json(405, {"ok": False, "error": "POST only"})
+        if malformed or not isinstance(body, dict):
+            return self._json(400, {"ok": False, "error": "invalid JSON body"})
+        address = str(body.get("address", "")).strip()
+        if not re.match(r"^0x[0-9a-fA-F]{40}$", address):
+            return self._json(400, {"ok": False, "error": "that does not look like a valid address (0x + 40 hex characters)"})
+        if self.answer == self.MALFORMED_ANSWER:
+            return 502, [("Content-Type", "text/html")], "<html><head><title>502 Bad Gateway</title></head><body>nginx</body></html>"
+        requested = len([r for r in self.requests if (r["body"] or {}).get("address") == body.get("address")])
+        if self.answer == self.PAID:
+            return self._json(200, {"ok": True, "paid": True, "tx_hash": self.tx_hash, "times_requested": requested, "times_paid": self.times_paid + 1})
+        if self.answer == self.QUEUED:
+            return self._json(200, {"ok": True, "queued": True, "times_requested": requested, "times_paid": self.times_paid})
+        status, sentence = self.SENTENCES[self.answer]
+        return self._json(status, {"ok": False, "error": sentence})
+
+    @staticmethod
+    def _json(status: int, payload: Any) -> Tuple[int, List[Tuple[str, str]], str]:
+        return status, [("Content-Type", "application/json")], json.dumps(payload)
+
+
+class TestnetRpcDouble:
+    """
+    THE CHAIN'S PUBLIC RPC, reads only: eth_getBalance answers the balance this double is told, as the hex quantity a node
+    answers; eth_chainId answers 0x8bd (2237). `fault` is "down" (not reachable), "error" (a JSON-RPC error object), or
+    "not_json" (a proxy's HTML) — each a road the harness must report and never read a balance from.
+    """
+
+    def __init__(self, balance_wei: int = 0, fault: Optional[str] = None):
+        self.balance_wei = balance_wei
+        self.fault = fault
+        self.calls: List[Dict[str, Any]] = []
+
+    def __call__(self, request: urllib.request.Request) -> Tuple[int, List[Tuple[str, str]], str]:
+        body = json.loads(request.data.decode("utf-8")) if request.data else {}
+        self.calls.append({"method": request.get_method(), "body": body})
+        if self.fault == "down":
+            raise H.Unreachable("%s %s could not be reached: [Errno 8] nodename nor servname provided, or not known" % (request.get_method(), request.full_url))
+        if self.fault == "not_json":
+            return 502, [("Content-Type", "text/html")], "<html><body>502 Bad Gateway</body></html>"
+        rpc_id = body.get("id")
+        if self.fault == "error":
+            return 200, [("Content-Type", "application/json")], json.dumps({"jsonrpc": "2.0", "id": rpc_id, "error": {"code": -32000, "message": "header not found"}})
+        method = body.get("method")
+        if method == "eth_getBalance":
+            result = hex(self.balance_wei)
+        elif method == "eth_chainId":
+            result = hex(T.TESTNET_CHAIN_ID)
+        else:
+            return 200, [("Content-Type", "application/json")], json.dumps({"jsonrpc": "2.0", "id": rpc_id, "error": {"code": -32601, "message": "the method %s does not exist/is not available" % method}})
+        return 200, [("Content-Type", "application/json")], json.dumps({"jsonrpc": "2.0", "id": rpc_id, "result": result})
+
+
 class EstateDouble:
     """The estate, in memory. Strict as the code; every answer is the code's own shape."""
 
-    def __init__(self, base: str = BASE, source_account: Optional[str] = "0x0000000000000000000000000000000000000abc",
+    def __init__(self, base: str = BASE, funding_wallet: str = "press",
                  company: str = A.ESTATE["company"], catalog_version: int = 14, currency_spoken_as_code: bool = False,
                  refuses_venue_contract: Optional[bool] = None, invite_seconds: float = 0.0, clock: Optional[Clock] = None,
                  pending_approval_says_why: bool = True, whitelist_roster: Optional[Sequence[str]] = None, platform_never_activates: bool = False,
                  before_spec_91: bool = False, seat_completes_on_redemption: bool = True, second_authorship_entry: bool = False,
-                 platform_names_approver: Sequence[str] = ()):
+                 platform_names_approver: Sequence[str] = (), mirror_lags: bool = False, register_corrects: bool = True,
+                 asset_short: bool = False, faucet: Optional[FaucetDouble] = None, rpc: Optional[TestnetRpcDouble] = None):
         self.currency_spoken_as_code = currency_spoken_as_code  # False: main's default arm (JSON); True: Spec 88's code
         # The payee door and a venue's contract (Spec T11). None: the door follows the written policy charter, as Spec 92 built it —
         # PAYEE_IS_VENUE_CONTRACT where the charter says refused and the address is on the venue table. True: Spec T8's stand-in, a door
@@ -474,7 +611,25 @@ class EstateDouble:
         self.workspace = {"id": WORKSPACE_ID, "name": company, "aapAccountId": AAP_ACCOUNT_ID, "realm": "sandbox", "sandboxMarkLetter": "S",
                           "baseCurrency": "USD", "displayCurrency": "AUD", "status": "active", "provisioning": "provisioned",
                           "rateSource": "double", "createdAt": "2026-09-19T00:00:00.000Z"}
-        self.source_account = source_account
+        # Spec T13 — the funding wallet (Spec 98): BOTH columns, or none. "press": born by the founder's press; "born": already held;
+        # "refused": the gateway refuses the credential, as it did on 21 September; "unavailable": no gateway configured. The typed-address
+        # road (POST /v1/workspace/source-account) is closed, so nothing here sets a source account but the birth.
+        if funding_wallet not in ("press", "born", "refused", "unavailable"):
+            raise ValueError("funding_wallet is press, born, refused or unavailable, not %r" % funding_wallet)
+        self.funding_wallet = funding_wallet
+        self.source_account: Optional[str] = None
+        self.custody_key_id: Optional[str] = None
+        self.wallet_born_at: Optional[str] = None
+        self.home_stack = "double-stack-1"
+        self.funding_presses: List[Dict[str, Any]] = []  # each options call and press, with the binding the challenge was derived from
+        # Spec T13 §3 — the mirror: the press that meets the count answers the row's stale `proposed` (as the live estate did at 23:44) while
+        # the platform counted 2 of 2; `register_corrects` is Spec 100, the register reading whitelisted on the next GET /v1/payees
+        self.mirror_lags = mirror_lags
+        self.register_corrects = register_corrects
+        # Spec T13 §4 — the gas pre-flight's estimate of the USDC transfer reverts at the RPC: the wallet holds no USDC
+        self.asset_short = asset_short
+        self.faucet = faucet if faucet is not None else FaucetDouble()
+        self.rpc = rpc if rpc is not None else TestnetRpcDouble()
         # The account's ONE role-bearing credential (the founder's author token drawn up by the birth script), on the account's
         # one policy entry bearing authorship — the entry an author invitation mints on since Spec 91.
         self.authorship_entry = {"id": "pe-author-" + secrets.token_hex(4), "name": "Founder (author)"}
@@ -494,6 +649,80 @@ class EstateDouble:
         self.calls: List[Dict[str, Any]] = []
         self.audit: List[str] = []
         self.founder_invite_token: Optional[str] = None
+        if funding_wallet == "born":
+            self.birth_funding_wallet(None, "account_creation_interview")
+
+    # -- the funding wallet (spec 98: services/fundingwallet.ts, routes/workspace.ts) ---------------------
+    def has_funding_wallet(self) -> bool:
+        """A funding wallet is BOTH columns. Either alone is not one (hasFundingWallet)."""
+        return bool(self.source_account and self.custody_key_id)
+
+    def funding_wallet_view(self) -> Optional[Dict[str, Any]]:
+        if not self.has_funding_wallet():
+            return None
+        return {"address": self.source_account, "keyId": self.custody_key_id, "homeStack": self.home_stack, "bornAt": self.wallet_born_at,
+                "sentence": "Funding wallet: %s, on %s." % (self.source_account, self.home_stack)}
+
+    def birth_funding_wallet(self, credential_id: Optional[str], via: str) -> Dict[str, Any]:
+        """birthFundingWallet: refused before the gateway is asked where a key stands; else both columns in one write, and wallet.born."""
+        if self.custody_key_id:
+            raise Refusal("FUNDING_WALLET_ALREADY_BORN", detail={"address": self.source_account, "keyId": self.custody_key_id, "cause": ALREADY_BORN_CAUSE},
+                          provenance={"source": "workspace"})
+        if self.funding_wallet == "unavailable":
+            raise Refusal("GATEWAY_UNAVAILABLE", GATEWAY_NOT_CONFIGURED, {"cause": "no signing gateway is configured for this deployment", "setting": "GATEWAY_ADDRESS"},
+                          provenance={"source": "deployment"})
+        if self.funding_wallet == "refused":
+            raise Refusal("WALLET_BIRTH_REFUSED", WALLET_BIRTH_REFUSED_ON_21_SEPTEMBER, {"gatewaySaid": GATEWAY_SAID_ON_21_SEPTEMBER, "kind": "refused"},
+                          provenance={"source": "gateway"})
+        self.source_account = T.derive_address("the estate double's funding wallet/%s" % T.TESTNET_NAME)
+        self.custody_key_id = "key-" + secrets.token_hex(6)
+        self.wallet_born_at = self._now_iso()
+        self.audit.append("wallet.born %s key %s on %s via %s by %s" % (self.source_account, self.custody_key_id, self.home_stack, via, credential_id))
+        return {"address": self.source_account, "keyId": self.custody_key_id, "homeStack": self.home_stack, "bornAt": self.wallet_born_at}
+
+    def funding_wallet_binding(self, issued_at: Any, credential_id: str) -> Dict[str, str]:
+        """deriveChallenge's binding for the press: setDigest `funding-wallet:<workspace id>:<issuedAtMs>`, the credential, the purpose."""
+        return {"setDigest": "funding-wallet:%s:%s" % (WORKSPACE_ID, issued_at), "credentialId": credential_id, "purpose": FUNDING_WALLET_PURPOSE}
+
+    def funding_wallet_challenge(self, binding: Dict[str, str]) -> str:
+        return self.challenge(binding["purpose"], "%s|%s" % (binding["setDigest"], binding["credentialId"]), 0)
+
+    def funding_wallet_options(self, headers: Dict[str, str]) -> Tuple[int, Any]:
+        caller = self.require_caller(headers, "author")
+        if self.has_funding_wallet():
+            raise Refusal("FUNDING_WALLET_ALREADY_BORN", detail={"address": self.source_account, "keyId": self.custody_key_id, "cause": ALREADY_BORN_CAUSE},
+                          provenance={"source": "workspace"})
+        issued_at = int(time.time() * 1000)
+        binding = self.funding_wallet_binding(issued_at, caller["credentialId"])
+        challenge = self.funding_wallet_challenge(binding)
+        own = [w for w, row in self.passkeys.items() if row["credentialId"] == caller["credentialId"]]
+        self.funding_presses.append({"step": "options", "binding": binding, "issuedAtMs": issued_at, "challenge": challenge})
+        return 200, {"options": {"challenge": challenge, "rpId": self.rp_id, "timeout": 60000, "userVerification": "required",
+                                 "allowCredentials": [{"id": w, "type": "public-key", "transports": ["internal"]} for w in own]}, "issuedAtMs": issued_at}
+
+    def funding_wallet_press(self, headers: Dict[str, str], body: Any) -> Tuple[int, Any]:
+        caller = self.require_caller(headers, "author", mutating=True)
+        body = body or {}
+        for field in ("issuedAtMs", "response"):
+            if field not in body:
+                raise Malformed("%s: Required" % field)
+        self.assert_fresh(body["issuedAtMs"])
+        binding = self.funding_wallet_binding(body["issuedAtMs"], caller["credentialId"])
+        expected = self.funding_wallet_challenge(binding)
+        response = body["response"] or {}
+        if not isinstance(response.get("id"), str) or not response["id"]:
+            raise Refusal("STEP_UP_INVALID", detail={"cause": "assertion carried no credential id"})
+        stored = self.passkeys.get(response["id"])
+        if not stored or stored["credentialId"] != caller["credentialId"]:
+            raise Refusal("STEP_UP_INVALID", detail={"cause": "the asserting passkey is not the pressing credential"})
+        try:
+            stored["signCount"] = PK.verify_assertion(response, expected, self.origin, self.rp_id, stored["publicKey"], stored["signCount"])
+        except PK.PasskeyRefused as err:
+            raise Refusal("STEP_UP_INVALID", detail={"cause": str(err)[:200]})
+        stored["lastAuthAtMs"] = body["issuedAtMs"]
+        self.funding_presses.append({"step": "press", "binding": binding, "issuedAtMs": body["issuedAtMs"], "verified": True, "credentialId": caller["credentialId"]})
+        birth = self.birth_funding_wallet(caller["credentialId"], "press")
+        return 200, {"born": True, "fundingWallet": dict(birth, sentence="Funding wallet: %s, on %s." % (birth["address"], birth["homeStack"]))}
 
     # -- the birth script's road: the founder's one-time link -----------------------------
     def mint_founder_link(self, display_name: str = "Harriet") -> str:
@@ -511,6 +740,11 @@ class EstateDouble:
         method = request.get_method()
         url = urllib.parse.urlparse(request.full_url)
         path = url.path
+        # Spec T13: the faucet and the chain's RPC are other hosts; each answers for itself, in its own shape
+        if url.netloc == FAUCET_HOST and path.startswith("/faucet-api/"):
+            return self.faucet(request)
+        if url.netloc == RPC_HOST:
+            return self.rpc(request)
         headers = {k.lower(): v for k, v in request.header_items()}
         body: Any = None
         if request.data:
@@ -674,7 +908,13 @@ class EstateDouble:
             return self.approval(headers, m.group(1), m.group(2), body)
         if route == "GET /v1/workspace":
             self.require_session(headers)
-            return 200, {"workspace": dict(self.workspace), "sourceAccount": self.source_account, "supportedCurrencies": ["AUD", "EUR", "GBP", "USD"]}
+            wallet = self.funding_wallet_view()
+            return 200, {"workspace": dict(self.workspace), "sourceAccount": self.source_account, "fundingWallet": wallet,
+                         "fundingWalletAbsence": None if wallet else NO_FUNDING_WALLET_SENTENCE, "supportedCurrencies": ["AUD", "EUR", "GBP", "USD"]}
+        if route == "POST /v1/workspace/funding-wallet/options":
+            return self.funding_wallet_options(headers)
+        if route == "POST /v1/workspace/funding-wallet":
+            return self.funding_wallet_press(headers, body)
         if route == "POST /v1/workspace/display-currency":
             self.require_caller(headers, "author", mutating=True)
             currency = str((body or {}).get("displayCurrency", "")).upper()
@@ -682,6 +922,9 @@ class EstateDouble:
             return 200, {"displayCurrency": currency}
         if route == "GET /v1/workspace/readiness":
             self.require_session(headers)
+            # NO FUNDING WALLET, NO PAYMENT (spec 98, item 3): both columns, or transactable is false with the sentence's own reason
+            if not self.has_funding_wallet():
+                return 200, {"transactable": False, "reason": NO_FUNDING_WALLET_REASON, "workspace": dict(self.workspace)}
             return 200, {"transactable": True, "reason": None, "workspace": dict(self.workspace)}
         if route == "GET /v1/aer360/wallets":
             self.require_caller(headers, "viewer")
@@ -1907,9 +2150,15 @@ class EstateDouble:
             ceremony["signatures"].append(credential_id)  # only once either way
         required, collected = ceremony["requiredSignatures"], len(ceremony["signatures"])
         if collected >= required and not self.platform_never_activates:
-            row["whitelistStatus"] = "whitelisted"
             row["promotedAt"] = self._now_iso()
             self.audit.append("payee.address.whitelisted %s by %s" % (row["id"], seat["user_id"]))
+            if self.mirror_lags:
+                # Spec T13 §3: the platform counted 2 of 2 and activated the entry; the estate's mirror answered the row's stale word,
+                # `proposed`, as it did at 23:44 on 21 September. With Spec 100 the register corrects itself on the next GET /v1/payees;
+                # before it the register reads `proposed` too.
+                row["whitelistStatus"] = "whitelisted" if self.register_corrects else "proposed"
+                return {"whitelistStatus": "proposed"}
+            row["whitelistStatus"] = "whitelisted"
             return {"whitelistStatus": "whitelisted"}
         may_still = [s["display_name"] for s in active if not s["credential_id"] or s["credential_id"] not in ceremony["signatures"]]
         self.audit.append("payee.address.promotion_pending_quorum %s requiredSignatures %d, signaturesCollected %d, mayStillApprove %s" % (
@@ -2049,7 +2298,7 @@ class EstateDouble:
              else "%d on the approved list, %d one-off" % (sum(1 for o in resolved if o["standing"] == "whitelisted"), sum(1 for o in resolved if o["isOneOff"]))},
             {"gate": "pricing", "passed": not pricing_refusals and bool(resolved), "refusals": pricing_refusals, "evidence": "priced from double"},
             {"gate": "quota", "passed": True, "refusals": [], "evidence": "this plan has no monthly signature ceiling"},
-            {"gate": "gas_preflight", "passed": True, "refusals": [], "evidence": "ethereum: needs 0, holds 1"},
+            self.gas_preflight_gate(resolved),
             {"gate": "duplicate_screen", "passed": True, "refusals": [], "evidence": "no matching payment in the last 7 days"},
         ]
         payload = {"rows": [{"index": o["index"], "payeeName": o["payeeName"], "chain": o["chain"], "address": o["address"], "isOneOff": o["isOneOff"], "asset": o["asset"],
@@ -2063,6 +2312,20 @@ class EstateDouble:
                                 "eligibleApproverCredentialIds": list(self.second_approvers), "approvedByCredentialIds": [], "submitterCredentialId": caller["credentialId"]},
                    "acceptable": bool(resolved) and all(g["passed"] for g in gates), "acknowledgeable": []}
         return {"payload": payload, "resolved": [o for o in resolved], "aggregateUsd": aggregate, "threshold": threshold, "approvalsRequired": approvals_required}
+
+    def gas_preflight_gate(self, resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Gate 4 (setgates.ts gasPreflight). With `asset_short`, the estimate of each ERC-20 transfer reverts at the RPC — the wallet holds
+        none of the asset — and wrapRpc (chains.ts) carries the RPC's words as the cause under GAS_PREFLIGHT_UNAVAILABLE, per row.
+        """
+        payable = [o for o in resolved if not o["refusals"] and o["address"]]
+        if not payable:
+            return {"gate": "gas_preflight", "passed": True, "refusals": [], "evidence": "nothing to estimate"}
+        if self.asset_short:
+            refusals = [{"code": "GAS_PREFLIGHT_UNAVAILABLE", "message": MESSAGES["GAS_PREFLIGHT_UNAVAILABLE"], "rowIndex": o["index"],
+                         "detail": {"chain": o["chain"], "cause": ESTIMATE_REVERTED}} for o in payable if o["asset"] not in ("ETH",)]
+            return {"gate": "gas_preflight", "passed": not refusals, "refusals": refusals, "evidence": "no chains to check"}
+        return {"gate": "gas_preflight", "passed": True, "refusals": [], "evidence": "ethereum: needs 0, holds 1"}
 
     def set_view(self, row: Dict[str, Any], caller: Dict[str, Any]) -> Dict[str, Any]:
         current = [a for a in self.approvals.get(row["id"], []) if a["setDigest"] == row["setDigest"]]
@@ -2541,7 +2804,7 @@ class TheDoubleTellsTheTruth(unittest.TestCase):
         self.assertTrue(all(c.elapsed_ms == 0 for c in runner.calls if c.route != "POST /v1/invites"))
 
     def test_a_run_without_a_funding_account_is_refused_in_the_routes_words(self):
-        double = EstateDouble(source_account=None)
+        double = EstateDouble(funding_wallet="refused")  # Spec T13: no typed address stands in for a wallet; this estate's press is refused, so none is born
         link = double.mint_founder_link()
         runner = runner_on(double, self.tmp, invite=link)
         founder = runner.people[A.FOUNDER]

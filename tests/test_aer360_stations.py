@@ -25,7 +25,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import aer360_answers as A  # noqa: E402
 import aer360_harness as H  # noqa: E402
 import aer360_passkey as PK  # noqa: E402
-from tests.test_aer360_double import EstateDouble, Refusal, approver_seat_shared_sentence, runner_on, tiers_need_three_people, usd_figure  # noqa: E402
+from tests.test_aer360_double import (EstateDouble, NO_FUNDING_WALLET_SENTENCE, Refusal, WALLET_BIRTH_REFUSED_ON_21_SEPTEMBER,  # noqa: E402
+                                      approver_seat_shared_sentence, runner_on, tiers_need_three_people, usd_figure)
 
 # The approve route's guard (aeredium/AERAccounts, routes/payees.ts:221 at 9964205: requireCaller 'approver'), in the room sentence.
 NEEDS_AN_APPROVER = ("ROLE_NOT_GRANTED: You are signed into Harness Holdings Pty Ltd as an author and a viewer. This action needs an approver — "
@@ -509,25 +510,43 @@ class ResumedAndSecondRuns(unittest.TestCase):
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
 class TheRunContinuesPastAFailedStation(unittest.TestCase):
-    def test_a_workspace_with_no_funding_account_fails_s7_in_the_routes_words_and_the_hats_still_run(self):
-        double = EstateDouble(source_account=None)
+    def test_an_estate_whose_gateway_refuses_the_birth_fails_s5_and_s7_in_the_estates_words_and_the_hats_still_run(self):
+        """
+        Spec T13: the estate of 23:44 on 21 September — the founder presses for the funding wallet and the gateway refuses the
+        credential, so none is born. S5 fails naming WALLET_BIRTH_REFUSED with the gateway's sentence; the faucet is not asked
+        (nothing to fund); S7 meets routes/sets.ts's refusal of a run without a funding account and adds no asset line (there is no
+        wallet to fund by hand); S8 reads transactable False, reason no funding wallet; the hats still run.
+        """
+        double = EstateDouble(funding_wallet="refused")
         tmp = tempfile.mkdtemp()
         link = double.mint_founder_link()
         runner = runner_on(double, tmp, invite=link)
         outcomes = {o.station: o for o in runner.run()}
-        for station in ("S1", "S2", "S3", "S4", "S5"):
+        for station in ("S1", "S2", "S3", "S4"):
             self.assertEqual(outcomes[station].outcome, H.PASS, outcomes[station].line)
-        self.assertEqual(outcomes["S6"].outcome, H.PASS, "Spec 95: the roster whitelists the payees; the funding account gates S7, not S6")
+        s5 = outcomes["S5"]
+        self.assertEqual(s5.outcome, H.FAIL, s5.line)
+        self.assertIn("funding wallet: not born — refused: WALLET_BIRTH_REFUSED: %s" % WALLET_BIRTH_REFUSED_ON_21_SEPTEMBER, s5.line)
+        self.assertIn("faucet: not asked — the estate has no funding wallet to fund", s5.line)
+        self.assertEqual(double.faucet.requests, [])
+        self.assertEqual(double.rpc.calls, [], "no wallet, so no balance to read")
+        presses = [c for c in runner.calls if c.route == "POST /v1/workspace/funding-wallet"]
+        self.assertEqual([(c.status, c.retry_of) for c in presses], [(502, None)], "the press is made once with its assertion and never retried")
+        self.assertEqual(outcomes["S6"].outcome, H.PASS, "Spec 95: the roster whitelists the payees; the funding wallet gates S7, not S6")
         o = outcomes["S7"]
         self.assertEqual(o.outcome, H.FAIL)
         self.assertIn("refused at creation — GAS_PREFLIGHT_UNAVAILABLE: No funding account has been set for this workspace, so network fees cannot be checked.", o.line)
-        self.assertTrue(any("names no funding account" in n for n in runner.notes["S7"]))
+        self.assertTrue(any("names no funding account" in n and NO_FUNDING_WALLET_SENTENCE in n for n in runner.notes["S7"]), runner.notes["S7"])
+        self.assertNotIn("US$18,249.99", o.line, "no wallet, so no asset line: nothing can be funded by hand yet")
         self.assertEqual(outcomes["S8"].outcome, H.PASS)
         self.assertIn("journey stage 3 of 7", outcomes["S8"].line)
+        self.assertIn("readiness: transactable False, reason no funding wallet; funding wallet: none — %s" % NO_FUNDING_WALLET_SENTENCE, outcomes["S8"].line)
         self.assertEqual(outcomes["S12"].outcome, H.PASS)
-        # Rule 13 held: the 503 named what happened, so S10 raised no finding about it
+        # Rule 13 held: the 502 and the 503 named what happened, so S10 raised no finding about them
         self.assertFalse(any(f.probe.startswith("Rule 13") for f in runner.findings))
         self.assertTrue(any("S7 created no run for P3" in n for n in runner.notes["S11"]))
+        summary = runner.report().split("Findings under S10 and S11", 1)[1].split("## S1 — Enrol", 1)[0]
+        self.assertIn("Funding wallet: none — %s The press answered WALLET_BIRTH_REFUSED: " % NO_FUNDING_WALLET_SENTENCE, summary)
 
     def test_an_unreachable_estate_is_a_fault_not_a_judgment(self):
         def dead(request):

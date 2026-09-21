@@ -157,7 +157,38 @@ class EstateHarnessReadmeTest(unittest.TestCase):
             self.assertIn(words, self.section, words)
 
 
+    def test_it_says_the_harness_births_and_funds_the_wallet_since_spec_t13(self):
+        self.assertIn("Spec T13, 22 September 2026", self.section)
+        self.assertIn("aer360-harness-2026-09-21-234438.md", self.section)
+        self.assertIn("AER 360 Spec 98", self.section)
+        for words in ("S5 ends by giving the estate its funding wallet", "`POST /v1/workspace/funding-wallet`", "`funding-wallet:<workspace id>:<issuedAtMs>`",
+                      "`workspace.funding_wallet`", "funding wallet: <address> on <home stack>, key <id>", "`WALLET_BIRTH_REFUSED` carries the gateway's sentence",
+                      "`GATEWAY_UNAVAILABLE` is a fault", "`FUNDING_WALLET_ALREADY_BORN` is never met", "S5 funds the wallet from the faucet, once, as the founder would",
+                      "`https://testnet.rpc.aeredium.io`", "`https://aeredium.io/faucet-api/request`", '`{"address": "<address>"}`',
+                      "four payments per wallet and eight per IP in a day, and 200 SEAR across everyone", "never asks twice in one run and never invents a balance",
+                      "never judged as the estate's", "S6 judges the register, not the press",
+                      "the platform counted 2 of 2 and the register reads proposed; the estate's mirror disagrees with the platform",
+                      "S7 says what the payments would need", "US$18,249.99 of USDC", "never mints or moves the asset", "The report names the wallet",
+                      "`transactable True`", "no address of the faucet's or the treasury's", "143 → 150"):
+            self.assertIn(words, self.section, words)
+
+
 class ChangelogTest(unittest.TestCase):
+    def test_the_changelog_records_spec_t13_before_t12_and_names_every_change(self):
+        text = read("CHANGELOG.md")
+        self.assertIn("## Spec T13 — The harness presses for the funding wallet, funds it from the faucet as the founder would, and reads the payee register back after the count (22 September 2026)", text)
+        self.assertLess(text.index("## Spec T13"), text.index("## Spec T12"))
+        t13 = text.split("## Spec T13", 1)[1].split("## Spec T12", 1)[0]
+        for words in ("aer360-harness-2026-09-21-234438.md", "AER 360 Spec 98", "`give_the_estate_its_funding_wallet`", "`funding_wallet_words`", "`read_native_balance`",
+                      "`fund_the_wallet_from_the_faucet`", "`faucet_words`", "`request_outside`", "`request(..., retry=False)`", "`FUNDING_WALLET_PURPOSE`",
+                      "`funding-wallet:<workspace id>:<issuedAtMs>`", "`WALLET_BIRTH_REFUSED`", "`GATEWAY_UNAVAILABLE`", "`FUNDING_WALLET_ALREADY_BORN` is never met",
+                      "`Call.outside`", "`audit_money`", "`audit_refusals`", "`mirror_sentence`", "`MIRROR_DISAGREES`",
+                      "the platform counted 2 of 2 and the register reads proposed; the estate's mirror disagrees with the platform", "`payments_need`", "`payments_need_line`",
+                      "US$18,249.99 of USDC", "`funding_summary_lines`", "143 → 150 lines", "`TESTNET_RPC_URL`", "`FAUCET_REQUEST_URL`", "`GAS_FLOOR_SEAR`", "`coin_amount`",
+                      "`FaucetDouble`", "`TestnetRpcDouble`", '`funding_wallet="press"|"born"|"refused"|"unavailable"`', "`mirror_lags`", "`register_corrects`", "`asset_short`",
+                      "`tests/test_aer360_funding.py`", "`aer360_answers.py`, the passkey files, the estate, the faucet"):
+            self.assertIn(words, t13, words)
+
     def test_the_changelog_records_spec_t12_before_t11_and_names_every_change(self):
         text = read("CHANGELOG.md")
         self.assertIn("## Spec T12 — The harness follows a walk-back as a browser would, and S6 presses the roster people whose presses count (21 September 2026)", text)

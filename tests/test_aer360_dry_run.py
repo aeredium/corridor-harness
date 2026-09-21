@@ -5,7 +5,9 @@ from the dry run at main after PR #5, and the venue probe's expectation is the l
 Spec T10 added, under S4, the seats as the run finds them, the conditional re-invitation for each author, and the seat
 re-grant's condition (121 → 134 lines). Spec T11 added the six answers the book now gives that a version-14 estate serves
 (C11A and C19 under S3; WO1 to WO4 under S5) and one S10 comparison line for Spec 92's charter fields (134 → 141 lines); the
-venue probe's expectation follows the book's C19, and S7's submit lines say what the tiers would do.
+venue probe's expectation follows the book's C19, and S7's submit lines say what the tiers would do. Spec T13 ended S5 with the
+funding wallet and the faucet — the workspace read, the options road, the press, the read-back, the one balance read and the one
+faucet call — and added S7's asset-line report (143 → 150 lines).
 """
 import contextlib
 import io
@@ -158,8 +160,11 @@ class DryRunTest(unittest.TestCase):
         """Spec T8: --dry unchanged in its calls. The fixture is the dry run at main after PR #5, its expectations cut off at the arrow."""
         with open(FROZEN_CALLS, "r", encoding="utf-8") as handle:
             frozen = handle.read().splitlines()
-        self.assertEqual(len(frozen), 143, "Spec T12 presses the whole roster in S6: three pressers (Ada, Ben, Cora) per payee in place of the two of Spec T9, so one more approve line per payee")
+        self.assertEqual(len(frozen), 150, "Spec T13 ends S5 with the funding wallet and the faucet (six lines: the workspace read, the options, the press, the read-back, the balance, the one faucet call) and adds S7's asset-line report (143 → 150)")
         self.assertEqual(calls_of(H.dry_lines()), frozen)
+        self.assertEqual(len([l for l in frozen if l.startswith("S5 — ") and "/v1/workspace/funding-wallet" in l]), 2, "the options road and the press")
+        self.assertEqual(len([l for l in frozen if "https://aeredium.io/faucet-api/request" in l]), 1, "the faucet is asked once")
+        self.assertEqual(len([l for l in frozen if "https://testnet.rpc.aeredium.io" in l]), 1, "the balance is read once")
         added = [l for l in frozen if any('"questionId": "%s"' % qid in l for qid in ("C11A", "C19", "WO1", "WO2", "WO3", "WO4"))]
         self.assertEqual(len(added), 6)
         self.assertEqual(len([l for l in frozen if l.startswith("S10 — ") and "Spec 92 fields" in l]), 1)
@@ -227,6 +232,28 @@ class DryRunTest(unittest.TestCase):
         self.assertFalse(any("(as Harriet Founder, the roster" in l for l in approves), "the founder is the last resort, not a listed press")
         self.assertEqual(len([l for l in s6 if "/promote" in l and "pending_promotion" in l]), 2)
         self.assertTrue(any("read by this run's payee ids" in l for l in s6))
+
+    def test_s5_ends_with_the_funding_wallet_and_the_faucet_asked_once(self):
+        """Spec T13 §1 and §2: after the journey read, S5 reads the workspace, presses for the wallet where it is absent, reads it back, reads the balance and asks the faucet once."""
+        lines = H.dry_lines()
+        s5 = [l for l in lines if l.startswith("S5 — ")]
+        journey = next(i for i, l in enumerate(s5) if l.startswith("S5 — GET /v1/journey"))
+        tail = s5[journey + 1:]
+        self.assertEqual(len(tail), 6)
+        self.assertTrue(tail[0].startswith("S5 — GET /v1/workspace → expect fundingWallet (address, keyId, homeStack, bornAt, sentence) or fundingWalletAbsence (Spec 98); a wallet already born is reported and not pressed for again"), tail[0])
+        self.assertIn("POST /v1/workspace/funding-wallet/options {} — only where fundingWalletAbsence stands → expect 200: options with the challenge the estate derives from funding-wallet:<workspace id>:<issuedAtMs> under the purpose workspace.funding_wallet, and issuedAtMs", tail[1])
+        self.assertIn('POST /v1/workspace/funding-wallet {"issuedAtMs": "<issuedAtMs>", "response": "<assertion by Harriet Founder\'s passkey over the challenge>"} → expect 200: born true, fundingWallet {address, keyId, homeStack}; WALLET_BIRTH_REFUSED (the gateway\'s sentence) or GATEWAY_UNAVAILABLE (a fault) is reported in the estate\'s words and S5 fails naming it', tail[2])
+        self.assertIn('GET /v1/workspace → expect the funding wallet just born, reported as "funding wallet: <address> on <home stack>, key <id>"', tail[3])
+        self.assertIn('POST https://testnet.rpc.aeredium.io {"jsonrpc": "2.0", "id": 1, "method": "eth_getBalance", "params": ["<funding wallet>", "latest"]} → expect a hex quantity, the wallet\'s native balance in wei on AEREDIUM testnet2 (chain 2237, SEAR)', tail[4])
+        self.assertIn("the estate offers a browser no live balance of its funding wallet, so the chain's public RPC named in the faucet record is read; a fault is reported and the faucet is not asked", tail[4])
+        self.assertIn('POST https://aeredium.io/faucet-api/request {"address": "<funding wallet>"} — once per run, only where the balance reads below 0.1 SEAR → expect paid true and tx_hash (0.5 SEAR), or the faucet\'s own refusal sentence, verbatim (its limits: four payments per wallet and eight per IP in a day, and 200 SEAR across everyone)', tail[5])
+        s6 = [l for l in lines if l.startswith("S6 — GET /v1/payees")]
+        self.assertIn("the judgement is the register's, not the press's — a register reading proposed after the platform counted 2 of 2 fails with the mirror sentence (Spec T13 §3)", s6[0])
+        s7 = [l for l in lines if l.startswith("S7 — ")]
+        self.assertIn("expect the funding wallet S5 gave the estate (fundingWallet; sourceAccount is the account the runs leave from, Spec 98)", s7[0])
+        self.assertTrue(s7[-1].startswith("S7 — [report] where a payment is refused with the funding wallet present, the refusal verbatim and one line: the funding wallet's address and what the three payments need together — US$18,249.99 of USDC — so it can be funded by hand; the harness never mints or moves the asset"), s7[-1])
+        s8 = [l for l in lines if l.startswith("S8 — GET /v1/workspace/readiness")]
+        self.assertIn('printed: transactable True once the wallet exists (False, reason "no funding wallet", before it), and the funding wallet\'s address', s8[0])
 
     def test_no_line_carries_a_secret_or_a_venue_address_of_our_own(self):
         lines = H.dry_lines()
