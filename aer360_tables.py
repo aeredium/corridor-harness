@@ -82,7 +82,6 @@ PAYEES: List[Dict[str, str]] = [
 PAYMENT_ASSET = "USDC"
 ASSET_DECIMALS = {"USDC": 6, "USDT": 6, "ETH": 18, "WETH": 18, "DAI": 18}
 
-
 def address(key: str) -> str:
     """The pinned bytes for a table key. A key that is not pinned is a bug, and it throws."""
     if key not in PINNED:
@@ -158,3 +157,58 @@ def minor_units(amount: str, decimals: int) -> str:
     if len(fraction) > decimals:
         raise ValueError("%r has %d decimal places but %s carries %d" % (amount, len(fraction), PAYMENT_ASSET, decimals))
     return str(int(whole + fraction.ljust(decimals, "0")))
+
+
+# ---------------------------------------------------------------------------
+# THE AEREDIUM TESTNET AND ITS FAUCET (Spec T13, 22 September 2026): facts, never inventions. Read from the
+# cabinet's faucet record — Deployments drawer, "AEREDIUM testnet faucet, the auto-pay mechanism end to end,
+# 21 September 2026", written from Bear's own account — and from the faucet page that record describes,
+# https://aeredium.io/faucet.html, whose network helper names the RPC and the explorer beside the chain id.
+# The RPC was read back on 22 September 2026: eth_chainId answered 0x8bd, which is 2237.
+#
+# The harness funds the estate's funding wallet exactly as a founder at that page would: one POST of the
+# address as JSON to the faucet's request road, once per run, only where the wallet's native balance reads
+# below GAS_FLOOR_SEAR — and it never invents a balance. The faucet pays exactly 0.5 SEAR per request and
+# refuses, in its own sentence, past four payments to a wallet or eight to an IP in a trailing day, or 200
+# SEAR across everyone. This is gas only; what the payments move (USDC) is a different question, and the
+# harness never mints or moves it. No address of the faucet's or the treasury's is written here.
+# ---------------------------------------------------------------------------
+TESTNET_CHAIN_ID = 2237                      # testnet 2, hex 0x8bd
+TESTNET_NAME = "AEREDIUM testnet2"
+NATIVE_COIN = "SEAR"
+NATIVE_DECIMALS = 18
+TESTNET_RPC_URL = "https://testnet.rpc.aeredium.io"
+TESTNET_EXPLORER_URL = "https://testnet.explorer.aeredium.io"
+FAUCET_PAGE_URL = "https://aeredium.io/faucet.html"
+FAUCET_REQUEST_URL = "https://aeredium.io/faucet-api/request"
+FAUCET_PAYS_SEAR = "0.5"                     # exactly, per auto-paid request
+FAUCET_LIMITS = "four payments per wallet and eight per IP in a day, and 200 SEAR across everyone"
+GAS_FLOOR_SEAR = "0.1"                       # below it the harness asks the faucet, once per run (Spec T13 §2)
+
+
+def to_wei(amount: str) -> int:
+    """A plain decimal of the native coin to wei, by the same string arithmetic as minor_units."""
+    return int(minor_units(amount, NATIVE_DECIMALS))
+
+
+GAS_FLOOR_WEI = to_wei(GAS_FLOOR_SEAR)
+
+
+def coin_amount(wei: int) -> str:
+    """
+    Wei as a plain decimal of the native coin, by string arithmetic — no float anywhere: 0 → "0",
+    500000000000000000 → "0.5", 10**18 → "1", 1234500000000000000 → "1.2345".
+    """
+    if not isinstance(wei, int) or wei < 0:
+        raise ValueError("a balance is a non-negative integer of wei: %r" % (wei,))
+    text = str(wei).rjust(NATIVE_DECIMALS + 1, "0")
+    whole, fraction = text[:-NATIVE_DECIMALS], text[-NATIVE_DECIMALS:].rstrip("0")
+    return whole + ("." + fraction if fraction else "")
+
+
+def payments_total(amounts: List[str], decimals: int = 6) -> str:
+    """The sum of plain-decimal amounts of the payment asset, as a plain decimal, by string arithmetic."""
+    total = sum(int(minor_units(a, decimals)) for a in amounts)
+    text = str(total).rjust(decimals + 1, "0")
+    fraction = text[-decimals:].rstrip("0").ljust(2, "0")
+    return text[:-decimals] + "." + fraction
