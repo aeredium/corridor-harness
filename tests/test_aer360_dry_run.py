@@ -113,7 +113,7 @@ class DryRunTest(unittest.TestCase):
         self.assertTrue(any(T.address("NORTHWIND_ETHEREUM") in l for l in s6))
         self.assertTrue(any(T.address("CONTOSO_ETHEREUM") in l for l in s6))
         self.assertEqual(len([l for l in s6 if "/promote" in l]), 2)
-        self.assertEqual(len([l for l in s6 if "/approve" in l]), 4, "two presses per payee: Ada, then the next roster member (Spec T9)")
+        self.assertEqual(len([l for l in s6 if "/approve" in l]), 6, "three roster pressers per payee: Ada, Ben, Cora (Spec T12)")
         s7 = [l for l in lines if l.startswith("S7 — ")]
         self.assertEqual(len([l for l in s7 if "POST /v1/sets/review" in l]), 3)
         self.assertEqual(len([l for l in s7 if "POST /v1/sets {" in l]), 3)
@@ -158,12 +158,12 @@ class DryRunTest(unittest.TestCase):
         """Spec T8: --dry unchanged in its calls. The fixture is the dry run at main after PR #5, its expectations cut off at the arrow."""
         with open(FROZEN_CALLS, "r", encoding="utf-8") as handle:
             frozen = handle.read().splitlines()
-        self.assertEqual(len(frozen), 141, "Spec T9 added a second approve press per payee to S6; Spec T10 added thirteen lines under S4 and reworded the seat re-grant's condition; "
-                                           "Spec T11 added the six answers a version-14 estate serves (C11A, C19; WO1 to WO4) and one S10 comparison line, and nothing else")
+        self.assertEqual(len(frozen), 143, "Spec T12 presses the whole roster in S6: three pressers (Ada, Ben, Cora) per payee in place of the two of Spec T9, so one more approve line per payee")
         self.assertEqual(calls_of(H.dry_lines()), frozen)
         added = [l for l in frozen if any('"questionId": "%s"' % qid in l for qid in ("C11A", "C19", "WO1", "WO2", "WO3", "WO4"))]
         self.assertEqual(len(added), 6)
         self.assertEqual(len([l for l in frozen if l.startswith("S10 — ") and "Spec 92 fields" in l]), 1)
+        self.assertEqual(len([l for l in frozen if l.startswith("S6 — ") and "/approve" in l]), 6, "three roster pressers per payee")
 
     def test_s4_carries_the_conditional_re_invitation_for_each_author_and_the_seat_re_grant(self):
         """Spec T10 §5: for each author the comparison and the conditional fresh invitation, options and verify with a NEW passkey stored beside the old; for Ada the seat re-grant."""
@@ -189,8 +189,8 @@ class DryRunTest(unittest.TestCase):
         self.assertEqual(len(grant), 1)
         self.assertIn("— only if the seat is enrolled_not_seated or names a credential other than Ada Approver's session's → expect the seat seated, naming Ada Approver's own credential (Spec 91); a refusal is a finding in the estate's words", grant[0])
         self.assertIn("GET /v1/invites (as Harriet Founder) → expect the register: three authors, redeemed; each row's sharesCredentialWith (Spec 91's marker) read for S10, expected absent after the re-invitation", s4[-1])
-        # the other stations are as Spec T9 left them
-        self.assertEqual(len([l for l in H.dry_lines() if l.startswith("S6 — ") and "/approve" in l]), 4)
+        # Spec T12: S6 presses the whole roster (Ada, Ben, Cora) per payee
+        self.assertEqual(len([l for l in H.dry_lines() if l.startswith("S6 — ") and "/approve" in l]), 6)
 
     def test_the_venue_probes_expectation_is_the_charters(self):
         """Spec T11 §3: the book answers C19 No, so the dry line expects the payee door's own refusal by name, in the estate's sentence; an acceptance is the finding."""
@@ -212,22 +212,19 @@ class DryRunTest(unittest.TestCase):
             self.assertEqual(H.venue_law_of_the_book(), "accepted")
         self.assertEqual(H.venue_law_of_the_book(), "refused")
 
-    def test_the_second_press_is_carried_with_its_expectation(self):
-        """Spec T9 §5: S6's second press names the next roster member (expected Ben Signatory) and expects whitelisted; the first press expects the quorum's pending answer."""
+    def test_s6_presses_the_roster_in_order_the_founder_last(self):
+        """Spec T12 §2: S6 presses the roster people the harness holds a passkey for — Ada, Ben, Cora, the founder last — until whitelisted; a press refused SIGNATURE_NOT_COUNTED is recorded and the next presses."""
         s6 = [l for l in H.dry_lines() if l.startswith("S6 — ")]
         approves = [l for l in s6 if "/approve" in l]
-        self.assertEqual(len(approves), 4)
-        first = [l for l in approves if "(as Ada Approver)" in l]
-        self.assertEqual(len(first), 2)
-        for l in first:
-            self.assertIn("expect whitelistStatus pending_promotion with one more needed", l)
-            self.assertIn("approvals {required 2, collected 1, remaining 1}", l)
-            self.assertIn("may_still_approve", l)
-            self.assertIn("sentence (Spec 89)", l)
-        second = [l for l in approves if "the next roster member the first answer names, expected Ben Signatory" in l]
-        self.assertEqual(len(second), 2, "one second press per payee, expected Ben Signatory")
-        for l in second:
-            self.assertIn("→ expect whitelistStatus whitelisted", l)
+        self.assertEqual(len(approves), 6, "three roster pressers (Ada, Ben, Cora) per payee")
+        for name in ("Ada Approver", "Ben Signatory", "Cora Clerk"):
+            mine = [l for l in approves if "(as %s, the roster in order, the founder last)" % name in l]
+            self.assertEqual(len(mine), 2, name)
+            for l in mine:
+                self.assertIn("count it toward the quorum of two", l)
+                self.assertIn("refuse SIGNATURE_NOT_COUNTED", l)
+                self.assertIn("until whitelisted or nobody is left", l)
+        self.assertFalse(any("(as Harriet Founder, the roster" in l for l in approves), "the founder is the last resort, not a listed press")
         self.assertEqual(len([l for l in s6 if "/promote" in l and "pending_promotion" in l]), 2)
         self.assertTrue(any("read by this run's payee ids" in l for l in s6))
 

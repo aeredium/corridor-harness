@@ -140,8 +140,42 @@ class EstateHarnessReadmeTest(unittest.TestCase):
         self.assertIn("since Spec T11 the probe reads the charter's answer to C19 at run time", self.section)
         self.assertIn("a finding only if refused", self.section, "Spec T8's sentence stands, for an estate whose C19 is Yes")
 
+    def test_it_says_the_harness_follows_a_walk_back_since_spec_t12(self):
+        self.assertIn("Spec T12, 21 September 2026", self.section)
+        self.assertIn("aer360-harness-2026-09-21-223148.md", self.section)
+        self.assertIn("AER 360 Spec 95", self.section)
+        for words in ("A walk-back is followed, once per question", "`CHARTER_INCOMPLETE` with `walkBackTo`",
+                      "walked back to WA1: <the estate's sentence>; answered from the book and returned to the read-back",
+                      "walked back to twice is a failure with both sentences", "applies to S3 and S5 alike",
+                      "take their expectation from the answer book for every question the read-back carries",
+                      "how many lines came from this run's answers and how many from the book",
+                      "the whitelist door admits any active roster signer", "the roster is the census of four at two",
+                      "in order with the founder last", "pressing on past a `SIGNATURE_NOT_COUNTED` refusal",
+                      "Ada refused, Ben and Cora counted, two of four", "bound to her retired credential",
+                      "the census signs it at Spec 99", "a note, not a finding, because the estate is telling the truth",
+                      "S7 is unchanged and still waits on Spec 98's funding wallet"):
+            self.assertIn(words, self.section, words)
+
 
 class ChangelogTest(unittest.TestCase):
+    def test_the_changelog_records_spec_t12_before_t11_and_names_every_change(self):
+        text = read("CHANGELOG.md")
+        self.assertIn("## Spec T12 — The harness follows a walk-back as a browser would, and S6 presses the roster people whose presses count (21 September 2026)", text)
+        self.assertLess(text.index("## Spec T12"), text.index("## Spec T11"))
+        t12 = text.split("## Spec T12", 1)[1].split("## Spec T11", 1)[0]
+        for words in ("aer360-harness-2026-09-21-223148.md", "AER 360 Spec 95", '`walkBackTo {questionId: "WA1"}`',
+                      "`audit_readback`", "`audit_charter`", "`readback_provenance_note`", "`walk_back_of`", "`follow_walk_back`",
+                      "`drive_to_read_back`", "walked back to WA1: <the estate's sentence>; answered from the book and returned to the read-back",
+                      "The same question walked back to twice is a failure carrying both sentences", "`approve_to_quorum`", "`whitelist_pressers`",
+                      "the founder last", "`SIGNATURE_NOT_COUNTED`", "names who counted and who did not", '`next_presser` and the pre-89 "one further press"',
+                      "Ada refused, Ben and Cora counted, two of four", "`seat_binding_notes`", "the seat still bound to a retired passkey until Spec 99 lands",
+                      "141 → 143 lines", "the whitelist door learns AER 360 Spec 95 — `address_action`'s approve and reject admit any authenticated author",
+                      "`WalkBackDouble`", "`TheHarnessFollowsAWalkBack`", "twenty-eight lines of which the run answered ten",
+                      "S7's P1 clears at submission now that Northwind is whitelisted",
+                      "`aer360_answers.py` (T11's book stands)",
+                      "`corridor_harness.py`, `series.py`, `tables.py`, `aer360_passkey.py`, `aer360_tables.py` and the corridor's tests"):
+            self.assertIn(words, t12, words)
+
     def test_the_changelog_records_spec_t11_before_t10_and_names_every_change(self):
         text = read("CHANGELOG.md")
         self.assertIn("## Spec T11 — The answer book learns catalog version 14, and the auditor reads the new law back (21 September 2026)", text)

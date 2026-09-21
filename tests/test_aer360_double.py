@@ -1847,8 +1847,10 @@ class EstateDouble:
         return Refusal("SUBMITTER_MAY_NOT_APPROVE", message, {"cause": cause}, provenance={"source": "charter"})
 
     def address_action(self, headers: Dict[str, str], address_id: str, action: str) -> Tuple[int, Any]:
-        role = "author" if action == "promote" else "approver"
-        caller = self.require_caller(headers, role, mutating=True)
+        # AER 360 Spec 95 (Spec T12): the approve door admits any active roster signer, not only a seated approver — so the
+        # gate is `author` (an authenticated author; a viewer is still refused), and the platform's ceremony
+        # (sign_whitelist_ceremony) is the sole judge, binding and counting an active seat or refusing SIGNATURE_NOT_COUNTED.
+        caller = self.require_caller(headers, "author", mutating=True)
         row = self.addresses.get(address_id)
         if not row:
             raise Refusal("ADDRESS_NOT_WHITELISTED", detail={"cause": "no such address"})
@@ -1865,10 +1867,6 @@ class EstateDouble:
                          "ceremony": {"pendingTxId": ceremony["pendingTxId"], "requiredSignatures": ceremony["requiredSignatures"], "signaturesCollected": len(ceremony["signatures"])}}
         if row["whitelistStatus"] != "pending_promotion" or not row.get("ceremony"):
             raise Refusal("ADDRESS_PROMOTION_PENDING", detail={"cause": "this address has not been proposed to the platform whitelist yet"})
-        facts = self.charter_facts(caller)
-        may, cause = self.may_approve(facts, row["proposedBy"], caller["credentialId"])
-        if not may:
-            raise self.approval_refusal(cause or "charter_silent", facts, A_PAYEE_ADDRESS, caller["roles"])
         if action == "reject":
             row["whitelistStatus"] = "rejected"
             row["promotedAt"] = self._now_iso()
@@ -2766,7 +2764,7 @@ class TheDoubleLearnsSpec91(unittest.TestCase):
         self.assertEqual(ceremony["signatures"], [ada.credential_id, ben.credential_id])
 
     def test_a_seat_bound_to_the_shared_credential_refuses_the_persons_own_credential(self):
-        """The prediction for the rerun: the roster stands (governance established once), Ada's seat is bound to the founder's credential, and her own is "not authorized"."""
+        """Spec T12: the roster stands (governance established once), Ada's seat is bound to the founder's retired credential, and her own is "not authorized" — SIGNATURE_NOT_COUNTED — while Ben and Cora, on seats never bound, count and the payee is whitelisted, so S6 passes past the one press that cannot count."""
         double = EstateDouble(before_spec_91=True)
         runner = runner_on(double, self.tmp, invite=double.mint_founder_link())
         runner.run()  # Ada's press in S6 bound her seat to the shared credential
@@ -2785,7 +2783,9 @@ class TheDoubleLearnsSpec91(unittest.TestCase):
         self.assertEqual(body["error"]["code"], "SIGNATURE_NOT_COUNTED")
         self.assertEqual(body["error"]["detail"]["platformSaid"], PLATFORM_NOT_AUTHORIZED)
         self.assertEqual(body["error"]["detail"]["platformStatus"], "403")
-        self.assertEqual(outcomes["S6"].outcome, H.FAIL)
+        self.assertEqual(outcomes["S6"].outcome, H.PASS, outcomes["S6"].line)
+        for record in again.facts["payees"]:
+            self.assertEqual(record["register_status"], "whitelisted", "Ben and Cora, on seats never bound, carried the quorum past Ada's refused press")
 
     def test_people_already_on_a_shared_credential_are_marked_refused_a_seat_and_given_their_own_by_a_fresh_invitation(self):
         """Spec 91's own scenario (owncredential.test.ts, 'marks them on the register...'), against this double."""

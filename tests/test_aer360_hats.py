@@ -114,6 +114,20 @@ class TheAuditorOnAFixture(unittest.TestCase):
         self.assertEqual([f["probe"] for f in found], ["charter (wallet_account): the per-payment hold (O2)"])
         self.assertEqual(found[0]["expected"], json.dumps(A.MONEY["per_payment_cents"]))
 
+    def test_a_resumed_read_back_is_checked_against_the_book_with_the_provenance_count(self):
+        """
+        Spec T12 §0: a read-back of twenty-eight lines of which this run answered ten raises no finding — the eighteen the
+        run did not answer are the book's, line for line — and the note says ten from the run and eighteen from the book.
+        """
+        qids = ["A1", "A4", "A5", "A8", "A9", "A11", "B1", "B2", "B3", "B4", "C9S", "C9", "C10", "C11", "C11A", "C11C",
+                "C15", "C18", "C12", "C12A", "C12B", "C12C", "C12D", "D0", "D4", "R0", "R1", "G1"]
+        self.assertEqual(len(qids), 28)
+        lines = [{"questionId": qid, "prompt": "prompt of %s" % qid, "spoken": H.spoken_for(A.kind_of("policy", qid), qid, A.POLICY_ANSWERS[qid])} for qid in qids]
+        answered_ten = [(qid, A.POLICY_ANSWERS[qid], "prompt of %s" % qid, A.kind_of("policy", qid)) for qid in qids[:10]]
+        self.assertEqual(H.audit_readback("policy", answered_ten, lines), [], "every line agrees with the book, whether this run answered it or not")
+        self.assertEqual(H.readback_provenance_note("policy", answered_ten, lines),
+                         "the policy read-back was checked against the book: 28 line(s), 10 this run answered and 18 from the book")
+
     def test_the_five_expectations_of_spec_t11_pass_against_spec_92s_charter_and_fail_against_the_fixture_of_21_september(self):
         """Spec T11 §2: payeeApproval, payeeVenueContracts, holder, signingTiers.holderAloneUpToCents, twoSignaturesUpToCents — each an expect beside T8's."""
         policy = {q: v for q, v, _, _ in fixture_answers("policy")}
@@ -247,8 +261,14 @@ class TheAuditorOnAFixture(unittest.TestCase):
         missing = [l for l in fixture_readback("policy") if l["questionId"] != "C18"]
         self.assertEqual([f["said"] for f in H.audit_readback("policy", fixture_answers("policy"), missing)],
                          ["the read-back has no line for C18, which was answered"])
-        extra = fixture_readback("policy") + [{"questionId": "C16", "prompt": "…", "spoken": "24 hours"}]
-        self.assertEqual(len(H.audit_readback("policy", fixture_answers("policy"), extra)), 1)
+        # Spec T12 §0: a line the run did not answer but the book knows and agrees with is no finding (the resumed-interview cure)
+        known_extra = fixture_readback("policy") + [{"questionId": "C16", "prompt": "…", "spoken": "24 hours"}]
+        self.assertEqual(H.audit_readback("policy", fixture_answers("policy"), known_extra), [], "C16 is in the book and its line agrees, so it is no finding")
+        # but a line for a question the book does not know is a finding, as before
+        unknown_extra = fixture_readback("policy") + [{"questionId": "ZZ9", "prompt": "…", "spoken": "whatever"}]
+        found = H.audit_readback("policy", fixture_answers("policy"), unknown_extra)
+        self.assertEqual([f["probe"] for f in found], ["read-back (policy) of ZZ9"])
+        self.assertIn("the book does not know", found[0]["said"])
 
     def test_the_read_back_is_spoken_as_readback_spells_it(self):
         self.assertEqual(H.spoken_for("statement", "B1", {"acknowledged": True}), "Stated and acknowledged.")

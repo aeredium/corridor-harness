@@ -890,36 +890,111 @@ class Runner:
         return "the answer book answers catalog version %d" % A.CATALOG_VERSION_ANSWERED
 
     def confirm_and_compile(self, station: str, interview_type: str, interview_id: str, who: Person, page: Dict[str, Any]) -> Dict[str, Any]:
+        walked_back: Dict[str, str] = {}  # Spec T12 §1: a question walked back to once, so a second is a failure and never a loop
         state = page.get("state")
-        if state == "at_read_back":
-            readback = self.request(who, "GET", "/v1/onboarding/interviews/%s/readback" % interview_id, None, station)
-            self.step(station, readback, "the charter read back in plain sentences, the realm first",
-                      ("%d lines" % len((readback.json or {}).get("lines") or [])) if readback.ok else readback.sentence(), None, who.name)
-            if not readback.ok or not isinstance(readback.json, dict):
-                raise StationStop("GET readback answered %s" % readback.sentence())
-            self.facts["readback"][interview_type] = readback.json
-            options = self.request(who, "POST", "/v1/onboarding/interviews/%s/confirm/options" % interview_id, {}, station)
-            self.step(station, options, "200 with the digest-bound challenge, issuedAtMs and the digest",
-                      "answered" if options.ok else options.sentence(), {}, who.name)
-            if not options.ok or not isinstance(options.json, dict):
-                raise StationStop("POST confirm/options answered %s" % options.sentence())
-            challenge = str((options.json.get("options") or {}).get("challenge"))
-            body = {"issuedAtMs": options.json.get("issuedAtMs"), "response": self.assertion_for(who, challenge, station)}
-            confirmed = self.request(who, "POST", "/v1/onboarding/interviews/%s/confirm" % interview_id, body, station)
-            self.step(station, confirmed, "200 with the interview confirmed", "confirmed" if confirmed.ok else confirmed.sentence(), body, who.name)
-            if not confirmed.ok:
-                raise StationStop("POST confirm answered %s" % confirmed.sentence())
-            state = "confirmed"
-        if state in ("confirmed", "compiled"):
-            compiled = self.request(who, "POST", "/v1/onboarding/interviews/%s/compile" % interview_id, {}, station)
-            self.step(station, compiled, "200 with the compiled charter, the write receipt and the seat",
-                      "compiled and written" if compiled.ok else compiled.sentence(), {}, who.name)
-            if not compiled.ok or not isinstance(compiled.json, dict):
-                raise StationStop("POST compile answered %s" % compiled.sentence())
-            self.facts["compile"][interview_type] = compiled.json
-            self.facts["charter"][interview_type] = compiled.json.get("charter") or {}
-            return compiled.json
-        raise StationStop("the interview stands in state %r after its questions; the read-back was not reached" % state)
+        while True:
+            if state == "at_read_back":
+                readback = self.request(who, "GET", "/v1/onboarding/interviews/%s/readback" % interview_id, None, station)
+                walk = self.walk_back_of(readback)
+                if walk is not None:
+                    state = self.follow_walk_back(station, interview_type, interview_id, who, readback, walk, walked_back).get("state")
+                    continue
+                self.step(station, readback, "the charter read back in plain sentences, the realm first",
+                          ("%d lines" % len((readback.json or {}).get("lines") or [])) if readback.ok else readback.sentence(), None, who.name)
+                if not readback.ok or not isinstance(readback.json, dict):
+                    raise StationStop("GET readback answered %s" % readback.sentence())
+                self.facts["readback"][interview_type] = readback.json
+                options = self.request(who, "POST", "/v1/onboarding/interviews/%s/confirm/options" % interview_id, {}, station)
+                self.step(station, options, "200 with the digest-bound challenge, issuedAtMs and the digest",
+                          "answered" if options.ok else options.sentence(), {}, who.name)
+                if not options.ok or not isinstance(options.json, dict):
+                    raise StationStop("POST confirm/options answered %s" % options.sentence())
+                challenge = str((options.json.get("options") or {}).get("challenge"))
+                body = {"issuedAtMs": options.json.get("issuedAtMs"), "response": self.assertion_for(who, challenge, station)}
+                confirmed = self.request(who, "POST", "/v1/onboarding/interviews/%s/confirm" % interview_id, body, station)
+                walk = self.walk_back_of(confirmed)
+                if walk is not None:
+                    state = self.follow_walk_back(station, interview_type, interview_id, who, confirmed, walk, walked_back).get("state")
+                    continue
+                self.step(station, confirmed, "200 with the interview confirmed", "confirmed" if confirmed.ok else confirmed.sentence(), body, who.name)
+                if not confirmed.ok:
+                    raise StationStop("POST confirm answered %s" % confirmed.sentence())
+                state = "confirmed"
+            if state in ("confirmed", "compiled"):
+                compiled = self.request(who, "POST", "/v1/onboarding/interviews/%s/compile" % interview_id, {}, station)
+                walk = self.walk_back_of(compiled)
+                if walk is not None:
+                    state = self.follow_walk_back(station, interview_type, interview_id, who, compiled, walk, walked_back).get("state")
+                    continue
+                self.step(station, compiled, "200 with the compiled charter, the write receipt and the seat",
+                          "compiled and written" if compiled.ok else compiled.sentence(), {}, who.name)
+                if not compiled.ok or not isinstance(compiled.json, dict):
+                    raise StationStop("POST compile answered %s" % compiled.sentence())
+                self.facts["compile"][interview_type] = compiled.json
+                self.facts["charter"][interview_type] = compiled.json.get("charter") or {}
+                return compiled.json
+            raise StationStop("the interview stands in state %r after its questions; the read-back was not reached" % state)
+
+    @staticmethod
+    def walk_back_of(answer: Answer) -> Optional[str]:
+        """The questionId a CHARTER_INCOMPLETE refusal asks the browser to walk back to, or None (Spec T12 §1)."""
+        refusal = answer.refusal
+        if refusal and refusal.get("code") == "CHARTER_INCOMPLETE":
+            target = refusal.get("walkBackTo")
+            if isinstance(target, dict) and target.get("questionId"):
+                return str(target["questionId"])
+        return None
+
+    def follow_walk_back(self, station: str, interview_type: str, interview_id: str, who: Person,
+                         refusal_answer: Answer, qid: str, walked_back: Dict[str, str]) -> Dict[str, Any]:
+        """
+        Spec T12 §1: a founder's browser taken back to a question answers it and returns to the read-back. Where the
+        read-back or a confirm answers CHARTER_INCOMPLETE with walkBackTo, the harness answers the named question from
+        the book, resumes to the read-back, and reports the walk-back as a note. The same question walked back to twice
+        is a failure carrying both sentences — a book that cannot satisfy the belt is reported, never looped.
+        """
+        refusal = refusal_answer.refusal or {}
+        sentence = str(refusal.get("message") or refusal_answer.sentence())
+        self.step(station, refusal_answer, "a walk-back to %s the harness follows, or the read-back" % qid,
+                  "walk-back to %s: %s" % (qid, sentence), None, who.name)
+        if qid in walked_back:
+            raise StationStop("walked back to %s a second time and the belt still refuses: first %r, then %r; the book's answer "
+                              "does not satisfy the estate's belt, so it is reported and never looped" % (qid, walked_back[qid], sentence))
+        walked_back[qid] = sentence
+        book = A.ANSWERS.get(interview_type, {})
+        if qid not in book:
+            raise StationStop("the estate walked back to %s (%s), which the answer book has no answer for" % (qid, sentence))
+        value = book[qid]
+        body = {"questionId": qid, "value": value}
+        answered = self.request(who, "POST", "/v1/onboarding/interviews/%s/answers" % interview_id, body, station)
+        self.step(station, answered, "200 with the next page (%s answered from the book on the walk-back)" % qid,
+                  "answered from the book" if answered.ok else answered.sentence(), body, who.name)
+        if not answered.ok or not isinstance(answered.json, dict):
+            raise StationStop("answering %s on the walk-back answered %s" % (qid, answered.sentence()))
+        self.facts["answers"][interview_type].append((qid, value, "", A.kind_of(interview_type, qid) or ""))
+        page = self.drive_to_read_back(station, interview_type, interview_id, who, answered.json)
+        self.note(station, "walked back to %s: %s; answered from the book and returned to the read-back" % (qid, sentence))
+        return page
+
+    def drive_to_read_back(self, station: str, interview_type: str, interview_id: str, who: Person, page: Dict[str, Any]) -> Dict[str, Any]:
+        """Answer from the book any further questions the estate serves after a walk-back's answer, until the read-back."""
+        for _ in range(200):
+            if page.get("contradiction"):
+                raise StationStop("the estate served a contradiction on the walk-back: %s" % (page.get("contradiction") or {}).get("message"))
+            question = page.get("question")
+            if question is None or page.get("state") not in ("in_progress", "at_read_back"):
+                return page
+            qid = str(question.get("questionId"))
+            value = A.answer_for(interview_type, question)
+            body = {"questionId": qid, "value": value}
+            answer = self.request(who, "POST", "/v1/onboarding/interviews/%s/answers" % interview_id, body, station)
+            self.step(station, answer, "200 with the next page (%s: %s, resumed toward the read-back)" % (qid, question.get("kind")),
+                      "answered" if answer.ok else answer.sentence(), body, who.name)
+            if not answer.ok or not isinstance(answer.json, dict):
+                raise StationStop("resuming after the walk-back, %s answered %s" % (qid, answer.sentence()))
+            self.facts["answers"][interview_type].append((qid, value, str(question.get("prompt", "")), str(question.get("kind", ""))))
+            page = answer.json
+        return page
 
     def station_s3(self) -> Outcome:
         founder = self.founder()
@@ -1265,7 +1340,6 @@ class Runner:
         display name (routes/payees.ts), and earlier runs leave rows with the same addresses still pending.
         """
         founder = self.founder()
-        ada = self.people[A.PAYMENT_APPROVER]
         said: List[str] = []
         all_whitelisted = True
         for payee in T.PAYEES:
@@ -1292,7 +1366,7 @@ class Runner:
             self.step("S6", promoted, "a ceremony: status pending_promotion, platformMembershipId, ceremony", "answered" if promoted.ok else promoted.sentence(), {}, founder.name)
             record["promoted"] = promoted.json if promoted.ok else promoted.sentence()
             promote_said = "promoted" if promoted.ok else "promote answered %s" % promoted.sentence()
-            said.append("%s: created; %s; %s" % (payee["name"], promote_said, self.approve_to_quorum(record, ada)))
+            said.append("%s: created; %s; %s" % (payee["name"], promote_said, self.approve_to_quorum(record)))
         register = self.request(founder, "GET", "/v1/payees", None, "S6")
         self.step("S6", register, "the payees register with both addresses whitelisted, read by this run's payee ids", "answered" if register.ok else register.sentence(), None, founder.name)
         self.facts["payees_register"] = register.json if isinstance(register.json, dict) else None
@@ -1304,84 +1378,67 @@ class Runner:
         detail = "payees: %s; register: %s" % ("; ".join(said), ", ".join("%s %s" % (r["name"], r.get("register_status")) for r in self.facts["payees"]) or "none")
         return Outcome("S6", PASS if all_whitelisted and self.facts["payees"] else FAIL, detail)
 
-    def approve_to_quorum(self, record: Dict[str, Any], first: Person) -> str:
+    def approve_to_quorum(self, record: Dict[str, Any]) -> str:
         """
-        Press approve as Ada, then as the next roster member the answer names, until the address is whitelisted, a press
-        is refused, or approvals.required presses were made — and never more than the roster has names (Spec T9 §1, §3).
-        Returns the presses as the station's line speaks them: "approved by Ada Approver (1 of 2), by Ben Signatory (2 of 2): whitelisted".
+        Spec T12 §2: press the roster people the harness holds a passkey for, in order (the founder last), on their
+        current credential, until the estate answers whitelisted or nobody is left. Each press is recorded with the
+        estate's answer verbatim; a press refused SIGNATURE_NOT_COUNTED — its seat bound to a retired credential the
+        census cannot yet move (Spec 95 opened the ceremony, Spec 99 signs it) — is recorded and the next person
+        presses. The line names who counted and who did not, and the outcome the estate last gave.
         """
-        if not first.signed_in:
-            return "%s has no session, so the approval was not asked" % first.name
+        pressers = self.whitelist_pressers()
+        if not pressers:
+            return "no roster member has a session, so the whitelist was not pressed"
         quorum = A.WHITELIST_QUORUM
-        cap = len(A.WHITELIST_ROSTER)
-        required: Optional[int] = None  # the estate's own figure, read from the first answer; the charter's quorum until then
-        says_why = True                 # False once the first answer carried no approvals: an estate before Spec 89
-        presser = first
+        required: Optional[int] = None  # the estate's own figure, read from the first answer that counted
+        counted: List[str] = []
         spoken: List[str] = []
         outcome = "not answered"
-        count = 0
-        while True:
-            count += 1
+        audited = False
+        for presser in pressers:
             answer = self.request(presser, "POST", "/v1/payees/addresses/%s/approve" % record["address_id"], {}, "S6")
-            self.step("S6", answer, self.press_expectation(count, required if required is not None else quorum), "answered" if answer.ok else answer.sentence(), {}, presser.name)
+            self.step("S6", answer, self.press_expectation(len(counted) + 1, required if required is not None else quorum),
+                      "answered" if answer.ok else answer.sentence(), {}, presser.name)
             body = answer.json if answer.ok and isinstance(answer.json, dict) else None
-            record["presses"].append({"who": presser.name, "status": answer.status, "answer": body if body is not None else answer.sentence()})
+            record["presses"].append({
+                "who": presser.name, "key": presser.key, "credential": presser.credential_id, "status": answer.status,
+                "answer": body if body is not None else answer.sentence(),
+                "refusal_code": (answer.refusal or {}).get("code") if answer.refusal else None,
+            })
             if body is None:
-                spoken.append("by %s" % presser.name)
-                outcome = ("refused %s" % answer.sentence()) if not answer.ok else ("answered HTTP %d without a body" % answer.status)
-                break
+                spoken.append("%s not counted (%s)" % (presser.name, answer.sentence()))
+                if outcome == "not answered":
+                    outcome = "pending_promotion"
+                continue
             record["approved"] = body
             status = body.get("whitelistStatus")
             approvals = body.get("approvals") if isinstance(body.get("approvals"), dict) else None
-            if count == 1 and status == "pending_promotion":
-                self.audit_first_approval(record, answer, body)
-                says_why = approvals is not None
-                if approvals is not None and isinstance(approvals.get("required"), int) and approvals["required"] > 0:
-                    required = approvals["required"]
-            collected = approvals["collected"] if approvals is not None and isinstance(approvals.get("collected"), int) else count
-            spoken.append("by %s (%s of %s)" % (presser.name, collected, required if required is not None else quorum))
+            if not audited and status == "pending_promotion":
+                self.audit_first_approval(record, answer, body)  # Spec T9 §2, on the first pending answer that counted
+                audited = True
+            if approvals is not None and isinstance(approvals.get("required"), int) and approvals["required"] > 0:
+                required = approvals["required"]
+            counted.append(presser.name)
+            collected = approvals["collected"] if approvals is not None and isinstance(approvals.get("collected"), int) else len(counted)
+            spoken.append("%s counted (%s of %s)" % (presser.name, collected, required if required is not None else quorum))
             if status != "pending_promotion":
                 outcome = str(status)
                 break
             outcome = "pending_promotion"
-            if not says_why:
-                # An estate before Spec 89 says nothing of the count: one further press, on the charter's quorum, and no more.
-                if count >= 2:
-                    break
-                self.note("S6", "the answer carried no approvals count; one more press was made on the charter's quorum of %s" % self.COUNT_WORDS.get(quorum, str(quorum)))
-                presser = self.next_presser(None)
-                continue
-            remaining = approvals.get("remaining") if approvals is not None else None
-            if not (isinstance(remaining, int) and remaining > 0):
-                break
-            if count >= min(required if required is not None else quorum, cap):
-                break
-            presser = self.next_presser(body.get("may_still_approve"))
-        return "approved %s: %s" % (", ".join(spoken), outcome)
+        return "%s: %s" % ("; ".join(spoken) or "nobody pressed", outcome)
+
+    def whitelist_pressers(self) -> List[Person]:
+        """The roster people the harness holds a signed-in session for, in the charter's roster order, the founder last (Spec T12 §2)."""
+        order = [k for k in A.CENSUS_ORDER if k != A.FOUNDER] + [A.FOUNDER]
+        return [self.people[k] for k in order if k in self.people and self.people[k].signed_in]
 
     def press_expectation(self, press: int, required: int) -> str:
-        """What the n-th press should answer (Spec T9 §3): pending with the count and the sentence until the quorum's press, then whitelisted."""
+        """What the n-th press that counts should answer (Spec T9 §3): pending with the count and the sentence until the quorum's press, then whitelisted."""
         if press >= required:
             return "whitelistStatus whitelisted"
         remaining = required - press
         return ("whitelistStatus pending_promotion with %s more needed (%d of %d approvals recorded): approvals {required, collected, remaining}, "
                 "may_still_approve naming the unsigned, and the sentence (Spec 89)" % (self.COUNT_WORDS.get(remaining, str(remaining)), press, required))
-
-    def next_presser(self, may_still_approve: Any) -> Person:
-        """
-        The first roster member in may_still_approve for whom the harness holds a signed-in session, else Ben Signatory,
-        else the founder (Spec T9 §1). The founder is not the primary pick and is the last resort: on this estate the
-        four authors share the ONE role-bearing credential, so the founder's press carries no distinct seat email and
-        the platform cannot tell it from the press that already stands (the "one credential worn by four people" fact
-        S10 reports); a distinct author's press is what moves the count, which is why §1, §3 and §5 all name Ben second.
-        """
-        if isinstance(may_still_approve, list):
-            for name in may_still_approve:
-                key = next((k for k, p in self.people.items() if p.name == name and k != A.FOUNDER), None)
-                if key is not None and self.people[key].signed_in:
-                    return self.people[key]
-        ben = self.people[self.FALLBACK_PRESSER]
-        return ben if ben.signed_in else self.founder()
 
     def audit_first_approval(self, record: Dict[str, Any], answer: Answer, body: Dict[str, Any]) -> None:
         """
@@ -1604,19 +1661,27 @@ class Runner:
         for interview_type in A.INTERVIEW_TYPES:
             readback = self.facts["readback"].get(interview_type)
             answers = self.facts["answers"].get(interview_type) or []
-            if readback and answers:
-                for f in audit_readback(interview_type, answers, readback.get("lines") or []):
+            book = A.ANSWERS.get(interview_type, {})
+            lines = (readback or {}).get("lines") or []
+            line_ids = [str(l.get("questionId")) for l in lines if not l.get("synthetic")]
+            if readback:
+                for f in audit_readback(interview_type, answers, lines):
                     if f.get("not_compared"):
                         self.note("S10", "%s: %s" % (f["probe"], f["said"]))
                     else:
                         self.finding("S10", f["probe"], f["sent"], None, f["expected"], f["said"])
+                # Spec T12 §0: the note says how many lines came from this run's answers and how many from the book
+                self.note("S10", readback_provenance_note(interview_type, answers, lines))
             else:
-                self.note("S10", "no read-back and answers recorded for the %s interview in this run; the read-back comparison was not made" % interview_type)
+                self.note("S10", "no read-back recorded for the %s interview in this run; the read-back comparison was not made" % interview_type)
             charter = self.facts["charter"].get(interview_type)
-            if charter and answers:
-                for f in audit_charter(interview_type, charter, {q: v for q, v, _, _ in answers}):
+            if charter:
+                # Spec T12 §0: the charter's expectation comes from the book for every question the read-back carries
+                covered = {qid: book[qid] for qid in line_ids if qid in book}
+                covered.update({q: v for q, v, _, _ in answers})
+                for f in audit_charter(interview_type, charter, covered):
                     self.finding("S10", f["probe"], f["sent"], None, f["expected"], f["said"])
-            elif answers:
+            else:
                 self.note("S10", "no compiled charter recorded for the %s interview; the charter comparison was not made" % interview_type)
         if founder.signed_in:
             journey = self.read_journey("S10", founder)
@@ -1648,6 +1713,8 @@ class Runner:
                     self.finding("S10", f["probe"], f["sent"], None, f["expected"], f["said"])
             for f in audit_payees(self.facts.get("payees_register"), self.facts["payees"], self.facts["charter"].get("wallet_account")):
                 self.finding("S10", f["probe"], f["sent"], None, f["expected"], f["said"])
+            for note in self.seat_binding_notes():
+                self.note("S10", note)
         else:
             self.note("S10", "the founder has no session; the registers were not read again")
         for f in audit_money(self.calls):
@@ -1658,6 +1725,39 @@ class Runner:
         refusals_met = len([c for c in self.calls if c.status >= 400 and c.station not in ("S10", "S11")])
         return Outcome("S10", PASS if found == 0 else FAIL, "the auditor: %d finding(s); %d refusal(s) met in S1 to S9 checked for Rule 13; %d call(s) checked for the minor-unit law" % (
             found, refusals_met, len(self.calls)))
+
+    def seat_binding_notes(self) -> List[str]:
+        """
+        Spec T12 §3: for each roster person whose S6 whitelist press was refused SIGNATURE_NOT_COUNTED, a note naming
+        the credential the harness pressed with and the one the People register says they hold — so the report shows the
+        platform's roster seat still bound to a retired passkey (Spec 95 opened a governed ceremony to move it; the census
+        has no door to sign it until Spec 99). It is a note, not a finding: the estate is telling the truth. One per person.
+        """
+        register = self.facts.get("invites_register") or {}
+        rows_by_email: Dict[str, List[Dict[str, Any]]] = {}
+        for row in register.get("invites") or []:
+            email = str(row.get("email") or "").strip().lower()
+            if email and row.get("state") == "redeemed" and row.get("credentialId"):
+                rows_by_email.setdefault(email, []).append(row)
+        notes: List[str] = []
+        seen: set = set()
+        for record in self.facts["payees"]:
+            for press in record.get("presses") or []:
+                key = press.get("key")
+                if press.get("refusal_code") != "SIGNATURE_NOT_COUNTED" or key in seen:
+                    continue
+                seen.add(key)
+                pressed = press.get("credential")
+                rows = rows_by_email.get(str(A.PEOPLE[key].email).lower(), []) if key in A.PEOPLE else []
+                # the credential the People register says they hold: the one the harness pressed with where the register
+                # carries a redeemed row for it (the person's own current credential), else the newest such row it names
+                held = pressed if any(str(r.get("credentialId")) == str(pressed) for r in rows) else (rows[0].get("credentialId") if rows else None)
+                held_words = last4(held) if held else "no credential the register names"
+                notes.append(
+                    "S6: %s's whitelist press was not counted (SIGNATURE_NOT_COUNTED); the harness pressed with %s, the credential of their own the People register says they hold (%s), "
+                    "so the platform's roster seat is still bound to a retired passkey — Spec 95 opened a governed ceremony to move it, and the census signs it at Spec 99. "
+                    "The estate is telling the truth: a note, not a finding." % (press.get("who"), last4(press.get("credential")), held_words))
+        return notes
 
     # -- S11 The attacker ---------------------------------------------------------------
     def refused_or_finding(self, probe: str, sent: Any, answer: Answer, expected: str) -> bool:
@@ -2198,23 +2298,38 @@ def readback_disagreements(probe: str, kind: str, value: Dict[str, Any], expecte
 
 def audit_readback(interview_type: str, answers: Sequence[Tuple[str, Dict[str, Any], str, str]], lines: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    The read-back compared with the answers the harness gave, by content (Spec T8): each answer rendered in the
-    estate's own spoken form (spoken_for) and compared with the line the estate spoke, a list entry by entry so a
-    finding names the entry. An answer of a kind the harness has no rendering for is not compared: its entry
-    carries not_compared=True and says so, and S10 records it as a note, never a finding. A line for a question
-    the harness did not answer, a missing line, and a moved prompt are findings as before.
+    The read-back compared by content, line by line (Spec T8), with the expectation for every line the estate
+    speaks taken from the book (A.ANSWERS) for every question the read-back carries, whether or not this run
+    answered it (Spec T12 §0). A resumed interview's read-back carries the answers earlier runs gave to the rest,
+    and the book is what those answers were; comparing only against this run's answers made every earlier answer a
+    finding. So a line this run answered is rendered from what it sent (and its prompt is checked); a line only the
+    book knows is rendered from the book; a line the book does not know is a finding as before. An answer of a kind
+    with no rendering is not compared (not_compared=True), which S10 records as a note. The provenance count — how
+    many lines came from this run and how many from the book — is written by S10, which holds the counts.
     """
     findings: List[Dict[str, Any]] = []
+    book = A.ANSWERS.get(interview_type, {})
+    run_answered = {str(qid): (value, prompt, kind) for qid, value, prompt, kind in answers}
     spoken = {str(l.get("questionId")): l for l in lines if not l.get("synthetic")}
-    for qid, value, prompt, kind in answers:
-        expected = spoken_for(kind, qid, value)
-        line = spoken.get(qid)
-        probe = "read-back (%s) of %s" % (interview_type, qid)
-        if line is None:
-            findings.append({"probe": probe, "sent": value, "expected": expected if expected is not None else json.dumps(value, ensure_ascii=False),
+    # a question this run answered that the read-back carries no line for is a finding (a dropped answer)
+    for qid, (value, prompt, kind) in run_answered.items():
+        if qid not in spoken:
+            expected = spoken_for(kind, qid, value)
+            findings.append({"probe": "read-back (%s) of %s" % (interview_type, qid), "sent": value,
+                             "expected": expected if expected is not None else json.dumps(value, ensure_ascii=False),
                              "said": "the read-back has no line for %s, which was answered" % qid})
-            continue
+    for qid, line in spoken.items():
+        probe = "read-back (%s) of %s" % (interview_type, qid)
         said = str(line.get("spoken"))
+        if qid in run_answered:
+            value, prompt, kind = run_answered[qid]
+        elif qid in book:
+            value, prompt, kind = book[qid], None, A.kind_of(interview_type, qid)
+        else:
+            findings.append({"probe": probe, "sent": None, "expected": "no line for a question the book does not know",
+                             "said": "the read-back carries a line for %s, which the harness did not answer and the book does not know: %r" % (qid, said)})
+            continue
+        expected = spoken_for(kind, qid, value) if kind else None
         if expected is None:
             findings.append({"probe": probe, "sent": value, "expected": None, "not_compared": True,
                              "said": "not compared: no rendering for kind %s (the read-back says %r)" % (kind, said)})
@@ -2222,14 +2337,10 @@ def audit_readback(interview_type: str, answers: Sequence[Tuple[str, Dict[str, A
             findings.extend(readback_disagreements(probe, kind, value, expected, said))
         if prompt and str(line.get("prompt")) != prompt:
             findings.append({"probe": probe + " (the prompt)", "sent": prompt, "expected": prompt, "said": "the read-back's prompt is %r" % line.get("prompt")})
-    answered = {qid for qid, _, _, _ in answers}
-    for qid in spoken:
-        if qid not in answered:
-            findings.append({"probe": "read-back (%s) of %s" % (interview_type, qid), "sent": None, "expected": "no line for a question the harness did not answer",
-                             "said": "the read-back carries a line for %s, which the harness did not answer: %r" % (qid, spoken[qid].get("spoken"))})
-    # Spec T11: C19 answered No — the read-back says what the payee door will do, in its own line (VENUE_DOOR_READBACK_QUESTION_ID)
-    c19 = next((value for qid, value, _, _ in answers if qid == "C19"), None)
-    if isinstance(c19, dict) and c19.get("choice") == A.VENUE_NO:
+    # Spec T11: C19 answered No — the read-back says what the payee door will do, in its own line (VENUE_DOOR_READBACK_QUESTION_ID).
+    # Spec T12 §0: the C19 answer is read from this run's answers or, failing that, the book, like every other line.
+    c19 = run_answered["C19"][0] if "C19" in run_answered else book.get("C19")
+    if "C19" in spoken and isinstance(c19, dict) and c19.get("choice") == A.VENUE_NO:
         door = next((l for l in lines if str(l.get("questionId")) == VENUE_DOOR_READBACK_QUESTION_ID), None)
         probe = "read-back (%s) of C19: the door's sentence" % interview_type
         if door is None:
@@ -2238,6 +2349,21 @@ def audit_readback(interview_type: str, answers: Sequence[Tuple[str, Dict[str, A
         elif str(door.get("spoken")) != VENUE_DOOR_READBACK_SENTENCE:
             findings.append({"probe": probe, "sent": c19, "expected": VENUE_DOOR_READBACK_SENTENCE, "said": "the read-back's door line says %r" % door.get("spoken")})
     return findings
+
+
+def readback_provenance_note(interview_type: str, answers: Sequence[Tuple[str, Dict[str, Any], str, str]], lines: Sequence[Dict[str, Any]]) -> str:
+    """
+    Spec T12 §0: how many read-back lines this run answered and how many the book supplied, counted over the lines the
+    estate speaks (the synthetic lines set aside). On a resumed interview the read-back carries the answers earlier runs
+    gave, so the two counts show how much of the law being read back this run wrote and how much stood before it.
+    """
+    book = A.ANSWERS.get(interview_type, {})
+    run_ids = {q for q, _, _, _ in answers}
+    line_ids = [str(l.get("questionId")) for l in lines if not l.get("synthetic")]
+    from_run = sum(1 for qid in line_ids if qid in run_ids)
+    from_book = sum(1 for qid in line_ids if qid not in run_ids and qid in book)
+    return "the %s read-back was checked against the book: %d line(s), %d this run answered and %d from the book" % (
+        interview_type, from_run + from_book, from_run, from_book)
 
 
 def audit_charter(interview_type: str, charter: Dict[str, Any], answers: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -2812,16 +2938,18 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
         A.WALLET_ACCOUNT_NAME, A.MONEY["per_payment_cents"], A.MONEY["per_day_cents"]))
     line("S5", "GET /v1/aer360/wallets → expect the Wallets register with %s, or its absence sentence before the first close" % A.WALLET_ACCOUNT_NAME)
     line("S5", "GET /v1/journey → expect currentStage 3 of %d, working_the_sandbox" % JOURNEY_STAGE_COUNT)
-    # S6 — Spec T9: pressed until the whitelist roster's quorum (A.WHITELIST_QUORUM) is met
+    # S6 — Spec T12: since AER 360 Spec 95 the whitelist door admits any active roster signer; the harness presses the roster
+    # people it holds a passkey for, in order (the founder last), until the estate answers whitelisted or nobody is left. A press
+    # refused SIGNATURE_NOT_COUNTED (its seat bound to a retired credential, Spec 95/99) is recorded and the next person presses.
     quorum = A.WHITELIST_QUORUM
+    roster_pressers = [k for k in A.CENSUS_ORDER if k != A.FOUNDER]  # ada, ben, cora; the founder is the last resort
     for payee in T.PAYEES:
         line("S6", "POST /v1/payees %s (as %s) → expect 201: the payee with its address proposed" % (
             _j({"displayName": payee["name"], "defaultAsset": T.PAYMENT_ASSET, "defaultChain": payee["chain"], "addresses": [{"chain": payee["chain"], "address": T.address(payee["key"])}]}), founder.name))
         line("S6", "POST /v1/payees/addresses/<address of %s>/promote {} (as %s) → expect a ceremony: status pending_promotion, platformMembershipId, ceremony" % (payee["name"], founder.name))
-        line("S6", "POST /v1/payees/addresses/<address of %s>/approve {} (as %s) → expect whitelistStatus pending_promotion with %s more needed: approvals {required %d, collected 1, remaining %d}, may_still_approve, sentence (Spec 89)" % (
-            payee["name"], A.PEOPLE[A.PAYMENT_APPROVER].name, Runner.COUNT_WORDS.get(quorum - 1, str(quorum - 1)), quorum, quorum - 1))
-        line("S6", "POST /v1/payees/addresses/<address of %s>/approve {} (as the next roster member the first answer names, expected %s) → expect whitelistStatus whitelisted" % (
-            payee["name"], A.PEOPLE[Runner.FALLBACK_PRESSER].name))
+        for key in roster_pressers:
+            line("S6", "POST /v1/payees/addresses/<address of %s>/approve {} (as %s, the roster in order, the founder last) → expect the estate to count it toward the quorum of %s (approvals, may_still_approve, sentence; Spec 89), or refuse SIGNATURE_NOT_COUNTED where the seat is bound to a retired credential (Spec 95/99); the harness presses on until whitelisted or nobody is left" % (
+                payee["name"], A.PEOPLE[key].name, Runner.COUNT_WORDS.get(quorum, str(quorum))))
     line("S6", "GET /v1/payees → expect both addresses whitelisted, read by this run's payee ids")
     # S7
     clerk = A.PEOPLE[A.PAYMENT_CLERK]
