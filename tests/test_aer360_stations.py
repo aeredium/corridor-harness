@@ -9,6 +9,11 @@ each person on a credential of their own — and meets what that unmasks under t
 a named approver, so Ben's press is refused at the approve route's guard). The estate of the four live
 runs stands behind `before_spec_91=True`, and the three scenarios Spec T10 lists — the people brought in
 again on their own credentials, the people already on their own, a seat grant refused — are here too.
+
+Spec T11 (21 September 2026): the double is the estate at AER 360 Spec 92, catalog version 14, so S3 walks
+23 questions and S5 18, the book answering the seven Spec 92 added; S3 reports the book's version beside
+what the estate served; S10 reads the new law back and raises nothing new; S11's venue probe meets the payee
+door's refusal by name, PAYEE_IS_VENUE_CONTRACT, and raises no finding; S7 says what the tiers would do.
 """
 import json
 import os
@@ -73,11 +78,20 @@ class TheFoundersRoad(unittest.TestCase):
     def test_s3_answers_every_question_the_estate_serves_and_compiles_the_charter(self):
         o = self.outcomes["S3"]
         self.assertEqual(o.outcome, H.PASS, o.line)
-        self.assertIn("policy interview: 21 questions answered", o.line)
+        self.assertIn("policy interview: 23 questions answered", o.line, "Spec T11: C11A and C19 among them")
         self.assertIn("charter compiled (Harness Holdings Pty Ltd; quorum 1", o.line)
         self.assertIn("journey stage 2 of 7", o.line)
+        # Spec T11 §5: the book's version beside the estate's, which the estate does not state
+        self.assertIn("; the answer book answers catalog version 14, and the estate served 23 question(s), every one known to the book (%s)" % H.ESTATE_STATES_NO_CATALOG_VERSION, o.line)
         given = [q for q, _, _, _ in self.runner.facts["answers"]["policy"]]
         self.assertEqual(given, [q.id for q in A.expected_walk("policy")], "the estate served the questions the book expected, in order")
+        self.assertIn("C11A", given)
+        self.assertIn("C19", given)
+        self.assertNotIn("C11C", given, "asked only behind C11A's third answer")
+        charter = self.runner.facts["charter"]["policy"]
+        self.assertEqual(charter["payeeApproval"], {"answer": "change_approvers", "roster": ["%s <%s>" % (A.PEOPLE[k].name, A.PEOPLE[k].email) for k in A.CENSUS_ORDER],
+                                                    "quorum": 2, "rosterQuestionId": "A8", "quorumQuestionId": "C12"})
+        self.assertEqual(charter["payeeVenueContracts"], "refused")
         self.assertEqual(self.runner.facts["charter"]["policy"]["allowedChains"], ["aeredium-testnet"])
         self.assertEqual(self.runner.facts["charter"]["policy"]["recordedChains"], ["aeredium", "ethereum"])
         self.assertEqual(self.runner.facts["charter_standing"], {"standsWritten": True, "inForceSince": self.runner.facts["compile"]["policy"]["receipt"]["completedAt"]})
@@ -118,10 +132,32 @@ class TheFoundersRoad(unittest.TestCase):
     def test_s5_opens_the_operating_account_and_moves_the_journey_to_stage_three(self):
         o = self.outcomes["S5"]
         self.assertEqual(o.outcome, H.PASS, o.line)
-        self.assertIn("wallet account: 14 questions answered", o.line)
+        self.assertIn("wallet account: 18 questions answered", o.line, "Spec T11: WO1 to WO4 among them, WO3 behind the named holder")
         self.assertIn("charter compiled (Operating account, purpose Operations — day-to-day business payments, per payment hold 1000000 cents, daily 5000000 cents, destinations hold_non_listed)", o.line)
         self.assertIn("journey stage 3 of 7 (working_the_sandbox)", o.line)
         self.assertIn("No daily close has completed yet", o.line)
+        given = [q for q, _, _, _ in self.runner.facts["answers"]["wallet_account"]]
+        self.assertEqual(given, [q.id for q in A.expected_walk("wallet_account")])
+        self.assertEqual(given[given.index("WA2") + 1:given.index("WCW")], ["WO1", "WO2", "WO3", "WO4"])
+        # the compiled account charter carries Spec 92's fields as the compiler records them
+        charter = self.runner.facts["charter"]["wallet_account"]
+        self.assertEqual(charter["holder"], {"held": "by_person", "name": "Ben Signatory", "email": A.PEOPLE["ben"].email, "title": "Officer"})
+        self.assertEqual(charter["signingTiers"]["holderAloneUpToCents"], "200000")
+        self.assertEqual(charter["signingTiers"]["twoSignaturesUpToCents"], "1000000")
+        self.assertEqual(charter["signingTiers"]["thirdParty"], {"name": "Harriet", "surname": "Founder", "email": A.PEOPLE["harriet"].email, "title": "CEO"})
+        self.assertEqual(charter["signers"], ["Ada Approver <%s>" % A.PEOPLE["ada"].email, "Ben Signatory <%s>" % A.PEOPLE["ben"].email, "Harriet Founder <%s>" % A.PEOPLE["harriet"].email],
+                         "WA1's people, and WO2's third party once")
+        self.assertIsNone(charter["payeeApproval"])
+        self.assertIsNone(charter["payeeVenueContracts"])
+        # the read-back spoke the figures the book wrote, never the written dollar, and the person by name and email
+        lines = {l["questionId"]: l["spoken"] for l in self.runner.facts["readback"]["wallet_account"]["lines"]}
+        self.assertEqual(lines["WO3"], "US$2,000 and 00 cents.")
+        self.assertEqual(lines["WO4"], "US$10,000 and 00 cents.")
+        self.assertEqual(lines["WO1"], "Ben Signatory — %s." % A.PEOPLE["ben"].email)
+        self.assertEqual(lines["WO2"], "Harriet — %s — CEO — Founder" % A.PEOPLE["harriet"].email, "a list entry's values in the order jsonb stores them")
+        self.assertIn("WO1_TITLE", lines)
+        self.assertIn("HOLD_NOT_WRITTEN", lines)
+        self.assertIn("WQ_TIERS", lines)
 
     def test_s6_meets_the_approve_routes_guard_at_bens_press_once_every_person_holds_their_own_credential(self):
         """
@@ -153,6 +189,18 @@ class TheFoundersRoad(unittest.TestCase):
         self.assertIn("Ada approved P1: status approved, approvals 1 of 1", o.line)
         self.assertIn("P2 (4999.99 USDC, expected to waits): the run waits for approval: status pending_approval, approvalsRequired 1", o.line)
         self.assertIn("P3 (12000.00 USDC, expected to held): the run waits for approval: status pending_approval, approvalsRequired 1", o.line)
+        # Spec T11 §4: the amounts are unchanged, and the line and the expectation column say what the tiers would do with each
+        self.assertIn("approvalsRequired 1; under the tiers: within the holder's own figure (US$2,000.00), one signature — the holder's", o.line)
+        self.assertIn("approvalsRequired 1; under the tiers: two signatures (above US$2,000.00, up to US$10,000.00)", o.line)
+        self.assertIn("approvalsRequired 1; under the tiers: three signatures (above US$10,000.00)", o.line)
+        submits = [s for s in self.runner.evidence["S7"] if s["route"].endswith("/submit")]
+        self.assertEqual([s["expected"].split("; ", 1)[1] for s in submits],
+                         ["under the tiers: within the holder's own figure (US$2,000.00), one signature — the holder's",
+                          "under the tiers: two signatures (above US$2,000.00, up to US$10,000.00)",
+                          "under the tiers: three signatures (above US$10,000.00)"])
+        reviews = [s for s in self.runner.evidence["S7"] if s["route"].endswith("/sets/review")]
+        self.assertTrue(all("(figures from this run's compiled account charter)" in s["expected"] for s in reviews), [s["expected"] for s in reviews])
+        self.assertEqual([p.amount for p in A.PAYMENTS], ["1250.00", "4999.99", "12000.00"])
         sets = self.runner.facts["sets"]
         self.assertEqual(sets["P2"]["view"]["set"]["instructions"][0]["isOneOff"], True)
         self.assertEqual(sets["P3"]["view"]["set"]["approval"]["bandThresholdBaseMinor"], A.MONEY["per_payment_cents"])
@@ -197,11 +245,17 @@ class TheFoundersRoad(unittest.TestCase):
             self.assertTrue(f.said.startswith("ACCEPTED:"), f.said)
             self.assertTrue(f.came_back.startswith("HTTP 20"), f.came_back)
         self.assertIn("17 probe(s), 1 finding(s)", o.line)
+        # Spec T11 §3: the charter answered No at C19, so the probe expects the payee door's refusal by name, in the estate's sentence
         venue = [s for s in self.runner.evidence["S11"] if "a real venue contract" in str(s.get("probe", ""))]
         self.assertEqual(len(venue), 1)
-        self.assertEqual(venue[0]["status"], 201)
-        self.assertEqual(venue[0]["result"], "accepted, as the law says (%s)" % H.VENUE_RULING)
-        self.assertTrue(any(l.startswith("  S11 — accepted, as the law says — a payee address that is a real venue contract") for l in self.said))
+        self.assertEqual(venue[0]["status"], 422)
+        sentence = "This address is the contract of Uniswap v3 on ethereum. Your charter says a payee must be a wallet held by a person or a company (question C19). Nothing was saved."
+        self.assertEqual(venue[0]["expected"], "HTTP 422 PAYEE_IS_VENUE_CONTRACT: %s (this run's compiled policy charter says payeeVenueContracts \"refused\")" % sentence)
+        self.assertEqual(venue[0]["result"], "refused as the charter says (C19 No): PAYEE_IS_VENUE_CONTRACT: %s" % sentence)
+        self.assertIn('"code": "PAYEE_IS_VENUE_CONTRACT"', venue[0]["came_back"])
+        self.assertEqual(self.runner.facts["venue_law"], "refused")
+        self.assertTrue(any(l.startswith("  S11 — refused as the charter says — a payee address that is a real venue contract") and l.endswith(": PAYEE_IS_VENUE_CONTRACT: %s" % sentence) for l in self.said))
+        self.assertFalse(any("venue contract" in f.probe for f in findings), "refused as the charter says is no finding")
         refused = [l for l in self.said if l.startswith("  S11 — refused as expected — ")]
         for expected in ("without the x-csrf-token header", "Ben confirms", "a viewer's session at an author route: POST /v1/payees", "POST /v1/sets", "POST /v1/invites",
                          "/answers", "principal", "did not serve", "compile before confirm", "wrong kind", "replayed", "wrong rpId", "second confirm",
@@ -386,6 +440,16 @@ class ResumedAndSecondRuns(unittest.TestCase):
         self.assertEqual(runner.facts["unlisted_key"], "UNLISTED_ETHEREUM_2", "the first run paid the first unlisted destination, so the estate no longer finds it new")
         self.assertIn("P2 (4999.99 USDC, expected to waits): the run waits for approval", outcomes["S7"].line)
         self.assertTrue(any("no read-back and answers recorded for the policy interview" in n for n in runner.notes["S10"]))
+        # Spec T11: a run that compiled no policy charter reads the book's C19 for the venue probe and says so; the door still refuses by name
+        self.assertTrue(any(n.startswith("this run compiled no policy charter (S3 did not run), so the venue probe's expectation is read off the answer book's C19") for n in runner.notes["S11"]), runner.notes["S11"])
+        self.assertEqual(runner.facts["venue_law"], "refused")
+        self.assertFalse(any("venue contract" in f.probe for f in runner.findings if f.station == "S11"))
+        venue = [s for s in runner.evidence["S11"] if "a real venue contract" in str(s.get("probe", ""))][-1]
+        self.assertEqual(venue["status"], 422)
+        self.assertIn("(the answer book's C19 is \"No — only wallets held by people or companies\")", venue["expected"])
+        # and S7's tiers are read from the book, no account charter having been compiled in this run
+        reviews = [s for s in runner.evidence["S7"] if s["route"].endswith("/sets/review")]
+        self.assertTrue(all("(figures from the answer book)" in s["expected"] for s in reviews), [s["expected"] for s in reviews])
 
     def test_a_second_full_run_signs_in_rather_than_enrolling_and_amends_the_charter(self):
         said = []

@@ -120,7 +120,50 @@ class EstateHarnessReadmeTest(unittest.TestCase):
         self.assertIn("until Spec 91; see Spec T10 below", self.section)
 
 
+    def test_it_says_the_book_learned_catalog_version_14_and_what_the_auditor_reads_back_since_spec_t11(self):
+        self.assertIn("Spec T11, 21 September 2026", self.section)
+        self.assertIn("aer360-harness-2026-09-21.md", self.section)
+        self.assertIn("commit cf3be4a, `CATALOG_VERSION 14`", self.section)
+        for words in ("*The people who may change these rules, at the number you set for a change*", "*No — only wallets held by people or companies*",
+                      "*One person, named here*", "`{choice, person: {name, email}}`", "Harriet Founder, CEO", "2,000.00 (the holder alone)", "10,000.00 (two signatures enough)",
+                      "WA1 gains Ben beside Ada", "WQ stays at one", "`CATALOG_VERSION_ANSWERED = 14`", "the estate states no catalog version on the roads a browser walks",
+                      "`tests/fixtures/aer360-served-2026-09-21.json`", "`payeeApproval` is the change-approvers answer", "`payeeVenueContracts` is `refused`",
+                      "`{held: by_person, name: Ben Signatory, email, title: Officer}`", "`signingTiers.holderAloneUpToCents` is `200000`", "`twoSignaturesUpToCents` `1000000`",
+                      "never as the written *US$1 and 00 cents.*", "*You answered No: such an address will be refused when entered.*",
+                      "no `payeeApproval`, no `holder`", "`PAYEE_IS_VENUE_CONTRACT`, 422",
+                      "*This address is the contract of Uniswap v3 on ethereum. Your charter says a payee must be a wallet held by a person or a company (question C19). Nothing was saved.*",
+                      "keeps the expectation of 20 September", "*within the holder's own figure (US$2,000.00), one signature — the holder's*",
+                      "*two signatures (above US$2,000.00, up to US$10,000.00)*", "*three signatures (above US$10,000.00)*", "invents no source account",
+                      "the frozen fixture is 141 lines", "`refuses_venue_contract=None` follows the charter", "`catalog_version=12` leaves the seven out"):
+            self.assertIn(words, self.section, words)
+        self.assertIn("the catalog is version 14 since AER 360 Spec 92; see Spec T11 below", self.section)
+        self.assertIn("since Spec T11 the probe reads the charter's answer to C19 at run time", self.section)
+        self.assertIn("a finding only if refused", self.section, "Spec T8's sentence stands, for an estate whose C19 is Yes")
+
+
 class ChangelogTest(unittest.TestCase):
+    def test_the_changelog_records_spec_t11_before_t10_and_names_every_change(self):
+        text = read("CHANGELOG.md")
+        self.assertIn("## Spec T11 — The answer book learns catalog version 14, and the auditor reads the new law back (21 September 2026)", text)
+        self.assertLess(text.index("## Spec T11"), text.index("## Spec T10"))
+        t11 = text.split("## Spec T11", 1)[1].split("## Spec T10", 1)[0]
+        for words in ("aer360-harness-2026-09-21.md", "commit cf3be4a", "`CATALOG_VERSION 14`", "`person_or_none`",
+                      '`C11A` `{"choice": "The people who may change these rules, at the number you set for a change"}`',
+                      '`C11C` `{"entries": []}`', '`C19` `{"choice": "No — only wallets held by people or companies"}`',
+                      '`WO1` `{"choice": "One person, named here", "person": {"name": "Ben Signatory", "email": <Ben\'s>}}`',
+                      '`WO2` `{"entries": [{"name": "Harriet", "surname": "Founder", "email": <Harriet\'s>, "title": "CEO"}]}`',
+                      '`WO3` `{"cents": "200000"}`', '`WO4` `{"cents": "1000000"}`', "`holder_alone_cents`", "`two_signatures_cents`", "`WA1` gains Ben beside Ada",
+                      "`CATALOG_VERSION_ANSWERED = 14`", "`ADDED_IN_V14`", "every one known to the book", "with the version pair in the sentence",
+                      "who approves a new payee (C11A: the answer, its roster and its quorum)", "may a payee be a venue's contract (C19)", "who holds this wallet (WO1)",
+                      "the holder's own figure (WO3)", "the two-signature figure (WO4)", "the signers (WA1, and WO2's third party once)", "`C19_DOOR`",
+                      "`PAYEE_IS_VENUE_CONTRACT`, 422", "`payee_is_venue_contract_sentence`", "it saved a venue's contract", "the expectation of 20 September stands",
+                      "`under_the_tiers`", "within the holder's own figure (US$2,000.00)", "does not invent a source account", "134 → 141 lines",
+                      "`tests/fixtures/aer360-served-2026-09-21.json`", "`TIER_TWO_NOT_ABOVE_ONE`", "`tiers_need_three_people`", "`read_wallet_people`",
+                      "`VENUE_CONTRACTS`", "`refuses_venue_contract=None`", "`catalog_version=12` leaves the seven out",
+                      "corridor_harness.py, series.py, tables.py, aer360_passkey.py, aer360_tables.py and the corridor's tests are not touched"):
+            self.assertIn(words, t11, words)
+
+
     def test_the_changelog_records_spec_t7_and_its_files(self):
         text = read("CHANGELOG.md")
         self.assertIn("Spec T7", text)

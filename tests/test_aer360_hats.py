@@ -9,6 +9,12 @@ is one finding naming the entry; a kind with no rendering is not compared); the 
 acceptance, and a double that refuses reads as a finding with the ruling quoted; a run with
 four-second invitations passes S12 and the report says where the seconds go; two reports in the
 folder give the closing table its last-run column, with closed, still open and new.
+
+Spec T11 (21 September 2026): the auditor reads Spec 92's law back — five expectations against a charter
+fixture written from the compiler's types, each failing against the fixture of 21 September (no
+payeeApproval, no holder); the read-back's two written figures and C19's door line; and the venue probe
+follows the charter — refusal by name where it says refused, the acceptance of 20 September where it says
+accepted, a door that saves regardless the finding.
 """
 import copy
 import json
@@ -17,6 +23,7 @@ import re
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import aer360_answers as A  # noqa: E402
@@ -24,6 +31,9 @@ import aer360_harness as H  # noqa: E402
 import aer360_passkey as PK  # noqa: E402
 import aer360_tables as T  # noqa: E402
 from tests.test_aer360_double import Clock, EstateDouble, VENUE_STIPULATION, runner_on  # noqa: E402
+
+# The payee door's sentence for the probe address (packages/shared/src/refusals.ts, payeeIsVenueContractSentence), word for word.
+VENUE_DOOR_SENTENCE = "This address is the contract of Uniswap v3 on ethereum. Your charter says a payee must be a wallet held by a person or a company (question C19). Nothing was saved."
 
 # The estate's own A8 line from the first live run, 20 September 2026 (report aer360-harness-2026-09-20.md), word for word:
 # the entries the book sends as name, email, role, spoken in the order jsonb stores them.
@@ -40,15 +50,21 @@ def fixture_readback(interview_type):
     lines = [{"questionId": "REALM", "prompt": "Where this estate opens", "spoken": "This estate opens in the Sandbox…", "synthetic": True}]
     for qid, value, prompt, kind in fixture_answers(interview_type):
         lines.append({"questionId": qid, "prompt": prompt, "spoken": H.spoken_for(kind, qid, value)})
+        if qid == "C19" and value.get("choice") == A.VENUE_NO:
+            # the estate's own line after a No (services/onboarding.ts, VENUE_DOOR_READBACK_QUESTION_ID)
+            lines.append({"questionId": "C19_DOOR", "prompt": "What happens to a venue’s contract entered as a payee", "spoken": H.VENUE_DOOR_READBACK_SENTENCE, "synthetic": True})
     return lines
 
 
-def fixture_charter(interview_type):
-    """A compiled charter that agrees with the book, in the shape onboardingcompiler.ts records."""
+CENSUS_ROSTER = ["%s <%s>" % (A.PEOPLE[k].name, A.PEOPLE[k].email) for k in A.CENSUS_ORDER]
+
+
+def fixture_charter_of_21_september(interview_type):
+    """A compiled charter of the shape the estate compiled before Spec 92 — no payeeApproval, no payeeVenueContracts, no holder, no signingTiers — which the run of 21 September left the harness comparing against."""
     if interview_type == "policy":
         return {"interviewType": "policy", "name": A.ESTATE["company"], "purpose": None, "allowedChains": ["aeredium-testnet"], "recordedChains": ["aeredium", "ethereum"],
                 "realm": "sandbox", "whitelistMode": None, "whitelistEntries": [], "quorum": 1, "signers": [A.PEOPLE["ada"].email],
-                "changeApprovers": ["%s <%s>" % (A.PEOPLE[k].name, A.PEOPLE[k].email) for k in A.CENSUS_ORDER], "isAgentsAccount": False, "principal": None,
+                "changeApprovers": list(CENSUS_ROSTER), "isAgentsAccount": False, "principal": None,
                 "amountsUsdCents": {"denyCeiling": None, "holdOverPerTx": None, "dailyTotal": None, "weeklyTotal": None, "monthlyTotal": None},
                 "requesterCountsAsSigner": True, "securityContact": {"name": A.PEOPLE["harriet"].name, "email": A.PEOPLE["harriet"].email},
                 "mutationGovernance": [{"scope": "all", "quorum": 2}]}
@@ -57,6 +73,24 @@ def fixture_charter(interview_type):
             "isAgentsAccount": False, "principal": A.PEOPLE["cora"].email,
             "amountsUsdCents": {"denyCeiling": None, "holdOverPerTx": A.MONEY["per_payment_cents"], "dailyTotal": A.MONEY["per_day_cents"], "weeklyTotal": None, "monthlyTotal": None},
             "requesterCountsAsSigner": True, "securityContact": None}
+
+
+def fixture_charter(interview_type):
+    """A compiled charter that agrees with the book, in the shape onboardingcompiler.ts records at Spec 92 (compiler version 4): the fixture of 21 September plus Spec 92's fields."""
+    charter = fixture_charter_of_21_september(interview_type)
+    if interview_type == "policy":
+        # PayeeApproval, WalletHolder and SigningTiers as onboardingcompiler.ts types them
+        charter["payeeApproval"] = {"answer": "change_approvers", "roster": list(CENSUS_ROSTER), "quorum": 2, "rosterQuestionId": "A8", "quorumQuestionId": "C12"}
+        charter["payeeVenueContracts"] = "refused"
+        return charter
+    charter["signers"] = ["%s <%s>" % (A.PEOPLE[k].name, A.PEOPLE[k].email) for k in ("ada", "ben", "harriet")]  # WA1's two, and WO2's third party once
+    charter["payeeApproval"] = None
+    charter["payeeVenueContracts"] = None
+    charter["holder"] = {"held": "by_person", "name": A.PEOPLE["ben"].name, "email": A.PEOPLE["ben"].email, "title": "Officer"}
+    charter["signingTiers"] = {"holderAloneUpToCents": A.MONEY["holder_alone_cents"], "twoSignaturesUpToCents": A.MONEY["two_signatures_cents"],
+                               "thirdParty": {"name": "Harriet", "surname": "Founder", "email": A.PEOPLE["harriet"].email, "title": "CEO"},
+                               "holdNotWritten": "Under this wallet’s signing tiers this figure is RECORDED and NOT written as a hold: a payment above the figure the holder may pay alone waits for its second or third signature instead, and those signatures are the approval."}
+    return charter
 
 
 class TheAuditorOnAFixture(unittest.TestCase):
@@ -79,6 +113,118 @@ class TheAuditorOnAFixture(unittest.TestCase):
         found = H.audit_charter("wallet_account", account, {q: v for q, v, _, _ in fixture_answers("wallet_account")})
         self.assertEqual([f["probe"] for f in found], ["charter (wallet_account): the per-payment hold (O2)"])
         self.assertEqual(found[0]["expected"], json.dumps(A.MONEY["per_payment_cents"]))
+
+    def test_the_five_expectations_of_spec_t11_pass_against_spec_92s_charter_and_fail_against_the_fixture_of_21_september(self):
+        """Spec T11 §2: payeeApproval, payeeVenueContracts, holder, signingTiers.holderAloneUpToCents, twoSignaturesUpToCents — each an expect beside T8's."""
+        policy = {q: v for q, v, _, _ in fixture_answers("policy")}
+        account = {q: v for q, v, _, _ in fixture_answers("wallet_account")}
+        self.assertEqual(H.audit_charter("policy", fixture_charter("policy"), policy), [])
+        self.assertEqual(H.audit_charter("wallet_account", fixture_charter("wallet_account"), account), [])
+        old_policy = H.audit_charter("policy", fixture_charter_of_21_september("policy"), policy)
+        self.assertEqual([f["probe"] for f in old_policy], ["charter (policy): who approves a new payee (C11A: the answer, its roster and its quorum)",
+                                                            "charter (policy): may a payee be a venue's contract (C19)"])
+        self.assertEqual(old_policy[0]["expected"], json.dumps({"answer": "change_approvers", "roster": CENSUS_ROSTER, "quorum": 2}, ensure_ascii=False))
+        self.assertEqual(old_policy[0]["said"], "the charter carries null")
+        self.assertEqual(old_policy[0]["sent"], A.PAYEE_APPROVAL_CHANGE_APPROVERS)
+        self.assertEqual((old_policy[1]["expected"], old_policy[1]["said"]), ('"refused"', "the charter carries null"))
+        old_account = H.audit_charter("wallet_account", fixture_charter_of_21_september("wallet_account"), account)
+        self.assertEqual([f["probe"] for f in old_account], ["charter (wallet_account): the signers (WA1, and WO2's third party once)",
+                                                             "charter (wallet_account): who holds this wallet (WO1)",
+                                                             "charter (wallet_account): the holder's own figure (WO3)",
+                                                             "charter (wallet_account): the two-signature figure (WO4)"])
+        self.assertEqual(old_account[1]["expected"], json.dumps({"held": "by_person", "name": "Ben Signatory", "email": A.PEOPLE["ben"].email, "title": "Officer"}, ensure_ascii=False))
+        self.assertEqual(old_account[1]["said"], "the charter carries null")
+        self.assertEqual((old_account[2]["expected"], old_account[2]["said"]), ('"200000"', "the charter carries null"))
+        self.assertEqual((old_account[3]["expected"], old_account[3]["said"]), ('"1000000"', "the charter carries null"))
+        # a figure that differs is the one finding for that figure: the written dollar left in place by an estate that did not take the answer
+        drifted = fixture_charter("wallet_account")
+        drifted["signingTiers"]["twoSignaturesUpToCents"] = "100"
+        found = H.audit_charter("wallet_account", drifted, account)
+        self.assertEqual([(f["probe"], f["said"]) for f in found], [("charter (wallet_account): the two-signature figure (WO4)", 'the charter carries "100"')])
+        # the other two answers to C11A, read as payeeApprovalOf reads them
+        first = dict(policy)
+        first["C11A"] = {"choice": A.PAYEE_APPROVAL_PAYMENT_APPROVERS}
+        charter = fixture_charter("policy")
+        charter["payeeApproval"] = {"answer": "payment_approvers", "roster": [A.PEOPLE["ada"].email], "quorum": 1, "rosterQuestionId": "C11", "quorumQuestionId": "C10"}
+        self.assertEqual(H.audit_charter("policy", charter, first), [])
+        third = dict(policy)
+        third["C11A"] = {"choice": A.PAYEE_APPROVAL_CFO}
+        third["C11C"] = {"entries": [{"name": "Cora Clerk", "email": A.PEOPLE["cora"].email}]}
+        charter["payeeApproval"] = {"answer": "cfo", "roster": ["Cora Clerk <%s>" % A.PEOPLE["cora"].email], "quorum": 1, "rosterQuestionId": "C11C", "quorumQuestionId": "C11A"}
+        self.assertEqual(H.audit_charter("policy", charter, third), [])
+        yes = dict(policy)
+        yes["C19"] = {"choice": A.VENUE_YES}
+        charter["payeeApproval"] = fixture_charter("policy")["payeeApproval"]
+        charter["payeeVenueContracts"] = "accepted"
+        self.assertEqual(H.audit_charter("policy", charter, yes), [])
+        # a wallet held by no one: no WO3, and the holder record says so
+        nobody = {q: v for q, v in account.items() if q != "WO3"}
+        nobody["WO1"] = {"choice": A.HOLDER_NO_ONE}
+        charter = fixture_charter("wallet_account")
+        charter["holder"] = {"held": "by_no_one"}
+        charter["signingTiers"]["holderAloneUpToCents"] = None
+        self.assertEqual(H.audit_charter("wallet_account", charter, nobody), [])
+
+    def test_the_third_party_is_expected_among_the_signers_once_by_email(self):
+        account = {q: v for q, v, _, _ in fixture_answers("wallet_account")}
+        charter = fixture_charter("wallet_account")
+        charter["signers"] = charter["signers"][:2]
+        found = H.audit_charter("wallet_account", charter, account)
+        self.assertEqual([f["probe"] for f in found], ["charter (wallet_account): the signers (WA1, and WO2's third party once)"])
+        self.assertEqual(found[0]["expected"], json.dumps(fixture_charter("wallet_account")["signers"], ensure_ascii=False))
+        # a third party already named at WA1 holds one seat, not two
+        both = dict(account)
+        both["WO2"] = {"entries": [{"name": "Ada", "surname": "Approver", "email": A.PEOPLE["ada"].email, "title": "CFO"}]}
+        charter = fixture_charter("wallet_account")
+        charter["signers"] = charter["signers"][:2]
+        charter["signingTiers"]["thirdParty"] = both["WO2"]["entries"][0]
+        self.assertEqual(H.audit_charter("wallet_account", charter, both), [])
+
+    def test_the_read_back_that_still_speaks_the_written_dollar_is_a_finding_saying_so_and_c19_no_expects_the_doors_line(self):
+        """Spec T11 §2: the two figures read as the book wrote them and not as US$1.00, and the venue sentence reads No, with the door's line after it."""
+        answers = fixture_answers("wallet_account")
+        lines = fixture_readback("wallet_account")
+        self.assertEqual(next(l["spoken"] for l in lines if l["questionId"] == "WO3"), "US$2,000 and 00 cents.")
+        self.assertEqual(next(l["spoken"] for l in lines if l["questionId"] == "WO4"), "US$10,000 and 00 cents.")
+        self.assertEqual(H.audit_readback("wallet_account", answers, lines), [])
+        for l in lines:
+            if l["questionId"] in ("WO3", "WO4"):
+                l["spoken"] = H.WRITTEN_DOLLAR_SPOKEN
+        found = H.audit_readback("wallet_account", answers, lines)
+        self.assertEqual([(f["probe"], f["expected"], f["said"]) for f in found], [
+            ("read-back (wallet_account) of WO3", "US$2,000 and 00 cents.", "the read-back says 'US$1 and 00 cents.' — the figure the field arrived written with, not the 'US$2,000 and 00 cents.' the book wrote"),
+            ("read-back (wallet_account) of WO4", "US$10,000 and 00 cents.", "the read-back says 'US$1 and 00 cents.' — the figure the field arrived written with, not the 'US$10,000 and 00 cents.' the book wrote"),
+        ])
+        policy = fixture_answers("policy")
+        lines = fixture_readback("policy")
+        self.assertEqual(next(l["spoken"] for l in lines if l["questionId"] == "C19"), "No — only wallets held by people or companies")
+        self.assertEqual(H.audit_readback("policy", policy, lines), [])
+        without_door = [l for l in lines if l["questionId"] != "C19_DOOR"]
+        found = H.audit_readback("policy", policy, without_door)
+        self.assertEqual([(f["probe"], f["expected"], f["said"]) for f in found], [
+            ("read-back (policy) of C19: the door's sentence", "You answered No: such an address will be refused when entered.",
+             "the read-back carries no line (C19_DOOR) saying what the payee door will do with a venue's contract")])
+        moved = [dict(l, spoken="Such an address is accepted.") if l["questionId"] == "C19_DOOR" else l for l in lines]
+        found = H.audit_readback("policy", policy, moved)
+        self.assertEqual([f["said"] for f in found], ["the read-back's door line says 'Such an address is accepted.'"])
+        # an estate whose C19 is Yes owes no door line
+        yes = [(q, {"choice": A.VENUE_YES} if q == "C19" else v, p, k) for q, v, p, k in policy]
+        yes_lines = [dict(l, spoken=A.VENUE_YES) if l["questionId"] == "C19" else l for l in without_door]
+        self.assertEqual(H.audit_readback("policy", yes, yes_lines), [])
+
+    def test_the_venue_probes_expectation_follows_the_charter_fixture(self):
+        """Spec T11: refusal when the charter fixture says refused, acceptance when it says accepted — or was never asked."""
+        self.assertEqual(H.venue_law_of(fixture_charter("policy")), "refused")
+        accepted = fixture_charter("policy")
+        accepted["payeeVenueContracts"] = "accepted"
+        self.assertEqual(H.venue_law_of(accepted), "accepted")
+        self.assertEqual(H.venue_law_of(fixture_charter_of_21_september("policy")), "accepted", "never asked compiles null, which every reader takes as the founder's default")
+        self.assertEqual(H.venue_law_of(None), "accepted")
+        self.assertEqual(H.venue_law_of({"payeeVenueContracts": None}), "accepted")
+        self.assertEqual(H.venue_law_of_the_book(), "refused", "the book answers C19 No")
+        self.assertEqual(H.payee_is_venue_contract_sentence("Uniswap v3", "ethereum"), VENUE_DOOR_SENTENCE)
+        self.assertEqual(H.PAYEE_IS_VENUE_CONTRACT_STATUS, 422)
+        self.assertEqual(H.ESTATE_VENUE_NAMES[H.CORRIDOR_VENUE_IDS[T.venue_address_for_probe()["key"]]], "Uniswap v3")
 
     def test_a_sandbox_charter_naming_a_live_network_is_a_finding(self):
         answers = {q: v for q, v, _, _ in fixture_answers("policy")}
@@ -131,6 +277,15 @@ class TheAuditorOnAFixture(unittest.TestCase):
         self.assertEqual(H.spoken_for("count", "C14N", {"count": 1}), "1 payment in a day.")
         self.assertEqual(H.spoken_for("count", "C14N", {"count": 1234}), "1,234 payments in a day.")
         self.assertIsNone(H.spoken_for("duration", "Z1", {"seconds": 5}), "a kind the estate's switch does not name has no rendering here")
+        # Spec 92's kind and the written zero (spokenAnswer at cf3be4a), so no kind the catalog serves goes uncompared
+        self.assertEqual(H.spoken_for("person_or_none", "WO1", A.ACCOUNT_ANSWERS["WO1"]), "Ben Signatory — harness+ben@aeredium.io.")
+        self.assertEqual(H.spoken_for("person_or_none", "WO1", {"choice": A.HOLDER_PERSON, "person": {"name": "  ", "email": "x@y.io"}}), "x@y.io.")
+        self.assertEqual(H.spoken_for("person_or_none", "WO1", {"choice": A.HOLDER_NO_ONE}), A.HOLDER_NO_ONE + ".")
+        self.assertEqual(H.spoken_for("person_or_none", "WO1", {}), "No one chosen.")
+        self.assertEqual(H.spoken_for("money", "WO3", {"cents": "100"}), "US$1 and 00 cents.", "the written dollar, as the estate speaks it")
+        self.assertEqual(H.spoken_for("money", "WO3", {"cents": "0"}), "US$0 and 00 cents — nothing is paid under this rule until you write a figure.")
+        self.assertEqual(H.spoken_for("money", "WO3", A.ACCOUNT_ANSWERS["WO3"]), "US$2,000 and 00 cents.")
+        self.assertEqual(H.spoken_for("list", "WO2", A.ACCOUNT_ANSWERS["WO2"]), "Harriet — harness+harriet@aeredium.io — CEO — Founder", "jsonb's order: name, email, title, surname")
 
     def test_the_census_in_the_estates_spoken_form_against_the_books_json_answers_is_no_finding(self):
         """The live estate's A8 line of 20 September 2026 against the entries the book sends as name, email, role: no finding."""
@@ -356,20 +511,26 @@ class TheAttackerAgainstTheDouble(unittest.TestCase):
         self.assertEqual(wrong["status"], 403)
         self.assertIn("Unexpected RP ID hash", wrong["came_back"])
 
-    def test_the_checksum_probe_is_a_finding_and_the_venue_probe_is_accepted_as_the_law_says(self):
+    def test_the_checksum_probe_is_a_finding_and_the_venue_probe_is_refused_as_the_charter_says(self):
+        """Spec T11 §3: the compiled charter says refused (C19 No), so the door's refusal by name, in the estate's sentence, is what the law says."""
         checksum = self.step("a payee address with a wrong checksum")
         self.assertEqual(checksum["status"], 201)
         self.assertEqual(checksum["sent"]["addresses"][0]["address"], T.wrong_checksum(T.address("CHECKSUM_PROBE_ETHEREUM")))
         venue = self.step("a real venue contract")
-        self.assertEqual(venue["status"], 201)
+        self.assertEqual(venue["status"], 422)
         self.assertEqual(venue["sent"]["addresses"][0]["address"], T.venue_address_for_probe()["address"])
-        self.assertEqual(venue["expected"], "HTTP 201: accepted, as the law says (%s)" % H.VENUE_RULING)
-        self.assertEqual(venue["result"], "accepted, as the law says (Bear, 20 September 2026: unless the questionnaire stipulates otherwise, an address is accepted)")
+        self.assertEqual(venue["expected"], "HTTP 422 PAYEE_IS_VENUE_CONTRACT: %s (this run's compiled policy charter says payeeVenueContracts \"refused\")" % VENUE_DOOR_SENTENCE)
+        self.assertEqual(venue["result"], "refused as the charter says (C19 No): PAYEE_IS_VENUE_CONTRACT: %s" % VENUE_DOOR_SENTENCE)
+        came_back = json.loads(venue["came_back"])
+        self.assertEqual(came_back["error"]["code"], "PAYEE_IS_VENUE_CONTRACT")
+        self.assertEqual(came_back["error"]["message"], VENUE_DOOR_SENTENCE)
+        self.assertEqual(came_back["error"]["detail"], {"venue": "uniswap_v3", "chain": "ethereum", "address": T.venue_address_for_probe()["address"], "charterQuestionId": "C19"})
         findings = {f.probe: f for f in self.runner.findings if f.station == "S11"}
         self.assertIn("a payee address with a wrong checksum", findings)
         self.assertTrue(findings["a payee address with a wrong checksum"].said.startswith("ACCEPTED: HTTP 201"))
-        self.assertFalse(any("venue contract" in probe for probe in findings), "accepted is what the law says; the venue is a finding only if refused")
-        self.assertTrue(any(l.startswith("  S11 — accepted, as the law says — a payee address that is a real venue contract") and l.endswith(": HTTP 201") for l in self.said))
+        self.assertFalse(any("venue contract" in probe for probe in findings), "refused as the charter says is what the law says; an acceptance would be the finding")
+        self.assertTrue(any(l.startswith("  S11 — refused as the charter says — a payee address that is a real venue contract") and l.endswith(": PAYEE_IS_VENUE_CONTRACT: %s" % VENUE_DOOR_SENTENCE) for l in self.said))
+        self.assertIsNone(H.refusal_without_why(venue["status"], venue["came_back"]), "a refusal that says why")
 
     def test_the_clerks_own_approval_is_refused_at_the_guard_on_a_credential_of_her_own(self):
         # Spec 91: Cora holds her own credential, which the policy names no approver, so the challenge is refused in the room sentence;
@@ -389,34 +550,74 @@ class TheAttackerAgainstTheDouble(unittest.TestCase):
 
     def test_findings_are_printed_in_the_failure_form_with_the_probe(self):
         lines = [l for l in self.said if l.startswith("S11 — fail — ") and ": ACCEPTED: " in l]
-        self.assertEqual(len(lines), 1, "the wrong checksum; the venue is accepted, as the law says, and the clerk is refused at the guard")
+        self.assertEqual(len(lines), 1, "the wrong checksum; the venue is refused as the charter says, and the clerk is refused at the guard")
         self.assertIn("S11 — fail — the attacker: 17 probe(s), 1 finding(s)", self.said)
 
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
-class TheAttackerAgainstADoubleThatRefusesTheVenue(unittest.TestCase):
-    """The day the questionnaire stipulates against venue contracts the estate refuses; until the harness is told the law changed, that refusal is the finding, with the ruling quoted."""
+class TheVenueProbeFollowsTheCharter(unittest.TestCase):
+    """Spec T11 §3: the probe reads the compiled charter's answer at run time — refused by name under C19 No, the acceptance of 20 September under Yes."""
 
-    def test_a_refusal_of_the_venue_probe_is_a_finding_with_the_ruling_quoted(self):
-        double = EstateDouble(refuses_venue_contract=True)
+    VENUE_PROBE = "a payee address that is a real venue contract (Uniswap v3 SwapRouter02 on Ethereum, read from the corridor's tables.py at run time)"
+
+    def run_against(self, **double_kwargs):
+        double = EstateDouble(**double_kwargs)
         said = []
         runner = runner_on(double, tempfile.mkdtemp(), invite=double.mint_founder_link(), said=said)
         outcomes = {o.station: o for o in runner.run()}
+        return runner, outcomes, said
+
+    def test_a_door_that_saves_a_venues_contract_against_a_charter_that_says_no_is_the_finding(self):
+        """An estate whose payee door never learned C19 saves the address; the charter says refused, so the acceptance is reported as the finding."""
+        runner, outcomes, said = self.run_against(refuses_venue_contract=False)
         finding = next(f for f in runner.findings if f.station == "S11" and "a real venue contract" in f.probe)
-        self.assertTrue(finding.said.startswith("REFUSED: ADDRESS_PROPOSAL_REFUSED: %s" % VENUE_STIPULATION), finding.said)
-        self.assertIn("the law says otherwise (%s; a contract is an address)" % H.VENUE_RULING, finding.said)
-        self.assertEqual(finding.expected, "HTTP 201: accepted, as the law says (%s)" % H.VENUE_RULING)
+        self.assertEqual(finding.said, "ACCEPTED: HTTP 201 — the charter answered No at C19 (payeeVenueContracts refused), so the payee door must refuse PAYEE_IS_VENUE_CONTRACT, 422; it saved a venue's contract")
+        self.assertEqual(finding.expected, "HTTP 422 PAYEE_IS_VENUE_CONTRACT: %s (this run's compiled policy charter says payeeVenueContracts \"refused\")" % VENUE_DOOR_SENTENCE)
         self.assertEqual(finding.route, "POST /v1/payees")
-        self.assertTrue(finding.came_back.startswith("HTTP 422 — "), finding.came_back)
-        self.assertIn("this double stands in for the day it does", finding.came_back, "the estate's own words travel with the finding")
+        self.assertTrue(finding.came_back.startswith("HTTP 201 — "), finding.came_back)
         self.assertIn("17 probe(s), 2 finding(s)", outcomes["S11"].line)
         step = [s for s in runner.evidence["S11"] if "a real venue contract" in str(s.get("probe", ""))][-1]
-        self.assertEqual(step["status"], 422)
-        self.assertTrue(step["result"].startswith("refused: ADDRESS_PROPOSAL_REFUSED: "), step["result"])
-        self.assertTrue(any(l.startswith("S11 — fail — a payee address that is a real venue contract") and "REFUSED: ADDRESS_PROPOSAL_REFUSED" in l for l in said))
+        self.assertEqual(step["status"], 201)
+        self.assertEqual(step["result"], "accepted (HTTP 201) — the charter says otherwise")
+        self.assertTrue(any(l.startswith("S11 — fail — %s: ACCEPTED: HTTP 201 — the charter answered No at C19" % self.VENUE_PROBE) for l in said), said)
         report = runner.report()
-        self.assertIn("- **a payee address that is a real venue contract (Uniswap v3 SwapRouter02 on Ethereum, read from the corridor's tables.py at run time)** — REFUSED: ADDRESS_PROPOSAL_REFUSED", report)
-        self.assertIn("Bear, 20 September 2026", report)
+        self.assertIn("- **%s** — ACCEPTED: HTTP 201 — the charter answered No at C19 (payeeVenueContracts refused)" % self.VENUE_PROBE, report)
+        self.assertIn("  - Expected: HTTP 422 PAYEE_IS_VENUE_CONTRACT: %s" % VENUE_DOOR_SENTENCE, report)
+
+    def test_a_door_that_refuses_under_another_code_is_a_finding_carrying_the_estates_words(self):
+        """A refusal, but not the charter's door's: the code and the sentence the estate said travel with the finding, beside what was expected."""
+        runner, outcomes, said = self.run_against(refuses_venue_contract=True)
+        finding = next(f for f in runner.findings if f.station == "S11" and "a real venue contract" in f.probe)
+        self.assertTrue(finding.said.startswith("REFUSED, but not as the charter's door refuses: ADDRESS_PROPOSAL_REFUSED: %s" % VENUE_STIPULATION), finding.said)
+        self.assertTrue(finding.said.endswith("— expected PAYEE_IS_VENUE_CONTRACT, 422, %r" % VENUE_DOOR_SENTENCE), finding.said)
+        self.assertTrue(finding.came_back.startswith("HTTP 422 — "), finding.came_back)
+        self.assertIn(VENUE_STIPULATION, finding.came_back, "the estate's own words travel with the finding")
+        self.assertIn("17 probe(s), 2 finding(s)", outcomes["S11"].line)
+        step = [s for s in runner.evidence["S11"] if "a real venue contract" in str(s.get("probe", ""))][-1]
+        self.assertEqual(step["result"], "refused, but not as the charter's door refuses: ADDRESS_PROPOSAL_REFUSED: %s (a stipulation this door applies whatever the charter says; this double stands in for an estate that does)" % VENUE_STIPULATION)
+
+    def test_an_estate_whose_c19_is_yes_keeps_the_expectation_of_20_september(self):
+        """Under Yes the compiled charter says accepted: HTTP 201 is accepted, as the law says, and a refusal is the finding with the ruling quoted — Spec T8's expectation."""
+        with unittest.mock.patch.dict(A.POLICY_ANSWERS, {"C19": {"choice": A.VENUE_YES}}):
+            runner, outcomes, said = self.run_against()
+            self.assertEqual(runner.facts["charter"]["policy"]["payeeVenueContracts"], "accepted")
+            self.assertEqual(runner.facts["venue_law"], "accepted")
+            self.assertFalse(any("venue contract" in f.probe for f in runner.findings if f.station == "S11"))
+            step = [s for s in runner.evidence["S11"] if "a real venue contract" in str(s.get("probe", ""))][-1]
+            self.assertEqual(step["status"], 201)
+            self.assertEqual(step["expected"], "HTTP 201: accepted, as the law says (%s; this run's compiled policy charter says payeeVenueContracts \"accepted\")" % H.VENUE_RULING)
+            self.assertEqual(step["result"], "accepted, as the law says (%s)" % H.VENUE_RULING)
+            self.assertTrue(any(l.startswith("  S11 — accepted, as the law says — %s: HTTP 201" % self.VENUE_PROBE) for l in said))
+            self.assertIn("17 probe(s), 1 finding(s)", outcomes["S11"].line)
+            # the same estate with a door that refuses regardless: the finding of Spec T8, with the ruling quoted
+            runner, outcomes, said = self.run_against(refuses_venue_contract=True)
+            finding = next(f for f in runner.findings if f.station == "S11" and "a real venue contract" in f.probe)
+            self.assertTrue(finding.said.startswith("REFUSED: ADDRESS_PROPOSAL_REFUSED: %s" % VENUE_STIPULATION), finding.said)
+            self.assertIn("the law says otherwise (%s; a contract is an address; this run's compiled policy charter says payeeVenueContracts \"accepted\")" % H.VENUE_RULING, finding.said)
+            self.assertEqual(finding.expected, "HTTP 201: accepted, as the law says (%s; this run's compiled policy charter says payeeVenueContracts \"accepted\")" % H.VENUE_RULING)
+            self.assertIn("17 probe(s), 2 finding(s)", outcomes["S11"].line)
+            self.assertIn("Bear, 20 September 2026", runner.report())
+        self.assertEqual(A.POLICY_ANSWERS["C19"]["choice"], A.VENUE_NO, "the book's own answer stands")
 
 
 class TheOptimizerOnARecordedLog(unittest.TestCase):
@@ -652,7 +853,7 @@ class TheLastRunColumn(unittest.TestCase):
     def test_two_reports_in_the_folder_give_the_closing_table_its_last_run_column_with_closed_still_open_and_new(self):
         tmp = tempfile.mkdtemp()
         out = os.path.join(tmp, "out")
-        # the first run: the estate as main is today — the currency read back as JSON, the venue contract accepted
+        # the first run: the estate at Spec 92 with main's currency arm — the currency read back as JSON, the venue contract refused as the charter says
         first_double = EstateDouble()
         first = H.Runner(first_double.base, os.path.join(tmp, "store-1"), first_double.mint_founder_link(), False, None, out, transport=first_double, say=lambda s: None, sleep=lambda s: None)
         first.run()
@@ -661,9 +862,9 @@ class TheLastRunColumn(unittest.TestCase):
             ("S10", "read-back (policy) of A5"),
             ("S11", "a payee address with a wrong checksum"),
         ])
-        # the rerun after a fix: Spec 88 has landed, so the currency is read back as its code; and the questionnaire
-        # has gained a stipulation against venue contracts, which the harness has not yet been told is the law
-        second_double = EstateDouble(currency_spoken_as_code=True, refuses_venue_contract=True)
+        # the rerun after a fix: Spec 88 has landed, so the currency is read back as its code; and this estate's payee door never
+        # learned C19, so it saves the venue's contract the charter says to refuse (Spec T11) — a new finding
+        second_double = EstateDouble(currency_spoken_as_code=True, refuses_venue_contract=False)
         second = H.Runner(second_double.base, os.path.join(tmp, "store-2"), second_double.mint_founder_link(), False, None, out, transport=second_double, say=lambda s: None, sleep=lambda s: None)
         second.run()
         second_path = second.write_report()
@@ -687,9 +888,10 @@ class TheLastRunColumn(unittest.TestCase):
         self.assertIn("- closed — S10 — read-back (policy) of A5", report)
         self.assertIn("- still open — S11 — a payee address with a wrong checksum", report)
         self.assertIn("- new — S11 — a payee address that is a real venue contract", report)
+        self.assertTrue(any(f.said.startswith("ACCEPTED: HTTP 201 — the charter answered No at C19") for f in second.findings if "venue contract" in f.probe))
         self.assertNotIn("one credential for several people", report, "under Spec 91 nobody shares a credential")
         self.assertNotIn("- closed — S11", report)
-        # a third run against today's estate again: the venue finding closes, the currency finding is new once more
+        # a third run against today's estate again — the door following the charter: the venue finding closes, the currency finding is new once more
         third_double = EstateDouble()
         third = H.Runner(third_double.base, os.path.join(tmp, "store-3"), third_double.mint_founder_link(), False, None, out, transport=third_double, say=lambda s: None, sleep=lambda s: None)
         third.run()

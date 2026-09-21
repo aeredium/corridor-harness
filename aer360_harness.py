@@ -58,6 +58,21 @@ granted again where it is enrolled_not_seated or names a credential other than h
 the sessions carry distinct credential ids, none the founder's, and reads the People register's Spec 91 marker
 ("shares a credential with …") for each person. S6 is Spec T9's, unchanged, and reports what the estate answers.
 
+Spec T11 (21 September 2026, from the run of the same night, aer360-harness-2026-09-21.md, and the estate's catalog at
+AER 360 Spec 92, commit cf3be4a, CATALOG_VERSION 14): the answer book learns catalog version 14 and the auditor reads the
+new law back. The run stopped at S3 and S5 on the seven questions Spec 92 added (C11A, C11C, C19, WO1, WO2, WO3, WO4); the
+book answers them (aer360_answers.py) and states the version it answers, which S3 reports beside what the estate served — the
+estate states no catalog version on the roads a browser walks, so an unknown question is reported with the book's version and
+the inference that the estate's is later. S10 reads the new law back against the compiled charter: `payeeApproval` (C11A: the
+change approvers, the census of four at a quorum of two), `payeeVenueContracts` refused (C19 No), `holder` (WO1: Ben Signatory,
+by_person, Officer), `signingTiers.holderAloneUpToCents` 200000 and `twoSignaturesUpToCents` 1000000, and the third party WO2
+names as a signer beside WA1's people; against the read-back, the two figures as the book wrote them and never as the written
+US$1.00, and C19's door line. S11's venue probe follows the charter: where the compiled policy charter says `refused`, the probe
+expects the payee door's own refusal — PAYEE_IS_VENUE_CONTRACT, 422, in the sentence `payeeIsVenueContractSentence` composes —
+and reports an acceptance as the finding; an estate whose C19 is Yes, or was never asked, keeps the expectation of 20 September.
+S7 keeps its three amounts and says in its expectation column what the tiers would do with each (P1 within the holder's own
+figure, P2 two signatures, P3 three); it still cannot run until the workspace has a funding account, and says so.
+
 Runs on the Mac's own Python 3.9.6 with the standard library only: urllib.request, http.cookiejar,
 json, hashlib, secrets, base64, struct, subprocess. The one binary it calls is /usr/bin/openssl,
 through aer360_passkey.py. Nothing to install; nothing is shipped to any box.
@@ -107,6 +122,28 @@ HTTP_TIMEOUT_SECONDS = 60.0
 # contract is an address; the day the questionnaire gains a stipulation against venue contracts, the
 # probe's expectation flips to a refusal. Until then a refusal is the finding, with this ruling quoted.
 VENUE_RULING = "Bear, 20 September 2026: unless the questionnaire stipulates otherwise, an address is accepted"
+# Spec T11 (21 September 2026): the questionnaire gained the stipulation the same day (AER 360 Spec 92, catalog version 14, C19), and
+# Harness Holdings answers it No. The probe reads the compiled policy charter's `payeeVenueContracts` at run time: `refused` expects the
+# payee door's own refusal — PAYEE_IS_VENUE_CONTRACT, 422 (packages/shared/src/refusals.ts; http.ts), in the sentence
+# `payeeIsVenueContractSentence` composes, naming the venue as it publishes itself and the chain sent (services/payees.ts,
+# assertPayeeIsNotVenueContract) — and reports an acceptance as the finding; `accepted`, or a charter that was never asked (null,
+# which every reader takes as the founder's default), keeps the expectation of 20 September.
+PAYEE_IS_VENUE_CONTRACT = "PAYEE_IS_VENUE_CONTRACT"
+PAYEE_IS_VENUE_CONTRACT_STATUS = 422
+VENUE_CONTRACT_QUESTION_ID = "C19"  # services/payees.ts VENUE_CONTRACT_QUESTION_ID
+# The estate's own names for the venues its closed table knows (packages/shared/src/venues.ts, VENUE_NAMES), and which of them the
+# corridor's pinned probe address is. The sentence the door says names the venue by its published name, never its id.
+ESTATE_VENUE_NAMES = {"uniswap_v3": "Uniswap v3", "pancakeswap_v3": "PancakeSwap v3"}
+CORRIDOR_VENUE_IDS = {"UNISWAP_V3_ETHEREUM": "uniswap_v3"}
+# What the estate tells a browser about its catalog version: nothing. routes/onboarding.ts answers an interview's id and state, and
+# the page carries none; the interview row's catalogVersion never leaves the server. So S3 reports the book's version beside this.
+ESTATE_STATES_NO_CATALOG_VERSION = ("the estate states no catalog version on the roads a browser walks (routes/onboarding.ts answers an "
+                                    "interview's id and state, and the page carries none)")
+# The two figures WO3 and WO4 arrive written with, as the read-back speaks them (services/onboarding.ts, spokenAnswer, money).
+WRITTEN_DOLLAR_SPOKEN = "US$1 and 00 cents."
+# C19 answered No: the read-back's own line about the payee door (services/onboarding.ts, VENUE_DOOR_READBACK_QUESTION_ID).
+VENUE_DOOR_READBACK_QUESTION_ID = "C19_DOOR"
+VENUE_DOOR_READBACK_SENTENCE = "You answered No: such an address will be refused when entered."
 # Where an invitation's seconds go (Spec T8): routes/invites.ts mints the invitation, awaits the email's
 # dispatch (attemptDispatch), stamps the row, and only then answers 201. A fact to report, not a finding.
 INVITATION_SENDS_FIRST = "the invitation road sends the email before it answers, which is where its four seconds go"
@@ -223,6 +260,52 @@ def now_ms() -> int:
 
 def now_iso() -> str:
     return _dt.datetime.now().astimezone().isoformat(timespec="milliseconds")
+
+
+def payee_is_venue_contract_sentence(venue_name: str, chain: str, question_id: str = VENUE_CONTRACT_QUESTION_ID) -> str:
+    """`payeeIsVenueContractSentence` (packages/shared/src/refusals.ts, Spec 92), word for word."""
+    return ("This address is the contract of %s on %s. Your charter says a payee must be a wallet held by a person or a company "
+            "(question %s). Nothing was saved." % (venue_name, chain, question_id))
+
+
+def venue_law_of(charter: Optional[Dict[str, Any]]) -> str:
+    """
+    What the compiled policy charter says the payee door does with a venue's contract: 'refused' where `payeeVenueContracts` is
+    refused (C19 No), else 'accepted' — a charter that was never asked compiles null, which every reader takes as the founder's
+    default (onboardingcompiler.ts, venueContractsOf; Bear, 20 September 2026).
+    """
+    return "refused" if isinstance(charter, dict) and charter.get("payeeVenueContracts") == "refused" else "accepted"
+
+
+def venue_law_of_the_book() -> str:
+    """The same reading off the answer book's C19, for a dry run and for a run that compiled no policy charter."""
+    return "refused" if (A.POLICY_ANSWERS.get("C19") or {}).get("choice") == A.VENUE_NO else "accepted"
+
+
+def usd(cents: Any) -> str:
+    """A figure in cents as Spec T11 writes one: US$2,000.00."""
+    whole, frac = divmod(int(cents), 100)
+    return "US$%s.%02d" % ("{:,}".format(whole), frac)
+
+
+def under_the_tiers(amount: str, holder_alone_cents: Optional[str], two_signatures_cents: Optional[str]) -> str:
+    """
+    What the signing tiers (Spec 92, WO3 and WO4) would do with a payment of `amount` — a plain decimal of USDC, read as dollars,
+    because the tiers' figures are US cents and USDC is the dollar-pegged asset the payments are made in (Spec T11 §4): within the
+    holder's own figure, two signatures, or three. A wallet held by no one has no first figure; up to its two-signature figure a
+    payment is one approver's passkey (onboardingcompiler.ts, the tier rules).
+    """
+    if two_signatures_cents is None:
+        return "under the tiers: no figures compiled for this account"
+    cents = int(T.minor_units(amount, 2))
+    two = int(two_signatures_cents)
+    if holder_alone_cents is not None and cents <= int(holder_alone_cents):
+        return "under the tiers: within the holder's own figure (%s), one signature — the holder's" % usd(holder_alone_cents)
+    if cents <= two:
+        if holder_alone_cents is None:
+            return "under the tiers: up to the two-signature figure (%s) of a wallet held by no one, one approver's passkey" % usd(two)
+        return "under the tiers: two signatures (above %s, up to %s)" % (usd(holder_alone_cents), usd(two))
+    return "under the tiers: three signatures (above %s)" % usd(two)
 
 
 # ---------------------------------------------------------------------------
@@ -783,7 +866,13 @@ class Runner:
             if qid in served:
                 self.facts["served_twice"][interview_type].append(qid)
             served.append(qid)
-            value = A.answer_for(interview_type, question)
+            try:
+                value = A.answer_for(interview_type, question)
+            except A.UnknownQuestion as err:
+                # Spec T11: reported as before, with the version pair in the sentence — the book's, and what can be said of the estate's.
+                raise StationStop("%s — %s; %s, and it served a question the book does not know, so its catalog is later than %d or is "
+                                  "not the one the book read (%s)" % (err, self.book_version_words(), ESTATE_STATES_NO_CATALOG_VERSION,
+                                                                        A.CATALOG_VERSION_ANSWERED, A.CATALOG_SOURCE))
             body = {"questionId": qid, "value": value}
             answer = self.request(who, "POST", "/v1/onboarding/interviews/%s/answers" % interview_id, body, station)
             self.step(station, answer, "200 with the next page (%s: %s)" % (qid, question.get("kind")),
@@ -795,6 +884,10 @@ class Runner:
             page = answer.json
         self.facts["interview_state"][interview_type] = page.get("state")
         return interview_id, page, answered
+
+    @staticmethod
+    def book_version_words() -> str:
+        return "the answer book answers catalog version %d" % A.CATALOG_VERSION_ANSWERED
 
     def confirm_and_compile(self, station: str, interview_type: str, interview_id: str, who: Person, page: Dict[str, Any]) -> Dict[str, Any]:
         state = page.get("state")
@@ -841,6 +934,8 @@ class Runner:
         detail = "policy interview: %d questions answered, read-back %d lines, charter compiled (%s; quorum %s; networks recorded %s, allowed %s), journey stage %s of %s" % (
             answered, len((self.facts["readback"].get("policy") or {}).get("lines") or []), charter.get("name"), charter.get("quorum"),
             charter.get("recordedChains"), charter.get("allowedChains"), current, view.get("stageCount"))
+        # Spec T11: the book's catalog version beside the estate's — which the estate does not state, so what it served stands for it.
+        detail += "; %s, and the estate served %d question(s), every one known to the book (%s)" % (self.book_version_words(), answered, ESTATE_STATES_NO_CATALOG_VERSION)
         problems: List[str] = []
         if not (isinstance(standing.json, dict) and standing.json.get("standsWritten") is True):
             problems.append("GET /v1/onboarding/charter says %s" % (json.dumps(standing.json) if standing.json is not None else standing.sentence()))
@@ -1382,9 +1477,22 @@ class Runner:
             return None
         return {"payeeAddressId": address_id, "asset": T.PAYMENT_ASSET, "chain": T.PAYEE_CHAIN, "amountMinor": payment.amount_minor, "invoiceRef": payment.invoice}
 
+    def tiers(self) -> Tuple[Optional[str], Optional[str], str]:
+        """
+        The signing tiers' two figures (Spec 92, WO3 and WO4): this run's compiled account charter where it carries them, else the
+        book's answers, and a word for where they were read (Spec T11 §4).
+        """
+        charter = self.facts["charter"].get("wallet_account") or {}
+        tiers = charter.get("signingTiers")
+        if isinstance(tiers, dict) and tiers.get("twoSignaturesUpToCents") is not None:
+            return tiers.get("holderAloneUpToCents"), tiers.get("twoSignaturesUpToCents"), "this run's compiled account charter"
+        holder_named = (A.ACCOUNT_ANSWERS.get("WO1") or {}).get("choice") == A.HOLDER_PERSON
+        return ((A.ACCOUNT_ANSWERS.get("WO3") or {}).get("cents") if holder_named else None), (A.ACCOUNT_ANSWERS.get("WO4") or {}).get("cents"), "the answer book"
+
     def station_s7(self) -> Outcome:
         clerk = self.clerk()
         ada = self.people[A.PAYMENT_APPROVER]
+        holder_alone, two_signatures, tiers_read_from = self.tiers()
         workspace = self.request(clerk, "GET", "/v1/workspace", None, "S7")
         self.step("S7", workspace, "the workspace, its funding account (sourceAccount) and the offered currencies", "answered" if workspace.ok else workspace.sentence(), None, clerk.name)
         source_account = (workspace.json or {}).get("sourceAccount") if isinstance(workspace.json, dict) else None
@@ -1398,9 +1506,11 @@ class Runner:
                 said.append("%s: no address id for %s, so nothing was sent" % (payment.key, payment.payee_name))
                 failures += 1
                 continue
+            tier_words = under_the_tiers(payment.amount, holder_alone, two_signatures)
             review_body = {"pays": [row], "duplicatesAcknowledged": False}
             review = self.request(clerk, "POST", "/v1/sets/review", review_body, "S7")
-            self.step("S7", review, "the gates' review of the run before anything is created", "answered" if review.ok else review.sentence(), review_body, clerk.name)
+            self.step("S7", review, "the gates' review of the run before anything is created; %s (figures from %s)" % (tier_words, tiers_read_from),
+                      "answered" if review.ok else review.sentence(), review_body, clerk.name)
             create_body = dict(review_body)
             create_body.update({"idempotencyKey": "aer360-harness-%s-%s" % (self.run_stamp, payment.key), "reference": "Harness payment %s" % payment.key})
             created = self.request(clerk, "POST", "/v1/sets", create_body, "S7")
@@ -1410,13 +1520,13 @@ class Runner:
                                       "submitted": None, "view": None, "approval": None}
             self.facts["sets"][payment.key] = record
             if not created.ok or not isinstance(created.json, dict):
-                said.append("%s (%s, expected to %s): refused at creation — %s" % (payment.key, payment.amount, payment.expect, created.sentence()))
+                said.append("%s (%s, expected to %s): refused at creation — %s; %s" % (payment.key, payment.amount, payment.expect, created.sentence(), tier_words))
                 failures += 1
                 continue
             set_id = str((created.json.get("set") or {}).get("id"))
             record["set_id"] = set_id
             submitted = self.request(clerk, "POST", "/v1/sets/%s/submit" % set_id, {}, "S7")
-            self.step("S7", submitted, "status pending_approval (or approved where the policy asks no second hand), the digest, approvalsRequired",
+            self.step("S7", submitted, "status pending_approval (or approved where the policy asks no second hand), the digest, approvalsRequired; %s" % tier_words,
                       "answered" if submitted.ok else submitted.sentence(), {}, clerk.name)
             record["submitted"] = submitted.json if submitted.ok else submitted.sentence()
             view = self.request(clerk, "GET", "/v1/sets/%s" % set_id, None, "S7")
@@ -1428,7 +1538,7 @@ class Runner:
             verdict, sentence = self.judge_payment(payment, status, required, submitted.ok)
             if verdict == FAIL:
                 failures += 1
-            said.append("%s (%s USDC, expected to %s): %s" % (payment.key, payment.amount, payment.expect, sentence))
+            said.append("%s (%s USDC, expected to %s): %s; %s" % (payment.key, payment.amount, payment.expect, sentence, tier_words))
             if payment.key == "P1":
                 said.append(self.approve_first(record, set_id, status, ada))
         detail = "payments as %s: %s" % (clerk.name, "; ".join(said))
@@ -1575,28 +1685,76 @@ class Runner:
         self.finding("S11", probe, sent, answer, expected, "REFUSED: %s — %s" % (answer.sentence(), law))
         return False
 
+    def venue_law(self) -> Tuple[str, str]:
+        """
+        What the charter says the payee door does with a venue's contract, read at run time (Spec T11 §3): this run's compiled
+        policy charter's `payeeVenueContracts` where S3 compiled one; where this run compiled none (a run resumed past S3), the
+        answer book's C19 stands in and a note says so. 'refused' or 'accepted', and the words for where it was read.
+        """
+        charter = self.facts["charter"].get("policy")
+        if charter:
+            return venue_law_of(charter), "this run's compiled policy charter says payeeVenueContracts %s" % json.dumps(charter.get("payeeVenueContracts"), ensure_ascii=False)
+        law = venue_law_of_the_book()
+        book_c19 = json.dumps(A.POLICY_ANSWERS["C19"]["choice"], ensure_ascii=False)
+        self.note("S11", "this run compiled no policy charter (S3 did not run), so the venue probe's expectation is read off the answer book's C19, %s" % book_c19)
+        return law, "the answer book's C19 is %s" % book_c19
+
     def probe_venue_contract(self, founder: Person) -> None:
         """
         S11's venue probe: a payee whose address is a real venue contract, read from the corridor's tables.py at
         run time and never from a table of the harness's own.
 
-        THE EXPECTATION IS ACCEPTANCE (Spec T8). The first live run, 20 September 2026, called the estate's
-        HTTP 201 a failure; Bear ruled the same morning: "Unless it is stipulated explicitly in the questionnaire,
-        it must be accepted." The questionnaire decides policy, and a contract is an address — no question of the
-        charter asks whether a venue contract may be a payee, so the estate has nothing to refuse it under, and
-        an estate that accepted it did what the law says. The probe stays, because the expectation FLIPS the day
-        the questionnaire gains such a stipulation: then a refusal in the charter's words is what the law says,
-        and an acceptance becomes the finding. Until that day HTTP 201 is reported as accepted, as the law says,
-        and a refusal is the finding, with the ruling quoted beside the estate's own sentence.
+        THE EXPECTATION FOLLOWS THE CHARTER (Spec T11, 21 September 2026). The first live run, 20 September 2026,
+        called the estate's HTTP 201 a failure; Bear ruled the same morning: "Unless it is stipulated explicitly in
+        the questionnaire, it must be accepted." The questionnaire decides policy, and a contract is an address —
+        and the same day AER 360 Spec 92 gave the questionnaire the stipulation: C19, "May a payee address be the
+        contract of a trading venue or exchange…", whose No compiles `payeeVenueContracts: 'refused'` and makes the
+        payee door refuse a known venue's contract by name, PAYEE_IS_VENUE_CONTRACT, 422, in one sentence
+        (services/payees.ts, assertPayeeIsNotVenueContract; packages/shared/src/refusals.ts). Harness Holdings
+        answers No. So the probe reads the compiled charter's answer at run time: where it says refused, the door's
+        own refusal in the charter's words is what the law says and an acceptance is the finding; where it says
+        accepted, or was never asked, HTTP 201 is reported as accepted, as the law says, and a refusal is the
+        finding, with the ruling quoted beside the estate's own sentence — the expectation of 20 September.
         """
         venue = T.venue_address_for_probe()
         probe = "a payee address that is a real venue contract (%s, read from the corridor's tables.py at run time)" % venue["what"]
         body = {"displayName": "Venue probe", "addresses": [{"chain": T.PAYEE_CHAIN, "address": venue["address"]}]}
+        law, read_from = self.venue_law()
+        self.facts["venue_law"] = law
         answer = self.request(founder, "POST", "/v1/payees", body, "S11")
-        expected = "HTTP 201: accepted, as the law says (%s)" % VENUE_RULING
-        result = ("accepted, as the law says (%s)" % VENUE_RULING) if answer.ok else "refused: %s" % answer.sentence()
+        if law == "accepted":
+            expected = "HTTP 201: accepted, as the law says (%s; %s)" % (VENUE_RULING, read_from)
+            result = ("accepted, as the law says (%s)" % VENUE_RULING) if answer.ok else "refused: %s" % answer.sentence()
+            self.probe_step(probe, answer, body, expected, founder.name, result=result)
+            self.accepted_or_finding(probe, body, answer, expected, "the law says otherwise (%s; a contract is an address; %s)" % (VENUE_RULING, read_from))
+            return
+        venue_name = ESTATE_VENUE_NAMES.get(CORRIDOR_VENUE_IDS.get(venue["key"], ""), venue["what"])
+        sentence = payee_is_venue_contract_sentence(venue_name, T.PAYEE_CHAIN)
+        expected = "HTTP %d %s: %s (%s)" % (PAYEE_IS_VENUE_CONTRACT_STATUS, PAYEE_IS_VENUE_CONTRACT, sentence, read_from)
+        refusal = answer.refusal or {}
+        as_the_door_says = (answer.status == PAYEE_IS_VENUE_CONTRACT_STATUS and refusal.get("code") == PAYEE_IS_VENUE_CONTRACT
+                            and str(refusal.get("message") or "") == sentence)
+        if answer.ok:
+            result = "accepted (HTTP %d) — the charter says otherwise" % answer.status
+        elif as_the_door_says:
+            result = "refused as the charter says (%s No): %s" % (VENUE_CONTRACT_QUESTION_ID, answer.sentence())
+        else:
+            result = "refused, but not as the charter's door refuses: %s" % answer.sentence()
         self.probe_step(probe, answer, body, expected, founder.name, result=result)
-        self.accepted_or_finding(probe, body, answer, expected, "the law says otherwise (%s; a contract is an address)" % VENUE_RULING)
+        if answer.ok:
+            self.finding("S11", probe, body, answer, expected,
+                         "ACCEPTED: HTTP %d — the charter answered No at %s (payeeVenueContracts refused), so the payee door must refuse %s, %d; it saved a venue's contract" % (
+                             answer.status, VENUE_CONTRACT_QUESTION_ID, PAYEE_IS_VENUE_CONTRACT, PAYEE_IS_VENUE_CONTRACT_STATUS))
+            return
+        why = refusal_without_why(answer.status, answer.text)
+        if why:
+            self.finding("S11", probe, body, answer, expected, "refused without saying why: %s" % why)
+            return
+        if not as_the_door_says:
+            self.finding("S11", probe, body, answer, expected,
+                         "REFUSED, but not as the charter's door refuses: %s — expected %s, %d, %r" % (answer.sentence(), PAYEE_IS_VENUE_CONTRACT, PAYEE_IS_VENUE_CONTRACT_STATUS, sentence))
+            return
+        self.say("  S11 — refused as the charter says — %s: %s" % (probe, answer.sentence()))
 
     def station_s11(self) -> Outcome:
         before = len(self.findings)
@@ -1720,7 +1878,7 @@ class Runner:
         else:
             self.note("S11", "the passkey probes were not made: the founder holds no passkey in this run")
         # 9 and 10. A payee address with a wrong checksum (a refusal expected); a payee address that is a real
-        # venue contract (acceptance expected: the questionnaire decides policy, and a contract is an address).
+        # venue contract (the charter decides: refused by name where C19 is No, else accepted — a contract is an address).
         probes += 1
         probe = "a payee address with a wrong checksum"
         broken = T.wrong_checksum(T.address("CHECKSUM_PROBE_ETHEREUM"))
@@ -1729,7 +1887,7 @@ class Runner:
         self.probe_step(probe, answer, body, "a refusal (ADDRESS_MALFORMED), or the estate's acceptance recorded as it is", founder.name)
         self.refused_or_finding(probe, body, answer, "refused: an address whose checksum is wrong is not an address")
         probes += 1
-        self.probe_venue_contract(founder)  # expects acceptance, as the law says (Spec T8); a refusal is the finding
+        self.probe_venue_contract(founder)  # expects what the compiled charter says (Spec T11): refused by name under C19 No, else accepted as the law says
         # 11. A payment above the per-payment limit from the clerk (S7's P3), not released without approval.
         probes += 1
         probe = "the clerk's payment above the per-payment limit (S7's P3) released without approval?"
@@ -1953,6 +2111,9 @@ def spoken_for(kind: str, question_id: str, value: Dict[str, Any]) -> Optional[s
       percent        '<figure> per cent.'; left empty: T4's own sentence, otherwise 'Left empty — no share is set.'
       count          '<figure, grouped> payment(s) in a day.'; left empty: 'Left empty — no limit on how many.'
       roster_*       the people joined by ', ', or 'No one chosen.'
+      person_or_none '<name> — <email>.' where a person is named (the email alone where the name is blank); otherwise
+                     the option's own sentence with a full stop, or 'No one chosen.' (Spec 92, WO1; read at cf3be4a)
+      money, a zero  '<figure> — nothing is paid under this rule until you write a figure.' (Spec 90: a zero is a wall)
 
     A kind not listed has no rendering here, and None is returned: the comparison then says 'not compared: no
     rendering for kind <k>' rather than calling a difference it cannot judge a finding.
@@ -1980,7 +2141,18 @@ def spoken_for(kind: str, question_id: str, value: Dict[str, Any]) -> Optional[s
         if cents is None:
             return "Left empty — no limit; the loosest possible answer."
         whole, frac = divmod(int(cents), 100)
-        return "US$%s and %02d cents." % ("{:,}".format(whole), frac)
+        figure = "US$%s and %02d cents" % ("{:,}".format(whole), frac)
+        if int(cents) == 0:
+            return "%s — nothing is paid under this rule until you write a figure." % figure
+        return figure + "."
+    if kind == "person_or_none":
+        person = value.get("person")
+        if isinstance(person, dict) and str(person.get("email") or "").strip():
+            name = str(person.get("name") or "").strip()
+            email = str(person.get("email")).strip()
+            return "%s — %s." % (name, email) if name else "%s." % email
+        choice_text = str(value.get("choice") or "").strip()
+        return "%s." % choice_text if choice_text else "No one chosen."
     if kind == "percent":
         percent = value.get("percent")
         if percent is None:
@@ -2017,6 +2189,10 @@ def readback_disagreements(probe: str, kind: str, value: Dict[str, Any], expecte
                                 "said": "the read-back says %r for this entry" % h})
             if out:
                 return out
+    if kind == "money" and said == WRITTEN_DOLLAR_SPOKEN and expected != WRITTEN_DOLLAR_SPOKEN:
+        # Spec T11: WO3 and WO4 arrive written at one dollar; a read-back still speaking it did not take the figure the book wrote
+        return [{"probe": probe, "sent": value, "expected": expected,
+                 "said": "the read-back says %r — the figure the field arrived written with, not the %r the book wrote" % (said, expected)}]
     return [{"probe": probe, "sent": value, "expected": expected, "said": "the read-back says %r" % said}]
 
 
@@ -2051,6 +2227,16 @@ def audit_readback(interview_type: str, answers: Sequence[Tuple[str, Dict[str, A
         if qid not in answered:
             findings.append({"probe": "read-back (%s) of %s" % (interview_type, qid), "sent": None, "expected": "no line for a question the harness did not answer",
                              "said": "the read-back carries a line for %s, which the harness did not answer: %r" % (qid, spoken[qid].get("spoken"))})
+    # Spec T11: C19 answered No — the read-back says what the payee door will do, in its own line (VENUE_DOOR_READBACK_QUESTION_ID)
+    c19 = next((value for qid, value, _, _ in answers if qid == "C19"), None)
+    if isinstance(c19, dict) and c19.get("choice") == A.VENUE_NO:
+        door = next((l for l in lines if str(l.get("questionId")) == VENUE_DOOR_READBACK_QUESTION_ID), None)
+        probe = "read-back (%s) of C19: the door's sentence" % interview_type
+        if door is None:
+            findings.append({"probe": probe, "sent": c19, "expected": VENUE_DOOR_READBACK_SENTENCE,
+                             "said": "the read-back carries no line (%s) saying what the payee door will do with a venue's contract" % VENUE_DOOR_READBACK_QUESTION_ID})
+        elif str(door.get("spoken")) != VENUE_DOOR_READBACK_SENTENCE:
+            findings.append({"probe": probe, "sent": c19, "expected": VENUE_DOOR_READBACK_SENTENCE, "said": "the read-back's door line says %r" % door.get("spoken")})
     return findings
 
 
@@ -2091,14 +2277,61 @@ def audit_charter(interview_type: str, charter: Dict[str, Any], answers: Dict[st
             if choice("C12") not in governance:
                 findings.append({"probe": "charter (policy): the change quorum (C12)", "sent": choice("C12"), "expected": "a change quorum of %s" % choice("C12"),
                                  "said": "the charter's governance carries %s" % governance})
+        # Spec T11 — who approves a new payee (C11A), as onboardingcompiler.ts payeeApprovalOf reads the answer: the first answer is
+        # C11's people at C10's count; the second the census (else C11's people) at C12's, or C12D's behind a Yes on C12A; the third
+        # C11C's one person at one. The charter's record carries answer, roster ("Name <email>") and quorum, and S10 compares the three.
+        c11a = choice("C11A")
+        if c11a is not None:
+            if c11a == A.PAYEE_APPROVAL_PAYMENT_APPROVERS:
+                want: Any = {"answer": "payment_approvers", "roster": people("C11"), "quorum": int(choice("C10")) if choice("C10") else None}
+            elif c11a == A.PAYEE_APPROVAL_CHANGE_APPROVERS:
+                c12d = choice("C12D") if choice("C12A") == "Yes" else None
+                count = c12d or choice("C12")
+                want = {"answer": "change_approvers", "roster": census if census else people("C11"), "quorum": int(count) if count else None}
+            else:
+                cfo = next((e for e in entries("C11C") if str(e.get("email", "")).strip()), None)
+                label = ("%s <%s>" % (cfo.get("name", "").strip(), cfo.get("email", "").strip()) if cfo.get("name", "").strip() else cfo.get("email", "").strip()) if cfo else None
+                want = {"answer": "cfo", "roster": [label] if label else [], "quorum": 1}
+            got = charter.get("payeeApproval")
+            expect("who approves a new payee (C11A: the answer, its roster and its quorum)", want,
+                   {k: got.get(k) for k in ("answer", "roster", "quorum")} if isinstance(got, dict) else got, c11a)
+        # Spec T11 — may a payee be a venue's contract (C19): No compiles 'refused', Yes 'accepted' (venueContractsOf)
+        c19 = choice("C19")
+        if c19 is not None:
+            expect("may a payee be a venue's contract (C19)", "refused" if c19 == A.VENUE_NO else "accepted", charter.get("payeeVenueContracts"), c19)
     else:
         expect("the name (WN)", text("WN"), charter.get("name"), text("WN"))
         expect("the purpose (W1)", choice("W1"), charter.get("purpose"), choice("W1"))
         expect("the release quorum (WQ)", int(choice("WQ")) if choice("WQ") else None, charter.get("quorum"), choice("WQ"))
         signers = ["%s <%s>" % (e.get("name", "").strip(), e.get("email", "").strip()) if e.get("name", "").strip() else e.get("email", "").strip()
                    for e in entries("WA1") if e.get("email", "").strip()]
-        expect("the signers (WA1)", signers, charter.get("signers"), entries("WA1"))
+        # Spec T11 — WO2's third party is a signer beside WA1's people, once by email (onboardingcompiler.ts: "a person named at both
+        # WA1 and WO2 holds one seat, not two"), spoken as full name and surname (personLabel)
+        third = next((e for e in entries("WO2") if str(e.get("email", "")).strip()), None)
+        if third is not None:
+            third_email = str(third.get("email")).strip()
+            if not any(str(e.get("email", "")).strip().lower() == third_email.lower() for e in entries("WA1")):
+                label = " ".join(part for part in (str(third.get("name", "")).strip(), str(third.get("surname", "")).strip()) if part)
+                signers.append("%s <%s>" % (label, third_email) if label else third_email)
+        expect("the signers (WA1, and WO2's third party once)" if third is not None else "the signers (WA1)", signers, charter.get("signers"),
+               {"WA1": entries("WA1"), "WO2": entries("WO2")} if third is not None else entries("WA1"))
         purpose = choice("W1") or ""
+        # Spec T11 — the wallet's people and tiers (WO1, WO3, WO4), as the compiler records them (readWalletPeople): the holder by
+        # person with the title W1 decides (holderTitleFor: the Principal of a customer's account, the Officer of every other
+        # wallet), or by no one; and the two figures, WO3 null for a wallet held by no one because it is not asked
+        wo1 = answers.get("WO1")
+        if isinstance(wo1, dict):
+            if wo1.get("choice") == A.HOLDER_PERSON:
+                person = wo1.get("person") or {}
+                holder: Any = {"held": "by_person", "name": str(person.get("name", "")).strip(), "email": str(person.get("email", "")).strip(),
+                               "title": "Principal" if purpose == A.CUSTOMER else "Officer"}
+            else:
+                holder = {"held": "by_no_one"}
+            expect("who holds this wallet (WO1)", holder, charter.get("holder"), wo1)
+        if "WO4" in answers:
+            tiers = charter.get("signingTiers") if isinstance(charter.get("signingTiers"), dict) else {}
+            expect("the holder's own figure (WO3)", cents("WO3"), tiers.get("holderAloneUpToCents"), cents("WO3"))
+            expect("the two-signature figure (WO4)", cents("WO4"), tiers.get("twoSignaturesUpToCents"), cents("WO4"))
         if purpose.startswith("Operations") or purpose.startswith("Something else"):
             expect("the per-payment hold (O2)", cents("O2"), amounts.get("holdOverPerTx"), cents("O2"))
             expect("the daily figure (O1)", cents("O1"), amounts.get("dailyTotal"), cents("O1"))
@@ -2536,7 +2769,8 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     # S2
     line("S2", "GET /v1/journey → expect currentStage 1 of %d, the current stage policy_interview" % JOURNEY_STAGE_COUNT)
     # S3
-    line("S3", "POST /v1/onboarding/interviews %s → expect 200: the interview id and its first page" % _j({"interviewType": "policy"}))
+    line("S3", "POST /v1/onboarding/interviews %s → expect 200: the interview id and its first page; the answer book answers catalog version %d, and %s" % (
+        _j({"interviewType": "policy"}), A.CATALOG_VERSION_ANSWERED, ESTATE_STATES_NO_CATALOG_VERSION))
     for q in A.expected_walk("policy"):
         line("S3", "POST /v1/onboarding/interviews/<policy interview>/answers %s → expect 200: the next page (%s)" % (_j({"questionId": q.id, "value": A.POLICY_ANSWERS[q.id]}), q.kind))
     line("S3", "GET /v1/onboarding/interviews/<policy interview>/readback → expect the charter in plain sentences, the sandbox realm first")
@@ -2592,7 +2826,11 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     # S7
     clerk = A.PEOPLE[A.PAYMENT_CLERK]
     line("S7", "GET /v1/workspace (as %s) → expect the funding account (sourceAccount) the runs leave from; the founder's browser offers no control for one" % clerk.name)
+    holder_named = (A.ACCOUNT_ANSWERS.get("WO1") or {}).get("choice") == A.HOLDER_PERSON
+    tier_alone = (A.ACCOUNT_ANSWERS.get("WO3") or {}).get("cents") if holder_named else None
+    tier_two = (A.ACCOUNT_ANSWERS.get("WO4") or {}).get("cents")
     for payment in A.PAYMENTS:
+        tier_words = under_the_tiers(payment.amount, tier_alone, tier_two)
         if payment.payee_key is None:
             row: Dict[str, Any] = {"oneOff": {"chain": T.PAYEE_CHAIN, "address": T.address("UNLISTED_ETHEREUM"), "declared": True, "payeeName": payment.payee_name},
                                    "asset": T.PAYMENT_ASSET, "chain": T.PAYEE_CHAIN, "amountMinor": payment.amount_minor, "invoiceRef": payment.invoice}
@@ -2600,7 +2838,8 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
             row = {"payeeAddressId": "<address of %s>" % payment.payee_name, "asset": T.PAYMENT_ASSET, "chain": T.PAYEE_CHAIN, "amountMinor": payment.amount_minor, "invoiceRef": payment.invoice}
         line("S7", "POST /v1/sets/review %s (as %s) → expect the five gates' review" % (_j({"pays": [row], "duplicatesAcknowledged": False}), clerk.name))
         line("S7", "POST /v1/sets %s (as %s) → expect 201: the run in draft" % (_j({"pays": [row], "duplicatesAcknowledged": False, "idempotencyKey": "aer360-harness-<run>-%s" % payment.key, "reference": "Harness payment %s" % payment.key}), clerk.name))
-        line("S7", "POST /v1/sets/<run %s>/submit {} → expect status, setDigest, approvalsRequired; %s (%s): expected to %s" % (payment.key, payment.amount, T.PAYMENT_ASSET, payment.expect))
+        line("S7", "POST /v1/sets/<run %s>/submit {} → expect status, setDigest, approvalsRequired; %s (%s): expected to %s; %s" % (
+            payment.key, payment.amount, T.PAYMENT_ASSET, payment.expect, tier_words))
         line("S7", "GET /v1/sets/<run %s> → expect the run's state as the register shows it" % payment.key)
     line("S7", "POST /v1/approvals/<run P1>/challenge {} (as %s) → expect the digest-bound challenge" % A.PEOPLE[A.PAYMENT_APPROVER].name)
     line("S7", "POST /v1/approvals/<run P1>/approve %s (as %s) → expect status approved, approvalsGiven 1 of 1" % (_j({"response": "<assertion over the challenge>"}), A.PEOPLE[A.PAYMENT_APPROVER].name))
@@ -2612,6 +2851,9 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     # S10
     line("S10", "[compare] the read-back of each interview word for word with the answers given, as readback() spells them")
     line("S10", "[compare] the compiled charter (the compile answer) with the read-back: the figures, the rosters, the networks; GET /v1/onboarding/charter for its standing")
+    line("S10", "[compare] the compiled charter's Spec 92 fields with the answers given: payeeApproval (C11A — the change approvers, the census of %d at a quorum of %d), payeeVenueContracts (C19 — %s), holder (WO1 — %s, by_person, %s), signingTiers.holderAloneUpToCents (WO3 — %s) and twoSignaturesUpToCents (WO4 — %s), and WO2's third party among the signers; the read-back's WO3 and WO4 as the book wrote them and never as the written US$1.00, and C19's door line" % (
+        len(A.WHITELIST_ROSTER), A.WHITELIST_QUORUM, venue_law_of_the_book(), A.PEOPLE[A.WALLET_HOLDER].name, A.WALLET_HOLDER_TITLE,
+        A.MONEY["holder_alone_cents"], A.MONEY["two_signatures_cents"]))
     line("S10", "GET /v1/journey, GET /v1/onboarding/charter, GET /v1/payees, GET /v1/sets, GET /v1/invites → [compare] the journey stage with what the registers hold")
     line("S10", "[check] every money figure the server returned against the minor-unit law (money.ts): an integer string of minor units, never a float")
     line("S10", "[check] every refusal met in S1 to S9 for Rule 13: it names what happened and who refused; a bare status or a generic sentence is a finding")
@@ -2631,8 +2873,14 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     line("S11", "POST /v1/auth/login/options then /verify twice with the same nonce, issuedAtMs and challenge → expect the second refused 403 STEP_UP_STALE: challenge already used")
     line("S11", "POST /v1/auth/login/verify with an assertion whose rpIdHash is SHA-256('not-the-estate.invalid') → expect 403 STEP_UP_INVALID")
     line("S11", "POST /v1/payees %s → expect a refusal, or the estate's acceptance recorded" % _j({"displayName": "Checksum probe", "addresses": [{"chain": T.PAYEE_CHAIN, "address": T.wrong_checksum(T.address("CHECKSUM_PROBE_ETHEREUM"))}]}))
-    line("S11", "POST /v1/payees %s → expect 201, accepted, as the law says (%s); a refusal is the finding" % (
-        _j({"displayName": "Venue probe", "addresses": [{"chain": T.PAYEE_CHAIN, "address": "<the corridor's tables.py UNISWAP_V3_ETHEREUM, read at run time>"}]}), VENUE_RULING))
+    venue_body = _j({"displayName": "Venue probe", "addresses": [{"chain": T.PAYEE_CHAIN, "address": "<the corridor's tables.py UNISWAP_V3_ETHEREUM, read at run time>"}]})
+    if venue_law_of_the_book() == "refused":
+        line("S11", "POST /v1/payees %s → expect %d %s: %s (the book answers %s %s; the live run reads the compiled policy charter's payeeVenueContracts); an acceptance is the finding" % (
+            venue_body, PAYEE_IS_VENUE_CONTRACT_STATUS, PAYEE_IS_VENUE_CONTRACT, payee_is_venue_contract_sentence(ESTATE_VENUE_NAMES["uniswap_v3"], T.PAYEE_CHAIN),
+            VENUE_CONTRACT_QUESTION_ID, _j(A.POLICY_ANSWERS["C19"]["choice"])))
+    else:
+        line("S11", "POST /v1/payees %s → expect 201, accepted, as the law says (%s; the book answers %s %s, and the live run reads the compiled policy charter's payeeVenueContracts); a refusal is the finding" % (
+            venue_body, VENUE_RULING, VENUE_CONTRACT_QUESTION_ID, _j(A.POLICY_ANSWERS["C19"]["choice"])))
     line("S11", "[check] S7's P3 (%s %s, above the per-payment limit) was not released without approval" % (A.PAYMENTS[2].amount, T.PAYMENT_ASSET))
     line("S11", "POST /v1/approvals/<run P3>/challenge {} then /approve (as %s, who entered it) → expect a refusal in the charter's words" % clerk.name)
     line("S11", "POST /v1/onboarding/interviews/<policy interview>/confirm/options {} then /confirm (as %s) → expect 409 INTERVIEW_NOT_OPEN: confirm happens at the read-back" % founder.name)

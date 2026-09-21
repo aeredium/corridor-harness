@@ -1,0 +1,617 @@
+{
+  "what": "The question pages the AER 360 estate served the harness on 21 September 2026 (Spec T11), and the seven questions catalog version 14 added (Spec 92)",
+  "run": {
+    "report": "aer360-harness-2026-09-21.md",
+    "startedAt": "2026-09-21T20:55:56.193+10:00",
+    "base": "https://accounts.aeredium.io",
+    "stoppedAt": {
+      "policy": "C11A",
+      "wallet_account": "WO1"
+    }
+  },
+  "catalog": {
+    "version": 14,
+    "source": "aeredium/AERAccounts apps/server/src/services/questioncatalog.ts at cf3be4a (Spec 92), CATALOG_VERSION = 14",
+    "addedInVersion14": {
+      "policy": [
+        "C11A",
+        "C11C",
+        "C19"
+      ],
+      "wallet_account": [
+        "WO1",
+        "WO2",
+        "WO3",
+        "WO4"
+      ]
+    },
+    "optionAddedInVersion14": {
+      "W1": "A customer’s account — the customer initiates, the company approves above a figure"
+    }
+  },
+  "served": {
+    "policy": [
+      {
+        "questionId": "A1",
+        "part": "Part A — The census",
+        "kind": "text",
+        "prompt": "What is the company’s legal name?",
+        "options": null,
+        "listFields": null,
+        "recommended": null,
+        "note": null,
+        "required": true
+      },
+      {
+        "questionId": "A4",
+        "part": "Part A — The census",
+        "kind": "text",
+        "prompt": "What country is the company in?",
+        "options": null,
+        "listFields": null,
+        "recommended": null,
+        "note": null,
+        "required": true
+      },
+      {
+        "questionId": "A5",
+        "part": "Part A — The census",
+        "kind": "currency",
+        "prompt": "What currency do you want your numbers displayed in?",
+        "options": [
+          "AUD",
+          "CAD",
+          "EUR",
+          "GBP",
+          "NZD",
+          "USD"
+        ],
+        "listFields": null,
+        "recommended": "the currency of your country — Australia is offered AUD, Japan is offered JPY; changeable at will later",
+        "note": "Display only. The base is US dollars for every company, enforced and never asked — every figure is recorded in USD and live-translated into your display currency as a lens.",
+        "required": true
+      },
+      {
+        "questionId": "A8",
+        "part": "Part A — The census",
+        "kind": "list",
+        "prompt": "Name them. For each person: full name, work email, and what they PRIMARILY do — many people do several of these, so choose the one that is mostly theirs.",
+        "options": null,
+        "listFields": [
+          {
+            "key": "name",
+            "label": "Full name"
+          },
+          {
+            "key": "email",
+            "label": "Work email"
+          },
+          {
+            "key": "role",
+            "kind": "choice",
+            "label": "What they primarily do",
+            "options": [
+              "Enter payments",
+              "Review payments",
+              "Authorise payments",
+              "Release payments"
+            ]
+          }
+        ],
+        "recommended": null,
+        "note": null,
+        "required": true
+      },
+      {
+        "questionId": "A9",
+        "part": "Part A — The census",
+        "kind": "single_choice",
+        "prompt": "Will anyone stand at a level beneath you on the AER 360 system — your custody clients, partial custodians who hold alongside you, or divisions of this company that carry their own limits? Every level here is a STANDING inside this one company: one bill, one charter, one company.",
+        "options": [
+          "No — this company stands alone",
+          "Yes — our custody clients",
+          "Yes — partial custodians who hold alongside us",
+          "Yes — divisions of this company with their own limits",
+          "Yes — more than one of these"
+        ],
+        "listFields": null,
+        "recommended": null,
+        "note": "A separate company is not a level. It is designated a subsidiary, it walks its own onboarding from the beginning, and it is billed as its own client — that road is in the estate, not on this page.",
+        "required": true
+      },
+      {
+        "questionId": "A11",
+        "part": "Part A — The census",
+        "kind": "single_choice",
+        "prompt": "Does the company use AI agents or automated systems anywhere near payments — paying, trading, purchasing, moving digital assets?",
+        "options": [
+          "No",
+          "Yes"
+        ],
+        "listFields": null,
+        "recommended": null,
+        "note": null,
+        "required": true
+      },
+      {
+        "questionId": "B1",
+        "part": "Part B — Standing",
+        "kind": "statement",
+        "prompt": "You are founding this estate. You are level 1. Your answers here set who decides — who approves, who may change the rules, who sees what, and the networks this company uses. What this company can MOVE is set on the wallet accounts that pay, and your estate’s capacity is their total, added up and never asked. A level is a STANDING within this one company — your custody clients, your partial custodians, your divisions. Level 1 controls all levels; each level controls only the levels beneath it; no level controls above itself.",
+        "options": null,
+        "listFields": null,
+        "recommended": null,
+        "note": null,
+        "required": false
+      },
+      {
+        "questionId": "B2",
+        "part": "Part B — Standing",
+        "kind": "statement",
+        "prompt": "What stands beside you cannot see you, and you cannot see it. Each standing lives in its own branch of the tree: visible in full to the levels above, invisible to others.",
+        "options": null,
+        "listFields": null,
+        "recommended": null,
+        "note": null,
+        "required": false
+      },
+      {
+        "questionId": "B3",
+        "part": "Part B — Standing",
+        "kind": "statement",
+        "prompt": "You see every level of this estate, always — that is what being level 1 is, and nothing on the next page can change it. Below you, sight is GRANTED and never assumed: a level sees only its own level unless you say otherwise. Nothing sees above itself, and nothing sees beside itself, ever — that is not yours to grant or ours to offer.",
+        "options": null,
+        "listFields": null,
+        "recommended": null,
+        "note": null,
+        "required": false
+      },
+      {
+        "questionId": "C9S",
+        "part": "Part C — The company’s rules",
+        "kind": "statement",
+        "prompt": "The Aeredium network is enabled by default. It is the native network for the wallets and for the entire ecosystem of AER 360, and it cannot be switched off — every client operates on Aeredium; opting out of it is opting out of being a client.",
+        "options": null,
+        "listFields": null,
+        "recommended": null,
+        "note": null,
+        "required": false
+      },
+      {
+        "questionId": "C9",
+        "part": "Part C — The company’s rules",
+        "kind": "multi_choice",
+        "prompt": "Which OTHER networks may this company use, in addition to Aeredium? Choosing none is allowed, and means Aeredium only.",
+        "options": [
+          "Ethereum",
+          "Solana",
+          "Bitcoin"
+        ],
+        "listFields": null,
+        "recommended": "only the networks the company actually uses today",
+        "note": null,
+        "required": false
+      },
+      {
+        "questionId": "C10",
+        "part": "Part C — The company’s rules",
+        "kind": "single_choice",
+        "prompt": "When a payment is held for approval, how many people must approve online to release it?",
+        "options": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ],
+        "listFields": null,
+        "recommended": "2, when the finance roster honestly supports it",
+        "note": null,
+        "required": true
+      },
+      {
+        "questionId": "C11",
+        "part": "Part C — The company’s rules",
+        "kind": "roster_multi",
+        "prompt": "Name them — choose from the people you told us about.",
+        "options": null,
+        "listFields": null,
+        "recommended": null,
+        "note": null,
+        "required": true
+      },
+      {
+        "questionId": "C11A",
+        "part": "Part C — The company’s rules",
+        "kind": "single_choice",
+        "prompt": "When a new payee address is added, who must approve it before it can be paid?",
+        "options": [
+          "The people who approve payments (the people you named just above), at the number you set for a payment",
+          "The people who may change these rules, at the number you set for a change",
+          "The company’s CFO, or the person the CFO has delegated"
+        ],
+        "listFields": null,
+        "recommended": null,
+        "note": "Today the second is how every estate has worked: a new payee is a change to the rules. Choose the first if the people who release payments should also admit payees; choose the third if one officer’s authority admits them.",
+        "required": true
+      }
+    ],
+    "wallet_account": [
+      {
+        "questionId": "W0",
+        "part": "Standing",
+        "kind": "statement",
+        "prompt": "You are creating a wallet account. Everything you set here must fit inside your company’s ceiling. This account’s policy governs the account and every wallet beneath it. Those wallets — the units carrying the chain addresses themselves — are unlimited, and have no questions and no policy of their own, by design.",
+        "options": null,
+        "listFields": null,
+        "recommended": null,
+        "note": null,
+        "required": false
+      },
+      {
+        "questionId": "WN",
+        "part": "The wallet account",
+        "kind": "text",
+        "prompt": "What should this wallet account be called?",
+        "options": null,
+        "listFields": null,
+        "recommended": null,
+        "note": null,
+        "required": true
+      },
+      {
+        "questionId": "W1",
+        "part": "The purpose",
+        "kind": "single_choice",
+        "prompt": "What is this wallet account for?",
+        "options": [
+          "Payroll — paying the people who work here",
+          "Treasury — holding and protecting the company’s digital assets",
+          "Operations — day-to-day business payments",
+          "Trading — buying and selling on venues",
+          "Agents — the wallet account holding your agents’ wallets",
+          "Something else (describe it, and the general dialect is used)",
+          "A customer’s account — the customer initiates, the company approves above a figure"
+        ],
+        "listFields": null,
+        "recommended": null,
+        "note": null,
+        "required": true
+      },
+      {
+        "questionId": "O1",
+        "part": "The operations dialect",
+        "kind": "money",
+        "prompt": "How much does this account normally pay in one day?",
+        "options": null,
+        "listFields": null,
+        "recommended": null,
+        "note": "A blank field — you enter the amount yourself; no amounts are suggested. Recorded in US dollars, the base; your display currency is shown beside it as you type. Left blank, there is no limit. A zero is not blank: nothing is paid under a rule of zero until you write a figure.",
+        "required": false
+      },
+      {
+        "questionId": "O2",
+        "part": "The operations dialect",
+        "kind": "money",
+        "prompt": "Below what amount may one person pay without a second approval?",
+        "options": null,
+        "listFields": null,
+        "recommended": null,
+        "note": "A blank field — you enter the amount yourself; no amounts are suggested. Recorded in US dollars, the base; your display currency is shown beside it as you type. Left blank, there is no limit. A zero is not blank: nothing is paid under a rule of zero until you write a figure.",
+        "required": false
+      },
+      {
+        "questionId": "O3",
+        "part": "The operations dialect",
+        "kind": "single_choice",
+        "prompt": "Pay anyone, but pause the first payment to somewhere new?",
+        "options": [
+          "Yes",
+          "List only",
+          "Anyone, freely"
+        ],
+        "listFields": null,
+        "recommended": "Yes",
+        "note": null,
+        "required": false
+      },
+      {
+        "questionId": "O4",
+        "part": "The operations dialect",
+        "kind": "roster_single",
+        "prompt": "Who runs this account day to day? (optional)",
+        "options": null,
+        "listFields": null,
+        "recommended": null,
+        "note": "Optional — leave it empty and nothing is refused. AND SAID BEFORE YOU ANSWER: this name is RECORDED against this account’s charter and it is NOT POLICY. It grants nothing, it approves nothing, it is named in no rule, and no invitation is sent from it. Your read-back says so in full, and the day the platform can carry it, it is this answer that carries.",
+        "required": false
+      },
+      {
+        "questionId": "PN0",
+        "part": "Part PN — Areas of responsibility",
+        "kind": "statement",
+        "prompt": "A person here can hold an AREA OF RESPONSIBILITY with its own limits — a trader who may pay less in one payment than this account allows, a division head whose division carries its own daily ceiling. It stays inside this same company and this same charter: it is a scoped limit set attached to one named person, tighter than this account’s own and never wider. It is not a second estate, and it is not a company beneath you.",
+        "options": null,
+        "listFields": null,
+        "recommended": null,
+        "note": null,
+        "required": false
+      },
+      {
+        "questionId": "PN1",
+        "part": "Part PN — Areas of responsibility",
+        "kind": "single_choice",
+        "prompt": "Does anyone here hold an area of responsibility with limits tighter than this account’s own?",
+        "options": [
+          "No",
+          "Yes"
+        ],
+        "listFields": null,
+        "recommended": null,
+        "note": "Answering “No” records no areas of responsibility, and the next question is skipped.",
+        "required": true
+      },
+      {
+        "questionId": "WQ",
+        "part": "The approvers",
+        "kind": "single_choice",
+        "prompt": "When this account holds a payment for approval, how many people must agree to release it?",
+        "options": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+        ],
+        "listFields": null,
+        "recommended": "2, when the roster honestly supports it; for treasury, the most it supports",
+        "note": null,
+        "required": true
+      },
+      {
+        "questionId": "WA1",
+        "part": "The approvers",
+        "kind": "list",
+        "prompt": "Name them. For each approver: full name, and work email. No policy exists without named people — and when more than one signature is required, name at least that many.",
+        "options": null,
+        "listFields": [
+          {
+            "key": "name",
+            "label": "Full name"
+          },
+          {
+            "key": "email",
+            "label": "Work email"
+          }
+        ],
+        "recommended": null,
+        "note": "An agent is never an approver; every name here is a person.",
+        "required": true
+      },
+      {
+        "questionId": "WA2",
+        "part": "The approvers",
+        "kind": "single_choice",
+        "prompt": "May the person who submits a payment also be one of those who approve it?",
+        "options": [
+          "Yes — one person can both submit and release, where the quorum allows it",
+          "No — every release needs at least one approver who did not submit it; with a quorum of 1 this means someone other than the submitter must approve"
+        ],
+        "listFields": null,
+        "recommended": null,
+        "note": "Answering “No” beside a single named approver is refused: nobody would be left who could release a payment. Name a second approver first, or answer Yes.",
+        "required": true
+      },
+      {
+        "questionId": "WO1",
+        "part": "The wallet’s people",
+        "kind": "person_or_none",
+        "prompt": "Who holds this wallet? Name the one person who will receive it and open it on their device: full name and work email — or answer No one.",
+        "options": [
+          "One person, named here",
+          "No one: this wallet is held by no person’s device and is visible and operated from AER 360 only"
+        ],
+        "listFields": [
+          {
+            "key": "name",
+            "label": "Full name"
+          },
+          {
+            "key": "email",
+            "label": "Work email"
+          }
+        ],
+        "recommended": null,
+        "note": "The person named here is this wallet’s Officer — or, for a customer’s account, its Principal: the one who receives the wallet and opens it on their own device. A wallet held by no one is operated from AER 360 only, by the people this charter names, and their passkeys are its signatures.",
+        "required": true
+      }
+    ]
+  },
+  "added": {
+    "policy": [
+      {
+        "questionId": "C11A",
+        "part": "Part C — The company’s rules",
+        "kind": "single_choice",
+        "required": true,
+        "dependsOn": null,
+        "prompt": "When a new payee address is added, who must approve it before it can be paid?",
+        "options": [
+          "The people who approve payments (the people you named just above), at the number you set for a payment",
+          "The people who may change these rules, at the number you set for a change",
+          "The company’s CFO, or the person the CFO has delegated"
+        ],
+        "listFields": null,
+        "note": "Today the second is how every estate has worked: a new payee is a change to the rules. Choose the first if the people who release payments should also admit payees; choose the third if one officer’s authority admits them.",
+        "servedOn": "2026-09-21"
+      },
+      {
+        "questionId": "C11C",
+        "part": "Part C — The company’s rules",
+        "kind": "list",
+        "required": true,
+        "dependsOn": {
+          "questionId": "C11A",
+          "oneOf": [
+            "The company’s CFO, or the person the CFO has delegated"
+          ]
+        },
+        "prompt": "Name the CFO, or the person the CFO has delegated: full name and work email.",
+        "options": null,
+        "listFields": [
+          {
+            "key": "name",
+            "label": "Full name"
+          },
+          {
+            "key": "email",
+            "label": "Work email"
+          }
+        ],
+        "note": "One person. Someone you already named in the census, or someone new — a roster needs a person who holds a credential of their own.",
+        "servedOn": null
+      },
+      {
+        "questionId": "C19",
+        "part": "Part C — The company’s rules",
+        "kind": "single_choice",
+        "required": true,
+        "dependsOn": null,
+        "prompt": "May a payee address be the contract of a trading venue or exchange, such as a swap router, rather than a person’s or a company’s wallet?",
+        "options": [
+          "Yes",
+          "No — only wallets held by people or companies"
+        ],
+        "listFields": null,
+        "note": "A venue contract is a program, not a person. Paying one is how a trade or a deposit is made; if this estate never does that, say No and the estate will refuse such an address when it is entered.",
+        "servedOn": null
+      }
+    ],
+    "wallet_account": [
+      {
+        "questionId": "WO1",
+        "part": "The wallet’s people",
+        "kind": "person_or_none",
+        "required": true,
+        "dependsOn": {
+          "questionId": "W1",
+          "oneOf": [
+            "Payroll — paying the people who work here",
+            "Treasury — holding and protecting the company’s digital assets",
+            "Operations — day-to-day business payments",
+            "Trading — buying and selling on venues",
+            "Something else (describe it, and the general dialect is used)",
+            "A customer’s account — the customer initiates, the company approves above a figure"
+          ]
+        },
+        "prompt": "Who holds this wallet? Name the one person who will receive it and open it on their device: full name and work email — or answer No one.",
+        "options": [
+          "One person, named here",
+          "No one: this wallet is held by no person’s device and is visible and operated from AER 360 only"
+        ],
+        "listFields": [
+          {
+            "key": "name",
+            "label": "Full name"
+          },
+          {
+            "key": "email",
+            "label": "Work email"
+          }
+        ],
+        "note": "The person named here is this wallet’s Officer — or, for a customer’s account, its Principal: the one who receives the wallet and opens it on their own device. A wallet held by no one is operated from AER 360 only, by the people this charter names, and their passkeys are its signatures.",
+        "servedOn": "2026-09-21"
+      },
+      {
+        "questionId": "WO2",
+        "part": "The wallet’s people",
+        "kind": "list",
+        "required": true,
+        "dependsOn": {
+          "questionId": "W1",
+          "oneOf": [
+            "Payroll — paying the people who work here",
+            "Treasury — holding and protecting the company’s digital assets",
+            "Operations — day-to-day business payments",
+            "Trading — buying and selling on venues",
+            "Something else (describe it, and the general dialect is used)",
+            "A customer’s account — the customer initiates, the company approves above a figure"
+          ]
+        },
+        "prompt": "Name the third party to this wallet’s activation and to its largest payments. Full name, surname, work email, and their title.",
+        "options": null,
+        "listFields": [
+          {
+            "key": "name",
+            "label": "Full name"
+          },
+          {
+            "key": "surname",
+            "label": "Surname"
+          },
+          {
+            "key": "email",
+            "label": "Work email"
+          },
+          {
+            "key": "title",
+            "label": "Title",
+            "kind": "choice",
+            "options": [
+              "CEO",
+              "CFO",
+              "COO"
+            ]
+          }
+        ],
+        "note": "One person, with a passkey of their own. A wallet held by no one still has a third party to its activation.",
+        "servedOn": null
+      },
+      {
+        "questionId": "WO3",
+        "part": "The wallet’s people",
+        "kind": "money",
+        "required": true,
+        "dependsOn": {
+          "questionId": "WO1",
+          "oneOf": [
+            "One person, named here"
+          ]
+        },
+        "prompt": "Up to what amount may the holder pay alone, with their own passkey only?",
+        "options": null,
+        "listFields": null,
+        "note": "This field starts at one dollar. Write the real figure. Recorded in US dollars, the base; your display currency is shown beside it as you type. A zero is not blank: nothing is paid under a rule of zero until you write a figure.",
+        "written": {
+          "cents": "100"
+        },
+        "servedOn": null
+      },
+      {
+        "questionId": "WO4",
+        "part": "The wallet’s people",
+        "kind": "money",
+        "required": true,
+        "dependsOn": {
+          "questionId": "W1",
+          "oneOf": [
+            "Payroll — paying the people who work here",
+            "Treasury — holding and protecting the company’s digital assets",
+            "Operations — day-to-day business payments",
+            "Trading — buying and selling on venues",
+            "Something else (describe it, and the general dialect is used)",
+            "A customer’s account — the customer initiates, the company approves above a figure"
+          ]
+        },
+        "prompt": "Up to what amount are two signatures enough? Above this figure all three are required.",
+        "options": null,
+        "listFields": null,
+        "note": "This field starts at one dollar. Write the real figure. Recorded in US dollars, the base; your display currency is shown beside it as you type. A zero is not blank: nothing is paid under a rule of zero until you write a figure.",
+        "written": {
+          "cents": "100"
+        },
+        "servedOn": null
+      }
+    ]
+  }
+}
