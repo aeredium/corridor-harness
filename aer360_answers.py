@@ -4,13 +4,27 @@ answer the harness gives, and the estate, the people, the money and the payments
 decided.
 
 Read from the AER 360 code, not from memory: `apps/server/src/services/questioncatalog.ts` at
-aeredium/AERAccounts main after PR #106 (commit e651616, catalog version 12), whose option
-strings are copied here byte for byte because the interview refuses a choice that is not one of
-the options offered (`services/onboarding.ts`, validateValue); and `questioncatalog.v11.ts`, the
-frozen record of version 11, which is the fixture the tests hold this book against. Version 12
+aeredium/AERAccounts commit cf3be4a (Spec 92, CATALOG_VERSION 14), whose option strings are copied
+here byte for byte because the interview refuses a choice that is not one of the options offered
+(`services/onboarding.ts`, validateValue); and `questioncatalog.v11.ts`, the frozen record of
+version 11, which is the fixture the tests held this book against until Spec T11. Version 12
 retired C16 and C16C ("how long may a held payment wait before it is refused automatically?"),
 so the two ids are carried here with the words version 11 offered them in (commit 5492703^),
-and are never served by a version-12 estate.
+and are never served by an estate at version 12 or later.
+
+SPEC T11 (21 September 2026): THE BOOK LEARNS CATALOG VERSION 14. The run of 21 September stopped
+at S3 and S5 — "the answer book has no answer for policy question C11A" and "… for wallet_account
+question WO1" — because Spec 92 gave the catalog seven questions the book did not know (C11A, C11C,
+C19, WO1, WO2, WO3, WO4) and one new answer kind, `person_or_none`. The book answers the seven
+below, states the version it answers (CATALOG_VERSION_ANSWERED), and the tests hold it against the
+pages the estate served that night (tests/fixtures/aer360-served-2026-09-21.json) plus the seven.
+The wire shape of the new kind (`services/onboarding.ts`, `case 'person_or_none'`) is
+{choice: <option sentence>, person: {name, email}} behind the first option and {choice} alone
+behind "No one". WO2 is a `list` whose one entry carries name, surname, email and title (CEO, CFO
+or COO). WO3 and WO4 are `money` — {cents}, as every money answer — and they are the two fields in
+the estate that arrive written, at one dollar; the book writes the real figure. The compiler
+refuses at the read-back where WO4 is not above WO3, and where WA1's people plus WO2's person are
+fewer than three (`tiersNeedThreePeople`).
 
 THE LAW OF THIS FILE. The harness never improvises an answer. A question the book does not know
 stops the run at that station with the question's id, prompt and kind printed word for word,
@@ -41,6 +55,18 @@ WHAT THE SPEC DECIDED, AND WHAT THE BOOK DECIDED WHERE THE SPEC LEFT IT TO THE H
   worn by four people. WA2's No is also refused at the page beside a single named approver
   (`crosschecks.ts`, SEPARATION_DEADLOCK_CHECKS).
 
+  The seven of catalog version 14 (Spec T11): C11A answers that a new payee is approved by the
+  people who may change the rules, at the number set for a change — the census at C12's count of
+  two, which is the roster T10 asserts in S6 (Ada and Ben, two of four). C11C is asked only behind
+  C11A's third answer and is not served behind that one; it is written all the same, as no entries,
+  so a walk that reaches it is answered and reported rather than stopped. C19 answers No — only
+  wallets held by people or companies: Harness Holdings pays people and companies, the stipulation
+  is the tighter law, and it is the one that proves the chain. WO1 names Ben Signatory as the one
+  person who holds the wallet — he is its Officer — and WO2 names Harriet Founder, CEO, as the third
+  party to its activation and its largest payments. WO3 is 2,000.00 (the holder alone) and WO4
+  10,000.00 (two signatures enough). WA1 gains Ben beside Ada, so the tiers name three people (Ada,
+  Ben, Harriet) and the read-back is not refused; WQ stays at one.
+
   The money is entered in the base the interview records — "Recorded in US dollars, the base;
   your display currency is shown beside it as you type" (MONEY_NOTE) — as whole figures: per
   payment 10,000 (O2), per day 50,000 (O1), treasury ceiling 250,000 (T1, in the book for the
@@ -59,9 +85,14 @@ from typing import Any, Dict, List, NamedTuple, Optional, Sequence
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import aer360_tables as T  # noqa: E402
 
-CATALOG_SOURCE = "aeredium/AERAccounts apps/server/src/services/questioncatalog.ts at e651616 (main after PR #106), CATALOG_VERSION = 12"
-CATALOG_VERSION_READ = 12
+CATALOG_SOURCE = "aeredium/AERAccounts apps/server/src/services/questioncatalog.ts at cf3be4a (Spec 92), CATALOG_VERSION = 14"
+CATALOG_VERSION_READ = 14
+# THE VERSION THIS BOOK ANSWERS (Spec T11). S3 reports it beside what the estate serves; a question the estate serves that the
+# book does not know is reported with this figure in the sentence, so a moved catalog names the two versions it stands between.
+CATALOG_VERSION_ANSWERED = 14
 RETIRED_IN_V12 = ("C16", "C16C")
+# The seven questions catalog version 14 added (Spec 92), by interview; a double standing in for an older estate leaves them out.
+ADDED_IN_V14 = {"policy": ("C11A", "C11C", "C19"), "wallet_account": ("WO1", "WO2", "WO3", "WO4")}
 
 # ---------------------------------------------------------------------------
 # The estate and its people.
@@ -140,10 +171,21 @@ MONEY = {
     "per_payment_cents": "1000000",       # 10,000.00 — O2: above it a payment is held for approval
     "per_day_cents": "5000000",           # 50,000.00 — O1: the account's normal day
     "treasury_ceiling_cents": "25000000",  # 250,000.00 — T1, for the treasury dialect (not walked)
+    # The signing tiers (Spec 92, WO3 and WO4; Spec T11). The two fields arrive written at one dollar ({cents: "100"}) and the
+    # book writes the real figure: the holder alone up to 2,000.00, two signatures enough up to 10,000.00, three above it.
+    "holder_alone_cents": "200000",       # 2,000.00 — WO3: up to it the holder pays alone, with their own passkey
+    "two_signatures_cents": "1000000",    # 10,000.00 — WO4: up to it two signatures are enough; above it all three
 }
 
 WALLET_ACCOUNT_NAME = "Operating account"
 WALLET_ACCOUNT_PURPOSE = "Operations — day-to-day business payments"
+# The wallet's people (Spec 92, WO1 and WO2; Spec T11): Ben holds the wallet, so he is its Officer (`holderTitleFor`: the
+# Principal of a customer's account, the Officer of every other wallet); Harriet, CEO, is the third party to its activation.
+WALLET_HOLDER = "ben"
+WALLET_HOLDER_TITLE = "Officer"
+THIRD_PARTY = "harriet"
+THIRD_PARTY_TITLE = "CEO"
+THIRD_PARTY_TITLES = ("CEO", "CFO", "COO")  # questioncatalog.ts THIRD_PARTY_TITLES, WO2's title field
 
 
 class Payment(NamedTuple):
@@ -170,7 +212,7 @@ PAYMENTS: List[Payment] = [
 ]
 
 # ---------------------------------------------------------------------------
-# The catalog, as version 12 asks it: id, kind, the gate it hangs on, and its closed options.
+# The catalog, as version 14 asks it: id, kind, the gate it hangs on, and its closed options.
 # Order is the catalog's own; the interview serves questions in this order, skipping the gated.
 # ---------------------------------------------------------------------------
 class Question(NamedTuple):
@@ -195,6 +237,17 @@ OPERATIONS = "Operations — day-to-day business payments"
 TRADING = "Trading — buying and selling on venues"
 AGENT = "Agents — the wallet account holding your agents’ wallets"
 OTHER = "Something else (describe it, and the general dialect is used)"
+CUSTOMER = "A customer’s account — the customer initiates, the company approves above a figure"  # W1's option added by version 14
+NON_AGENT_PURPOSES = [PAYROLL, TREASURY, OPERATIONS, TRADING, OTHER, CUSTOMER]  # the purposes that hold a wallet a person may hold
+# Version 14's own words (questioncatalog.ts PAYEE_APPROVAL_OPTIONS, VENUE_CONTRACT_OPTIONS, HOLDER_OPTIONS), byte for byte.
+PAYEE_APPROVAL_PAYMENT_APPROVERS = "The people who approve payments (the people you named just above), at the number you set for a payment"
+PAYEE_APPROVAL_CHANGE_APPROVERS = "The people who may change these rules, at the number you set for a change"
+PAYEE_APPROVAL_CFO = "The company’s CFO, or the person the CFO has delegated"
+VENUE_YES = "Yes"
+VENUE_NO = "No — only wallets held by people or companies"
+HOLDER_PERSON = "One person, named here"
+HOLDER_NO_ONE = "No one: this wallet is held by no person’s device and is visible and operated from AER 360 only"
+WRITTEN_ONE_DOLLAR = {"cents": "100"}  # the figure WO3 and WO4 arrive written with (questioncatalog.ts WRITTEN_ONE_DOLLAR)
 WA2_YES = "Yes — one person can both submit and release, where the quorum allows it"
 WA2_NO = ("No — every release needs at least one approver who did not submit it; with a quorum of 1 "
           "this means someone other than the submitter must approve")
@@ -220,7 +273,12 @@ POLICY_CATALOG: List[Question] = [
     Question("C9", "multi_choice", None, list(OTHER_NETWORKS)),
     Question("C10", "single_choice", None, list(ONE_TO_FIVE), True),
     Question("C11", "roster_multi", None, None, True),
+    # version 14 (Spec 92): who approves a new payee, and — behind the third answer only — the CFO or the CFO's delegate
+    Question("C11A", "single_choice", None, [PAYEE_APPROVAL_PAYMENT_APPROVERS, PAYEE_APPROVAL_CHANGE_APPROVERS, PAYEE_APPROVAL_CFO], True),
+    Question("C11C", "list", _gate("C11A", [PAYEE_APPROVAL_CFO]), None, True),
     Question("C15", "single_choice", None, ["No", "Yes"], True),
+    # version 14 (Spec 92): may a payee address be a venue's contract; its id is C19, not the C16 the spec drafted (C16 is retired for ever)
+    Question("C19", "single_choice", None, [VENUE_YES, VENUE_NO], True),
     Question("C18", "list", None, None, True),
     Question("C12", "single_choice", None, list(ONE_TO_FIVE), True),
     Question("C12A", "single_choice", None, ["No", "Yes"], True),
@@ -249,7 +307,7 @@ RETIRED_POLICY_QUESTIONS: List[Question] = [
 ACCOUNT_CATALOG: List[Question] = [
     Question("W0", "statement", None, None),
     Question("WN", "text", None, None, True),
-    Question("W1", "single_choice", None, [PAYROLL, TREASURY, OPERATIONS, TRADING, AGENT, OTHER], True),
+    Question("W1", "single_choice", None, [PAYROLL, TREASURY, OPERATIONS, TRADING, AGENT, OTHER, CUSTOMER], True),
     Question("P1", "list", _gate("W1", [PAYROLL]), None, True),
     Question("P2", "single_choice", _gate("W1", [PAYROLL]),
              ["Monthly, on a set day", "Fortnightly", "Weekly", "Custom — days, hours, and the timezone the run is anchored to"]),
@@ -283,7 +341,12 @@ ACCOUNT_CATALOG: List[Question] = [
     Question("WQ", "single_choice", None, list(ONE_TO_FIVE), True),
     Question("WA1", "list", None, None, True),
     Question("WA2", "single_choice", None, [WA2_YES, WA2_NO], True),
-    Question("WCW", "statement", _gate("W1", [PAYROLL, TREASURY, OPERATIONS, TRADING, OTHER]), None),
+    # version 14 (Spec 92): the wallet's people and tiers, for every purpose but the agents'; WO3 only where WO1 names a person
+    Question("WO1", "person_or_none", _gate("W1", NON_AGENT_PURPOSES), [HOLDER_PERSON, HOLDER_NO_ONE], True),
+    Question("WO2", "list", _gate("W1", NON_AGENT_PURPOSES), None, True),
+    Question("WO3", "money", _gate("WO1", [HOLDER_PERSON]), None, True),
+    Question("WO4", "money", _gate("W1", NON_AGENT_PURPOSES), None, True),
+    Question("WCW", "statement", _gate("W1", [PAYROLL, TREASURY, OPERATIONS, TRADING, OTHER, CUSTOMER]), None),
     Question("WCA", "statement", _gate("W1", [AGENT]), None),
     Question("WG1", "statement", None, None),
 ]
@@ -304,7 +367,8 @@ def question(interview_type: str, question_id: str) -> Optional[Question]:
 # (`services/onboarding.ts`, AnswerValue): statement {acknowledged}, single_choice {choice},
 # multi_choice {choices}, text and currency {text}, list {entries}, money {cents}, percent
 # {percent}, count {count}, roster_single and roster_multi {people} (work emails, as the wizard
-# collects them — `apps/web/src/screens/Onboarding.tsx`, "Email addresses, comma separated").
+# collects them — `apps/web/src/screens/Onboarding.tsx`, "Email addresses, comma separated"),
+# person_or_none {choice, person: {name, email}} or {choice} alone (Spec 92, WO1).
 # ---------------------------------------------------------------------------
 ACK: Dict[str, Any] = {"acknowledged": True}
 
@@ -328,7 +392,13 @@ POLICY_ANSWERS: Dict[str, Dict[str, Any]] = {
     "C9": {"choices": [T.C9_NETWORK_CHOICE]},
     "C10": {"choice": "1"},
     "C11": {"people": [PEOPLE[PAYMENT_APPROVER].email]},
+    # Spec T11: a new payee is approved by the change approvers — the census at C12's count of two, the roster T10 asserts in S6
+    "C11A": {"choice": PAYEE_APPROVAL_CHANGE_APPROVERS},
+    # asked only behind C11A's third answer, which the book does not choose; written so a walk that reaches it is answered, not stopped
+    "C11C": {"entries": []},
     "C15": {"choice": "Yes"},
+    # Spec T11: Harness Holdings pays people and companies; the stipulation is the tighter law and the one that proves the chain
+    "C19": {"choice": VENUE_NO},
     "C16": {"choice": "24 hours"},  # version 11 only; never served by version 12
     "C16C": {"text": ""},           # asked only behind Custom, which the book does not choose
     "C18": {"entries": [{"name": PEOPLE[SECURITY_CONTACT].name, "email": PEOPLE[SECURITY_CONTACT].email}]},
@@ -380,8 +450,15 @@ ACCOUNT_ANSWERS: Dict[str, Dict[str, Any]] = {
     "PN1": {"choice": "No"},
     "PN2": {"entries": []},
     "WQ": {"choice": "1"},
-    "WA1": {"entries": [{"name": PEOPLE[PAYMENT_APPROVER].name, "email": PEOPLE[PAYMENT_APPROVER].email}]},
+    # Spec T11: Ben beside Ada, so the tiers name three people with WO2's Harriet and the read-back is not refused (tiersNeedThreePeople)
+    "WA1": {"entries": [{"name": PEOPLE[PAYMENT_APPROVER].name, "email": PEOPLE[PAYMENT_APPROVER].email},
+                        {"name": PEOPLE[WALLET_HOLDER].name, "email": PEOPLE[WALLET_HOLDER].email}]},
     "WA2": {"choice": WA2_YES},
+    # Spec 92's wallet people and tiers (Spec T11). WO1 in the person_or_none shape: the choice, and the person behind the first option.
+    "WO1": {"choice": HOLDER_PERSON, "person": {"name": PEOPLE[WALLET_HOLDER].name, "email": PEOPLE[WALLET_HOLDER].email}},
+    "WO2": {"entries": [{"name": "Harriet", "surname": "Founder", "email": PEOPLE[THIRD_PARTY].email, "title": THIRD_PARTY_TITLE}]},
+    "WO3": {"cents": MONEY["holder_alone_cents"]},    # 2,000.00 — arrives written at one dollar; the book writes the real figure
+    "WO4": {"cents": MONEY["two_signatures_cents"]},  # 10,000.00 — arrives written at one dollar; the book writes the real figure
     "WCW": ACK,
     "WCA": ACK,
     "WG1": ACK,
@@ -454,6 +531,7 @@ SHAPE_OF_KIND = {
     "count": "count",
     "roster_single": "people",
     "roster_multi": "people",
+    "person_or_none": "choice",  # Spec 92: {choice, person} behind the first option, {choice} alone behind "No one"
 }
 
 
@@ -507,7 +585,7 @@ def _visible(q: Question, answers: Dict[str, Dict[str, Any]]) -> bool:
 
 
 def expected_walk(interview_type: str) -> List[Question]:
-    """The questions a version-12 estate serves for this book, in order."""
+    """The questions a version-14 estate serves for this book, in order."""
     answers = ANSWERS[interview_type]
     return [q for q in CATALOGS[interview_type] if _visible(q, answers)]
 

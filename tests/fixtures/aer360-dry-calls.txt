@@ -16,7 +16,9 @@ S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": 
 S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C9", "value": {"choices": ["Ethereum"]}}
 S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C10", "value": {"choice": "1"}}
 S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C11", "value": {"people": ["harness+ada@aeredium.io"]}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C11A", "value": {"choice": "The people who may change these rules, at the number you set for a change"}}
 S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C15", "value": {"choice": "Yes"}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C19", "value": {"choice": "No — only wallets held by people or companies"}}
 S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C18", "value": {"entries": [{"name": "Harriet Founder", "email": "harness+harriet@aeredium.io"}]}}
 S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C12", "value": {"choice": "2"}}
 S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C12A", "value": {"choice": "No"}}
@@ -66,8 +68,12 @@ S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId":
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "PN0", "value": {"acknowledged": true}}
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "PN1", "value": {"choice": "No"}}
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WQ", "value": {"choice": "1"}}
-S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WA1", "value": {"entries": [{"name": "Ada Approver", "email": "harness+ada@aeredium.io"}]}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WA1", "value": {"entries": [{"name": "Ada Approver", "email": "harness+ada@aeredium.io"}, {"name": "Ben Signatory", "email": "harness+ben@aeredium.io"}]}}
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WA2", "value": {"choice": "Yes — one person can both submit and release, where the quorum allows it"}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WO1", "value": {"choice": "One person, named here", "person": {"name": "Ben Signatory", "email": "harness+ben@aeredium.io"}}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WO2", "value": {"entries": [{"name": "Harriet", "surname": "Founder", "email": "harness+harriet@aeredium.io", "title": "CEO"}]}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WO3", "value": {"cents": "200000"}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WO4", "value": {"cents": "1000000"}}
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WCW", "value": {"acknowledged": true}}
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WG1", "value": {"acknowledged": true}}
 S5 — GET /v1/onboarding/interviews/<account interview>/readback
@@ -105,6 +111,7 @@ S8 — GET /v1/workspace/readiness
 S9 — [out of scope] the tour's answers as Claude would see them: the harness is the founder, not Claude
 S10 — [compare] the read-back of each interview word for word with the answers given, as readback() spells them
 S10 — [compare] the compiled charter (the compile answer) with the read-back: the figures, the rosters, the networks; GET /v1/onboarding/charter for its standing
+S10 — [compare] the compiled charter's Spec 92 fields with the answers given: payeeApproval (C11A — the change approvers, the census of 4 at a quorum of 2), payeeVenueContracts (C19 — refused), holder (WO1 — Ben Signatory, by_person, Officer), signingTiers.holderAloneUpToCents (WO3 — 200000) and twoSignaturesUpToCents (WO4 — 1000000), and WO2's third party among the signers; the read-back's WO3 and WO4 as the book wrote them and never as the written US$1.00, and C19's door line
 S10 — GET /v1/journey, GET /v1/onboarding/charter, GET /v1/payees, GET /v1/sets, GET /v1/invites
 S10 — [check] every money figure the server returned against the minor-unit law (money.ts): an integer string of minor units, never a float
 S10 — [check] every refusal met in S1 to S9 for Rule 13: it names what happened and who refused; a bare status or a generic sentence is a finding

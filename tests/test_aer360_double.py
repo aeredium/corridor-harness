@@ -114,6 +114,36 @@ credential, nothing is retired, the register carries no marker, the seat road un
 author invitation is refused, listing both, as Spec 91's own test has it; `platform_names_approver=("ben",)` is an
 operator at the platform's own console naming a person's minted credential a second approver on the entry — outside
 the estate's seat road, which refuses them (APPROVER_SEAT_NOT_IN_CHARTER), and read live by the estate (roles.ts).
+
+Spec T11 (21 September 2026) taught the double AER 360 Spec 92 (aeredium/AERAccounts, commit cf3be4a, catalog version 14), read
+from the code and not from memory, because the run of that night stopped on questions the double had never served:
+
+  services/questioncatalog.ts                        the seven questions version 14 added (C11A, C11C, C19, WO1, WO2, WO3, WO4), the
+                                                     option W1 gained, their parts, prompts, options, list fields and notes, served
+                                                     from tests/fixtures/aer360-served-2026-09-21.json — the pages the estate served
+                                                     that night, and the catalog's words for the five the run never reached; WO3 and
+                                                     WO4 served with the written dollar as their value where no answer stands
+  services/onboarding.ts, validateValue              `person_or_none`: the choice is one of the two options; behind the first the
+                                                     person is named in full with a work email; behind "No one" no person travels
+  services/onboarding.ts, spokenAnswer, readback     a person is spoken as `<name> — <email>.`; a written zero as a wall; and Spec 92's
+                                                     synthetic lines — C19_DOOR after a No, WO1_TITLE after a named holder, HOLD_NOT_WRITTEN
+                                                     and WQ_TIERS on a tiered account
+  services/onboardingcompiler.ts                     `payeeApprovalOf` (the whitelist_mutation roster the answer to C11A draws up, which
+                                                     the double seats), `venueContractsOf`, `readWalletPeople` (the holder with the title
+                                                     `holderTitleFor` gives, the third party with a title of the three, the two figures),
+                                                     `assertSigningTiersConsistent` (WO4 not above WO3; fewer than three people between
+                                                     WA1 and WO2 — refused at the read-back, the confirm and the compile in the spec's own
+                                                     sentences), the third party as a signer beside WA1's people once by email, and the
+                                                     charter's `payeeApproval`, `payeeVenueContracts`, `holder` and `signingTiers`
+  services/payees.ts, assertPayeeIsNotVenueContract  THE DOOR: where the written policy charter says `payeeVenueContracts: 'refused'` and
+  packages/shared/src/venues.ts, refusals.ts         the address is on the engine's closed venue table (copied here row for row), the
+                                                     payee is refused PAYEE_IS_VENUE_CONTRACT, 422, in `payeeIsVenueContractSentence`'s
+                                                     words, naming the venue as it publishes itself and the chain sent
+
+and the venue dial is redrawn: `refuses_venue_contract=None` (the default) is the door following the charter, as Spec 92 built it;
+`True` is the stand-in of Spec T8 — a door that refuses the probe address regardless of its charter, under ADDRESS_PROPOSAL_REFUSED,
+which now stands for an estate refusing against a charter that says accepted; `False` is a door that saves the address regardless,
+an estate whose door never learned C19. `catalog_version` below 14 leaves the seven out, the estate of the runs before 21 September.
 """
 from __future__ import annotations
 
@@ -128,6 +158,7 @@ import sys
 import tempfile
 import time
 import unittest
+import unittest.mock
 import urllib.parse
 import urllib.request
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
@@ -155,7 +186,7 @@ STATUS = {
     "INTERNAL_ERROR": 500, "APPROVER_SEAT_NOT_ENROLLED": 422, "APPROVER_SEAT_NOT_IN_CHARTER": 422,
     "ONE_OFF_NOT_DECLARED": 422, "AMOUNT_MALFORMED": 400, "ASSET_UNKNOWN": 422, "WORKSPACE_NOT_PROVISIONED": 503,
     "SET_NOT_EDITABLE": 409, "BASE_CURRENCY_UNSET": 422, "ADDRESS_PROPOSAL_REFUSED": 422, "SIGNATURE_NOT_COUNTED": 403,
-    "APPROVER_SEAT_AMBIGUOUS": 409, "APPROVER_SEAT_CREDENTIAL_SHARED": 409,
+    "APPROVER_SEAT_AMBIGUOUS": 409, "APPROVER_SEAT_CREDENTIAL_SHARED": 409, "PAYEE_IS_VENUE_CONTRACT": 422,
 }
 MESSAGES = {
     "NOT_AUTHENTICATED": "You are not signed in.",
@@ -192,6 +223,8 @@ MESSAGES = {
     "SIGNATURE_NOT_COUNTED": "The access platform did not count your approval: it does not recognise your key as one of this wallet’s signatories. The address stays exactly as it was — nothing was approved, and nothing was changed.",
     "APPROVER_SEAT_AMBIGUOUS": "This email address matches more than one enrolled credential, so which one to seat cannot be told from the record. Nothing was changed. Withdraw or revoke the credentials that are no longer this person’s, and grant the seat again.",
     "APPROVER_SEAT_CREDENTIAL_SHARED": "This person’s passkey speaks for a credential that other people in this estate also hold, so there is no credential of their own to seat, and seating the one they hold would seat everyone who holds it. Nothing was changed. Invite this person again to give them their own; their seat completes itself when they bind their passkey.",
+    # the default sentence only (Spec 92); every raise composes its own through payee_is_venue_contract_sentence, naming the venue and the chain
+    "PAYEE_IS_VENUE_CONTRACT": "This address is the contract of a known trading venue. Your charter says a payee must be a wallet held by a person or a company. Nothing was saved.",
 }
 ESTATE_KEY_CURE = ("If you meant a different estate, sign out and choose that estate’s key when your device offers the picker — "
                    "each key is labelled with its estate’s name.")
@@ -262,7 +295,80 @@ def load_v11_prompts() -> Dict[str, Dict[str, str]]:
 
 
 V11 = load_v11_prompts()
+SERVED_FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "aer360-served-2026-09-21.json")
+
+
+def load_v14_added() -> Dict[str, Dict[str, Any]]:
+    """
+    id → {part, kind, prompt, options, listFields, note, written} for the seven questions catalog version 14 added (Spec 92), from the
+    fixture of the pages the estate served on 21 September 2026 and the catalog's own words for the five the run never reached.
+    """
+    with open(SERVED_FIXTURE, "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    out: Dict[str, Dict[str, Any]] = {}
+    for questions in data["added"].values():
+        for q in questions:
+            out[q["questionId"]] = q
+    return out
+
+
+V14_ADDED = load_v14_added()
+PROMPTS: Dict[str, Dict[str, Any]] = dict(V11)
+PROMPTS.update(V14_ADDED)
 LEVELS_BENEATH = set(A.LEVELS_BENEATH)
+# packages/shared/src/venues.ts (Spec 92): the engine's closed venue table, row for row and in its order, and the venues' published names.
+VENUE_CONTRACTS = (
+    ("uniswap_v3", "ethereum", "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45"),
+    ("uniswap_v3", "arbitrum", "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45"),
+    ("uniswap_v3", "base", "0x2626664c2603336E57B271c5C0b26F421741e481"),
+    ("pancakeswap_v3", "ethereum", "0x13f4EA83D0bd40E75C8222255bc855a974568Dd4"),
+    ("pancakeswap_v3", "arbitrum", "0x32226588378236Fd0c7c4053999F88aC0e5cAc77"),
+    ("pancakeswap_v3", "base", "0x678Aa4bF4E210cf2166753e054d5b7c31cc7fa86"),
+)
+VENUE_NAMES = {"uniswap_v3": "Uniswap v3", "pancakeswap_v3": "PancakeSwap v3"}
+VENUE_CONTRACT_QUESTION_ID = "C19"  # services/payees.ts
+
+
+def venue_of_destination(chain: str, destination: str) -> str:
+    """`venueOfDestination`: the venue id when the destination is a known venue contract on its chain, else the empty string."""
+    if not destination.strip():
+        return ""
+    for venue, row_chain, address in VENUE_CONTRACTS:
+        if row_chain.strip().lower() == chain.strip().lower() and address.lower() == destination.strip().lower():
+            return venue
+    return ""
+
+
+def payee_is_venue_contract_sentence(venue_name: str, chain: str, question_id: str = VENUE_CONTRACT_QUESTION_ID) -> str:
+    """`payeeIsVenueContractSentence` (packages/shared/src/refusals.ts), word for word."""
+    return ("This address is the contract of %s on %s. Your charter says a payee must be a wallet held by a person or a company "
+            "(question %s). Nothing was saved." % (venue_name, chain, question_id))
+
+
+# The signing tiers' sentences (packages/shared/src/refusals.ts; services/onboardingcompiler.ts), word for word.
+TIER_TWO_NOT_ABOVE_ONE = "The figure for two signatures must be above the figure for one; as written, two signatures would never be asked."
+TIER_HOLD_NOT_WRITTEN = ("Under this wallet’s signing tiers this figure is RECORDED and NOT written as a hold: a payment above the figure the holder "
+                         "may pay alone waits for its second or third signature instead, and those signatures are the approval.")
+TIER_QUORUM_STANDS_ASIDE = ("Under this wallet’s signing tiers, how many signatures a payment needs is decided by the two figures below — one up to the "
+                            "first, two up to the second, three above it. This number sizes the roster that approves a new payee for this account, and "
+                            "AER 360’s own approval inbox for a payment a clerk enters.")
+TIERS_FROM_CATALOG_VERSION = 14  # questioncatalog.ts TIERS_FROM_CATALOG_VERSION
+
+
+def tiers_need_three_people(figure: str, named: int) -> str:
+    """`tiersNeedThreePeople`: the figure WO4 names and how many distinct people WA1 and WO2 name between them."""
+    return "Three signatures are asked above %s but only %d %s named; name more or lower the tiers." % (figure, named, "person is" if named == 1 else "people are")
+
+
+def usd_figure(cents: Any) -> str:
+    """`usdFigure`: a figure in cents spoken the way the read-back speaks one — US$50,000 and 00 cents."""
+    whole, frac = divmod(int(cents), 100)
+    return "US$%s and %02d cents" % ("{:,}".format(whole), frac)
+
+
+def holder_title_for(purpose: Optional[str]) -> str:
+    """`holderTitleFor`: the Principal of a customer's account, the Officer of every other wallet."""
+    return "Principal" if purpose == A.CUSTOMER else "Officer"
 VENUE_STIPULATION = "This estate’s questionnaire stipulates that a venue contract is not a payee, so this address was not saved. Nothing was changed."
 # What the platform says to a signature it will not count (apps/server/src/test/aapDouble.ts: "`validateMultisigSigner`
 # returns `ErrNotAuthorized` unwrapped, and 'not authorized' is exactly the body a live client saw on 31 August 2026").
@@ -325,13 +431,16 @@ class EstateDouble:
     """The estate, in memory. Strict as the code; every answer is the code's own shape."""
 
     def __init__(self, base: str = BASE, source_account: Optional[str] = "0x0000000000000000000000000000000000000abc",
-                 company: str = A.ESTATE["company"], catalog_version: int = 12, currency_spoken_as_code: bool = False,
-                 refuses_venue_contract: bool = False, invite_seconds: float = 0.0, clock: Optional[Clock] = None,
+                 company: str = A.ESTATE["company"], catalog_version: int = 14, currency_spoken_as_code: bool = False,
+                 refuses_venue_contract: Optional[bool] = None, invite_seconds: float = 0.0, clock: Optional[Clock] = None,
                  pending_approval_says_why: bool = True, whitelist_roster: Optional[Sequence[str]] = None, platform_never_activates: bool = False,
                  before_spec_91: bool = False, seat_completes_on_redemption: bool = True, second_authorship_entry: bool = False,
                  platform_names_approver: Sequence[str] = ()):
         self.currency_spoken_as_code = currency_spoken_as_code  # False: main's default arm (JSON); True: Spec 88's code
-        self.refuses_venue_contract = refuses_venue_contract  # the day the questionnaire stipulates against venue contracts
+        # The payee door and a venue's contract (Spec T11). None: the door follows the written policy charter, as Spec 92 built it —
+        # PAYEE_IS_VENUE_CONTRACT where the charter says refused and the address is on the venue table. True: Spec T8's stand-in, a door
+        # that refuses the probe address regardless of its charter under ADDRESS_PROPOSAL_REFUSED. False: a door that saves it regardless.
+        self.refuses_venue_contract = refuses_venue_contract
         self.invite_seconds = invite_seconds  # how long POST /v1/invites takes on the shared clock, the email awaited
         self.clock = clock
         # Spec T9's dials. False: the estate of 20 September 2026 before Spec 89, whose press answered only the status.
@@ -678,7 +787,12 @@ class EstateDouble:
 
     # -- the interviews --------------------------------------------------------------------------------
     def catalog(self, interview_type: str) -> List[A.Question]:
-        return list(A.CATALOGS[interview_type])
+        """The book's catalog; an estate before version 14 (Spec T11) leaves out the seven Spec 92 added."""
+        questions = list(A.CATALOGS[interview_type])
+        if self.catalog_version < 14:
+            added = set(A.ADDED_IN_V14[interview_type])
+            questions = [q for q in questions if q.id not in added]
+        return questions
 
     def latest(self, interview_id: str) -> Dict[str, Dict[str, Any]]:
         out: Dict[str, Dict[str, Any]] = {}
@@ -742,13 +856,16 @@ class EstateDouble:
             if visible[i].id in latest:
                 previous = visible[i].id
                 break
-        part = V11.get(q.id, {}).get("part", "") if q else (V11.get(visible[-1].id, {}).get("part", "") if visible else "")
-        in_part = [v for v in visible if V11.get(v.id, {}).get("part", "") == part]
+        part = PROMPTS.get(q.id, {}).get("part", "") if q else (PROMPTS.get(visible[-1].id, {}).get("part", "") if visible else "")
+        in_part = [v for v in visible if PROMPTS.get(v.id, {}).get("part", "") == part]
         question = None
         if q:
-            question = {"questionId": q.id, "part": part, "kind": q.kind, "prompt": V11.get(q.id, {}).get("prompt", q.id), "options": list(q.options) if q.options else None,
-                        "listFields": None, "recommended": None, "note": None, "required": q.required,
-                        "priorValue": latest[q.id]["value"] if q.id in latest else None}
+            # THE FIGURE THAT ARRIVES WRITTEN (Spec 92): WO3 and WO4 carry the catalog's written dollar as the value on record where no
+            # answer stands yet; every other page reads exactly as before
+            written = PROMPTS.get(q.id, {}).get("written")
+            question = {"questionId": q.id, "part": part, "kind": q.kind, "prompt": PROMPTS.get(q.id, {}).get("prompt", q.id), "options": list(q.options) if q.options else None,
+                        "listFields": PROMPTS.get(q.id, {}).get("listFields"), "recommended": None, "note": PROMPTS.get(q.id, {}).get("note"), "required": q.required,
+                        "priorValue": latest[q.id]["value"] if q.id in latest else (dict(written) if written else None)}
             if q.kind == "currency":
                 question["options"] = ["AUD", "EUR", "GBP", "USD"]
         return {"interviewId": iv["id"], "state": state, "question": question,
@@ -880,6 +997,22 @@ class EstateDouble:
                 refuse("the platform’s hard bound is five signatories")
             if q.required and len(value["people"]) == 0:
                 refuse("choose at least one person")
+        elif kind == "person_or_none":
+            # ONE PERSON, OR NO ONE (Spec 92, WO1): services/onboarding.ts, validateValue, case 'person_or_none'
+            if not isinstance(value.get("choice"), str):
+                refuse("choose whether one person holds this, or no one")
+            if not q.options or value["choice"] not in q.options:
+                refuse("the choice must be one of the options offered")
+            if value["choice"] == q.options[0]:
+                person = value.get("person")
+                if not isinstance(person, dict):
+                    refuse("name the person: full name and work email")
+                if not (isinstance(person.get("name"), str) and person["name"].strip()):
+                    refuse("the person needs a full name")
+                if not (isinstance(person.get("email"), str) and person["email"].strip()):
+                    refuse("the person needs a work email")
+            elif value.get("person") is not None:
+                refuse("“No one” names nobody; remove the person or choose the first option")
         else:
             refuse("unknown question kind %s" % kind)
 
@@ -957,7 +1090,7 @@ class EstateDouble:
                           walkBackTo={"questionId": violation["quorumQuestionId"]})
         prior = latest.get(qid)
         self.answers[interview_id].append({"questionId": qid, "value": stored, "revision": (prior["revision"] + 1) if prior else 1,
-                                           "promptAsAsked": V11.get(qid, {}).get("prompt", qid), "credentialId": caller["credentialId"]})
+                                           "promptAsAsked": PROMPTS.get(qid, {}).get("prompt", qid), "credentialId": caller["credentialId"]})
         page = self.page(iv, serve_truth=False)
         if page["question"] is None:
             violation = self.standing_violation(iv["interviewType"], self.latest(interview_id))
@@ -968,6 +1101,39 @@ class EstateDouble:
             page["state"] = "at_read_back"
         return 200, page
 
+    def tiered(self, iv: Dict[str, Any], latest: Dict[str, Dict[str, Any]]) -> bool:
+        """The compiler's own test (onboardingcompiler.ts): a wallet account begun under the tiers' version, for any purpose but the agents'."""
+        if iv["interviewType"] != "wallet_account" or (iv.get("catalogVersion") or 0) < TIERS_FROM_CATALOG_VERSION:
+            return False
+        purpose = (latest.get("W1") or {}).get("value", {}).get("choice")
+        return purpose is not None and not purpose.startswith("Agents — the wallet account")
+
+    def tiers_violation(self, iv: Dict[str, Any], latest: Dict[str, Dict[str, Any]]) -> Optional[Refusal]:
+        """
+        `assertSigningTiersConsistent` (Spec 92): judged over the answers that exist, at the read-back, the confirm and the compile — WO4
+        not above WO3, then fewer than three people between WA1 and WO2 once the third party is named, each in the spec's own sentence.
+        """
+        if not self.tiered(iv, latest):
+            return None
+        value = lambda qid: (latest.get(qid) or {}).get("value") or {}  # noqa: E731
+        holder_named = value("WO1").get("choice") == A.HOLDER_PERSON
+        alone = value("WO3").get("cents") if holder_named and "WO3" in latest else None
+        two = value("WO4").get("cents") if "WO4" in latest else None
+        if two is None:
+            return None
+        if alone is not None and int(two) <= int(alone):
+            return Refusal("CHARTER_INCOMPLETE", TIER_TWO_NOT_ABOVE_ONE, {"cause": TIER_TWO_NOT_ABOVE_ONE, "holderAloneUpToCents": alone, "twoSignaturesUpToCents": two},
+                           walkBackTo={"questionId": "WO4"})
+        third = next((e for e in (value("WO2").get("entries") or []) if str(e.get("email", "")).strip()), None)
+        if third is None:
+            return None
+        named = {str(e.get("email", "")).strip().lower() for e in (value("WA1").get("entries") or []) if str(e.get("email", "")).strip()}
+        named.add(str(third["email"]).strip().lower())
+        if len(named) < 3:
+            sentence = tiers_need_three_people(usd_figure(two), len(named))
+            return Refusal("CHARTER_INCOMPLETE", sentence, {"cause": sentence, "named": str(len(named)), "twoSignaturesUpToCents": two}, walkBackTo={"questionId": "WA1"})
+        return None
+
     def readback_lines_for_test(self, interview_id: str) -> List[Dict[str, Any]]:
         """The renderer alone, for a test: the lines as readback() would speak them, the standing checks set aside."""
         return self.readback(self.load_interview(interview_id), check_standing=False)
@@ -977,6 +1143,11 @@ class EstateDouble:
         violation = self.standing_violation(iv["interviewType"], latest) if check_standing else None
         if violation:
             raise Refusal("ANSWER_INVALID", violation["sentence"], {"questionId": violation["quorumQuestionId"]}, walkBackTo={"questionId": violation["quorumQuestionId"]})
+        tiers_refusal = self.tiers_violation(iv, latest) if check_standing else None
+        if tiers_refusal:
+            raise tiers_refusal
+        tiered = self.tiered(iv, latest)
+        purpose = (latest.get("W1") or {}).get("value", {}).get("choice") if iv["interviewType"] == "wallet_account" else None
         lines = [{"questionId": "REALM", "prompt": "Where this estate opens", "spoken": SANDBOX_SENTENCE, "synthetic": True}]
         for q in self.catalog(iv["interviewType"]):
             if not self.visible(q, latest) or q.id not in latest:
@@ -1002,7 +1173,18 @@ class EstateDouble:
                 spoken = "; ".join(" — ".join(str(x) for x in e.values()) for e in (v.get("entries") or [])) or "No entries."
             elif kind == "money":
                 cents = v.get("cents")
-                spoken = "Left empty — no limit; the loosest possible answer." if cents is None else "US$%s and %02d cents." % ("{:,}".format(int(cents) // 100), int(cents) % 100)
+                # a written zero is a wall (Spec 90), spoken as such; every other figure exactly as before
+                spoken = ("Left empty — no limit; the loosest possible answer." if cents is None
+                          else "%s — nothing is paid under this rule until you write a figure." % usd_figure(cents) if int(cents) == 0
+                          else "%s." % usd_figure(cents))
+            elif kind == "person_or_none":
+                # ONE PERSON, OR NO ONE (Spec 92, WO1): spokenAnswer, case 'person_or_none'
+                person = v.get("person")
+                if isinstance(person, dict) and str(person.get("email") or "").strip():
+                    name = str(person.get("name") or "").strip()
+                    spoken = ("%s — %s." % (name, person["email"].strip())) if name else "%s." % person["email"].strip()
+                else:
+                    spoken = ("%s." % v["choice"].strip()) if str(v.get("choice") or "").strip() else "No one chosen."
             elif kind == "percent":
                 p = v.get("percent")
                 spoken = ("Left empty — never halts on pace." if q.id == "T4" else "Left empty — no share is set.") if p is None else "%s per cent." % p
@@ -1011,9 +1193,22 @@ class EstateDouble:
                 spoken = "Left empty — no limit on how many." if c is None else "%s %s in a day." % ("{:,}".format(c), "payment" if c == 1 else "payments")
             else:
                 spoken = ", ".join(v.get("people") or []) or "No one chosen."
-            lines.append({"questionId": q.id, "prompt": V11.get(q.id, {}).get("prompt", q.id), "spoken": spoken})
+            lines.append({"questionId": q.id, "prompt": PROMPTS.get(q.id, {}).get("prompt", q.id), "spoken": spoken})
             if q.id in ("C10", "WQ"):
                 lines.append({"questionId": "HELD_WAIT", "prompt": "What happens while a payment waits for them", "spoken": HELD_PAYMENT_WAITS, "synthetic": True})
+            # Spec 92's lines — each a line in the read-back, never a question, where the answer it speaks about is
+            if q.id == "C19" and v.get("choice") == A.VENUE_NO:
+                lines.append({"questionId": "C19_DOOR", "prompt": "What happens to a venue’s contract entered as a payee",
+                              "spoken": "You answered No: such an address will be refused when entered.", "synthetic": True})
+            if q.id == "WO1" and v.get("choice") == A.HOLDER_PERSON and str((v.get("person") or {}).get("email") or "").strip():
+                person = v["person"]
+                name = str(person.get("name") or "").strip() or person["email"].strip()
+                lines.append({"questionId": "WO1_TITLE", "prompt": "What this person is called",
+                              "spoken": "%s is this wallet’s %s: the one person who receives it and opens it on their own device." % (name, holder_title_for(purpose)), "synthetic": True})
+            if tiered and q.id in ("P3", "O2") and v.get("cents") is not None:
+                lines.append({"questionId": "HOLD_NOT_WRITTEN", "prompt": "What this figure does under the signing tiers", "spoken": TIER_HOLD_NOT_WRITTEN, "synthetic": True})
+            if tiered and q.id == "WQ":
+                lines.append({"questionId": "WQ_TIERS", "prompt": "What this number does under the signing tiers", "spoken": TIER_QUORUM_STANDS_ASIDE, "synthetic": True})
         if iv["interviewType"] == "policy":
             lines.append({"questionId": "ESTATE_CAPACITY", "prompt": "What this estate can move — added up, never asked", "spoken": "Nothing yet: no wallet account has been opened.", "synthetic": True})
         return lines
@@ -1030,6 +1225,9 @@ class EstateDouble:
                 raise Malformed("%s: Required" % field)
         self.assert_fresh(body["issuedAtMs"])
         iv = self.load_interview(interview_id)
+        tiers_refusal = self.tiers_violation(iv, self.latest(interview_id))
+        if tiers_refusal:
+            raise tiers_refusal
         digest = self.interview_digest(iv)
         expected = self.challenge("onboarding.confirm", "%s:%s|%s" % (digest, body["issuedAtMs"], caller["credentialId"]), body["issuedAtMs"])
         response = body["response"] or {}
@@ -1059,8 +1257,11 @@ class EstateDouble:
         iv = self.load_interview(interview_id)
         if iv["state"] not in ("confirmed", "compiled"):
             raise Refusal("INTERVIEW_NOT_OPEN", detail={"state": iv["state"], "cause": "the compiler reads only confirmed interviews"})
+        tiers_refusal = self.tiers_violation(iv, self.latest(interview_id))
+        if tiers_refusal:
+            raise tiers_refusal
         latest = {qid: row["value"] for qid, row in self.latest(interview_id).items()}
-        charter = self.compile_charter(iv["interviewType"], latest)
+        charter = self.compile_charter(iv["interviewType"], latest, iv.get("catalogVersion"))
         already_stood = False
         if iv["interviewType"] == "policy":
             # THE CHANGE GOVERNANCE IS ESTABLISHED ONCE (services/onboardingcompiler.ts, establishGovernance; the platform's
@@ -1091,16 +1292,99 @@ class EstateDouble:
         threshold is governanceRecordsFor's — C12's number over every family, or C12D's own behind a Yes on C12A. The
         `whitelist_roster` dial seats only the census keys named, so a roster smaller than its quorum can be met.
         """
-        people = self.parse_roster(charter.get("changeApprovers") or charter.get("signers") or [])
+        approval = charter.get("payeeApproval")
+        if isinstance(approval, dict):
+            # Spec 92: the roster the answer to C11A draws up, at its own count (payeeApprovalOf); unanswered, the change roster as before
+            people = self.parse_roster(approval.get("roster") or [])
+            threshold: Any = approval.get("quorum")
+        else:
+            people = self.parse_roster(charter.get("changeApprovers") or charter.get("signers") or [])
+            choice = lambda qid: (latest.get(qid) or {}).get("choice")  # noqa: E731
+            threshold = choice("C12D") if choice("C12A") == "Yes" and choice("C12D") else choice("C12")
         if self.whitelist_roster is not None:
             wanted = {A.PEOPLE[k].email.lower() for k in self.whitelist_roster}
             people = [p for p in people if p["email"].lower() in wanted]
-        choice = lambda qid: (latest.get(qid) or {}).get("choice")  # noqa: E731
-        threshold = choice("C12D") if choice("C12A") == "Yes" and choice("C12D") else choice("C12")
         self.whitelist_seats = [{"user_id": p["email"], "display_name": p["name"], "credential_id": "", "status": "active"} for p in people]
         self.whitelist_threshold = int(threshold) if threshold else 1
 
-    def compile_charter(self, interview_type: str, latest: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    @staticmethod
+    def roster_entry(name: str, email: str) -> str:
+        """`rosterEntry`: the one shape every roster on the charter carries, "Name <email>"."""
+        return "%s <%s>" % (name.strip(), email.strip()) if name.strip() else email.strip()
+
+    def payee_approval_of(self, latest: Dict[str, Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """`payeeApprovalOf` (onboardingcompiler.ts, Spec 92): the one reading of C11A; null where never answered."""
+        choice = lambda qid: (latest.get(qid) or {}).get("choice")  # noqa: E731
+        answer = choice("C11A")
+        if answer is None:
+            return None
+        payment_approvers = self.roster_of(latest.get("C11"))
+        if answer == A.PAYEE_APPROVAL_PAYMENT_APPROVERS:
+            return {"answer": "payment_approvers", "roster": payment_approvers, "quorum": int(choice("C10")) if choice("C10") else None,
+                    "rosterQuestionId": "C11", "quorumQuestionId": "C10"}
+        if answer == A.PAYEE_APPROVAL_CHANGE_APPROVERS:
+            census = [self.roster_entry(str(e.get("name", "")), str(e.get("email", ""))) for e in ((latest.get("A8") or {}).get("entries") or []) if str(e.get("email", "")).strip()]
+            c12d = choice("C12D") if choice("C12A") == "Yes" else None
+            c12 = choice("C12")
+            return {"answer": "change_approvers", "roster": census if census else payment_approvers,
+                    "quorum": int(c12d) if c12d else (int(c12) if c12 else None),
+                    "rosterQuestionId": "A8" if census else "C11", "quorumQuestionId": "C12D" if c12d else "C12"}
+        if answer == A.PAYEE_APPROVAL_CFO:
+            cfo = next(({"name": str(e.get("name", "")).strip(), "email": str(e.get("email", "")).strip()} for e in ((latest.get("C11C") or {}).get("entries") or [])
+                        if str(e.get("email", "")).strip()), None)
+            if cfo is None:
+                raise Refusal("CHARTER_INCOMPLETE", detail={"cause": "C11A chose the CFO’s authority to approve a new payee, but C11C names nobody"}, walkBackTo={"questionId": "C11C"})
+            return {"answer": "cfo", "roster": [self.roster_entry(cfo["name"], cfo["email"])], "quorum": 1, "rosterQuestionId": "C11C", "quorumQuestionId": "C11A", "cfo": cfo}
+        raise Refusal("CHARTER_INCOMPLETE", detail={"cause": "C11A holds “%s”, which is not an answer this estate offers to who approves a new payee" % answer}, walkBackTo={"questionId": "C11A"})
+
+    @staticmethod
+    def venue_contracts_of(latest: Dict[str, Dict[str, Any]]) -> Optional[str]:
+        """`venueContractsOf`: null where never asked, which every reader takes as the founder's default, accepted."""
+        answer = (latest.get("C19") or {}).get("choice")
+        if answer is None:
+            return None
+        if answer == A.VENUE_YES:
+            return "accepted"
+        if answer == A.VENUE_NO:
+            return "refused"
+        raise Refusal("CHARTER_INCOMPLETE", detail={"cause": "C19 holds “%s”, which is not an answer this estate offers to whether a payee may be a venue’s contract" % answer}, walkBackTo={"questionId": "C19"})
+
+    def read_wallet_people(self, latest: Dict[str, Dict[str, Any]], purpose: Optional[str]) -> Dict[str, Any]:
+        """`readWalletPeople` (Spec 92): WO1 to WO4, refusing in words where an answer is missing, each refusal naming its page."""
+        def refuse(question_id: str, cause: str) -> None:
+            raise Refusal("CHARTER_INCOMPLETE", detail={"cause": cause}, walkBackTo={"questionId": question_id})
+        wo1 = latest.get("WO1") or {}
+        if not isinstance(wo1.get("choice"), str):
+            refuse("WO1", "who holds this wallet was not answered; a wallet is held by one named person or by no one")
+        if wo1["choice"] == A.HOLDER_NO_ONE:
+            holder: Dict[str, Any] = {"held": "by_no_one"}
+        elif wo1["choice"] == A.HOLDER_PERSON:
+            person = wo1.get("person") or {}
+            name = str(person.get("name") or "").strip()
+            email = str(person.get("email") or "").strip()
+            if not name or not email:
+                refuse("WO1", "the holder must be named in full, with a work email, or the answer is No one")
+            holder = {"held": "by_person", "name": name, "email": email, "title": holder_title_for(purpose)}
+        else:
+            refuse("WO1", "“%s” is not an answer this estate offers to who holds the wallet" % wo1["choice"])
+        entry = next((e for e in ((latest.get("WO2") or {}).get("entries") or []) if str(e.get("email", "")).strip()), None)
+        if entry is None:
+            refuse("WO2", "the third party to this wallet’s activation and its largest payments was not named")
+        third = {"name": str(entry.get("name") or "").strip(), "surname": str(entry.get("surname") or "").strip(),
+                 "email": str(entry.get("email") or "").strip(), "title": str(entry.get("title") or "").strip()}
+        if not third["name"]:
+            refuse("WO2", "the third party needs a full name")
+        if third["title"] not in A.THIRD_PARTY_TITLES:
+            refuse("WO2", "the third party’s title must be one of %s; “%s” is not one of them" % (", ".join(A.THIRD_PARTY_TITLES), third["title"]))
+        alone = (latest.get("WO3") or {}).get("cents") if holder["held"] == "by_person" else None
+        if holder["held"] == "by_person" and alone is None:
+            refuse("WO3", "up to what amount the holder may pay alone was not answered; the field arrives written and cannot be blank")
+        two = (latest.get("WO4") or {}).get("cents")
+        if two is None:
+            refuse("WO4", "up to what amount two signatures are enough was not answered; the field arrives written and cannot be blank")
+        return {"holder": holder, "thirdParty": third, "holderAloneUpToCents": alone, "twoSignaturesUpToCents": two}
+
+    def compile_charter(self, interview_type: str, latest: Dict[str, Dict[str, Any]], catalog_version: Optional[int] = None) -> Dict[str, Any]:
         is_account = interview_type == "wallet_account"
         choice = lambda qid: (latest.get(qid) or {}).get("choice")  # noqa: E731
         cents = lambda qid: (latest.get(qid) or {}).get("cents")  # noqa: E731
@@ -1121,6 +1405,14 @@ class EstateDouble:
         agent = bool(purpose and purpose.startswith("Agents"))
         payroll = bool(purpose and purpose.startswith("Payroll"))
         trading = bool(purpose and purpose.startswith("Trading"))
+        # Spec 92: the wallet's people and tiers, for a wallet account begun under version 14 or later, for any purpose but the agents'
+        tiered = is_account and not agent and (catalog_version or 0) >= TIERS_FROM_CATALOG_VERSION
+        wallet_people = self.read_wallet_people(latest, purpose) if tiered else None
+        if wallet_people is not None:
+            # THE THIRD PARTY IS A SIGNER beside WA1's people — once, by email
+            third = wallet_people["thirdParty"]
+            if not any(p["email"].lower() == third["email"].lower() for p in self.parse_roster(signers)):
+                signers = list(signers) + [self.roster_entry(" ".join(part for part in (third["name"], third["surname"]) if part), third["email"])]
         deny = (cents("T1") if treasury else cents("AG2") if agent else None) if is_account else None
         hold = (cents("P3") if payroll else cents("O2")) if is_account else None
         daily = (cents("AG3") if agent else (cents("O1") if cents("O1") is not None else cents("X2"))) if is_account else None
@@ -1148,7 +1440,14 @@ class EstateDouble:
             "requesterCountsAsSigner": requester, "securityContact": contact_entry if not is_account else None,
             "mutationGovernance": ([{"scope": "all", "quorum": int(c12)}] if c12 else []) if not is_account else [],
             "visibility": {"grants": []}, "velocity": {"multiplier": None, "action": None}, "compilerVersion": "double",
+            # Spec 92: null on a wallet-account interview for the two Part C answers; absent on every charter the tiers do not reach
+            "payeeApproval": None if is_account else self.payee_approval_of(latest),
+            "payeeVenueContracts": None if is_account else self.venue_contracts_of(latest),
         }
+        if wallet_people is not None:
+            charter["holder"] = wallet_people["holder"]
+            charter["signingTiers"] = {"holderAloneUpToCents": wallet_people["holderAloneUpToCents"], "twoSignaturesUpToCents": wallet_people["twoSignaturesUpToCents"],
+                                       "thirdParty": wallet_people["thirdParty"], "holdNotWritten": None if hold is None else TIER_HOLD_NOT_WRITTEN}
         return charter
 
     def charter_standing(self, headers: Dict[str, str]) -> Tuple[int, Any]:
@@ -1161,6 +1460,13 @@ class EstateDouble:
 
     def newest_written_charter(self) -> Optional[Dict[str, Any]]:
         written = [iv for iv in self.interviews.values() if iv["state"] == "written" and iv["compiledCharter"]]
+        if not written:
+            return None
+        return sorted(written, key=lambda i: i["updatedAt"])[-1]["compiledCharter"]
+
+    def newest_written_policy_charter(self) -> Optional[Dict[str, Any]]:
+        """The estate's written policy charter, which the payee door reads for C19's answer (services/payees.ts)."""
+        written = [iv for iv in self.interviews.values() if iv["interviewType"] == "policy" and iv["state"] == "written" and iv["compiledCharter"]]
         if not written:
             return None
         return sorted(written, key=lambda i: i["updatedAt"])[-1]["compiledCharter"]
@@ -1465,11 +1771,22 @@ class EstateDouble:
                             else "an address is 32 to 44 base58 characters, and base58 leaves out the digit zero, capital O, capital I and lower-case L")
                 raise Refusal("ADDRESS_MALFORMED", "That is not an address %s can pay, so nothing was saved. On %s, %s." % (named, named, expected),
                               {"field": "address", "chain": a["chain"], "address": address, "expected": expected}, provenance={"source": "chain_registry", "reference": a["chain"]})
-            if self.refuses_venue_contract and address.lower() == T.venue_address_for_probe()["address"].lower():
+            if self.refuses_venue_contract is True and address.lower() == T.venue_address_for_probe()["address"].lower():
+                # Spec T8's stand-in: a door that refuses the probe address whatever its charter says, under the code the estate used for
+                # an address it would not propose — since Spec 92 an estate refusing against a charter that says accepted
                 raise Refusal("ADDRESS_PROPOSAL_REFUSED", VENUE_STIPULATION,
                               {"chain": a["chain"], "address": address,
-                               "cause": "a stipulation the live questionnaire does not carry today; this double stands in for the day it does"},
+                               "cause": "a stipulation this door applies whatever the charter says; this double stands in for an estate that does"},
                               provenance={"source": "charter"})
+            if self.refuses_venue_contract is None:
+                # THE DOOR (Spec 92, services/payees.ts assertPayeeIsNotVenueContract): the written policy charter is read, and where it
+                # answered No at C19 and the address is on the engine's venue table, the payee is refused in the spec's sentence
+                policy = self.newest_written_policy_charter()
+                venue = venue_of_destination(a["chain"], address) if (policy or {}).get("payeeVenueContracts") == "refused" else ""
+                if venue:
+                    raise Refusal("PAYEE_IS_VENUE_CONTRACT", payee_is_venue_contract_sentence(VENUE_NAMES.get(venue, venue), a["chain"]),
+                                  {"venue": venue, "chain": a["chain"], "address": address, "charterQuestionId": VENUE_CONTRACT_QUESTION_ID},
+                                  provenance={"source": "charter", "reference": VENUE_CONTRACT_QUESTION_ID})
             stored.append({"chain": a["chain"], "address": address if a["chain"] == "solana" else address.lower()})
         payee = {"id": "payee-" + secrets.token_hex(6), "displayName": display_name, "defaultAsset": body.get("defaultAsset"), "defaultChain": body.get("defaultChain"),
                  "references": body.get("references") or {}, "labels": body.get("labels") or [], "createdAt": self._now_iso()}
@@ -2009,25 +2326,207 @@ class TheDoubleTellsTheTruth(unittest.TestCase):
         a5 = next(l for l in self.double.readback_lines_for_test(iv) if l["questionId"] == "A5")
         self.assertEqual(a5["spoken"], "AUD", "Spec 88: a currency is read back as its code")
 
-    def test_a_double_told_the_questionnaire_stipulates_against_venue_contracts_refuses_them_by_name(self):
+    def walk(self, interview_type, overrides=None, stop_at=None):
+        """Start an interview as the founder and answer every page from the book, `overrides` taking a question's place; the last page is returned."""
+        started = self.request(self.founder, "POST", "/v1/onboarding/interviews", {"interviewType": interview_type})
+        self.assertEqual(started.status, 200, started.text)
+        iv = started.json["interview"]["id"]
+        page = started.json["page"]
+        for _ in range(60):
+            question = page.get("question")
+            if question is None or page.get("state") != "in_progress":
+                break
+            qid = question["questionId"]
+            if qid == stop_at:
+                break
+            value = (overrides or {}).get(qid, A.ANSWERS[interview_type].get(qid))
+            answer = self.request(self.founder, "POST", "/v1/onboarding/interviews/%s/answers" % iv, {"questionId": qid, "value": value})
+            self.assertEqual(answer.status, 200, answer.text)
+            page = answer.json
+        return iv, page
+
+    def compile_policy(self):
+        """The founder's road to a written policy charter: the walk, the read-back, the confirm under the passkey, the compile."""
+        iv, page = self.walk("policy")
+        self.assertEqual(page["state"], "at_read_back")
+        compiled = self.runner.confirm_and_compile("test", "policy", iv, self.founder, page)
+        return compiled["charter"]
+
+    def test_the_payee_door_refuses_a_venues_contract_by_name_where_the_written_policy_charter_says_so(self):
+        """Spec 92 (services/payees.ts, assertPayeeIsNotVenueContract): PAYEE_IS_VENUE_CONTRACT, 422, in payeeIsVenueContractSentence's words — and only then."""
         self.runner.enrol_by_invite(self.founder, self.link, "test")
         venue = T.venue_address_for_probe()["address"]
         body = {"displayName": "Venue probe", "addresses": [{"chain": "ethereum", "address": venue}]}
         accepted = self.request(self.founder, "POST", "/v1/payees", body)
-        self.assertEqual(accepted.status, 201, "today's estate: an address is accepted unless the questionnaire stipulates otherwise")
-        strict = EstateDouble(refuses_venue_contract=True)
-        link = strict.mint_founder_link()
-        runner = runner_on(strict, self.tmp, invite=link)
-        founder = runner.people[A.FOUNDER]
-        runner.enrol_by_invite(founder, link, "test")
-        refused = runner.request(founder, "POST", "/v1/payees", body, "test")
+        self.assertEqual(accepted.status, 201, "no policy charter is written yet: the door reads no No and accepts, the founder's default")
+        charter = self.compile_policy()
+        self.assertEqual(charter["payeeVenueContracts"], "refused", "the book answers C19 No")
+        refused = self.request(self.founder, "POST", "/v1/payees", body)
         self.assertEqual(refused.status, 422)
-        self.assertEqual(refused.refusal["code"], "ADDRESS_PROPOSAL_REFUSED")
-        self.assertEqual(refused.refusal["message"], VENUE_STIPULATION)
-        self.assertIn("this double stands in for the day it does", refused.refusal["detail"]["cause"])
+        self.assertEqual(refused.refusal["code"], "PAYEE_IS_VENUE_CONTRACT")
+        self.assertEqual(refused.refusal["message"], "This address is the contract of Uniswap v3 on ethereum. Your charter says a payee must be a wallet held by a person or a company (question C19). Nothing was saved.")
+        self.assertEqual(refused.refusal["detail"], {"venue": "uniswap_v3", "chain": "ethereum", "address": venue, "charterQuestionId": "C19"})
+        self.assertEqual(refused.refusal["provenance"], {"source": "charter", "reference": "C19"})
         self.assertIsNone(H.refusal_without_why(refused.status, refused.text), "a refusal that says why")
-        other = runner.request(founder, "POST", "/v1/payees", {"displayName": "x", "addresses": [{"chain": "ethereum", "address": T.address("CHECKSUM_PROBE_ETHEREUM")}]}, "test")
-        self.assertEqual(other.status, 201, "only the venue contract is stipulated against")
+        self.assertEqual(len(self.double.payees), 1, "nothing was saved")
+        other = self.request(self.founder, "POST", "/v1/payees", {"displayName": "x", "addresses": [{"chain": "ethereum", "address": T.address("CHECKSUM_PROBE_ETHEREUM")}]})
+        self.assertEqual(other.status, 201, "only a known venue's contract is refused; a wallet is a wallet")
+        # the table is the engine's, row for row: every row is refused on its chain and accepted on another
+        for venue_id, chain, address in VENUE_CONTRACTS:
+            row = self.request(self.founder, "POST", "/v1/payees", {"displayName": "row", "addresses": [{"chain": chain, "address": address}]})
+            self.assertEqual(row.status, 422, (venue_id, chain))
+            self.assertEqual(row.refusal["message"], payee_is_venue_contract_sentence(VENUE_NAMES[venue_id], chain))
+        elsewhere = self.request(self.founder, "POST", "/v1/payees", {"displayName": "row", "addresses": [{"chain": "polygon", "address": venue}]})
+        self.assertEqual(elsewhere.status, 201, "the same bytes on a chain the table knows no contract on are a wallet as far as this estate can tell")
+        # the two dials: a door that refuses regardless, under Spec T8's stand-in; a door that saves regardless
+        for dial, status, code in ((True, 422, "ADDRESS_PROPOSAL_REFUSED"), (False, 201, None)):
+            self.double.refuses_venue_contract = dial
+            answer = self.request(self.founder, "POST", "/v1/payees", body)
+            self.assertEqual(answer.status, status, dial)
+            if code:
+                self.assertEqual(answer.refusal["code"], code)
+                self.assertEqual(answer.refusal["message"], VENUE_STIPULATION)
+        self.double.refuses_venue_contract = None
+
+    def test_a_charter_whose_c19_is_yes_compiles_accepted_and_the_door_saves_the_venues_contract(self):
+        self.runner.enrol_by_invite(self.founder, self.link, "test")
+        with unittest.mock.patch.dict(A.POLICY_ANSWERS, {"C19": {"choice": A.VENUE_YES}}):
+            charter = self.compile_policy()
+        self.assertEqual(charter["payeeVenueContracts"], "accepted")
+        body = {"displayName": "Venue probe", "addresses": [{"chain": "ethereum", "address": T.venue_address_for_probe()["address"]}]}
+        self.assertEqual(self.request(self.founder, "POST", "/v1/payees", body).status, 201)
+
+    def test_the_policy_charter_carries_c11a_as_payee_approval_of_reads_it_and_c19_and_the_read_back_says_what_the_door_will_do(self):
+        self.runner.enrol_by_invite(self.founder, self.link, "test")
+        charter = self.compile_policy()
+        census = ["%s <%s>" % (A.PEOPLE[k].name, A.PEOPLE[k].email) for k in A.CENSUS_ORDER]
+        self.assertEqual(charter["payeeApproval"], {"answer": "change_approvers", "roster": census, "quorum": 2, "rosterQuestionId": "A8", "quorumQuestionId": "C12"})
+        self.assertEqual(charter["payeeVenueContracts"], "refused")
+        # the whitelist_mutation roster the answer drew up: the census of four at two (as before this question, which is the point of the second answer)
+        self.assertEqual([s["user_id"] for s in self.double.whitelist_seats], [A.PEOPLE[k].email for k in A.CENSUS_ORDER])
+        self.assertEqual(self.double.whitelist_threshold, 2)
+        lines = self.double.readback_lines_for_test(next(iv for iv in self.double.interviews))
+        by_id = {l["questionId"]: l for l in lines}
+        self.assertEqual(by_id["C11A"]["spoken"], A.PAYEE_APPROVAL_CHANGE_APPROVERS)
+        self.assertEqual(by_id["C11A"]["prompt"], "When a new payee address is added, who must approve it before it can be paid?")
+        self.assertEqual(by_id["C19"]["spoken"], A.VENUE_NO)
+        self.assertEqual(by_id["C19_DOOR"], {"questionId": "C19_DOOR", "prompt": "What happens to a venue’s contract entered as a payee",
+                                             "spoken": "You answered No: such an address will be refused when entered.", "synthetic": True})
+        self.assertNotIn("C11C", by_id, "asked only behind the CFO's answer")
+
+    def test_c11as_other_two_answers_draw_up_their_own_rosters_and_the_cfo_unnamed_is_refused_by_name(self):
+        self.runner.enrol_by_invite(self.founder, self.link, "test")
+        first = {"C11A": {"choice": A.PAYEE_APPROVAL_PAYMENT_APPROVERS}}
+        iv, page = self.walk("policy", first)
+        latest = {qid: row["value"] for qid, row in self.double.latest(iv).items()}
+        approval = self.double.payee_approval_of(latest)
+        self.assertEqual(approval, {"answer": "payment_approvers", "roster": [A.PEOPLE["ada"].email], "quorum": 1, "rosterQuestionId": "C11", "quorumQuestionId": "C10"})
+        self.assertEqual(self.request(self.founder, "DELETE", "/v1/onboarding/interviews/%s" % iv).status, 200)
+        third = {"C11A": {"choice": A.PAYEE_APPROVAL_CFO}, "C11C": {"entries": [{"name": "Cora Clerk", "email": A.PEOPLE["cora"].email}]}}
+        iv, page = self.walk("policy", third)
+        latest = {qid: row["value"] for qid, row in self.double.latest(iv).items()}
+        self.assertIn("C11C", latest, "C11C is served behind the third answer")
+        self.assertEqual(self.double.payee_approval_of(latest), {"answer": "cfo", "roster": ["Cora Clerk <%s>" % A.PEOPLE["cora"].email], "quorum": 1,
+                                                                 "rosterQuestionId": "C11C", "quorumQuestionId": "C11A", "cfo": {"name": "Cora Clerk", "email": A.PEOPLE["cora"].email}})
+        latest["C11C"] = {"entries": []}
+        with self.assertRaises(Refusal) as caught:
+            self.double.payee_approval_of(latest)
+        self.assertEqual(caught.exception.code, "CHARTER_INCOMPLETE")
+        self.assertEqual(caught.exception.detail["cause"], "C11A chose the CFO’s authority to approve a new payee, but C11C names nobody")
+
+    def test_the_account_interview_serves_the_wallets_people_and_tiers_and_speaks_them_as_the_estate_does(self):
+        self.runner.enrol_by_invite(self.founder, self.link, "test")
+        iv, page = self.walk("wallet_account", stop_at="WO3")
+        self.assertEqual(page["question"]["questionId"], "WO3", "WO3 opens behind the named holder")
+        self.assertEqual(page["question"]["priorValue"], {"cents": "100"}, "the figure that arrives written: one dollar, as the value on record")
+        self.assertEqual(page["question"]["note"], V14_ADDED["WO3"]["note"])
+        self.assertEqual(page["question"]["part"], "The wallet’s people")
+        self.assertEqual(page["progress"]["of"], 18)
+        served = [row["questionId"] for row in self.double.answers[iv]]
+        self.assertEqual(served[-2:], ["WO1", "WO2"])
+        wo1 = self.double.latest(iv)["WO1"]["value"]
+        self.assertEqual(list(wo1.keys()), ["choice", "person"])
+        self.assertEqual(list(wo1["person"].keys()), ["name", "email"], "jsonb: shortest key first")
+        iv, page = self.walk("wallet_account")
+        self.assertEqual(page["state"], "at_read_back")
+        lines = {l["questionId"]: l for l in self.double.readback_lines_for_test(iv)}
+        self.assertEqual(lines["WO1"]["spoken"], "Ben Signatory — %s." % A.PEOPLE["ben"].email)
+        self.assertEqual(lines["WO1_TITLE"]["spoken"], "Ben Signatory is this wallet’s Officer: the one person who receives it and opens it on their own device.")
+        self.assertEqual(lines["WO2"]["spoken"], "Harriet — %s — CEO — Founder" % A.PEOPLE["harriet"].email)
+        self.assertEqual(lines["WO3"]["spoken"], "US$2,000 and 00 cents.")
+        self.assertEqual(lines["WO4"]["spoken"], "US$10,000 and 00 cents.")
+        self.assertEqual(lines["HOLD_NOT_WRITTEN"]["spoken"], TIER_HOLD_NOT_WRITTEN)
+        self.assertEqual(lines["WQ_TIERS"]["spoken"], TIER_QUORUM_STANDS_ASIDE)
+        compiled = self.runner.confirm_and_compile("test", "wallet_account", iv, self.founder, page)["charter"]
+        self.assertEqual(compiled["holder"], {"held": "by_person", "name": "Ben Signatory", "email": A.PEOPLE["ben"].email, "title": "Officer"})
+        self.assertEqual(compiled["signingTiers"], {"holderAloneUpToCents": "200000", "twoSignaturesUpToCents": "1000000",
+                                                    "thirdParty": {"name": "Harriet", "surname": "Founder", "email": A.PEOPLE["harriet"].email, "title": "CEO"},
+                                                    "holdNotWritten": TIER_HOLD_NOT_WRITTEN})
+        self.assertEqual(compiled["signers"], ["Ada Approver <%s>" % A.PEOPLE["ada"].email, "Ben Signatory <%s>" % A.PEOPLE["ben"].email, "Harriet Founder <%s>" % A.PEOPLE["harriet"].email])
+        self.assertIsNone(compiled["payeeApproval"])
+        self.assertIsNone(compiled["payeeVenueContracts"])
+
+    def test_person_or_none_is_validated_as_the_estate_validates_it(self):
+        self.runner.enrol_by_invite(self.founder, self.link, "test")
+        iv, page = self.walk("wallet_account", stop_at="WO1")
+        self.assertEqual(page["question"]["kind"], "person_or_none")
+        self.assertEqual(page["question"]["options"], [A.HOLDER_PERSON, A.HOLDER_NO_ONE])
+        self.assertEqual(page["question"]["listFields"], [{"key": "name", "label": "Full name"}, {"key": "email", "label": "Work email"}])
+        def refused(value):
+            answer = self.request(self.founder, "POST", "/v1/onboarding/interviews/%s/answers" % iv, {"questionId": "WO1", "value": value})
+            self.assertEqual(answer.status, 400, answer.text)
+            self.assertEqual(answer.refusal["code"], "ANSWER_INVALID")
+            return answer.refusal["detail"]["cause"]
+        self.assertEqual(refused({"person": {"name": "Ben", "email": "b@x.io"}}), "choose whether one person holds this, or no one")
+        self.assertEqual(refused({"choice": "Ben holds it"}), "the choice must be one of the options offered")
+        self.assertEqual(refused({"choice": A.HOLDER_PERSON}), "name the person: full name and work email")
+        self.assertEqual(refused({"choice": A.HOLDER_PERSON, "person": {"name": "", "email": "b@x.io"}}), "the person needs a full name")
+        self.assertEqual(refused({"choice": A.HOLDER_PERSON, "person": {"name": "Ben Signatory", "email": " "}}), "the person needs a work email")
+        self.assertEqual(refused({"choice": A.HOLDER_NO_ONE, "person": {"name": "Ben Signatory", "email": "b@x.io"}}), "“No one” names nobody; remove the person or choose the first option")
+        nobody = self.request(self.founder, "POST", "/v1/onboarding/interviews/%s/answers" % iv, {"questionId": "WO1", "value": {"choice": A.HOLDER_NO_ONE}})
+        self.assertEqual(nobody.status, 200)
+        self.assertEqual(nobody.json["question"]["questionId"], "WO2", "a wallet held by no one is not asked WO3")
+        self.assertEqual(nobody.json["progress"]["of"], 17)
+
+    def test_the_tiers_two_contradictions_are_refused_at_the_read_back_in_the_specs_sentences(self):
+        self.runner.enrol_by_invite(self.founder, self.link, "test")
+        # WO4 not above WO3
+        iv, page = self.walk("wallet_account", {"WO4": {"cents": "200000"}})
+        self.assertEqual(page["state"], "at_read_back", "the page does not judge the tiers; the read-back does")
+        readback = self.request(self.founder, "GET", "/v1/onboarding/interviews/%s/readback" % iv)
+        self.assertEqual(readback.status, 409)
+        self.assertEqual(readback.refusal["code"], "CHARTER_INCOMPLETE")
+        self.assertEqual(readback.refusal["message"], TIER_TWO_NOT_ABOVE_ONE)
+        self.assertEqual(readback.refusal["walkBackTo"], {"questionId": "WO4"})
+        self.assertEqual(readback.refusal["detail"], {"cause": TIER_TWO_NOT_ABOVE_ONE, "holderAloneUpToCents": "200000", "twoSignaturesUpToCents": "200000"})
+        compiled = self.request(self.founder, "POST", "/v1/onboarding/interviews/%s/compile" % iv, {})
+        self.assertEqual(compiled.status, 409, "the compile reads only confirmed interviews, and the confirm judges the tiers too")
+        self.assertEqual(self.request(self.founder, "DELETE", "/v1/onboarding/interviews/%s" % iv).status, 200)
+        # fewer than three people between WA1 and WO2: Ada alone at WA1, Harriet at WO2
+        iv, page = self.walk("wallet_account", {"WA1": {"entries": [{"name": A.PEOPLE["ada"].name, "email": A.PEOPLE["ada"].email}]}})
+        readback = self.request(self.founder, "GET", "/v1/onboarding/interviews/%s/readback" % iv)
+        self.assertEqual(readback.status, 409)
+        self.assertEqual(readback.refusal["message"], "Three signatures are asked above US$10,000 and 00 cents but only 2 people are named; name more or lower the tiers.")
+        self.assertEqual(readback.refusal["walkBackTo"], {"questionId": "WA1"})
+        self.assertEqual(readback.refusal["detail"]["named"], "2")
+        self.assertEqual(tiers_need_three_people(usd_figure("1000000"), 1), "Three signatures are asked above US$10,000 and 00 cents but only 1 person is named; name more or lower the tiers.")
+        self.assertEqual(self.request(self.founder, "DELETE", "/v1/onboarding/interviews/%s" % iv).status, 200)
+        # a title not of the three is the compiler's refusal, at the compile
+        iv, page = self.walk("wallet_account", {"WO2": {"entries": [{"name": "Harriet", "surname": "Founder", "email": A.PEOPLE["harriet"].email, "title": "Chair"}]}})
+        latest = {qid: row["value"] for qid, row in self.double.latest(iv).items()}
+        with self.assertRaises(Refusal) as caught:
+            self.double.compile_charter("wallet_account", latest, 14)
+        self.assertEqual(caught.exception.detail["cause"], "the third party’s title must be one of CEO, CFO, COO; “Chair” is not one of them")
+        # an estate before version 14 never serves the seven, and compiles no holder and no tiers
+        older = EstateDouble(catalog_version=12)
+        self.assertFalse(any(q.id in A.ADDED_IN_V14["wallet_account"] for q in older.catalog("wallet_account")))
+        self.assertFalse(any(q.id in A.ADDED_IN_V14["policy"] for q in older.catalog("policy")))
+        self.assertEqual(len(older.catalog("wallet_account")), len(A.ACCOUNT_CATALOG) - 4)
+        self.assertEqual(len(older.catalog("policy")), len(A.POLICY_CATALOG) - 3)
+        charter = older.compile_charter("wallet_account", {qid: row["value"] for qid, row in self.double.latest(iv).items() if qid not in ("WO1", "WO2", "WO3", "WO4")}, 12)
+        self.assertNotIn("holder", charter)
+        self.assertNotIn("signingTiers", charter)
+        self.assertEqual(charter["signers"], ["Ada Approver <%s>" % A.PEOPLE["ada"].email, "Ben Signatory <%s>" % A.PEOPLE["ben"].email])
 
     def test_an_invitation_takes_its_seconds_on_the_shared_clock(self):
         clock = Clock()

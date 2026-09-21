@@ -2,7 +2,15 @@
 The answer book covers every question id of the live catalog (Spec T7): a test reads the ids from
 a fixture copied from questioncatalog.v11.ts and fails on any id without an answer, and every
 answer has the shape its kind takes and a choice the catalog offers.
+
+Spec T11 (21 September 2026): the book learns catalog version 14. A second fixture,
+tests/fixtures/aer360-served-2026-09-21.json, holds every question page the estate served the
+harness on the night of 21 September — the run that stopped at C11A and WO1 — and the seven
+questions Spec 92 added, in the catalog's own words; the book must answer every one of them, in
+the kind and with an option the page offers, WO1 in the estate's person_or_none shape, WO2 with a
+title of the three, WO4 above WO3, and state the version it answers.
 """
+import json
 import os
 import re
 import sys
@@ -13,6 +21,28 @@ import aer360_answers as A  # noqa: E402
 import aer360_tables as T  # noqa: E402
 
 FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "aer360-questioncatalog.v11.ts")
+SERVED = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "aer360-served-2026-09-21.json")
+THE_SEVEN = {("policy", "C11A"), ("policy", "C11C"), ("policy", "C19"), ("wallet_account", "WO1"), ("wallet_account", "WO2"),
+             ("wallet_account", "WO3"), ("wallet_account", "WO4")}
+
+
+def served_fixture():
+    with open(SERVED, "r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def served_and_added():
+    """(interview type, page) for every page the run of 21 September served, then the seven version 14 added — the two served among them once."""
+    data = served_fixture()
+    out = []
+    seen = set()
+    for interview_type in ("policy", "wallet_account"):
+        for page in data["served"][interview_type] + data["added"][interview_type]:
+            if (interview_type, page["questionId"]) in seen:
+                continue
+            seen.add((interview_type, page["questionId"]))
+            out.append((interview_type, page))
+    return out
 
 
 def fixture_questions():
@@ -52,11 +82,15 @@ class TheBookCoversTheCatalog(unittest.TestCase):
             field = A.SHAPE_OF_KIND[kind]
             self.assertIn(field, book[qid], "the answer to %s (%s) carries no %r" % (qid, kind, field))
 
-    def test_the_book_answers_nothing_the_fixture_does_not_ask(self):
+    def test_the_book_answers_nothing_the_fixture_does_not_ask_save_the_seven_version_14_added(self):
         asked = {(q[0], q[1]) for q in self.questions}
+        extra = set()
         for interview_type, book in A.ANSWERS.items():
             for qid in book:
-                self.assertIn((interview_type, qid), asked, "the book answers %s %s, which version 11 never asked" % (interview_type, qid))
+                if (interview_type, qid) not in asked:
+                    extra.add((interview_type, qid))
+        self.assertEqual(extra, THE_SEVEN, "the book answers nothing version 11 never asked, save the seven Spec 92 added (Spec T11)")
+        self.assertEqual({(t, q) for t, qs in A.ADDED_IN_V14.items() for q in qs}, THE_SEVEN)
 
     def test_every_choice_is_one_the_live_catalog_offers(self):
         for interview_type, book in A.ANSWERS.items():
@@ -138,12 +172,16 @@ class TheBookIsTheSpecsEstate(unittest.TestCase):
         for entry in A.ACCOUNT_ANSWERS["WA1"]["entries"]:
             self.assertIn(entry["email"], census)
 
-    def test_the_walk_the_book_expects_of_a_version_12_estate(self):
+    def test_the_walk_the_book_expects_of_a_version_14_estate(self):
+        """The run of 21 September served 23 policy pages and 17 account pages before WO1 was answered; WO3 opens behind a named holder, so 18."""
         self.assertEqual([q.id for q in A.expected_walk("policy")],
-                         ["A1", "A4", "A5", "A8", "A9", "A11", "B1", "B2", "B3", "C9S", "C9", "C10", "C11", "C15", "C18", "C12", "C12A", "D0", "R0", "R1", "G1"])
+                         ["A1", "A4", "A5", "A8", "A9", "A11", "B1", "B2", "B3", "C9S", "C9", "C10", "C11", "C11A", "C15", "C19", "C18", "C12", "C12A", "D0", "R0", "R1", "G1"])
         self.assertEqual([q.id for q in A.expected_walk("wallet_account")],
-                         ["W0", "WN", "W1", "O1", "O2", "O3", "O4", "PN0", "PN1", "WQ", "WA1", "WA2", "WCW", "WG1"])
-        self.assertNotIn("C16", [q.id for q in A.expected_walk("policy")], "version 12 never serves the retired pair")
+                         ["W0", "WN", "W1", "O1", "O2", "O3", "O4", "PN0", "PN1", "WQ", "WA1", "WA2", "WO1", "WO2", "WO3", "WO4", "WCW", "WG1"])
+        self.assertNotIn("C16", [q.id for q in A.expected_walk("policy")], "version 12 retired the pair, and version 14 never serves it")
+        self.assertNotIn("C11C", [q.id for q in A.expected_walk("policy")], "C11C is asked only behind C11A's third answer, which the book does not choose")
+        self.assertEqual(len(A.expected_walk("policy")), 23)
+        self.assertEqual(len(A.expected_walk("wallet_account")), 18)
 
     def test_the_whitelist_roster_is_the_a8_census_and_its_quorum_is_c12(self):
         """Spec T9 §4: WHITELIST_ROSTER is the A8 census names and WHITELIST_QUORUM is the C12 answer, so the harness's expectation is the charter's."""
@@ -166,6 +204,136 @@ class TheBookIsTheSpecsEstate(unittest.TestCase):
         self.assertEqual(A.PAYMENTS[0].payee_key, "NORTHWIND_ETHEREUM")
         self.assertIsNone(A.PAYMENTS[1].payee_key, "the second payment goes to an address not on the list")
         self.assertEqual(A.PAYMENTS[2].payee_key, "CONTOSO_ETHEREUM")
+
+
+class TheBookAnswersCatalogVersion14(unittest.TestCase):
+    """Spec T11: the fixture of the pages served on 21 September plus the seven; no id is missing, and the new shapes are the estate's."""
+
+    def setUp(self):
+        self.data = served_fixture()
+        self.pages = served_and_added()
+
+    def test_the_fixture_is_the_run_of_21_september_that_stopped_at_c11a_and_wo1(self):
+        self.assertEqual(self.data["run"]["report"], "aer360-harness-2026-09-21.md")
+        self.assertEqual(self.data["run"]["startedAt"], "2026-09-21T20:55:56.193+10:00")
+        self.assertEqual(self.data["run"]["stoppedAt"], {"policy": "C11A", "wallet_account": "WO1"})
+        self.assertEqual([p["questionId"] for p in self.data["served"]["policy"]],
+                         ["A1", "A4", "A5", "A8", "A9", "A11", "B1", "B2", "B3", "C9S", "C9", "C10", "C11", "C11A"])
+        self.assertEqual([p["questionId"] for p in self.data["served"]["wallet_account"]],
+                         ["W0", "WN", "W1", "O1", "O2", "O3", "O4", "PN0", "PN1", "WQ", "WA1", "WA2", "WO1"])
+        self.assertEqual(self.data["catalog"]["version"], 14)
+        self.assertEqual(self.data["catalog"]["addedInVersion14"], {"policy": ["C11A", "C11C", "C19"], "wallet_account": ["WO1", "WO2", "WO3", "WO4"]})
+        self.assertEqual(len(self.pages), 27 + 5, "27 pages served, and the five of the seven the run never reached")
+
+    def test_the_book_states_the_version_it_answers(self):
+        self.assertEqual(A.CATALOG_VERSION_ANSWERED, 14)
+        self.assertEqual(A.CATALOG_VERSION_READ, 14)
+        self.assertIn("cf3be4a", A.CATALOG_SOURCE)
+        self.assertIn("CATALOG_VERSION = 14", A.CATALOG_SOURCE)
+        self.assertEqual(A.ADDED_IN_V14, {"policy": ("C11A", "C11C", "C19"), "wallet_account": ("WO1", "WO2", "WO3", "WO4")})
+
+    def test_every_question_the_estate_served_plus_the_seven_has_an_answer_of_its_kind_no_id_missing(self):
+        for interview_type, page in self.pages:
+            qid, kind = page["questionId"], page["kind"]
+            book = A.ANSWERS[interview_type]
+            self.assertIn(qid, book, "no answer for %s %s (%s): %s" % (interview_type, qid, kind, page["prompt"]))
+            self.assertEqual(A.kind_of(interview_type, qid), kind, "the book knows %s as another kind" % qid)
+            self.assertIn(A.SHAPE_OF_KIND[kind], book[qid], "the answer to %s (%s) carries no %r" % (qid, kind, A.SHAPE_OF_KIND[kind]))
+            if page.get("options") and kind != "currency":
+                chosen = [book[qid]["choice"]] if "choice" in book[qid] else list(book[qid].get("choices", []))
+                for choice in chosen:
+                    self.assertIn(choice, page["options"], "%s's answer %r is not among the options the estate serves" % (qid, choice))
+
+    def test_every_served_page_of_the_run_is_answered_from_the_book_c11a_and_wo1_included(self):
+        """The two pages the run stopped on are answered now, and answer_for checks each choice against the options the page offered."""
+        for interview_type, page in self.pages:
+            if page["questionId"] in ("C11C", "C19", "WO2", "WO3", "WO4"):
+                continue  # never served that night
+            value = A.answer_for(interview_type, page)
+            self.assertEqual(value, A.ANSWERS[interview_type][page["questionId"]])
+        c11a = next(p for t, p in self.pages if p["questionId"] == "C11A")
+        self.assertEqual(A.answer_for("policy", c11a), {"choice": "The people who may change these rules, at the number you set for a change"})
+        wo1 = next(p for t, p in self.pages if p["questionId"] == "WO1")
+        self.assertEqual(A.answer_for("wallet_account", wo1), A.ACCOUNT_ANSWERS["WO1"])
+
+    def test_the_seven_carry_the_catalogs_own_words(self):
+        added = {p["questionId"]: p for pages in self.data["added"].values() for p in pages}
+        self.assertEqual(A.question("policy", "C11A").options, added["C11A"]["options"])
+        self.assertEqual(A.question("policy", "C19").options, added["C19"]["options"])
+        self.assertEqual(A.question("wallet_account", "WO1").options, added["WO1"]["options"])
+        self.assertEqual(A.question("wallet_account", "WO1").kind, "person_or_none")
+        self.assertEqual(A.question("policy", "C11C").depends_on, {"questionId": "C11A", "oneOf": [A.PAYEE_APPROVAL_CFO]})
+        self.assertEqual(A.question("wallet_account", "WO3").depends_on, {"questionId": "WO1", "oneOf": [A.HOLDER_PERSON]})
+        for qid in ("WO1", "WO2", "WO4"):
+            self.assertEqual(A.question("wallet_account", qid).depends_on, added[qid]["dependsOn"], qid)
+        w1 = next(p for t, p in self.pages if p["questionId"] == "W1")
+        self.assertEqual(A.question("wallet_account", "W1").options, w1["options"], "W1 gained the customer's account in version 14")
+        self.assertEqual(A.PAYEE_APPROVAL_CFO, "The company’s CFO, or the person the CFO has delegated")
+        self.assertEqual(A.HOLDER_NO_ONE, "No one: this wallet is held by no person’s device and is visible and operated from AER 360 only")
+        self.assertEqual(A.WRITTEN_ONE_DOLLAR, {"cents": "100"})
+        self.assertEqual(added["WO3"]["written"], A.WRITTEN_ONE_DOLLAR)
+        self.assertEqual(added["WO4"]["written"], A.WRITTEN_ONE_DOLLAR)
+
+    def test_wo1_decodes_to_the_estates_person_or_none_shape(self):
+        """services/onboarding.ts, case 'person_or_none': {choice, person: {name, email}} behind the first option."""
+        wo1 = A.ACCOUNT_ANSWERS["WO1"]
+        page = next(p for t, p in self.pages if p["questionId"] == "WO1")
+        self.assertEqual(set(wo1.keys()), {"choice", "person"})
+        self.assertEqual(wo1["choice"], page["options"][0], "the first option names one person")
+        self.assertEqual(wo1["choice"], A.HOLDER_PERSON)
+        self.assertEqual(set(wo1["person"].keys()), {"name", "email"})
+        self.assertEqual([f["key"] for f in page["listFields"]], ["name", "email"])
+        self.assertEqual(wo1["person"], {"name": "Ben Signatory", "email": A.PEOPLE["ben"].email}, "Ben holds the wallet; he is its Officer")
+        self.assertEqual(A.WALLET_HOLDER, "ben")
+        self.assertEqual(A.WALLET_HOLDER_TITLE, "Officer")
+        self.assertEqual(A.SHAPE_OF_KIND["person_or_none"], "choice")
+
+    def test_wo2_names_one_third_party_with_a_title_of_the_three(self):
+        wo2 = A.ACCOUNT_ANSWERS["WO2"]
+        page = next(p for t, p in self.pages if p["questionId"] == "WO2")
+        self.assertEqual(len(wo2["entries"]), 1)
+        entry = wo2["entries"][0]
+        self.assertEqual(list(entry.keys()), [f["key"] for f in page["listFields"]], "name, surname, email, title — as the page's fields")
+        self.assertEqual(entry, {"name": "Harriet", "surname": "Founder", "email": A.PEOPLE["harriet"].email, "title": "CEO"})
+        title_field = next(f for f in page["listFields"] if f["key"] == "title")
+        self.assertEqual(title_field["options"], ["CEO", "CFO", "COO"])
+        self.assertIn(entry["title"], title_field["options"])
+        self.assertIn(entry["title"], A.THIRD_PARTY_TITLES)
+        self.assertEqual(A.THIRD_PARTY_TITLES, ("CEO", "CFO", "COO"))
+
+    def test_wo4_is_above_wo3_and_neither_is_the_written_dollar(self):
+        wo3, wo4 = A.ACCOUNT_ANSWERS["WO3"], A.ACCOUNT_ANSWERS["WO4"]
+        self.assertEqual(wo3, {"cents": "200000"}, "2,000.00 — the holder alone")
+        self.assertEqual(wo4, {"cents": "1000000"}, "10,000.00 — two signatures enough")
+        self.assertGreater(int(wo4["cents"]), int(wo3["cents"]), "the compiler refuses at the read-back where WO4 is not above WO3")
+        self.assertNotEqual(wo3, A.WRITTEN_ONE_DOLLAR)
+        self.assertNotEqual(wo4, A.WRITTEN_ONE_DOLLAR)
+        self.assertEqual(A.MONEY["holder_alone_cents"], wo3["cents"])
+        self.assertEqual(A.MONEY["two_signatures_cents"], wo4["cents"])
+
+    def test_the_tiers_name_three_people_between_wa1_and_wo2(self):
+        """tiersNeedThreePeople: WA1's approvers and WO2's third party, each counted once by their work email, must be three."""
+        emails = {e["email"].lower() for e in A.ACCOUNT_ANSWERS["WA1"]["entries"]} | {e["email"].lower() for e in A.ACCOUNT_ANSWERS["WO2"]["entries"]}
+        self.assertGreaterEqual(len(emails), 3, "WA1 (Ada, Ben) and WO2 (Harriet)")
+        self.assertEqual([e["name"] for e in A.ACCOUNT_ANSWERS["WA1"]["entries"]], ["Ada Approver", "Ben Signatory"], "WA1 gains Ben beside Ada")
+        self.assertEqual(A.ACCOUNT_ANSWERS["WQ"]["choice"], "1", "WQ stays at one")
+        for entry in A.ACCOUNT_ANSWERS["WA1"]["entries"]:
+            self.assertEqual(list(entry.keys()), ["name", "email"])
+
+    def test_c11a_is_the_change_approvers_and_agrees_with_the_whitelist_roster_and_c11c_is_written_all_the_same(self):
+        self.assertEqual(A.POLICY_ANSWERS["C11A"]["choice"], A.PAYEE_APPROVAL_CHANGE_APPROVERS)
+        self.assertEqual(A.POLICY_ANSWERS["C11A"]["choice"], "The people who may change these rules, at the number you set for a change")
+        # the census at C12's count of two: the roster T10 asserts in S6
+        self.assertEqual(list(A.WHITELIST_ROSTER), [e["name"] for e in A.POLICY_ANSWERS["A8"]["entries"]])
+        self.assertEqual(A.WHITELIST_QUORUM, int(A.POLICY_ANSWERS["C12"]["choice"]))
+        self.assertEqual(A.POLICY_ANSWERS["C11C"], {"entries": []}, "not served behind that answer; written all the same")
+        self.assertNotIn("C11C", [q.id for q in A.expected_walk("policy")])
+
+    def test_c19_is_no_only_wallets_held_by_people_or_companies(self):
+        page = next(p for t, p in self.pages if p["questionId"] == "C19")
+        self.assertEqual(A.POLICY_ANSWERS["C19"], {"choice": "No — only wallets held by people or companies"})
+        self.assertEqual(A.POLICY_ANSWERS["C19"]["choice"], A.VENUE_NO)
+        self.assertEqual(page["options"], [A.VENUE_YES, A.VENUE_NO])
 
 
 class AnswerForAServedPage(unittest.TestCase):
