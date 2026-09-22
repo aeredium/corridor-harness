@@ -194,7 +194,47 @@ class EstateHarnessReadmeTest(unittest.TestCase):
             self.assertIn(words, self.section, words)
         self.assertLess(self.section.index("Spec T13, 22 September 2026"), self.section.index("Spec T15, 22 September 2026"))
 
+    def test_it_says_the_harness_grants_a_stale_seat_again_since_spec_t17(self):
+        self.assertIn("Spec T17, 23 September 2026", self.section)
+        self.assertIn("aer360-harness-2026-09-22-214017.md", self.section)
+        self.assertIn("it does not recognise your key as one of this wallet's signatories", self.section)
+        for words in ("the seat view has no onRoster; skipping", "`GET /v1/approver-seats`", "`GET /v1/roster/changes`",
+                      "`harness+<name>@aeredium.io`, never by display name", "a change already awaits; not granted",
+                      "`propose_the_move_afresh`", "`REPROPOSALS_AT_MOST`", "*moved at once*", "two passkeys enrolled; not granted",
+                      "not of the harness; not granted", "unverified: <rosterSaid>", "A `true` seat prints nothing",
+                      "change <id> moves <who>'s seat to a credential the harness does not hold; not signed",
+                      "signs only as persons whose own seat reads `onRoster: true`", "the stale seat's owner never signs her own move",
+                      "<n> required, <m> able", "grants no further seat", "up to three times over a bounded wait",
+                      "*<k> of <n> signatures*", "for a person whose seat read `null` the finding cites the unverified seat",
+                      "One note per seat granted", "*Spec 95 opened a governed ceremony to move it* is deleted", "it was never a fact",
+                      "`onRoster`, `rosterSaid`", "156 → 159", "`seat_on_roster`", "`seats_override`",
+                      "rerun once 105 is live", "count Ada 1 of 2", "Each of the spec's tests was red on main"):
+            self.assertIn(words, self.section, words)
+        self.assertLess(self.section.index("Spec T15, 22 September 2026"), self.section.index("Spec T17, 23 September 2026"))
+
 class ChangelogTest(unittest.TestCase):
+    def test_the_changelog_records_spec_t17_before_t15_and_names_every_change(self):
+        text = read("CHANGELOG.md")
+        self.assertIn("## Spec T17 — S4 grants a stale seat again before signing, one seat at a time, and S6 counts Ada (23 September 2026)", text)
+        self.assertLess(text.index("## Spec T17"), text.index("## Spec T15"))
+        t17 = text.split("## Spec T17", 1)[1].split("## Spec T15", 1)[0]
+        for words in ("aer360-harness-2026-09-22-214017.md", "AER 360 Spec 105", "fix/a-seat-tells-the-platforms-truth",
+                      "it does not recognise your key as one of this wallet's signatories", "`sign_the_roster_changes`",
+                      "`_sign_pass_t15`", "`_sign_pass_t17`", "`_sign_change_t17`", "`_confirm_seat_onroster`", "`_record_seat_moved`",
+                      "the seat view has no onRoster; skipping", "`GET /v1/roster/changes`", "`GET /v1/approver-seats`",
+                      "`harness+<name>@aeredium.io`, never by display name", "a change already awaits; not granted",
+                      "`propose_the_move_afresh`", "`REPROPOSALS_AT_MOST`", "*moved at once*", "two passkeys enrolled; not granted",
+                      "not of the harness; not granted", "unverified: <rosterSaid>",
+                      "change <id> moves <who>'s seat to a credential the harness does not hold; not signed",
+                      "`onRoster: true`", "the stale seat's owner never signs her own move", "*<n> required, <m> able*",
+                      "grants no further seat", "`SEAT_REREAD_ATTEMPTS`", "*<k> of <n> signatures*",
+                      "for a person whose seat read `null` the finding cites the unverified seat", "`seat_binding_notes`",
+                      "*Spec 95 opened a governed ceremony to move it* is deleted", "it was never a fact",
+                      "`SEAT_ON_ROSTER`", "`SEAT_ROSTER_SAID`", "`onRoster`", "`rosterSaid`", "156 → 159 lines",
+                      "`seat_on_roster`", "`seats_override`", "`rebindRosterSeats`", "`moving`",
+                      "`tests/test_aer360_roster.py`", "2 required, 1 able", "moved at once", "the passkey files, the estate and the platform"):
+            self.assertIn(words, t17, words)
+
     def test_the_changelog_records_spec_t15_before_t13_and_names_every_change(self):
         text = read("CHANGELOG.md")
         self.assertIn("## Spec T15 — The harness has the approvers sign a change of who the approvers are, and S6 counts Ada (22 September 2026)", text)

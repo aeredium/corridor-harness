@@ -228,6 +228,8 @@ SIGNATURE_NOT_COUNTED = "SIGNATURE_NOT_COUNTED"  # 403: the platform did not cou
 PLATFORM_REFUSED = "PLATFORM_REFUSED"  # 502: the platform's own no — a ceremony expired, approved or consumed — in its words (Spec 97)
 REPROPOSALS_AT_MOST = 1  # Spec T15 §1: a move whose change is listed expired is proposed afresh once; a second expiry fails S4 naming the ceremony
 PROPOSED_AFRESH = "proposed afresh"  # the pass's word for a change it could not sign as listed, whose move the founder's grant proposed again
+SEAT_REREAD_ATTEMPTS = 3  # Spec T17 §2: after the count is met S4 re-reads the seat up to three times over a bounded wait, and says "moved" only on a true read
+SEAT_REREAD_WAIT_SECONDS = 1.0  # the bounded wait between those re-reads (no-op under the test clock)
 
 STATIONS: List[Tuple[str, str]] = [
     ("S1", "Enrol"), ("S2", "Journey"), ("S3", "Policy Interview"), ("S4", "People"),
@@ -1373,13 +1375,14 @@ class Runner:
             person = self.people[key]
             said.append("%s %s" % (person.name, self.bring_in_on_own_credential("S4", person, founder)))
         seat_said = self.seat_on_own_credential("S4", founder, ada, found_words)
-        changes_said, changes_ok = self.sign_the_roster_changes("S4", founder)  # Spec T15 §1: the approvers sign a change of who the approvers are
+        grant_said, changes_said, changes_ok = self.sign_the_roster_changes("S4", founder)  # Spec T17 §1: S4 grants a stale seat again, then T15's pass signs it
         register = self.request(founder, "GET", "/v1/invites", None, "S4")
         self.step("S4", register, "the invitation register: who was invited, as what, and how it went; each row's sharesCredentialWith (Spec 91's marker) is read by S10",
                   "answered" if register.ok else register.sentence(), None, founder.name)
         self.facts["invites_register"] = register.json if isinstance(register.json, dict) else None
         rows = (register.json or {}).get("invites") if isinstance(register.json, dict) else None
-        detail = "people: %s; %s; roster changes: %s; %s invitation(s) in the register" % ("; ".join(said), seat_said, changes_said, len(rows) if isinstance(rows, list) else "?")
+        grant_segment = ("%s; " % grant_said) if grant_said else ""  # Spec T17: the grant step's words, before the signing narrative; empty where the door was not open
+        detail = "people: %s; %s; %sroster changes: %s; %s invitation(s) in the register" % ("; ".join(said), seat_said, grant_segment, changes_said, len(rows) if isinstance(rows, list) else "?")
         signed_in = all(self.people[k].signed_in for k in A.AUTHORS_INVITED)
         brought_in = all(r["ok"] for r in self.facts["brought_in_again"])
         if signed_in and brought_in and changes_ok and len(self.findings) == findings_before:
@@ -1430,27 +1433,16 @@ class Runner:
         wanted = str(email or "").strip().lower()
         return next((p for p in self.people.values() if p.email.lower() == wanted), None) if wanted else None
 
-    def sign_the_roster_changes(self, station: str, founder: Person) -> Tuple[str, bool]:
+    def sign_the_roster_changes(self, station: str, founder: Person) -> Tuple[str, str, bool]:
         """
-        Spec T15 §1. After every person has signed in on their own credential, the harness reads GET /v1/roster/changes as the founder.
-        For each change the estate lists as awaiting, it signs in turn as each person the list names as able to sign, with their stored
-        passkey and a step-up of purpose `roster.change`, through POST /v1/roster/changes/{pendingTxId}/sign, reading signaturesCollected
-        after each, until the estate reports it applied; then it re-reads the roster changes — where the People screen reads a seat's
-        credential; the People register's rows name a person's credential, never a roster seat's — and asserts the seat now names the
-        owner's current credential (`sign_as_the_list_names`, `assert_the_seat_moved`). Each signature is judged: a counted one reports
-        the numbers; a refusal is judged for Rule 13 the way S10 judges every refusal and reported in the estate's words, never retried,
-        and the next person the list names signs (`refusal_judged`).
+        Spec T17 §1 and §2, in substance T15 §1 with a grant step. After every person has signed in on their own credential, S4 reads
+        GET /v1/roster/changes and GET /v1/approver-seats. Where the seat view carries `onRoster` (AER 360 Spec 105), S4 grants each
+        stale seat of a person of the harness — one whose seat reads `onRoster: false` — one at a time, and only where no change for it
+        already awaits, then T15's pass signs it as the persons who can (`_sign_pass_t17`). Where the seat view has no `onRoster` (an
+        estate before Spec 105), S4 prints one line and behaves exactly as T15 (`_sign_pass_t15`).
 
-        A change the estate lists as expired is reported, and the move is proposed afresh — by the road the estate names for it, the
-        founder granting the seat again (`propose_the_move_afresh`; SPEC.md says a sign-in, and the estate proposes nothing at one: see
-        the module docstring) — then the list is read again and the change signed; once at most (REPROPOSALS_AT_MOST), then S4 fails
-        naming the ceremony. A change the estate lists as one it did not propose — the live ceremony of 21 September predates Spec 99's
-        seat row — names no seat, so the harness does not guess whose it is: it grants again each seat the charter names for a person of
-        the harness, once, and re-reads the list; a change still unproposed after that is reported and not signed, and does not fail S4
-        (a foreign ceremony is the platform's to hold). To have the harness only report such a change, drop the `seat is None` road
-        into `propose_the_move_afresh` below. Where the register lists no change, S4 does nothing new and says so in one line (§4).
-
-        Returns the words for the station's line, and whether every change the pass could sign ended applied.
+        Returns three words for the station's line: the grant step's (empty where the door was not open), T15's/T17's signing words,
+        and whether every change the pass could sign ended with the seat reading on the roster.
         """
         answer, view = self.read_roster_changes(station, founder, (
             "every roster change the platform holds for the estate (Spec 99): the ceremony, its state (awaiting, approved, applied, expired, closed), "
@@ -1459,8 +1451,26 @@ class Runner:
             if self.route_not_found(answer):
                 self.note(station, "the estate has no door onto the roster ceremony (%s answered %s): an estate before AER 360 Spec 99, so the signing pass was not made" % (
                     T.ROSTER_CHANGES_ROUTE, answer.sentence()))
-                return "the door is not open (an estate before Spec 99): %s answered %s" % (T.ROSTER_CHANGES_ROUTE, answer.sentence()), True
-            return "the roster changes could not be read: %s" % answer.sentence(), False
+                return "", "the door is not open (an estate before Spec 99): %s answered %s" % (T.ROSTER_CHANGES_ROUTE, answer.sentence()), True
+            return "", "the roster changes could not be read: %s" % answer.sentence(), False
+        # Spec T17 §1: the grant step reads the approver seats, with onRoster (AER 360 Spec 105). An estate without the field is behaved
+        # as T15 (§0), with one line saying so; the two signing rules of §2 apply only where onRoster is present.
+        seats_view = self.read_seats(station, founder, (
+            "the approver seats with onRoster (AER 360 Spec 105): which seat of a person of the harness reads on the roster and which is stale"))
+        seats = seats_view.get("seats") if isinstance(seats_view, dict) else None
+        has_onroster = isinstance(seats, list) and any(isinstance(s, dict) and T.SEAT_ON_ROSTER in s for s in seats)
+        if not has_onroster:
+            words, ok = self._sign_pass_t15(station, founder, view)
+            return "the seat view has no onRoster; skipping", words, ok
+        return self._sign_pass_t17(station, founder, view, [s for s in seats if isinstance(s, dict)])
+
+    def _sign_pass_t15(self, station: str, founder: Person, view: Dict[str, Any]) -> Tuple[str, bool]:
+        """
+        Spec T15's signing pass, run unchanged where the seat view has no onRoster (an estate before AER 360 Spec 105). For each change
+        the estate lists as awaiting it signs in turn as each person the list names as able to sign; a change listed expired or one this
+        estate did not propose is proposed afresh once (`propose_the_move_afresh`, `REPROPOSALS_AT_MOST`) and signed. Returns the words and
+        whether every change the pass could sign ended applied.
+        """
         changes = [c for c in (view.get("changes") or []) if isinstance(c, dict)]
         if not changes:
             return "none awaits a signature: the register lists no roster change, so S4 did nothing new (Spec T15 §4)", True
@@ -1528,6 +1538,172 @@ class Runner:
             queue = [c for c in (view_again.get("changes") or []) if isinstance(c, dict)
                      and (str(c.get("pendingTxId")) not in finished or (finished[str(c.get("pendingTxId"))] == PROPOSED_AFRESH and signable(c)))]
         return "; ".join(said), ok
+
+    # -- S4's tail under AER 360 Spec 105: the seat view reads the roster, so S4 grants a stale seat again and signs it (Spec T17) ---
+    def _sign_pass_t17(self, station: str, founder: Person, view: Dict[str, Any], seats: List[Dict[str, Any]]) -> Tuple[str, str, bool]:
+        """
+        Spec T17. The seat view carries onRoster (AER 360 Spec 105). S4 grants each stale seat of a person of the harness — matched by
+        email `harness+<name>@aeredium.io`, never by display name — one at a time, and only where no change for it already awaits; then
+        T15's pass signs it as the persons whose own seat reads `onRoster: true`, and after the count S4 re-reads the seat and says
+        `moved` only on a `true` read. A seat reading `true` prints nothing; a seat with a null credential or `ambiguous`, a seat of a
+        person not of the harness, and a seat reading null each print their line and are not granted (§1). Returns the grant step's
+        words, the signing words, and whether every seat S4 set out to move ended reading on the roster.
+        """
+        seats_by_email = {str(s.get("email", "")).lower(): s for s in seats}
+        changes = [c for c in (view.get("changes") or []) if isinstance(c, dict)]
+
+        def awaiting_for(email: str) -> Optional[Dict[str, Any]]:
+            wanted = str(email).lower()
+            return next((c for c in changes if str(c.get("state")) == "awaiting" and isinstance(c.get("seat"), dict)
+                         and str(c["seat"].get("email") or "").lower() == wanted), None)
+
+        grant_lines: List[str] = []
+        sign_lines: List[str] = []
+        ok = True
+        stopped = False  # once a count fell short, S4 grants no further seat (§2)
+        for seat in seats:
+            onr = seat.get(T.SEAT_ON_ROSTER)
+            who = seat.get("name") or seat.get("email")
+            email = str(seat.get("email") or "").lower()
+            person = self.person_by_email(email)
+            if onr is True:
+                continue  # a true seat prints nothing
+            # A stale seat, or one the estate could not verify. The lines, in the order §1 gives them: a null credential or two passkeys
+            # enrolled (which reads null too, so it is judged first); a seat of a person not of the harness; then a seat reading null.
+            if seat.get("credentialId") is None or seat.get("ambiguous"):
+                grant_lines.append("%s's seat: two passkeys enrolled; not granted" % who)
+                continue
+            if person is None:
+                grant_lines.append("%s's seat: not of the harness; not granted" % who)
+                continue
+            if onr is None:
+                grant_lines.append("%s's seat: unverified: %s" % (who, seat.get(T.SEAT_ROSTER_SAID)))
+                continue
+            # onr is False, the seat names a credential, and the person is of the harness: a seat the grant road will move
+            if stopped:
+                continue  # a count already fell short: this seat is not granted (§2)
+            change = awaiting_for(email)
+            if change is not None:
+                grant_lines.append("%s's seat: a change already awaits; not granted" % person.name)
+            else:
+                afresh = self.propose_the_move_afresh(station, founder, {"email": person.email, "name": person.name})
+                grant_lines.append("%s's seat: granted again; %s" % (person.name, afresh))
+                again, view_again = self.read_roster_changes(station, founder,
+                    "the roster changes after %s's seat was granted again: the move proposed afresh and listed awaiting, or moved at once where the grant carries no pendingTxId" % person.name)
+                if view_again is None:
+                    sign_lines.append("the roster changes could not be read again: %s" % again.sentence())
+                    ok = False
+                    break
+                changes = [c for c in (view_again.get("changes") or []) if isinstance(c, dict)]
+                change = awaiting_for(email)
+                if change is None:
+                    # the grant's answer carried no pendingTxId: Spec 95 applied the move at once (§1)
+                    grant_lines.append("moved at once")
+                    moved, words = self._confirm_seat_onroster(station, founder, person, None, None, None)
+                    sign_lines.append(words)
+                    if not moved:
+                        ok = False
+                    continue
+            outcome, words = self._sign_change_t17(station, founder, change, person, seats_by_email)
+            sign_lines.append("%s: %s" % (self.change_words(change), words))
+            if outcome == "count_short":
+                ok = False
+                stopped = True
+                continue  # grant no further seat
+            if outcome != "moved":
+                ok = False
+        grant_said = "; ".join(grant_lines) if grant_lines else "every seat of the harness reads on the roster; nothing to grant"
+        changes_said = "; ".join(sign_lines) if sign_lines else "none awaits a signature: no stale seat of the harness needed a move (Spec T17)"
+        return grant_said, changes_said, ok
+
+    def _sign_change_t17(self, station: str, founder: Person, change: Dict[str, Any], owner: Person,
+                         seats_by_email: Dict[str, Dict[str, Any]]) -> Tuple[str, str]:
+        """
+        Spec T17 §2. Sign one change with two rules added to T15's pass: sign only where the seat's person is of the harness and the
+        target credential is that person's stored passkey (else a finding, not signed); and sign only as persons whose own seat reads
+        `onRoster: true`, never the stale seat's owner. Where such persons are fewer than requiredSignatures, S4 fails naming the count.
+        Returns the outcome (`moved`, `not_moved`, `not_signed`, `count_short`, `awaiting`) and the words for the line.
+        """
+        pending_tx_id = str(change.get("pendingTxId"))
+        seat = change.get("seat") if isinstance(change.get("seat"), dict) else {}
+        required = change.get("requiredSignatures")
+        own_short = T.credential_short_form(owner.credential_id) if owner.credential_id else None
+        target = seat.get("newCredentialId")
+        # §2 rule 1: the change must move the seat of a harness person to that person's stored passkey, or it is not signed.
+        if self.person_by_email(seat.get("email")) is None or target != own_short:
+            said = "change %s moves %s's seat to a credential the harness does not hold; not signed" % (pending_tx_id, seat.get("name") or seat.get("email") or owner.name)
+            self.finding(station, "roster change %s…: the target credential the harness holds" % T.credential_short_form(pending_tx_id), None, None,
+                         "the change moves %s's seat to their stored passkey %s (short form)" % (owner.name, own_short), said)
+            return "not_signed", said
+
+        def able(name: Any) -> Optional[Person]:
+            signer = self.person_named(name)
+            if signer is None or not signer.signed_in or signer.email.lower() == owner.email.lower():
+                return None  # the stale seat's owner never signs her own move (§2)
+            row = seats_by_email.get(signer.email.lower())
+            return signer if isinstance(row, dict) and row.get(T.SEAT_ON_ROSTER) is True else None
+
+        may = list(change.get("maySign") or [])
+        able_names = [name for name in may if able(name) is not None]
+        if isinstance(required, int) and len(able_names) < required:
+            # a person whose current key is not on the roster cannot sign (§2): fewer able than the count asks
+            return "count_short", "%d required, %d able" % (required, len(able_names))
+        spoken = ["found awaiting at %s of %s, %s able to sign" % (change.get("signaturesCollected"), required, names_in_words(able_names) or "nobody")]
+        collected = change.get("signaturesCollected")
+        for name in may:
+            signer = able(name)
+            if signer is None:
+                continue  # named as able by the list, but their own seat does not read on the roster (§2)
+            answer, body = self.sign_roster_change_as(station, signer, pending_tx_id, owner.name, required)
+            if body is None:
+                spoken.append("%s refused (%s)" % (signer.name, answer.sentence()))  # the estate's words, verbatim; never retried
+                continue
+            required = body.get("requiredSignatures") or required
+            collected = body.get("signaturesCollected")
+            spoken.append("%s counted (%s of %s)" % (signer.name, collected, required))
+            if body.get("state") == "applied":
+                moved, words = self._confirm_seat_onroster(station, founder, owner, collected, required, body)
+                spoken.append(words)
+                return ("moved" if moved else "not_moved"), "; ".join(spoken)
+        spoken.append("nobody left to sign, and the estate did not report the change applied")
+        return "awaiting", "; ".join(spoken)
+
+    def _confirm_seat_onroster(self, station: str, founder: Person, owner: Person, collected: Any, required: Any,
+                               body: Optional[Dict[str, Any]]) -> Tuple[bool, str]:
+        """
+        Spec T17 §2. After the count is met, re-read GET /v1/approver-seats up to three times over a bounded wait, and say `moved` only
+        on a read where the owner's seat reads `onRoster: true`; otherwise fail naming the seat and `<k> of <n> signatures`. A moved
+        seat is recorded in `facts["seats_moved"]` for S6 and S10. Returns whether the seat read on the roster, and the words.
+        """
+        for attempt in range(SEAT_REREAD_ATTEMPTS):
+            seats_view = self.read_seats(station, founder,
+                "%s's seat reading onRoster true after the count (AER 360 Spec 105)" % owner.name)
+            row = self.seat_of(seats_view, owner.email)
+            if isinstance(row, dict) and row.get(T.SEAT_ON_ROSTER) is True:
+                if body is not None:  # a signed move; a "moved at once" grant has no ceremony and no signers to record for S10
+                    self._record_seat_moved(owner, body)
+                return True, "moved: %s's seat now reads on the roster%s" % (
+                    owner.name, (", signed by %s" % (names_in_words([str(s.get("name")) for s in (body or {}).get("signedBy") or [] if isinstance(s, dict)]) or "nobody the estate names")) if body else "")
+            if attempt < SEAT_REREAD_ATTEMPTS - 1:
+                self.sleep(SEAT_REREAD_WAIT_SECONDS)
+        count = "%s of %s signatures" % (0 if collected is None else collected, 0 if required is None else required)
+        self.finding(station, "roster change: %s's seat after the count" % owner.name, None, None,
+                     "%s's seat reading onRoster true (AER 360 Spec 105)" % owner.name,
+                     "%s's seat did not read on the roster after the count: %s" % (owner.name, count))
+        return False, "%s's seat did not read on the roster: %s" % (owner.name, count)
+
+    def _record_seat_moved(self, owner: Person, body: Optional[Dict[str, Any]]) -> None:
+        """Record a seat S4 moved this run, for S6 (a not-counted press of theirs is a finding) and S10 (the trail's `roster.seat_rebound`)."""
+        body = body or {}
+        signers = [str(s.get("name")) for s in body.get("signedBy") or [] if isinstance(s, dict)]
+        pending_tx_id = body.get("pendingTxId")
+        if any(m.get("key") == owner.key for m in self.facts["seats_moved"]):
+            return
+        self.facts["seats_moved"].append({
+            "email": owner.email.lower(), "key": owner.key, "name": owner.name,
+            "pendingTxId": str(pending_tx_id) if pending_tx_id else None,
+            "signers": signers, "signer_credentials": [s.get("credentialId") for s in body.get("signedBy") or [] if isinstance(s, dict)],
+            "new_credential": owner.credential_id, "rebound": body.get("rebound"), "roster": (body.get("rebound") or {}).get("rosterName")})
 
     def propose_the_move_afresh(self, station: str, founder: Person, seat: Optional[Dict[str, Any]]) -> str:
         """
@@ -2430,7 +2606,7 @@ class Runner:
                 held_words = last4(held) if held else "no credential the register names"
                 notes.append(
                     "S6: %s's whitelist press was not counted (SIGNATURE_NOT_COUNTED); the harness pressed with %s, the credential of their own the People register says they hold (%s), "
-                    "so the platform's roster seat is still bound to a retired passkey — Spec 95 opened a governed ceremony to move it, and S4 found no roster change of theirs it could sign "
+                    "so the platform's roster seat is still bound to a retired passkey, and S4 found no roster change of theirs it could sign "
                     "(Spec 99's door; see S4's line). The estate is telling the truth: a note, not a finding." % (press.get("who"), last4(press.get("credential")), held_words))
         return notes
 
@@ -3605,18 +3781,25 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     line("S4", "GET /v1/approver-seats (as %s) → expect the charter's seats after the people were brought in; %s seated or enrolled_not_seated, and which credential the seat names" % (founder.name, approver.name))
     line("S4", "POST /v1/approver-seats/grant %s (as %s) — only if the seat is enrolled_not_seated or names a credential other than %s's session's → expect the seat seated, naming %s's own credential (Spec 91); a refusal is a finding in the estate's words" % (
         _j({"email": approver.email}), founder.name, approver.name, approver.name))
-    # Spec T15 §1: the approvers sign a change of who the approvers are (AER 360 Spec 99)
+    # Spec T17 §1 and §2 (in substance T15 §1 with a grant step): S4 reads the roster changes and the seats with onRoster (AER 360
+    # Specs 99 and 105), grants each stale seat of a harness person one at a time where nothing awaits, and T15's pass signs it.
     line("S4", "GET %s (as %s) → expect every roster change the platform holds for the estate (Spec 99): pendingTxId, state awaiting, approved, applied, expired or closed, whose seat it moves, requiredSignatures, signaturesCollected, signedBy, maySign; a fresh estate lists none, and S4 says so in one line" % (
         T.ROSTER_CHANGES_ROUTE, founder.name))
-    line("S4", "POST %s {} (as each person the list names as able to sign, in turn) — only for a change listed awaiting → expect 200: options with the challenge the estate derives from %s under the purpose %s, and issuedAtMs" % (
-        T.ROSTER_CHANGE_SIGN_OPTIONS_ROUTE % "<pendingTxId>", T.ROSTER_CHANGE_BINDING % ("<workspace id>", "<pendingTxId>", "<issuedAtMs>"), T.ROSTER_CHANGE_PURPOSE))
-    line("S4", "POST %s %s → expect 200: signaturesCollected of requiredSignatures, state awaiting until the count is met, then applied with rebound naming %s's current credential; a refusal (%s, %s, %s, %s) is judged for Rule 13 and reported in the estate's words, never retried" % (
+    line("S4", "GET /v1/approver-seats (as %s) — the grant step's read, with %s (AER 360 Spec 105) → expect each seat's onRoster true, false or null; for a seat of a harness person (matched by email harness+<name>@aeredium.io) reading false with no awaiting change the founder grants it again (below); a seat reading true prints nothing; a null credential or ambiguous seat, a seat of a person not of the harness, and a null seat print their line and are not granted; an estate without %s prints \"the seat view has no onRoster; skipping\" and S4 behaves as T15" % (
+        founder.name, T.SEAT_ON_ROSTER, T.SEAT_ON_ROSTER))
+    line("S4", "POST /v1/approver-seats/grant %s (as %s) — only for a seat of a harness person reading %s false with no awaiting change → expect Spec 95 to propose the move afresh at the seat grant, one call, listed awaiting and signed below; where the grant's answer carries no pendingTxId the line says \"moved at once\" and the signing is skipped" % (
+        _j({"email": approver.email}), founder.name, T.SEAT_ON_ROSTER))
+    line("S4", "POST %s {} (as each person the list names as able to sign whose own seat reads %s true, in turn; never the stale seat's owner) — only for a change listed awaiting whose target credential is that person's stored passkey → expect 200: options with the challenge the estate derives from %s under the purpose %s, and issuedAtMs; where the able persons are fewer than requiredSignatures S4 fails \"<n> required, <m> able\" and grants no further seat" % (
+        T.ROSTER_CHANGE_SIGN_OPTIONS_ROUTE % "<pendingTxId>", T.SEAT_ON_ROSTER, T.ROSTER_CHANGE_BINDING % ("<workspace id>", "<pendingTxId>", "<issuedAtMs>"), T.ROSTER_CHANGE_PURPOSE))
+    line("S4", "POST %s %s → expect 200: signaturesCollected of requiredSignatures, state awaiting until the count is met, then applied with rebound naming %s's current credential; a change moving a harness seat to a credential the harness does not hold is the finding \"change <id> moves <who>'s seat to a credential the harness does not hold; not signed\"; a refusal (%s, %s, %s, %s) is judged for Rule 13 and reported in the estate's words, never retried" % (
         T.ROSTER_CHANGE_SIGN_ROUTE % "<pendingTxId>", _j({"issuedAtMs": "<issuedAtMs>", "response": "<assertion by the signer's passkey over the challenge>"}), approver.name,
         CHANGE_SIGNER_NOT_ON_ROSTER, APPROVER_ALREADY_SIGNED, SIGNATURE_NOT_COUNTED, PLATFORM_REFUSED))
     line("S4", "POST /v1/approver-seats/grant %s (as %s) — only for a change listed expired, or one this estate did not propose → expect Spec 95 to propose the move afresh at the seat grant (the estate proposes a move at a seat grant or a redemption, not at a sign-in), the change re-listed awaiting and signed; a second expiry fails S4 naming the ceremony" % (
         _j({"email": approver.email}), founder.name))
     line("S4", "GET %s (as %s) — after the count is met → expect the change applied, its seat naming %s's current credential in short form, as the signature's rebound named it" % (
         T.ROSTER_CHANGES_ROUTE, founder.name, approver.name))
+    line("S4", "GET /v1/approver-seats (as %s) — after the count is met, up to three times over a bounded wait → expect %s's seat reading %s true (moved); otherwise S4 fails naming the seat and \"<k> of <n> signatures\"" % (
+        founder.name, approver.name, T.SEAT_ON_ROSTER))
     line("S4", "GET /v1/invites (as %s) → expect the register: three authors, redeemed; each row's sharesCredentialWith (Spec 91's marker) read for S10, expected absent after the re-invitation" % founder.name)
     # S5
     line("S5", "POST /v1/onboarding/interviews %s → expect 200: the interview id and its first page" % _j({"interviewType": "wallet_account"}))

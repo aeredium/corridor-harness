@@ -533,5 +533,201 @@ class TheTablesNameTheRoadsAsTheEstateSpellsThem(unittest.TestCase):
         self.assertEqual(T.credential_short_form(None), "")
 
 
+
+
+# ---------------------------------------------------------------------------
+# Spec T17 (23 September 2026): S4 grants a stale seat again before signing, one at a time, and S6 counts Ada.
+# The estate at AER 360 Spec 105: the seat view reads the roster, so GET /v1/approver-seats carries onRoster. In substance T15 §1
+# gains a grant step — a stale seat (onRoster false) is granted again to propose the move, then T15's pass signs it as the persons
+# whose own seat reads onRoster true.
+# ---------------------------------------------------------------------------
+def stale_seat_estate(change_roster=("ben", "cora"), clear_changes=False, **dials):
+    """
+    Harness Holdings on the day Spec 105 is live. The first run binds Ada's whitelist seat to the shared credential (before Spec 91);
+    Specs 91, 95, 99 and 105 deploy; a second runner signs everyone in on their own credential and re-grants Ada's seat (Spec T10).
+    Returns the double and that second runner with S1–S3 and the bring-in done, ready for S4's grant step. With clear_changes the
+    ceremony Ada's re-invitation proposed is swept, modelling the live finding: her seat is stale but no ceremony is on record.
+    """
+    double = EstateDouble(before_spec_91=True, change_roster=change_roster)
+    tmp = tempfile.mkdtemp()
+    link = double.mint_founder_link()
+    runner_on(double, tmp, invite=link).run()
+    double.before_spec_91 = False
+    for name, value in dials.items():
+        setattr(double, name, value)
+    runner = runner_on(double, tmp, invite=link)
+    runner.load_passkeys()
+    for station in ("station_s1", "station_s2", "station_s3"):
+        getattr(runner, station)()
+    founder = runner.people["harriet"]
+    for key in A.AUTHORS_INVITED:
+        runner.bring_in_on_own_credential("S4", runner.people[key], founder)
+    runner.seat_on_own_credential("S4", founder, runner.people["ada"], "found")
+    if clear_changes:
+        double.ceremonies = []  # the day Spec 105 is live: the seat is stale, and no ceremony for the move is on record (the finding)
+    return double, runner, founder
+
+
+def onroster_seats(runner, ada="compute", ben=True, cora=True):
+    """The seats view Spec 105 answers: Ada's onRoster computed from the live roster (so it flips the moment the move applies), Ben's and Cora's as given."""
+    def spec(key, onr):
+        person = runner.people[key]
+        return {"email": person.email, "name": person.name, "state": "seated", "credentialId": person.credential_id, "onRoster": onr}
+    return [spec("ada", ada), spec("ben", ben), spec("cora", cora)]
+
+
+def _grants_after(runner, before):
+    return [c for c in runner.calls[before:] if c.route == "POST /v1/approver-seats/grant"]
+
+
+def _signs_after(runner, before):
+    return [c for c in runner.calls[before:] if c.route.endswith("/sign")]
+
+
+@unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
+class S4GrantsAStaleSeatAgainThenSignsIt(unittest.TestCase):
+    """Spec T17 §1 and §2: Ada onRoster false, Ben and Cora true, and the changes list empty — S4 grants Ada's seat, Ben and Cora sign, the seat reads true."""
+
+    def test_the_grant_comes_before_any_sign_call_ben_and_cora_sign_and_the_seat_reads_true(self):
+        double, runner, founder = stale_seat_estate(clear_changes=True)
+        ada, ben, cora = runner.people["ada"], runner.people["ben"], runner.people["cora"]
+        double.seats_override = onroster_seats(runner)  # Ada compute (false now), Ben and Cora true
+        self.assertEqual(double.ceremonies, [], "no ceremony is on record for the move")
+        f_before, before = len(runner.findings), len(runner.calls)
+        grant_said, changes_said, ok = runner.sign_the_roster_changes("S4", founder)
+        self.assertTrue(ok, (grant_said, changes_said))
+        grants, signs = _grants_after(runner, before), _signs_after(runner, before)
+        self.assertEqual(len(grants), 1, "one grant, for Ada's seat")
+        self.assertEqual(grants[0].sent, {"email": ada.email})
+        first_grant = next(i for i, c in enumerate(runner.calls[before:]) if c.route == "POST /v1/approver-seats/grant")
+        first_sign = next(i for i, c in enumerate(runner.calls[before:]) if c.route.endswith("/sign"))
+        self.assertLess(first_grant, first_sign, "the double records the grant before any sign call")
+        self.assertEqual([(c.who, c.status) for c in signs], [("Ben Signatory", 200), ("Cora Clerk", 200)], "sign calls as Ben and Cora only")
+        self.assertIn("Ada Approver's seat: granted again", grant_said)
+        self.assertIn("moved: Ada Approver's seat now reads on the roster, signed by Ben Signatory and Cora Clerk", changes_said)
+        self.assertEqual([m["key"] for m in runner.facts["seats_moved"]], ["ada"])
+        self.assertEqual(next(s for s in double.whitelist_seats if s["user_id"] == ada.email)["credential_id"], ada.credential_id, "the platform moved the seat")
+        self.assertEqual([f for f in runner.findings[f_before:] if f.station == "S4"], [])
+
+    def test_a_second_view_still_false_fails_s4_naming_ada_with_the_count(self):
+        double, runner, founder = stale_seat_estate(clear_changes=True)
+        double.seats_override = onroster_seats(runner, ada=False)  # the estate's seat view still reads false after the count
+        f_before, before = len(runner.findings), len(runner.calls)
+        grant_said, changes_said, ok = runner.sign_the_roster_changes("S4", founder)
+        self.assertFalse(ok, (grant_said, changes_said))
+        self.assertEqual(len(_grants_after(runner, before)), 1, "Ada's seat was granted")
+        self.assertEqual([(c.who, c.status) for c in _signs_after(runner, before)], [("Ben Signatory", 200), ("Cora Clerk", 200)], "the count was met")
+        self.assertIn("Ada Approver's seat did not read on the roster: 2 of 2 signatures", changes_said)
+        found = [f for f in runner.findings[f_before:] if f.station == "S4"]
+        self.assertEqual([f.probe for f in found], ["roster change: Ada Approver's seat after the count"])
+        self.assertIn("did not read on the roster after the count: 2 of 2 signatures", found[0].said)
+
+
+@unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
+class AChangeAlreadyAwaitsSoS4DoesNotGrant(unittest.TestCase):
+    def test_zero_grants_the_line_and_the_signing_as_today(self):
+        """Spec T17 §1: the changes list already carries an awaiting change for Ada — zero grants, the line, and T15's signing as today."""
+        double, runner, founder = stale_seat_estate()  # Ada's re-invitation left an awaiting change; not cleared
+        ada = runner.people["ada"]
+        self.assertTrue(any(c["purpose"] == "multisig_mutation" for c in double.ceremonies), "a change awaits for Ada")
+        double.seats_override = onroster_seats(runner)  # Ada compute (false), Ben and Cora true
+        f_before, before = len(runner.findings), len(runner.calls)
+        grant_said, changes_said, ok = runner.sign_the_roster_changes("S4", founder)
+        self.assertTrue(ok, (grant_said, changes_said))
+        self.assertEqual(_grants_after(runner, before), [], "zero grants: a change already awaits")
+        self.assertIn("Ada Approver's seat: a change already awaits; not granted", grant_said)
+        self.assertEqual([(c.who, c.status) for c in _signs_after(runner, before)], [("Ben Signatory", 200), ("Cora Clerk", 200)])
+        self.assertIn("moved: Ada Approver's seat now reads on the roster", changes_said)
+        self.assertEqual([m["key"] for m in runner.facts["seats_moved"]], ["ada"])
+        self.assertEqual([f for f in runner.findings[f_before:] if f.station == "S4"], [])
+
+
+@unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
+class FewerAbleThanTheCountFailsAfterOneGrant(unittest.TestCase):
+    def test_ada_and_ben_both_false_two_required_one_able_no_second_grant(self):
+        """Spec T17 §2: Ada and Ben both false on a roster requiring two — S4 fails "2 required, 1 able" after one grant, and grants no further seat."""
+        double, runner, founder = stale_seat_estate(clear_changes=True)
+        double.seats_override = onroster_seats(runner, ada="compute", ben=False, cora=True)  # only Cora can sign
+        before = len(runner.calls)
+        grant_said, changes_said, ok = runner.sign_the_roster_changes("S4", founder)
+        self.assertFalse(ok, (grant_said, changes_said))
+        self.assertEqual(len(_grants_after(runner, before)), 1, "one grant, for Ada's seat; the count fell short, so Ben's seat is not granted")
+        self.assertEqual(_grants_after(runner, before)[0].sent, {"email": runner.people["ada"].email})
+        self.assertEqual(_signs_after(runner, before), [], "no signature: the count could never be met")
+        self.assertIn("2 required, 1 able", changes_said)
+        self.assertEqual(runner.facts["seats_moved"], [])
+
+
+@unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
+class TheSeatsThatArePrintedButNotGranted(unittest.TestCase):
+    def test_a_stranger_an_ambiguous_and_a_null_seat_zero_grants_each_line(self):
+        """Spec T17 §1: a stranger's stale seat, an ambiguous seat, and a null seat — zero grants, each with its own line."""
+        double, runner, founder = stale_seat_estate(clear_changes=True)
+        double.seats_override = [
+            {"email": "outsider@example.com", "name": "An Outsider", "state": "seated", "credentialId": "cred-outsider", "onRoster": False},
+            {"email": runner.people["ben"].email, "name": "Ben Signatory", "state": "seated", "credentialId": None, "ambiguous": True, "onRoster": None},
+            {"email": runner.people["cora"].email, "name": "Cora Clerk", "state": "seated", "credentialId": "cred-cora", "onRoster": None, "rosterSaid": "no roster names this person"},
+        ]
+        before = len(runner.calls)
+        grant_said, changes_said, ok = runner.sign_the_roster_changes("S4", founder)
+        self.assertEqual(_grants_after(runner, before), [], "zero grants")
+        self.assertEqual(_signs_after(runner, before), [], "nothing signed")
+        self.assertIn("An Outsider's seat: not of the harness; not granted", grant_said)
+        self.assertIn("Ben Signatory's seat: two passkeys enrolled; not granted", grant_said)
+        self.assertIn("Cora Clerk's seat: unverified: no roster names this person", grant_said)
+
+
+@unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
+class AChangeToACredentialTheHarnessDoesNotHoldIsNotSigned(unittest.TestCase):
+    def test_the_target_is_not_a_stored_passkey_a_finding_not_signed(self):
+        """Spec T17 §2: a change whose target credential is not the seat person's stored passkey is not signed, and it is the finding."""
+        double, runner, founder = stale_seat_estate()  # a change awaits for Ada
+        ada = runner.people["ada"]
+        for row in double.trail:  # bend the recorded proposal so the change moves Ada's seat to a credential the harness never held
+            if row["action"] == T.ROSTER_CHANGE_PROPOSED and str(row["detail"].get("seatEmail") or "").lower() == ada.email.lower():
+                row["detail"]["newCredentialId"] = "a-credential-the-harness-never-held"
+        double.seats_override = onroster_seats(runner)  # Ada compute (false), Ben and Cora true
+        f_before, before = len(runner.findings), len(runner.calls)
+        grant_said, changes_said, ok = runner.sign_the_roster_changes("S4", founder)
+        self.assertFalse(ok, (grant_said, changes_said))
+        self.assertEqual(_signs_after(runner, before), [], "not signed")
+        self.assertEqual(runner.facts["seats_moved"], [])
+        found = [f for f in runner.findings[f_before:] if f.station == "S4"]
+        self.assertEqual(len(found), 1, [f.probe for f in found])
+        self.assertIn("moves Ada Approver's seat to a credential the harness does not hold; not signed", found[0].said)
+        self.assertIn("moves Ada Approver's seat to a credential the harness does not hold; not signed", changes_said)
+
+
+@unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
+class AGrantThatMovesTheSeatAtOnce(unittest.TestCase):
+    def test_no_pendingtxid_is_moved_at_once_no_sign_call_and_the_seat_is_re_read(self):
+        """Spec T17 §1: a grant whose answer carries no pendingTxId — the move applied at once — prints "moved at once", skips the signing, and re-reads the seat."""
+        double, runner, founder = stale_seat_estate(clear_changes=True)
+        double.change_threshold = 1  # a change of one signature applies at once at the platform: no ceremony, no pendingTxId
+        double.seats_override = onroster_seats(runner)  # Ada compute
+        before = len(runner.calls)
+        grant_said, changes_said, ok = runner.sign_the_roster_changes("S4", founder)
+        self.assertTrue(ok, (grant_said, changes_said))
+        self.assertEqual(len(_grants_after(runner, before)), 1, "one grant")
+        self.assertEqual(_signs_after(runner, before), [], "no sign call: the move was applied at once")
+        self.assertIn("moved at once", grant_said)
+        self.assertIn("moved: Ada Approver's seat now reads on the roster", changes_said)
+        self.assertTrue(any(c.route == "GET /v1/approver-seats" for c in runner.calls[before:]), "the seat was re-read")
+        self.assertEqual(next(s for s in double.whitelist_seats if s["user_id"] == runner.people["ada"].email)["credential_id"], runner.people["ada"].credential_id)
+
+
+@unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
+class AnEstateWithoutOnRosterBehavesAsT15(unittest.TestCase):
+    def test_s4_prints_the_skipping_line_and_behaves_as_t15(self):
+        """Spec T17 §0: against an estate whose seat view has no onRoster, S4 prints one line and behaves as T15 (the four-at-two, its awaiting change signed by Ben and Cora)."""
+        double, runner, outcomes, _ = four_at_two()  # no seats_override: the seat view carries no onRoster
+        o = outcomes["S4"]
+        self.assertEqual(o.outcome, H.PASS, o.line)
+        self.assertIn("the seat view has no onRoster; skipping", o.line)
+        self.assertEqual(sign_calls(runner), [("Ben Signatory", 200), ("Cora Clerk", 200)], "T15's pass, unchanged")
+        self.assertEqual(outcomes["S6"].outcome, H.PASS, outcomes["S6"].line)
+        self.assertIn("Ada Approver counted (1 of 2); Ben Signatory counted (2 of 2): whitelisted", outcomes["S6"].line)
+
+
 if __name__ == "__main__":
     unittest.main()
