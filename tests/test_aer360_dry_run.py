@@ -7,7 +7,9 @@ re-grant's condition (121 → 134 lines). Spec T11 added the six answers the boo
 (C11A and C19 under S3; WO1 to WO4 under S5) and one S10 comparison line for Spec 92's charter fields (134 → 141 lines); the
 venue probe's expectation follows the book's C19, and S7's submit lines say what the tiers would do. Spec T13 ended S5 with the
 funding wallet and the faucet — the workspace read, the options road, the press, the read-back, the one balance read and the one
-faucet call — and added S7's asset-line report (143 → 150 lines).
+faucet call — and added S7's asset-line report (143 → 150 lines). Spec T15 added, under S4, the roster changes read, the signature's two
+roads for each person the list names, the seat granted again for a change listed expired, and the read-back after the count, and under
+S10 the trail's roster.seat_rebound row (150 → 156 lines).
 """
 import contextlib
 import io
@@ -160,8 +162,11 @@ class DryRunTest(unittest.TestCase):
         """Spec T8: --dry unchanged in its calls. The fixture is the dry run at main after PR #5, its expectations cut off at the arrow."""
         with open(FROZEN_CALLS, "r", encoding="utf-8") as handle:
             frozen = handle.read().splitlines()
-        self.assertEqual(len(frozen), 150, "Spec T13 ends S5 with the funding wallet and the faucet (six lines: the workspace read, the options, the press, the read-back, the balance, the one faucet call) and adds S7's asset-line report (143 → 150)")
+        self.assertEqual(len(frozen), 156, "Spec T15 adds S4's roster changes read, the signature's options and press, the seat granted again, the read-back after the count, and S10's trail read (150 → 156)")
         self.assertEqual(calls_of(H.dry_lines()), frozen)
+        self.assertEqual(len([l for l in frozen if l.startswith("S4 — ") and "/v1/roster/changes" in l]), 4, "the list, the options, the press, the read-back after the count")
+        self.assertEqual(len([l for l in frozen if l.startswith("S4 — ") and "/v1/approver-seats/grant" in l]), 2, "Spec T10's grant and Spec T15's seat granted again")
+        self.assertEqual(len([l for l in frozen if l.startswith("S10 — ") and "/v1/export/audit" in l]), 1, "the trail is read once")
         self.assertEqual(len([l for l in frozen if l.startswith("S5 — ") and "/v1/workspace/funding-wallet" in l]), 2, "the options road and the press")
         self.assertEqual(len([l for l in frozen if "https://aeredium.io/faucet-api/request" in l]), 1, "the faucet is asked once")
         self.assertEqual(len([l for l in frozen if "https://testnet.rpc.aeredium.io" in l]), 1, "the balance is read once")
@@ -173,7 +178,7 @@ class DryRunTest(unittest.TestCase):
     def test_s4_carries_the_conditional_re_invitation_for_each_author_and_the_seat_re_grant(self):
         """Spec T10 §5: for each author the comparison and the conditional fresh invitation, options and verify with a NEW passkey stored beside the old; for Ada the seat re-grant."""
         s4 = [l for l in H.dry_lines() if l.startswith("S4 — ")]
-        self.assertEqual(len(s4), 25)
+        self.assertEqual(len(s4), 30, "Spec T10's 25 and Spec T15's five")
         self.assertIn("GET /v1/approver-seats (as Harriet Founder) → expect the charter's seats as this run finds them: which credential Ada Approver's seat names before anybody is brought in again", s4[0])
         for key in A.AUTHORS_INVITED:
             person = A.PEOPLE[key]
@@ -191,9 +196,29 @@ class DryRunTest(unittest.TestCase):
             self.assertIn("the new key stored beside the old at ~/.aer360-harness/harness-holdings/%s-2-<date>.json mode 0600, the old one untouched" % key, conditional[1])
             self.assertIn("→ expect 200: a session for %s on a credential of %s's own, not the founder's" % (person.name, person.name), conditional[1])
         grant = [l for l in s4 if "POST /v1/approver-seats/grant" in l]
-        self.assertEqual(len(grant), 1)
+        self.assertEqual(len(grant), 2, "Spec T10's grant, and Spec T15's seat granted again for a change listed expired")
         self.assertIn("— only if the seat is enrolled_not_seated or names a credential other than Ada Approver's session's → expect the seat seated, naming Ada Approver's own credential (Spec 91); a refusal is a finding in the estate's words", grant[0])
         self.assertIn("GET /v1/invites (as Harriet Founder) → expect the register: three authors, redeemed; each row's sharesCredentialWith (Spec 91's marker) read for S10, expected absent after the re-invitation", s4[-1])
+
+    def test_s4_signs_the_roster_changes_as_the_list_names_and_s10_reads_the_trail(self):
+        """Spec T15 §1 and §3: after the seat re-grant, the roster changes are read, signed as each person the list names, proposed afresh where expired, and read back; S10 reads the trail."""
+        lines = H.dry_lines()
+        s4 = [l for l in lines if l.startswith("S4 — ")]
+        grant = next(i for i, l in enumerate(s4) if "POST /v1/approver-seats/grant" in l)
+        tail = s4[grant + 1:]
+        self.assertEqual(len(tail), 6, "the list, the options, the press, the seat granted again, the read-back after the count, then the register")
+        self.assertTrue(tail[0].startswith("S4 — GET /v1/roster/changes (as Harriet Founder) → expect every roster change the platform holds for the estate (Spec 99): pendingTxId, state awaiting, approved, applied, expired or closed, whose seat it moves, requiredSignatures, signaturesCollected, signedBy, maySign; a fresh estate lists none, and S4 says so in one line"), tail[0])
+        self.assertIn("POST /v1/roster/changes/<pendingTxId>/sign/options {} (as each person the list names as able to sign, in turn) — only for a change listed awaiting → expect 200: options with the challenge the estate derives from roster-change:<workspace id>:<pendingTxId>:<issuedAtMs> under the purpose roster.change, and issuedAtMs", tail[1])
+        self.assertIn('POST /v1/roster/changes/<pendingTxId>/sign {"issuedAtMs": "<issuedAtMs>", "response": "<assertion by the signer\'s passkey over the challenge>"} → expect 200: signaturesCollected of requiredSignatures, state awaiting until the count is met, then applied with rebound naming Ada Approver\'s current credential; a refusal (CHANGE_SIGNER_NOT_ON_ROSTER, APPROVER_ALREADY_SIGNED, SIGNATURE_NOT_COUNTED, PLATFORM_REFUSED) is judged for Rule 13 and reported in the estate\'s words, never retried', tail[2])
+        self.assertIn('POST /v1/approver-seats/grant {"email": "harness+ada@aeredium.io"} (as Harriet Founder) — only for a change listed expired, or one this estate did not propose → expect Spec 95 to propose the move afresh at the seat grant (the estate proposes a move at a seat grant or a redemption, not at a sign-in), the change re-listed awaiting and signed; a second expiry fails S4 naming the ceremony', tail[3])
+        self.assertIn("GET /v1/roster/changes (as Harriet Founder) — after the count is met → expect the change applied, its seat naming Ada Approver's current credential in short form, as the signature's rebound named it", tail[4])
+        self.assertTrue(tail[5].startswith("S4 — GET /v1/invites"))
+        s6 = [l for l in lines if l.startswith("S6 — ") and "/approve" in l]
+        for l in s6:
+            self.assertIn("with every seat on its holder's current credential, Ada Approver counted (1 of 2) and Ben Signatory counted (2 of 2), the count met, so Cora Clerk is not asked (Spec T15 §2)", l)
+        s10 = [l for l in lines if l.startswith("S10 — GET /v1/export/audit")]
+        self.assertEqual(len(s10), 1)
+        self.assertIn("→ [compare] the trail's roster.seat_rebound row for each seat S4 moved: the ceremony's id, seatEmail, via roster_change, and signerNames naming every signer (Spec T15 §3); the note about a seat still bound to a retired passkey is dropped where S4 moved it", s10[0])
         # Spec T12: S6 presses the whole roster (Ada, Ben, Cora) per payee
         self.assertEqual(len([l for l in H.dry_lines() if l.startswith("S6 — ") and "/approve" in l]), 6)
 
@@ -227,7 +252,7 @@ class DryRunTest(unittest.TestCase):
             self.assertEqual(len(mine), 2, name)
             for l in mine:
                 self.assertIn("count it toward the quorum of two", l)
-                self.assertIn("refuse SIGNATURE_NOT_COUNTED", l)
+                self.assertIn("a SIGNATURE_NOT_COUNTED for a person whose seat S4 just moved is a finding, one for a seat S4 could not move is recorded and the next person presses", l)
                 self.assertIn("until whitelisted or nobody is left", l)
         self.assertFalse(any("(as Harriet Founder, the roster" in l for l in approves), "the founder is the last resort, not a listed press")
         self.assertEqual(len([l for l in s6 if "/promote" in l and "pending_promotion" in l]), 2)

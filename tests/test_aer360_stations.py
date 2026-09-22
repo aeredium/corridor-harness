@@ -718,32 +718,58 @@ class EveryPersonOnTheirOwnCredential(unittest.TestCase):
         self.assertIn("- closed — S10 — people register: one credential for several people", self.report)
         self.assertEqual(self.runner.last_run()["name"], os.path.basename(self.first_report))
 
-    def test_s6_presses_past_the_bound_seat_ada_refused_ben_and_cora_counted(self):
+    def test_s4_has_the_census_sign_adas_seat_home_and_s6_counts_ada(self):
         """
-        Spec T12 §2, THE FOUR-AT-TWO. The change governance was established on the first run, so the roster's seat for Ada is
-        still bound to the credential her first press wore — the founder's, now retired (Spec 95 opened a governed ceremony to
-        move it; the census signs it at Spec 99). On her own credential the platform answers not authorized, relayed as
-        SIGNATURE_NOT_COUNTED. Ben and Cora hold seats never bound; their presses bind and count, meeting the quorum of two, and
-        the payee is whitelisted. So S6 passes, its line naming who counted (Ben, Cora) and who did not (Ada) — the harness
-        presses the roster past the one press that cannot count, rather than stopping at it.
+        Spec T15, THE FOUR-AT-TWO AFTER SPEC 99. The change governance was established on the first run, so the roster's seat
+        for Ada was still bound to the credential her first press wore — the founder's, now retired. Her re-invitation's
+        redemption proposes the move (Spec 95) and the platform holds it as a ceremony at the charter's count of two. S4 lists it
+        and has the census sign it as the list names them: the founder is refused in the roster's own words (this double
+        attributes the founder's key no address), Ada counts (1 of 2), Ben counts (2 of 2), the platform applies it, and the
+        seat now names Ada's current credential. S6 then presses Ada (1 of 2) and Ben (2 of 2), stops at the count so Cora is
+        not asked, and the payee is whitelisted; S10 reads the trail's roster.seat_rebound row and drops Spec T12's note.
         """
-        o = self.outcomes["S6"]
+        o = self.outcomes["S4"]
         self.assertEqual(o.outcome, H.PASS, o.line)
-        sig = ("Ada Approver not counted (SIGNATURE_NOT_COUNTED: The access platform did not count your approval: it does not "
-               "recognise your key as one of this wallet’s signatories. The address stays exactly as it was — nothing was "
-               "approved, and nothing was changed.); Ben Signatory counted (1 of 2); Cora Clerk counted (2 of 2): whitelisted")
-        self.assertIn("Northwind Supplies: created; promoted; %s" % sig, o.line)
-        self.assertIn("Contoso Legal: created; promoted; %s" % sig, o.line)
-        for record in self.runner.facts["payees"]:
-            self.assertEqual([(p["who"], p["status"]) for p in record["presses"]], [("Ada Approver", 403), ("Ben Signatory", 200), ("Cora Clerk", 200)])
-            self.assertEqual(record["register_status"], "whitelisted")
+        ada = self.runner.people["ada"]
+        signing = self.runner.facts["roster_signing"]
+        self.assertEqual(len(signing), 1, signing)
+        record = signing[0]
+        self.assertEqual((record["state_found"], record["proposed_here"], record["outcome"], record["reproposed"]), ("awaiting", True, "applied", False))
+        self.assertEqual(record["seat"]["email"], ada.email)
+        self.assertEqual([(s["who"], s["status"]) for s in record["signatures"]], [("Harriet Founder", 403), ("Ada Approver", 200), ("Ben Signatory", 200)],
+                         "each person the list names as able to sign, in turn, until the estate reports it applied; Cora is not reached")
+        self.assertEqual(record["signatures"][0]["refusal_code"], "CHANGE_SIGNER_NOT_ON_ROSTER")
+        self.assertEqual(record["signatures"][1]["answer"]["signaturesCollected"], 1)
+        self.assertEqual(record["signatures"][2]["answer"]["state"], "applied")
+        short = ada.credential_id[:8]
+        self.assertIn("roster changes: %s… awaiting (Ada Approver's seat, 0 of 2 signed): found awaiting at 0 of 2, Harriet Founder, Ada Approver, Ben Signatory and Cora Clerk able to sign; "
+                      "Harriet Founder refused (CHANGE_SIGNER_NOT_ON_ROSTER: A change of who the approvers are is signed by Harriet Founder, Ada Approver, Ben Signatory and Cora Clerk; you are not among them. Nothing was signed." % record["pendingTxId"][:8], o.line)
+        self.assertIn("Ada Approver counted (1 of 2); Ben Signatory counted (2 of 2); applied: the seat now names %s, Ada Approver's current credential (%s), signed by Ada Approver and Ben Signatory" % (
+            short, H.last4(ada.credential_id)), o.line)
+        moved = self.runner.facts["seats_moved"]
+        self.assertEqual([(m["key"], m["signers"], m["new_credential"]) for m in moved], [("ada", ["Ada Approver", "Ben Signatory"], ada.credential_id)])
         ada_seat = next(s for s in self.double.whitelist_seats if s["user_id"] == A.PEOPLE["ada"].email)
-        self.assertEqual(ada_seat["credential_id"], self.runner.people["harriet"].credential_id, "the roster's seat is still bound to the retired shared credential")
-        press = [c for c in self.runner.calls if c.station == "S6" and c.route.endswith("/approve")][0]
-        self.assertIn('"platformSaid": "not authorized"', press.text)
-        self.assertIsNone(H.refusal_without_why(press.status, press.text), "the refusal says who declined and why (Rule 13)")
-        # Spec T12 §3: S10 carries a note for Ada's refused press, naming the credential pressed with and the one the register holds
-        self.assertTrue(any(n.startswith("S6: Ada Approver's whitelist press was not counted (SIGNATURE_NOT_COUNTED)") for n in self.runner.notes["S10"]), self.runner.notes["S10"])
+        self.assertEqual(ada_seat["credential_id"], ada.credential_id, "the platform moved the roster's seat to Ada's current credential")
+        # S6: Ada 1 of 2, Ben 2 of 2, Cora not asked
+        o6 = self.outcomes["S6"]
+        self.assertEqual(o6.outcome, H.PASS, o6.line)
+        sig = "Ada Approver counted (1 of 2); Ben Signatory counted (2 of 2): whitelisted"
+        self.assertIn("Northwind Supplies: created; promoted; %s" % sig, o6.line)
+        self.assertIn("Contoso Legal: created; promoted; %s" % sig, o6.line)
+        for payee in self.runner.facts["payees"]:
+            self.assertEqual([(p["who"], p["status"]) for p in payee["presses"]], [("Ada Approver", 200), ("Ben Signatory", 200)], "the count is met at Ben; Cora is not asked")
+            self.assertEqual(payee["register_status"], "whitelisted")
+        self.assertEqual([f for f in self.runner.findings if f.station in ("S4", "S6")], [])
+        # every refusal S4 met says who refused and why (Rule 13)
+        for call in self.runner.calls:
+            if call.station == "S4" and call.status >= 400:
+                self.assertIsNone(H.refusal_without_why(call.status, call.text), call.text)
+        # S10: the trail row, and no note about a seat still bound to a retired passkey
+        notes = self.runner.notes["S10"]
+        self.assertFalse(any("whitelist press was not counted" in n for n in notes), notes)
+        trail = [n for n in notes if n.startswith("the trail carries roster.seat_rebound for Ada Approver's seat: ceremony %s, signed by Ada Approver, Ben Signatory, moved from %s to %s on Harness Holdings Pty Ltd — whitelist_mutation approvers (via roster_change), at " % (
+            record["pendingTxId"], H.last4(self.runner.people["harriet"].credential_id), H.last4(ada.credential_id)))]
+        self.assertEqual(len(trail), 1, notes)
 
     def test_the_seat_is_granted_again_where_the_redemption_did_not_seat_it(self):
         """Spec T10 §2, the grant road: an estate whose redemption says nothing of a seat leaves Ada enrolled_not_seated on her new credential, and the founder grants it."""
