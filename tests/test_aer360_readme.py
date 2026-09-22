@@ -173,7 +173,52 @@ class EstateHarnessReadmeTest(unittest.TestCase):
             self.assertIn(words, self.section, words)
 
 
+    def test_it_says_the_approvers_sign_adas_seat_home_and_s6_counts_ada_since_spec_t15(self):
+        self.assertIn("Spec T15, 22 September 2026", self.section)
+        self.assertIn("aer360-harness-2026-09-22-135010.md", self.section)
+        self.assertIn("AER 360 Spec 99 (aeredium/AERAccounts, commit 33e039c)", self.section)
+        for words in ("S4 signs the pending roster changes", "`GET /v1/roster/changes`", "`roster-change:<workspace id>:<pendingTxId>:<issuedAtMs>`", "`roster.change`",
+                      "`POST /v1/roster/changes/{pendingTxId}/sign`", "reading `signaturesCollected` after each, until the estate reports it applied",
+                      "asserts the change applied with its seat naming the owner's current credential in the estate's short form",
+                      "Ben Signatory counted (1 of 2); Cora Clerk counted (2 of 2); applied: the seat now names",
+                      "judged for Rule 13 the way S10 judges every refusal and reported in the estate's words", "`CHANGE_SIGNER_NOT_ON_ROSTER`", "`APPROVER_ALREADY_SIGNED`",
+                      "`SIGNATURE_NOT_COUNTED` (the platform's *not authorized*)", "`PLATFORM_REFUSED`", "*conflict: pending transaction expired*",
+                      "the move is proposed afresh once; a second expiry fails S4 naming the ceremony", "S4 does nothing new and says so in one line",
+                      "S6 expects Ada to count", "Ada's press counted (1 of 2) and Ben's (2 of 2), stops at the count so Cora is not asked", "*entry is already active*",
+                      "a `SIGNATURE_NOT_COUNTED` for a person whose seat S4 just moved is a finding, not a note", "S10 reads the trail", "`GET /v1/export/audit`",
+                      "`roster.seat_rebound`", "SPEC.md spells it `roster.seat.rebound`", "naming the ceremony and every signer", "drops Spec T12's note",
+                      "Two disagreements carried to Bear, not silently resolved", "not at a sign-in", "never from login/verify",
+                      "Granting <who>'s seat again in this room, or <who> redeeming a fresh invitation, proposes the move afresh", "`POST /v1/approver-seats/grant`",
+                      "a roster change this estate did not propose", "does not guess whose seat it moves", "the platform's ceremony is content-bound",
+                      "`sign_the_roster_changes`", "150 → 156", "`change_roster`", "`before_spec_99`", "`ceremony_lapses`", "`lapse_after_first_signature`", "`account_email`"):
+            self.assertIn(words, self.section, words)
+        self.assertLess(self.section.index("Spec T13, 22 September 2026"), self.section.index("Spec T15, 22 September 2026"))
+
 class ChangelogTest(unittest.TestCase):
+    def test_the_changelog_records_spec_t15_before_t13_and_names_every_change(self):
+        text = read("CHANGELOG.md")
+        self.assertIn("## Spec T15 — The harness has the approvers sign a change of who the approvers are, and S6 counts Ada (22 September 2026)", text)
+        self.assertLess(text.index("## Spec T15"), text.index("## Spec T13"))
+        t15 = text.split("## Spec T15", 1)[1].split("## Spec T13", 1)[0]
+        for words in ("aer360-harness-2026-09-22-135010.md", "AER 360 Spec 99", "commit 33e039c", "`sign_the_roster_changes`", "`read_roster_changes`", "`sign_as_the_list_names`",
+                      "`sign_roster_change_as`", "`assert_the_seat_moved`", "`refusal_judged`", "`propose_the_move_afresh`", "`REPROPOSALS_AT_MOST`", "`route_not_found`",
+                      "`GET /v1/roster/changes`", "`POST /v1/roster/changes/{pendingTxId}/sign/options`", "`POST /v1/roster/changes/{pendingTxId}/sign`",
+                      "`roster-change:<workspace id>:<pendingTxId>:<issuedAtMs>`", "`roster.change`", "`request(..., retry=False)`", "`credentialIdShortForm`",
+                      "`facts[\"seats_moved\"]`", "`refusal_without_why`", "a second expiry fails S4 naming the ceremony",
+                      "none awaits a signature: the register lists no roster change, so S4 did nothing new (Spec T15 §4)", "`approve_to_quorum`", "`seat_moved_for`",
+                      "`audit_the_trail_for_moved_seats`", "`seat_binding_notes`", "`GET /v1/export/audit?limit=5000`", "`roster.seat_rebound`", "`roster.seat.rebound`",
+                      "`signerNames`", "A DISAGREEMENT CARRIED TO BEAR, NOT SILENTLY RESOLVED", "not at a sign-in", "`rebindRosterSeats`", "never from login/verify",
+                      "Granting <who>'s seat again in this room, or <who> redeeming a fresh invitation, proposes the move afresh.", "`POST /v1/approver-seats/grant`",
+                      "a roster change this estate did not propose", "`roster.change_proposed`", "content-bound", "drop the `seat is None` road", "150 → 156 lines",
+                      "`ROSTER_CHANGES_ROUTE`", "`ROSTER_CHANGE_SIGN_ROUTE`", "`ROSTER_CHANGE_SIGN_OPTIONS_ROUTE`", "`ROSTER_CHANGE_PURPOSE`", "`ROSTER_CHANGE_BINDING`",
+                      "`ROSTER_SEAT_REBOUND`", "`AUDIT_EXPORT_ROUTE`", "`credential_short_form`", "`CHANGE_SIGNER_NOT_ON_ROSTER` (403)", "`ROSTER_CHANGE_UNKNOWN` (404)",
+                      "`APPROVER_ALREADY_SIGNED` (409)", "`PLATFORM_REFUSED` (502)", "`rebind_roster_seats`", "`replace_multisig_signers`", "`seat_change_roster`",
+                      "`born_ceremony`", "`ceremony_is_live`", "`list_roster_changes`", "`roster_change_view`", "`sign_roster_change`", "`apply_roster_change`",
+                      "`roster_change_sentence`", "`roster_change_signed_sentence`", "`platform_refused_sentence`", "`audit_export`", "`approvalPlatformRefusal`",
+                      "`change_roster=(\"ben\", \"cora\")`", "`before_spec_99`", "`ceremony_lapses`", "`lapse_after_first_signature`", "`account_email`",
+                      "`tests/test_aer360_roster.py`", "`aer360_answers.py`, the passkey files, the estate"):
+            self.assertIn(words, t15, words)
+
     def test_the_changelog_records_spec_t13_before_t12_and_names_every_change(self):
         text = read("CHANGELOG.md")
         self.assertIn("## Spec T13 — The harness presses for the funding wallet, funds it from the faucet as the founder would, and reads the payee register back after the count (22 September 2026)", text)

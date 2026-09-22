@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Dict, List, NamedTuple, Optional
+from typing import Any, Dict, List, NamedTuple, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from corridor_harness import checksum_address, keccak256  # noqa: E402  the corridor's own keccak and EIP-55
@@ -212,3 +212,37 @@ def payments_total(amounts: List[str], decimals: int = 6) -> str:
     text = str(total).rjust(decimals + 1, "0")
     fraction = text[-decimals:].rstrip("0").ljust(2, "0")
     return text[:-decimals] + "." + fraction
+
+
+# ---------------------------------------------------------------------------
+# THE ROSTER CEREMONY'S DOOR (Spec T15, 22 September 2026): the two roads and the step-up purpose, read from AER 360 Spec 99
+# (aeredium/AERAccounts, commit 33e039c — apps/server/src/routes/rosterchanges.ts, services/approverseats.ts, services/changequorum.ts,
+# services/audit.ts; packages/shared/src/wire.ts, enrolment.ts, refusals.ts) and never invented.
+#
+# Spec 95 moves a roster seat to a person's current credential at a re-invitation's redemption, at a seat grant and at the self-seat —
+# not at a sign-in (enrolment.ts says so in its own words) — and where the charter asks more than one person to agree to a change of
+# who the approvers are (C12C), the access platform holds the move as a ceremony, a pending `multisig_update` needing the charter's
+# count of signatures. Spec 99 is the door the client's people sign it through: the list, and one signature under the signer's own
+# session with a passkey step-up of purpose `roster.change`, whose challenge the estate derives from the binding
+# `roster-change:<workspace id>:<pendingTxId>:<issuedAtMs>` | the signer's credential | the purpose. The count met, the estate presents
+# the change to the platform again, the seat moves, and the trail says so: `roster.seat_rebound` naming the ceremony and every signer
+# (SPEC.md spells the verb `roster.seat.rebound`; the estate's closed list of verbs, services/audit.ts, spells it with an underscore,
+# and the harness uses the estate's word). The trail a browser reads is the accountant's audit export.
+# ---------------------------------------------------------------------------
+ROSTER_CHANGES_ROUTE = "/v1/roster/changes"                                # GET: every roster change the platform holds for the estate
+ROSTER_CHANGE_SIGN_OPTIONS_ROUTE = "/v1/roster/changes/%s/sign/options"    # POST: the step-up's first half, the digest-bound challenge
+ROSTER_CHANGE_SIGN_ROUTE = "/v1/roster/changes/%s/sign"                    # POST: one signature, as the signer
+ROSTER_CHANGE_PURPOSE = "roster.change"                                    # routes/rosterchanges.ts ROSTER_CHANGE_PURPOSE, on CHANGE_CEREMONIES (C12C's family)
+ROSTER_CHANGE_BINDING = "roster-change:%s:%s:%s"                           # the setDigest half of the binding: the workspace id, the ceremony's id, then issuedAtMs
+ROSTER_CHANGE_OPERATION = "multisig_update"                                # services/approverseats.ts ROSTER_CHANGE_OPERATION: Spec 95's rebind, in the platform's word
+ROSTER_CHANGE_STATES = ("awaiting", "approved", "applied", "expired", "closed")  # packages/shared/src/wire.ts RosterChangeState
+ROSTER_SEAT_REBOUND = "roster.seat_rebound"                                # services/audit.ts: the trail's verb for a seat the platform moved
+ROSTER_CHANGE_PROPOSED = "roster.change_proposed"                          # services/audit.ts: the seat's row for a move the client's governance holds
+VIA_ROSTER_CHANGE = "roster_change"                                        # the road a met count re-presented the change on, as the trail writes it
+AUDIT_EXPORT_ROUTE = "/v1/export/audit"                                    # routes/exports.ts: the trail, oldest first, `items` with at, action, credential_id, detail
+AUDIT_EXPORT_LIMIT = 5000                                                  # routes/exports.ts MAX_LIMIT
+
+
+def credential_short_form(credential_id: Any) -> str:
+    """`credentialIdShortForm` (packages/shared/src/enrolment.ts): a credential id's first eight characters, for a line a person reads."""
+    return str(credential_id or "")[:8]

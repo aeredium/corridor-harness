@@ -56,6 +56,11 @@ S4 — POST /v1/auth/invite/options {"token": "<token from the fresh url>", "iss
 S4 — POST /v1/auth/invite/verify {"token": "<token>", "issuedAtMs": "<issuedAtMs>", "response": "<RegistrationResponseJSON with a NEW passkey>"} — only if Cora Clerk is brought in again
 S4 — GET /v1/approver-seats (as Harriet Founder)
 S4 — POST /v1/approver-seats/grant {"email": "harness+ada@aeredium.io"} (as Harriet Founder) — only if the seat is enrolled_not_seated or names a credential other than Ada Approver's session's
+S4 — GET /v1/roster/changes (as Harriet Founder)
+S4 — POST /v1/roster/changes/<pendingTxId>/sign/options {} (as each person the list names as able to sign, in turn) — only for a change listed awaiting
+S4 — POST /v1/roster/changes/<pendingTxId>/sign {"issuedAtMs": "<issuedAtMs>", "response": "<assertion by the signer's passkey over the challenge>"}
+S4 — POST /v1/approver-seats/grant {"email": "harness+ada@aeredium.io"} (as Harriet Founder) — only for a change listed expired, or one this estate did not propose
+S4 — GET /v1/roster/changes (as Harriet Founder) — after the count is met
 S4 — GET /v1/invites (as Harriet Founder)
 S5 — POST /v1/onboarding/interviews {"interviewType": "wallet_account"}
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "W0", "value": {"acknowledged": true}}
@@ -126,6 +131,7 @@ S10 — [check] every money figure the server returned against the minor-unit la
 S10 — [check] every refusal met in S1 to S9 for Rule 13: it names what happened and who refused; a bare status or a generic sentence is a finding
 S10 — [compare] the People register with the invitations sent, and the credential id each session carries
 S10 — [compare] the payees register with the whitelist the charter enforces and with what Ada approved
+S10 — GET /v1/export/audit?limit=5000
 S11 — POST /v1/workspace/display-currency {"displayCurrency": "AUD"} without x-csrf-token
 S11 — POST /v1/onboarding/interviews/<policy interview>/confirm/options {} then /confirm as Ben with the founder's passkey
 S11 — POST /v1/invites {"displayName": "Olive Overseer", "email": "harness+olive@aeredium.io", "role": "viewer"} (as Harriet Founder)

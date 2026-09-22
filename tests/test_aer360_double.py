@@ -169,6 +169,54 @@ their own code, because the run of 23:44 met an estate with no funding wallet an
 
 and the knobs: `funding_wallet="press"` (the default) is an estate whose wallet the press births; `"born"` already holds it; `"refused"` is
 the estate of 23:44, whose gateway refuses the credential; `"unavailable"` a deployment with no gateway configured.
+
+Spec T15 (22 September 2026) taught the double AER 360 Spec 99 (aeredium/AERAccounts, commit 33e039c) and, beneath it, the platform's
+pending-transaction roads as the estate's own double of the platform models them (apps/server/src/test/aapDouble.ts), read from the code,
+because the run of 13:50 met a seat the census had no door to move:
+
+  services/approverseats.ts, rebindRosterSeats     A SEAT FOLLOWS ITS PERSON (Spec 95): at a re-invitation's redemption (routes/auth.ts,
+  (`rebind_roster_seats`)                            invite/verify) and at a seat grant — never at a sign-in — every active roster seat naming
+                                                     the person's address and bound to a credential they no longer hold is presented to the
+                                                     platform moved (`replace_multisig_signers`, the roster sent again with the one credential
+                                                     changed); where the account's change governance holds multisig_update at a count above
+                                                     one, the platform answers a CEREMONY and the estate records it against the seat
+                                                     (`roster.change_proposed`, Spec 99) and answers `rosterSeats.awaiting` with Spec 95's
+                                                     sentence; at a count of one the platform applies it and the trail says `roster.seat_rebound`
+  test/aapDouble.ts, the pending transactions       the ceremony's lifecycle — pending → approved the moment the count is met → consumed when the
+  (`born_ceremony`, `ceremony_is_live`)             governed write is presented again with the same content, which the platform binds it to by
+                                                     digest; a lapse read off expires_at (24 hours), never swept to a word; a signature counts for
+                                                     an active seat matched by credential, or binds an empty seat named by the address the press
+                                                     carries; anybody else "not authorized"; a lapsed ceremony "conflict: pending transaction
+                                                     expired"; one no longer pending "conflict: pending transaction is <status>"
+  routes/rosterchanges.ts, services/approverseats.ts GET /v1/roster/changes (`list_roster_changes`, `roster_change_view`): every multisig_mutation
+  (listRosterChanges, signRosterChange,             ceremony, newest first, joined to the seat the estate recorded, with who has signed, who may
+  applyRosterChange)                                 and whether the caller may — a ceremony no seat row names is "a roster change this estate did
+                                                     not propose" and is never matched by guesswork; POST …/sign/options and …/sign
+                                                     (`roster_change_sign_options`, `sign_roster_change`): the step-up bound to
+                                                     `roster-change:<workspace id>:<pendingTxId>:<issuedAtMs>` | credential | `roster.change`, then
+                                                     in the fail-closed order ROSTER_CHANGE_UNKNOWN (404: not proposed here, or not listed),
+                                                     CHANGE_SIGNER_NOT_ON_ROSTER (403, the roster's own words naming who may, before the platform
+                                                     is asked), APPROVER_ALREADY_SIGNED (409, from the platform's record, never asked twice), the
+                                                     platform's own no relayed as PLATFORM_REFUSED (502, Spec 97's sentence) or SIGNATURE_NOT_COUNTED
+                                                     (403, "not authorized" in detail.platformSaid); the count met, the change presented again and
+                                                     the seat marked rebound from the roster the platform returns (`apply_roster_change`), the trail
+                                                     row naming the ceremony and every signer
+  packages/shared/src/enrolment.ts, refusals.ts     every sentence, word for word (`roster_change_sentence`, `roster_change_signed_sentence`,
+                                                     `not_on_change_roster_sentence`, `platform_refused_sentence`, `roster_seat_awaiting_sentence`)
+  routes/exports.ts, auditRegister                  GET /v1/export/audit (`audit_export`): the trail a browser reads, oldest first — `items` of
+                                                     audit_id, at, action, credential_id, subject_id, detail
+  services/payees.ts, approvalPlatformRefusal       a whitelist press on an entry the platform no longer holds pending — the count met and the
+                                                     address active — is the platform's 409 "entry is already active" relayed as
+                                                     ADDRESS_PROPOSAL_REFUSED in the approve road's own sentence: a third press is refused as
+                                                     unneeded, in the platform's words
+
+and the knobs: `change_roster=("ben", "cora")` seats only the census keys named on the multisig_mutation roster (None, the default, seats the
+census the compiler writes, `governanceSignersFor`: the four at C12's count); `before_spec_99=True` is the estate at Spec 95 — the move is
+proposed and the platform holds the ceremony, but no seat row is recorded and the roster roads do not exist; `ceremony_lapses=1` makes the next
+ceremony born lapse at birth (the platform's clock past its expires_at), `2` the next two; `lapse_after_first_signature=True` lets the clock pass
+a ceremony's expiry once its first signature is counted, so the second meets the platform's "conflict: pending transaction expired";
+`account_email` is the AAP account's own address, which the estate attributes to the founder's key (`addressesOfCaller`) — None, the default,
+is an account whose address the double does not know, so the founder's key is attributed no census seat.
 """
 from __future__ import annotations
 
@@ -186,7 +234,8 @@ import unittest
 import unittest.mock
 import urllib.parse
 import urllib.request
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+import uuid
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import aer360_answers as A  # noqa: E402
@@ -213,6 +262,8 @@ STATUS = {
     "SET_NOT_EDITABLE": 409, "BASE_CURRENCY_UNSET": 422, "ADDRESS_PROPOSAL_REFUSED": 422, "SIGNATURE_NOT_COUNTED": 403,
     "APPROVER_SEAT_AMBIGUOUS": 409, "APPROVER_SEAT_CREDENTIAL_SHARED": 409, "PAYEE_IS_VENUE_CONTRACT": 422,
     "WALLET_BIRTH_REFUSED": 502, "GATEWAY_UNAVAILABLE": 503, "FUNDING_WALLET_ALREADY_BORN": 409, "GAS_SHORTFALL": 422,
+    "CHANGE_SIGNER_NOT_ON_ROSTER": 403, "ROSTER_CHANGE_UNKNOWN": 404, "PLATFORM_REFUSED": 502, "CHANGE_GOVERNANCE_UNREADABLE": 503,
+    "ROSTER_SEAT_NOT_REBOUND": 502,
 }
 MESSAGES = {
     "NOT_AUTHENTICATED": "You are not signed in.",
@@ -256,6 +307,13 @@ MESSAGES = {
     "FUNDING_WALLET_ALREADY_BORN": "This estate already holds its funding wallet. A key is allocated once for an estate; nothing was changed.",
     "GATEWAY_UNAVAILABLE": "The signing service could not be reached. Nothing was signed.",
     "GAS_SHORTFALL": "The funding account does not hold enough of the chain’s native asset to cover the network fees for this run.",
+    # Spec 99 (refusals.ts): the default sentences; every raise of the first composes its own through not_on_change_roster_sentence
+    "CHANGE_SIGNER_NOT_ON_ROSTER": "Changing these rules is signed by the people your charter names for it, and that list is not the same list as the one that releases a payment. Your signature was not recorded.",
+    "ROSTER_CHANGE_UNKNOWN": "No roster change with this id is held for this estate: the access platform lists none, or this estate did not propose it and cannot say what it changes. Nothing was signed.",
+    "CHANGE_GOVERNANCE_UNREADABLE": "How many must agree to this change, and who may sign it, could not be read from your estate’s change governance — so it was not guessed at. Nothing was opened, signed or applied.",
+    # Spec 97 (refusals.ts): the default sentence; every raise composes its own through platform_refused_sentence
+    "PLATFORM_REFUSED": "The access platform did not carry out this request, so nothing was changed. Its own status and words are below.",
+    "ROSTER_SEAT_NOT_REBOUND": "The access platform would not move this person’s roster seat to their new credential, so the seat stays bound to the credential it held. Nothing was marked rebound. The platform’s own words are below.",
 }
 ESTATE_KEY_CURE = ("If you meant a different estate, sign out and choose that estate’s key when your device offers the picker — "
                    "each key is labelled with its estate’s name.")
@@ -281,6 +339,19 @@ ALREADY_BORN_CAUSE = "this estate already carries a custody key; a key is alloca
 ESTIMATE_REVERTED = 'execution reverted: "ERC20: transfer amount exceeds balance"'
 FAUCET_HOST = urllib.parse.urlparse(T.FAUCET_REQUEST_URL).netloc
 RPC_HOST = urllib.parse.urlparse(T.TESTNET_RPC_URL).netloc
+# Spec T15 — the platform's pending-transaction roads as the estate's own double models them (apps/server/src/test/aapDouble.ts), and the
+# whitelist road's answer to a press the platform no longer needs (services/payees.ts, approvalPlatformRefusal), word for word
+PLATFORM_NOT_AUTHORIZED_SENTENCE = "not authorized"  # `validateMultisigSigner` returns ErrNotAuthorized unwrapped: the body a live client saw on 31 August 2026
+PLATFORM_EXPIRED = "conflict: pending transaction expired"  # read off expires_at; the platform sweeps nothing to the word `expired`
+PLATFORM_NOT_PENDING = "conflict: pending transaction is %s"  # a signature on a ceremony already approved or consumed
+PLATFORM_ENTRY_ALREADY = "entry is already %s"  # the whitelist approve on an entry no longer pending
+PENDING_TX_TTL_SECONDS = 24 * 60 * 60  # the platform's default ceremony lifetime (defaultPendingTxTTL)
+CHANGE_ROSTER_ID = "ms-multisig-mutation-harness"  # the census the compiler writes for C12C's family (governanceSignersFor), at C12's count
+WHITELIST_ROSTER_ID = "ms-whitelist-mutation-harness"
+SIGNATURES_ROAD = "POST /v1/pending-transactions-v2/{id}/signatures"  # the platform road a roster change is signed on (aapclient.ts)
+NOT_ON_ROSTER_CAUSE = ("a change of who the approvers are is signed by the active signers of the roster the access platform collects this ceremony on — "
+                       "the census your charter wrote (A8), at C12C’s count — and this credential is not one of them, by credential or by any address this "
+                       "estate attributes to it. Nothing was signed.")
 STEPUP_MAX_AGE_MS = 120 * 1000
 KNOWN_CHAINS = ("ethereum", "polygon", "arbitrum", "optimism", "base", "avalanche", "bsc", "solana", "anvil")
 KNOWN_ASSETS = ("AERX", "AVAX", "BNB", "DAI", "ETH", "MATIC", "POL", "SOL", "USDC", "USDT", "WBTC", "WETH")
@@ -460,6 +531,132 @@ def pending_approval_sentence(required: int, collected: int, may_still_approve: 
     return "%s %s, from %s. The address is not payable until then." % (recorded, needed, names_joined(list(may_still_approve), "or"))
 
 
+def people_in_words(names: Sequence[str]) -> str:
+    """`peopleInWords` (refusals.ts) and `namesInWords` (enrolment.ts): "A", "A and B", "A, B and C"."""
+    spoken = [str(n) for n in names]
+    if len(spoken) <= 1:
+        return spoken[0] if spoken else ""
+    return "%s and %s" % (", ".join(spoken[:-1]), spoken[-1])
+
+
+def not_on_change_roster_sentence(names: Sequence[str]) -> str:
+    """`notOnChangeRosterSentence` (refusals.ts, Spec 99), word for word."""
+    who = people_in_words(names) if names else "nobody the roster currently names"
+    return "A change of who the approvers are is signed by %s; you are not among them. Nothing was signed." % who
+
+
+def platform_outcome(status: int) -> str:
+    """`platformOutcome` (refusals.ts, Spec 97)."""
+    if status >= 500:
+        return "failed"
+    if status in (400, 422):
+        return "malformed"
+    if status >= 400:
+        return "refused"
+    return "answered"
+
+
+def platform_refused_sentence(status: int, said: str) -> str:
+    """`platformRefusedSentence` (refusals.ts, Spec 97), word for word: what the platform did, and its own words in quotation marks."""
+    quoted = (": “%s”" % said) if said else ""
+    http = "HTTP %d" % status
+    outcome = platform_outcome(status)
+    if outcome == "refused":
+        return ("The access platform refused this request (%s)%s. Nothing was changed, and asking again will meet the same answer until what the "
+                "platform names has changed." % (http, quoted))
+    if outcome == "malformed":
+        return "The access platform would not accept the request this estate sent it (%s)%s. That is a fault in this estate’s request, not in yours; nothing was changed." % (http, quoted)
+    if outcome == "failed":
+        return "The access platform was reached and could not carry out this request (%s)%s. Nothing was changed; it may answer differently in a moment." % (http, quoted)
+    return "The access platform answered this request (%s) in a shape this estate will not act on%s. Nothing was changed." % (http, quoted)
+
+
+def roster_seat_awaiting_sentence(person: str, roster: str, pending_tx_id: str, required: int, collected: int) -> str:
+    """`rosterSeatAwaitingSentence` (refusals.ts, Spec 95), word for word."""
+    return ("%s’s seat on the roster “%s” was not moved yet: your charter asks %d %s to agree to a change of who the approvers are (C12C), and the "
+            "access platform holds that change as ceremony %s at %d of %d. The seat stays bound to the credential it held until they agree." % (
+                person, roster, required, "person" if required == 1 else "people", pending_tx_id, collected, required))
+
+
+def time_of_day(epoch: float) -> str:
+    """`timeOfDay` (packages/shared/src/when.ts): "5:47pm", in local time."""
+    local = time.localtime(epoch)
+    twelve = 12 if local.tm_hour % 12 == 0 else local.tm_hour % 12
+    return "%d:%02d%s" % (twelve, local.tm_min, "am" if local.tm_hour < 12 else "pm")
+
+
+def when_in_words(iso: str, now: float) -> str:
+    """`whenInWords` (packages/shared/src/when.ts): today or tomorrow at a time, a weekday within the week, else the date."""
+    if not iso:
+        return "—"
+    try:
+        when = time.mktime(time.strptime(iso[:19], "%Y-%m-%dT%H:%M:%S")) - time.timezone if iso.endswith("Z") else time.mktime(time.strptime(iso[:19], "%Y-%m-%dT%H:%M:%S"))
+    except ValueError:
+        return iso
+    a = time.localtime(now)
+    b = time.localtime(when)
+    days = round((time.mktime((b.tm_year, b.tm_mon, b.tm_mday, 0, 0, 0, 0, 0, -1)) - time.mktime((a.tm_year, a.tm_mon, a.tm_mday, 0, 0, 0, 0, 0, -1))) / 86400)
+    clock = time_of_day(when)
+    if days == 0:
+        return "today at %s" % clock
+    if days == 1:
+        return "tomorrow at %s" % clock
+    if 1 < days < 7:
+        return "%s at %s" % (time.strftime("%A", b), clock)
+    return "%s %d, %d at %s" % (time.strftime("%b", b), b.tm_mday, b.tm_year, clock)
+
+
+def roster_change_sentence(facts: Dict[str, Any], now: float) -> str:
+    """`rosterChangeSentence` (enrolment.ts, Spec 99), word for word: the line under the person's row, one per ceremony."""
+    names = [s["name"] for s in facts.get("signedBy") or []]
+    count = "%s of %s approvers have signed%s." % (facts.get("signaturesCollected"), facts.get("requiredSignatures"), (" (%s)" % people_in_words(names)) if names else "")
+    seat = facts.get("seat")
+    if not facts.get("proposedHere") or seat is None:
+        return ("A roster change this estate did not propose: the access platform holds ceremony %s… on “%s” as %s, %s This estate cannot say what it "
+                "changes, so it offers no press for it here." % (T.credential_short_form(facts.get("pendingTxId")), facts.get("signingRosterName") or "a roster it no longer lists",
+                                                                  facts.get("platformStatus"), count))
+    who = (seat.get("name") or "").strip() or seat.get("email")
+    moving = "Moving %s’s seat to their current passkey" % who
+    state = facts.get("state")
+    may_sign = facts.get("maySign") or []
+    afresh = "Granting %s’s seat again in this room, or %s redeeming a fresh invitation, proposes the move afresh." % (who, who)
+    if state == "awaiting":
+        return "%s: %s%s" % (moving, count, (" %s may sign." % people_in_words(may_sign)) if may_sign else "")
+    if state == "approved":
+        return ("%s: %s The access platform holds the change as %s and has not applied it: a governed change is applied only when it is presented to "
+                "the platform again with the same content. Granting %s’s seat again in this room, or %s redeeming a fresh invitation, presents it, and the "
+                "platform applies it with these signatures." % (moving, count, facts.get("platformStatus"), who, who))
+    if state == "applied":
+        return "%s’s seat was moved to their current passkey: %s The access platform applied the change, and their presses now count." % (who, count.replace("have signed", "signed"))
+    if state == "expired":
+        expires = facts.get("expiresAt")
+        return ("%s expired at the access platform before the count was met: %s The platform holds it as %s%s, and nothing can be signed on it now. %s" % (
+            moving, count, facts.get("platformStatus"), (", expiring %s" % when_in_words(expires, now)) if expires else "", afresh))
+    return "%s: the access platform holds the change as %s, so nothing can be signed on it. %s" % (moving, facts.get("platformStatus"), afresh)
+
+
+def roster_change_signed_sentence(view: Dict[str, Any], held_because: str = "") -> str:
+    """`rosterChangeSignedSentence` (enrolment.ts, Spec 99), word for word: what the hand that signed is told."""
+    names = [s["name"] for s in view.get("signedBy") or []]
+    count = "%s of %s approvers have signed%s." % (view.get("signaturesCollected"), view.get("requiredSignatures"), (" (%s)" % people_in_words(names)) if names else "")
+    state = view.get("state")
+    if state == "awaiting":
+        may_sign = view.get("maySign") or []
+        return "Your signature is counted: %s%s" % (count, (" %s may still sign." % people_in_words(may_sign)) if may_sign else "")
+    if state == "applied":
+        rebound = view.get("rebound") or {}
+        who = ((rebound.get("name") or "").strip() or rebound.get("email")) if rebound else "the person"
+        roster = (" on “%s”" % rebound.get("rosterName")) if rebound else ""
+        return "Your signature completed the count: %s The access platform applied the change, and %s’s seat%s now counts their current passkey." % (count, who, roster)
+    reopened = view.get("reopened")
+    if reopened:
+        return ("Your signature completed the count: %s Presenting the change to the access platform again opened a fresh ceremony %s… at %s of %s: the roster has "
+                "changed since the move was proposed, so the signatures given were for a change that no longer matches it. The move stands proposed afresh, and the "
+                "seat stays where it was until it is signed again." % (count, T.credential_short_form(reopened.get("pendingTxId")), reopened.get("signaturesCollected"), reopened.get("requiredSignatures")))
+    return "Your signature completed the count: %s The access platform holds the change approved and did not apply it%s. The seat stays where it was." % (
+        count, (": %s" % held_because) if held_because else "")
+
+
 class Clock:
     """Time that moves only when somebody sleeps on it, so a four-second invitation costs the suite nothing."""
 
@@ -572,7 +769,9 @@ class EstateDouble:
                  pending_approval_says_why: bool = True, whitelist_roster: Optional[Sequence[str]] = None, platform_never_activates: bool = False,
                  before_spec_91: bool = False, seat_completes_on_redemption: bool = True, second_authorship_entry: bool = False,
                  platform_names_approver: Sequence[str] = (), mirror_lags: bool = False, register_corrects: bool = True,
-                 asset_short: bool = False, faucet: Optional[FaucetDouble] = None, rpc: Optional[TestnetRpcDouble] = None):
+                 asset_short: bool = False, faucet: Optional[FaucetDouble] = None, rpc: Optional[TestnetRpcDouble] = None,
+                 change_roster: Optional[Sequence[str]] = None, before_spec_99: bool = False, ceremony_lapses: int = 0, account_email: Optional[str] = None,
+                 lapse_after_first_signature: bool = False):
         self.currency_spoken_as_code = currency_spoken_as_code  # False: main's default arm (JSON); True: Spec 88's code
         # The payee door and a venue's contract (Spec T11). None: the door follows the written policy charter, as Spec 92 built it —
         # PAYEE_IS_VENUE_CONTRACT where the charter says refused and the address is on the venue table. True: Spec T8's stand-in, a door
@@ -600,6 +799,20 @@ class EstateDouble:
         self.whitelist_seats: List[Dict[str, Any]] = []
         self.whitelist_threshold: Optional[int] = None
         self.governance_established = False
+        # Spec T15 — the roster ceremony (AER 360 Spec 99). The multisig_mutation roster is the census the compiler writes for C12C's family
+        # (governanceSignersFor), seated with the whitelist roster at the first policy compile, at C12's count; `change_roster` seats only the
+        # census keys named. The platform's ceremonies, its record of who signed and when, and the estate's trail as the audit export reads it.
+        self.change_roster = tuple(change_roster) if change_roster is not None else None
+        self.change_seats: List[Dict[str, Any]] = []
+        self.change_threshold: Optional[int] = None
+        self.ceremonies: List[Dict[str, Any]] = []
+        self.trail: List[Dict[str, Any]] = []
+        self.before_spec_99 = before_spec_99  # the estate at Spec 95: the move proposed, the ceremony held, no seat row and no roster roads
+        self.ceremony_lapses = ceremony_lapses  # the next ceremonies born lapse at birth: the platform's clock is past their expires_at
+        self.lapse_after_first_signature = lapse_after_first_signature  # the platform's clock passes a ceremony's expires_at once its first signature is counted
+        self.account_email = account_email  # the AAP account's own address, attributed to the founder's key (addressesOfCaller); None: not known here
+        self.whitelist_id = "wl-" + secrets.token_hex(4)
+        self._query: Dict[str, List[str]] = {}
         # The bindings a re-invitation's redemption retired: (address, credential) pairs from person.credential_replaced.
         self.retired: set = set()
         self.base = base.rstrip("/")
@@ -633,7 +846,7 @@ class EstateDouble:
         # The account's ONE role-bearing credential (the founder's author token drawn up by the birth script), on the account's
         # one policy entry bearing authorship — the entry an author invitation mints on since Spec 91.
         self.authorship_entry = {"id": "pe-author-" + secrets.token_hex(4), "name": "Founder (author)"}
-        self.founder_credential = "cred-founder-" + secrets.token_hex(4)
+        self.founder_credential = str(uuid.uuid4())  # the platform's credential ids are UUIDs, so their short form (Spec 99) tells them apart here too
         self.credentials: Dict[str, Dict[str, Any]] = {self.founder_credential: {"access": "sign+audit", "name": "Founder (author)", "entry": self.authorship_entry["id"]}}
         self.second_approvers: List[str] = []
         self.invites: Dict[str, Dict[str, Any]] = {}
@@ -746,6 +959,7 @@ class EstateDouble:
         if url.netloc == RPC_HOST:
             return self.rpc(request)
         headers = {k.lower(): v for k, v in request.header_items()}
+        self._query = urllib.parse.parse_qs(url.query)
         body: Any = None
         if request.data:
             try:
@@ -878,6 +1092,17 @@ class EstateDouble:
             return self.seats(headers)
         if route == "POST /v1/approver-seats/grant":
             return self.grant_seat(headers, body)
+        # Spec 99's door (routes/rosterchanges.ts): absent before it, so an estate at Spec 95 answers the route unknown
+        if not self.before_spec_99:
+            if route == "GET /v1/roster/changes":
+                return self.list_roster_changes(headers)
+            m = re.match(r"^/v1/roster/changes/([^/]+)/sign(/options)?$", path)
+            if m and method == "POST":
+                if m.group(2):
+                    return self.roster_change_sign_options(headers, m.group(1))
+                return self.sign_roster_change(headers, m.group(1), body)
+        if route == "GET /v1/export/audit":
+            return self.audit_export(headers)
         if route == "POST /v1/payees":
             return self.create_payee(headers, body)
         if route == "GET /v1/payees":
@@ -983,11 +1208,19 @@ class EstateDouble:
                     self.retired.add((row["email"].strip().lower(), old))
                 self.audit.append("person.credential_replaced %s: %s -> %s via invite_redemption" % (row["email"].strip().lower(), ",".join(replaced), credential_id))
         seat = self.complete_seat_on_redemption(credential_id, row.get("email"), row["displayName"])
+        # A SEAT FOLLOWS ITS PERSON (Spec 95, count 2; routes/auth.ts): the credential this redemption bound is the one every roster seat naming
+        # this address must count; the moved, held and refused seats travel on this answer alone, as `rosterSeats`
+        roster_seats = self.rebind_roster_seats(row.get("email"), row["displayName"], credential_id, credential_id, "invite_redemption") if row.get("email") else None
         roles = self.roles_of(credential_id)
         if not roles:
             raise Refusal("ROLE_NOT_GRANTED", detail={"required": "any", "held": "none"}, provenance={"source": "aap_policy"})
         session = self.open_session(credential_id, row["displayName"], set_cookie, row.get("email"))
-        return 200, self.session_view(session, {"approverSeat": seat} if seat else None)
+        extra: Dict[str, Any] = {}
+        if seat:
+            extra["approverSeat"] = seat
+        if roster_seats is not None:
+            extra["rosterSeats"] = roster_seats
+        return 200, self.session_view(session, extra or None)
 
     def login_options(self) -> Tuple[int, Any]:
         issued = int(time.time() * 1000)
@@ -1514,6 +1747,7 @@ class EstateDouble:
                 already_stood = True
             else:
                 self.seat_whitelist_roster(charter, latest)
+                self.seat_change_roster(charter, latest)
                 self.governance_established = True
         iv["compiledCharter"] = charter
         iv["state"] = "written"
@@ -1549,6 +1783,21 @@ class EstateDouble:
             people = [p for p in people if p["email"].lower() in wanted]
         self.whitelist_seats = [{"user_id": p["email"], "display_name": p["name"], "credential_id": "", "status": "active"} for p in people]
         self.whitelist_threshold = int(threshold) if threshold else 1
+
+    def seat_change_roster(self, charter: Dict[str, Any], latest: Dict[str, Dict[str, Any]]) -> None:
+        """
+        The multisig_mutation roster — who signs a change of who the approvers are, C12C's family — as the compiler writes it
+        (governanceSignersFor: the census, A8, else C11's people; one seat per person named by email, the credential slot empty until a
+        signature binds it) at C12's count (C12C's own behind a Yes on C12A). The `change_roster` dial seats only the census keys named.
+        """
+        people = self.parse_roster(charter.get("changeApprovers") or charter.get("signers") or [])
+        if self.change_roster is not None:
+            wanted = {A.PEOPLE[k].email.lower() for k in self.change_roster}
+            people = [p for p in people if p["email"].lower() in wanted]
+        choice = lambda qid: (latest.get(qid) or {}).get("choice")  # noqa: E731
+        threshold = choice("C12C") if choice("C12A") == "Yes" and choice("C12C") else choice("C12")
+        self.change_seats = [{"user_id": p["email"], "display_name": p["name"], "credential_id": "", "status": "active"} for p in people]
+        self.change_threshold = int(threshold) if threshold else 1
 
     @staticmethod
     def roster_entry(name: str, email: str) -> str:
@@ -1910,6 +2159,9 @@ class EstateDouble:
         if credential_id not in self.second_approvers:
             self.second_approvers.append(credential_id)
             self.audit.append("approver_seat.granted %s via people_room" % credential_id)
+        # A SEAT FOLLOWS ITS PERSON (Spec 95, count 2; grantApproverSeat): the credential just seated is the one every roster seat naming this
+        # address must count — a seat still bound to a credential they no longer hold is moved, or held by the client's own governance as a ceremony
+        self.rebind_roster_seats(person["email"], person["name"], credential_id, caller["credentialId"], "seat_grant")
         return 200, self.seats_view(caller)
 
     # -- invites (routes/invites.ts) -----------------------------------------------------------------------
@@ -1954,7 +2206,7 @@ class EstateDouble:
                     "candidates": ", ".join(c for _, _, held in entries for c in held), "entries": ", ".join("%s (%s)" % (eid, name) for eid, name, _ in entries)},
                     provenance={"source": "aap_policy"})
             entry_id, entry_name, _ = entries[0]
-            credential_id = "cred-author-" + secrets.token_hex(4)
+            credential_id = str(uuid.uuid4())
             self.credentials[credential_id] = {"access": "sign+audit", "name": "%s — %s" % (entry_name, display_name), "entry": entry_id}
             invited_key = next((k for k, p in A.PEOPLE.items() if p.email.lower() == email.lower()), None)
             if invited_key in self.platform_names_approver and credential_id not in self.second_approvers:
@@ -2108,10 +2360,23 @@ class EstateDouble:
                 address_id, ceremony["requiredSignatures"], len(ceremony["signatures"])))
             return 200, {"status": "pending_promotion", "platformMembershipId": row["platformMembershipId"],
                          "ceremony": {"pendingTxId": ceremony["pendingTxId"], "requiredSignatures": ceremony["requiredSignatures"], "signaturesCollected": len(ceremony["signatures"])}}
-        if row["whitelistStatus"] != "pending_promotion" or not row.get("ceremony"):
+        if not row.get("ceremony"):
             raise Refusal("ADDRESS_PROMOTION_PENDING", detail={"cause": "this address has not been proposed to the platform whitelist yet"})
+        entry_status = row.get("platformEntryStatus") or "pending"
+        if entry_status != "pending":
+            # THE PLATFORM NO LONGER NEEDS THIS PRESS (Spec T15 §2): the count was met and the entry is active, so the platform's approve answers
+            # 409 "entry is already active" (test/aapDouble.ts), and the whitelist road relays it in its own sentence with the platform's words
+            # beside it (services/payees.ts, approvalPlatformRefusal → platformRefusal: ADDRESS_PROPOSAL_REFUSED, 422)
+            said = PLATFORM_ENTRY_ALREADY % entry_status
+            raise Refusal("ADDRESS_PROPOSAL_REFUSED",
+                          "The access platform would not approve this address, so nothing was changed: the platform answered HTTP 409: %s for entry %s of whitelist %s." % (
+                              said, row["platformMembershipId"], self.whitelist_id),
+                          {"payeeAddressId": row["id"], "chain": row["chain"], "address": row["address"], "credentialId": caller["credentialId"],
+                           "entryId": row["platformMembershipId"], "whitelistId": self.whitelist_id, "platformStatus": "409", "platformSaid": said},
+                          provenance={"source": "aap_whitelist"})
         if action == "reject":
             row["whitelistStatus"] = "rejected"
+            row["platformEntryStatus"] = "rejected"
             row["promotedAt"] = self._now_iso()
             return 200, {"whitelistStatus": "rejected"}
         return 200, self.sign_whitelist_ceremony(row, caller)
@@ -2151,6 +2416,7 @@ class EstateDouble:
         required, collected = ceremony["requiredSignatures"], len(ceremony["signatures"])
         if collected >= required and not self.platform_never_activates:
             row["promotedAt"] = self._now_iso()
+            row["platformEntryStatus"] = "active"  # the platform activated the entry: a further press meets its 409, relayed (Spec T15 §2)
             self.audit.append("payee.address.whitelisted %s by %s" % (row["id"], seat["user_id"]))
             if self.mirror_lags:
                 # Spec T13 §3: the platform counted 2 of 2 and activated the entry; the estate's mirror answered the row's stale word,
@@ -2169,6 +2435,390 @@ class EstateDouble:
                 "approvals": {"required": required, "collected": collected, "remaining": max(required - collected, 0)},
                 "may_still_approve": may_still,
                 "sentence": pending_approval_sentence(required, collected, may_still, [s["display_name"] for s in active])}
+
+    # -- the roster ceremony (Spec T15: AER 360 Spec 99, routes/rosterchanges.ts, services/approverseats.ts; the platform's roads, test/aapDouble.ts) --
+    def rosters(self) -> List[Dict[str, Any]]:
+        """The two governance rosters the compiler wrote, as the platform lists them (listMultisigs); their signer lists are the live ones."""
+        return [
+            {"id": WHITELIST_ROSTER_ID, "name": "%s — whitelist_mutation approvers" % self.workspace["name"], "purposes": ["whitelist_mutation"],
+             "minSignatures": self.whitelist_threshold or 1, "signers": self.whitelist_seats, "active": True},
+            {"id": CHANGE_ROSTER_ID, "name": "%s — multisig_mutation approvers" % self.workspace["name"], "purposes": ["multisig_mutation"],
+             "minSignatures": self.change_threshold or 1, "signers": self.change_seats, "active": True},
+        ]
+
+    def roster_by_id(self, roster_id: Any) -> Optional[Dict[str, Any]]:
+        return next((r for r in self.rosters() if r["id"] == roster_id), None)
+
+    def append_trail(self, action: str, credential_id: Optional[str], detail: Dict[str, Any]) -> Dict[str, Any]:
+        """`appendAudit` (services/audit.ts), in the shape the audit export reads it back (routes/exports.ts, auditRegister)."""
+        row = {"audit_id": "aud-" + secrets.token_hex(6), "at": self._now_iso(), "action": action, "credential_id": credential_id or "",
+               "subject_id": WORKSPACE_ID, "detail": detail}
+        self.trail.append(row)
+        return row
+
+    def born_ceremony(self, roster: Dict[str, Any], payload_hash: str) -> Dict[str, Any]:
+        """A ceremony at birth (test/aapDouble.ts, bornCeremony): pending, unconsumed, expiring a day out, nothing collected — or lapsed at birth by the dial."""
+        now = time.time()
+        lapsed = self.ceremony_lapses > 0
+        if lapsed:
+            self.ceremony_lapses -= 1
+        expires = now - 60 if lapsed else now + PENDING_TX_TTL_SECONDS
+        return {"id": str(uuid.uuid4()), "accountId": AAP_ACCOUNT_ID, "purpose": "multisig_mutation", "entryId": roster["id"], "payloadHash": payload_hash,
+                "operation": T.ROSTER_CHANGE_OPERATION, "requiredMultisigId": CHANGE_ROSTER_ID, "requiredSignatures": self.change_threshold or 1,
+                "status": "pending", "createdAt": self._iso(now), "expiresAt": self._iso(expires), "expiresAtEpoch": expires, "consumedAt": None, "collected": []}
+
+    @staticmethod
+    def ceremony_is_live(ceremony: Dict[str, Any], now: float) -> bool:
+        """`ceremonyIsLive` (test/aapDouble.ts, findMutationCeremony's reading): pending or approved, unconsumed, and before its expiry."""
+        return ceremony["status"] in ("pending", "approved") and ceremony.get("consumedAt") is None and ceremony["expiresAtEpoch"] > now
+
+    def replace_multisig_signers(self, roster: Dict[str, Any], signers: List[Dict[str, Any]], actor: str) -> Dict[str, Any]:
+        """
+        The platform's PATCH /v1/multisigs-v2/{id} (test/aapDouble.ts): where the account's change governance holds multisig_update at a count
+        above one, the change is a governed mutation — found again by the digest of its content (hashed without the actor), a fresh ceremony where
+        none is live — answered 409 mutation_ceremony_required until the count is met, and APPLIED and CONSUMED in one act when the approved
+        change is presented again. At a count of one, or with no governance established, the roster is written at once.
+        """
+        threshold = self.change_threshold or 1
+        if self.governance_established and threshold > 1:
+            content = {"name": roster["name"], "signers": [{k: s.get(k) for k in ("user_id", "credential_id", "status", "display_name")} for s in signers],
+                       "min_signatures": roster["minSignatures"], "purposes": roster["purposes"]}
+            payload_hash = hashlib.sha256(json.dumps(content, sort_keys=True).encode("utf-8")).hexdigest()
+            now = time.time()
+            ceremony = next((c for c in self.ceremonies if c["entryId"] == roster["id"] and c["payloadHash"] == payload_hash and self.ceremony_is_live(c, now)), None)
+            if ceremony is None:
+                ceremony = self.born_ceremony(roster, payload_hash)
+                self.ceremonies.append(ceremony)
+            if ceremony["status"] != "approved":
+                return {"ceremony": ceremony, "roster": None}
+            ceremony["status"] = "consumed"
+            ceremony["consumedAt"] = self._now_iso()
+        roster["signers"][:] = signers  # the live list, replaced in place
+        return {"ceremony": None, "roster": roster}
+
+    def rebind_roster_seats(self, email: Any, person_name: str, credential_id: str, by_credential_id: str, via: str) -> Optional[Dict[str, Any]]:
+        """
+        `rebindRosterSeats` (services/approverseats.ts, Spec 95): every active seat naming this address and bound to a credential the person no
+        longer holds is presented to the platform moved; a ceremony the client's own governance answers with is carried as `awaiting` with Spec 95's
+        sentence and — since Spec 99 — remembered against the seat (`roster.change_proposed`); an applied move is written to the trail
+        (`roster.seat_rebound`). An empty seat is left for its own person's press to fill. None before Spec 91, whose estate had no Spec 95.
+        """
+        if self.before_spec_91:
+            return None
+        wanted = str(email or "").strip().lower()
+        outcome: Dict[str, Any] = {"rebound": [], "awaiting": [], "refused": None}
+        if not wanted:
+            return outcome
+        person = (person_name or "").strip() or wanted
+        for roster in self.rosters():
+            moving = [s for s in roster["signers"] if s["status"] == "active" and s["user_id"].lower() == wanted and s["credential_id"] and s["credential_id"] != credential_id]
+            if not moving:
+                continue
+            signers = [dict(s, credential_id=credential_id) if any(s is m for m in moving) else s for s in roster["signers"]]
+            answered = self.replace_multisig_signers(roster, signers, by_credential_id)
+            for seat in moving:
+                moved = {"rosterId": roster["id"], "rosterName": roster["name"], "purposes": list(roster["purposes"]), "seatEmail": wanted,
+                         "seatName": (seat.get("display_name") or "").strip() or (person_name or "").strip() or None,
+                         "oldCredentialId": seat["credential_id"], "newCredentialId": credential_id}
+                ceremony = answered["ceremony"]
+                if ceremony is not None:
+                    outcome["awaiting"].append(dict(moved, pendingTxId=ceremony["id"], operation=ceremony["operation"], requiredSignatures=ceremony["requiredSignatures"],
+                                                    signaturesCollected=len(ceremony["collected"]),
+                                                    sentence=roster_seat_awaiting_sentence(person, roster["name"], ceremony["id"], ceremony["requiredSignatures"], len(ceremony["collected"]))))
+                    if not self.before_spec_99:
+                        self.record_roster_change_proposed(by_credential_id, via, ceremony, moved)
+                    continue
+                self.append_trail(T.ROSTER_SEAT_REBOUND, by_credential_id, dict(
+                    {"rosterId": moved["rosterId"], "rosterName": moved["rosterName"], "purposes": ",".join(moved["purposes"]), "seatEmail": wanted},
+                    **({"seatName": moved["seatName"]} if moved["seatName"] else {}), oldCredentialId=moved["oldCredentialId"], newCredentialId=moved["newCredentialId"], via=via))
+                outcome["rebound"].append(moved)
+        return outcome
+
+    def record_roster_change_proposed(self, by_credential_id: str, via: str, ceremony: Dict[str, Any], seat: Dict[str, Any]) -> None:
+        """`recordRosterChangeProposed` (Spec 99): the ceremony the platform answered a move with, remembered against the seat it moves."""
+        detail = {"pendingTxId": ceremony["id"], "operation": ceremony["operation"], "purpose": ceremony["purpose"], "requiredMultisigId": ceremony["requiredMultisigId"],
+                  "requiredSignatures": str(ceremony["requiredSignatures"]), "signaturesCollected": str(len(ceremony["collected"])), "rosterId": seat["rosterId"],
+                  "rosterName": seat["rosterName"], "purposes": ",".join(seat["purposes"]), "seatEmail": seat["seatEmail"]}
+        if seat.get("seatName"):
+            detail["seatName"] = seat["seatName"]
+        detail.update({"oldCredentialId": seat["oldCredentialId"], "newCredentialId": seat["newCredentialId"], "via": via})
+        self.append_trail(T.ROSTER_CHANGE_PROPOSED, by_credential_id, detail)
+
+    def roster_change_proposals(self) -> Dict[str, Dict[str, Any]]:
+        """`rosterChangeProposals`: every move this estate proposed, by the ceremony's id, read back off the trail; the newest row for an id wins."""
+        proposals: Dict[str, Dict[str, Any]] = {}
+        for row in self.trail:
+            if row["action"] != T.ROSTER_CHANGE_PROPOSED:
+                continue
+            detail = row["detail"]
+            if not all(detail.get(k) for k in ("pendingTxId", "rosterId", "seatEmail", "newCredentialId")):
+                continue
+            proposals[detail["pendingTxId"]] = dict(detail, byCredentialId=row["credential_id"], proposedAt=row["at"])
+        return proposals
+
+    def register_names(self) -> Dict[str, str]:
+        """`registerNames`: the display name of the newest invitation to each address, any state."""
+        names: Dict[str, str] = {}
+        for row in sorted(self.invites.values(), key=lambda r: r["createdAt"], reverse=True):
+            email = (row.get("email") or "").strip().lower()
+            if email and email not in names:
+                names[email] = row["displayName"]
+        return names
+
+    @staticmethod
+    def seat_name(seat: Dict[str, Any], names: Dict[str, str]) -> str:
+        """`seatName`: the seat's own display name, the register's, the address, else the credential in short form."""
+        return (seat.get("display_name") or "").strip() or names.get(seat["user_id"].lower()) or seat["user_id"] or T.credential_short_form(seat.get("credential_id"))
+
+    @staticmethod
+    def seat_has_signed(seat: Dict[str, Any], collected: Sequence[Dict[str, Any]]) -> bool:
+        return any((seat["credential_id"] and c["credential_id"] == seat["credential_id"]) or (c.get("user_id") and c["user_id"].lower() == seat["user_id"].lower()) for c in collected)
+
+    def signer_view(self, signature: Dict[str, Any], active: Sequence[Dict[str, Any]], names: Dict[str, str]) -> Dict[str, Any]:
+        seat = next((s for s in active if s["credential_id"] and s["credential_id"] == signature["credential_id"]), None)
+        if seat is None and signature.get("user_id"):
+            seat = next((s for s in active if s["user_id"].lower() == signature["user_id"].lower()), None)
+        email = signature["user_id"].lower() if signature.get("user_id") else ((seat["user_id"].lower() or None) if seat else None)
+        name = self.seat_name(seat, names) if seat else (names.get(email, email) if email else T.credential_short_form(signature["credential_id"]))
+        return {"name": name, "email": email, "credentialId": T.credential_short_form(signature["credential_id"]), "signedAt": signature.get("collected_at")}
+
+    def addresses_of_caller(self, credential_id: str) -> Set[str]:
+        """
+        `addressesOfCaller`: the one address the estate honestly attributes to the credential — the invitation it redeemed, nobody else's key on it
+        (addressOfCredential) — else, for a key attached to no address and held by one passkey, the account's own address (getSelfAccount).
+        """
+        invited = self.signer_email_of(credential_id)
+        if invited:
+            return {invited.lower()}
+        attached = any(credential_id in ids for ids in self.enrolled_by_email().values())
+        held_by_one = len(self.credential_holders().get(credential_id, [])) <= 1
+        if attached or not held_by_one:
+            return set()
+        return {self.account_email.strip().lower()} if self.account_email else set()
+
+    @staticmethod
+    def caller_seat(active: Sequence[Dict[str, Any]], credential_id: str, addresses: Set[str]) -> Optional[Dict[str, Any]]:
+        """`callerSeat`: an active seat bound to the caller's credential, else one named by an address the estate attributes to them."""
+        return next((s for s in active if s["credential_id"] and s["credential_id"] == credential_id), None) or \
+            next((s for s in active if s["user_id"].lower() in addresses), None)
+
+    @staticmethod
+    def roster_change_state(record: Dict[str, Any], now: float) -> str:
+        """`rosterChangeState`: the platform's status word beside its expiry — a lapsed pending or approved ceremony is expired."""
+        lapsed = record["expiresAtEpoch"] <= now
+        status = record["status"]
+        if status == "consumed":
+            return "applied"
+        if status == "approved":
+            return "expired" if lapsed else "approved"
+        if status == "pending":
+            return "expired" if lapsed else "awaiting"
+        if status == "expired":
+            return "expired"
+        return "closed"
+
+    def roster_change_view(self, record: Dict[str, Any], proposal: Optional[Dict[str, Any]], caller_credential: str, addresses: Set[str],
+                           names: Dict[str, str], now: float) -> Dict[str, Any]:
+        """`rosterChangeView`: one row of the list, composed from the platform's record and the estate's own."""
+        signing = self.roster_by_id(record["requiredMultisigId"])
+        active = [s for s in signing["signers"] if s["status"] == "active"] if signing else []
+        collected = record["collected"]
+        signed_by = [self.signer_view(c, active, names) for c in collected]
+        may_sign = [self.seat_name(s, names) for s in active if not self.seat_has_signed(s, collected)]
+        mine = self.caller_seat(active, caller_credential, addresses) if signing else None
+        caller_has_signed = any(c["credential_id"] == caller_credential for c in collected) or (mine is not None and self.seat_has_signed(mine, collected))
+        state = self.roster_change_state(record, now)
+        seat = {"email": proposal["seatEmail"], "name": proposal.get("seatName") or None, "oldCredentialId": T.credential_short_form(proposal["oldCredentialId"]),
+                "newCredentialId": T.credential_short_form(proposal["newCredentialId"])} if proposal else None
+        facts = {"pendingTxId": record["id"], "state": state, "proposedHere": proposal is not None, "seat": seat, "signingRosterName": signing["name"] if signing else None,
+                 "platformStatus": record["status"], "requiredSignatures": record["requiredSignatures"], "signaturesCollected": len(collected), "signedBy": signed_by,
+                 "maySign": may_sign, "expiresAt": record["expiresAt"]}
+        view = dict(facts)
+        view.update({"operation": proposal["operation"] if proposal else None, "proposedAt": proposal["proposedAt"] if proposal else None,
+                     "via": proposal["via"] if proposal else None, "rosterId": proposal["rosterId"] if proposal else None, "rosterName": proposal["rosterName"] if proposal else None,
+                     "signingRosterId": record["requiredMultisigId"], "callerMaySign": state == "awaiting" and proposal is not None and mine is not None and not caller_has_signed,
+                     "callerHasSigned": caller_has_signed, "createdAt": record["createdAt"], "sentence": roster_change_sentence(facts, now)})
+        return view
+
+    def list_roster_changes(self, headers: Dict[str, str]) -> Tuple[int, Any]:
+        """GET /v1/roster/changes (Spec 99, item 1): every multisig_mutation ceremony the platform holds for the estate, newest first, any status."""
+        caller = self.require_caller(headers, "viewer")
+        proposals = self.roster_change_proposals()
+        names = self.register_names()
+        addresses = self.addresses_of_caller(caller["credentialId"])
+        now = time.time()
+        listed = sorted((c for c in self.ceremonies if c["purpose"] == "multisig_mutation"), key=lambda c: (c["createdAt"], c["id"]), reverse=True)
+        return 200, {"changes": [self.roster_change_view(c, proposals.get(c["id"]), caller["credentialId"], addresses, names, now) for c in listed]}
+
+    def roster_change_binding(self, pending_tx_id: str, issued_at: Any, credential_id: str) -> Dict[str, str]:
+        """deriveChallenge's binding for the signature: setDigest `roster-change:<workspace id>:<pendingTxId>:<issuedAtMs>`, the signer's credential, the purpose."""
+        return {"setDigest": T.ROSTER_CHANGE_BINDING % (WORKSPACE_ID, pending_tx_id, issued_at), "credentialId": credential_id, "purpose": T.ROSTER_CHANGE_PURPOSE}
+
+    def roster_change_challenge(self, binding: Dict[str, str]) -> str:
+        return self.challenge(binding["purpose"], "%s|%s" % (binding["setDigest"], binding["credentialId"]), 0)
+
+    def roster_change_sign_options(self, headers: Dict[str, str], pending_tx_id: str) -> Tuple[int, Any]:
+        """Step one: the digest-bound challenge, for the signer's own passkeys — a person who may not sign at all still receives one; the roster judges at the press."""
+        caller = self.require_caller(headers, "viewer", mutating=True)
+        issued_at = int(time.time() * 1000)
+        challenge = self.roster_change_challenge(self.roster_change_binding(pending_tx_id, issued_at, caller["credentialId"]))
+        own = [w for w, row in self.passkeys.items() if row["credentialId"] == caller["credentialId"]]
+        return 200, {"options": {"challenge": challenge, "rpId": self.rp_id, "timeout": 60000, "userVerification": "required",
+                                 "allowCredentials": [{"id": w, "type": "public-key", "transports": ["internal"]} for w in own]}, "issuedAtMs": issued_at}
+
+    def sign_roster_change(self, headers: Dict[str, str], pending_tx_id: str, body: Any) -> Tuple[int, Any]:
+        """
+        Step two (Spec 99, items 2 and 3; signRosterChange): the assertion verified against the same binding, then in the fail-closed order — is
+        this a change the estate proposed; is the caller an active signer of the roster the platform collects it on; has the platform already counted
+        them — then one signature as this person, and the platform's answer is the estate's; the count met, the change is presented again.
+        """
+        caller = self.require_caller(headers, "viewer", mutating=True)
+        body = body or {}
+        for field in ("issuedAtMs", "response"):
+            if field not in body:
+                raise Malformed("%s: Required" % field)
+        self.assert_fresh(body["issuedAtMs"])
+        expected = self.roster_change_challenge(self.roster_change_binding(pending_tx_id, body["issuedAtMs"], caller["credentialId"]))
+        response = body["response"] or {}
+        if not isinstance(response.get("id"), str) or not response["id"]:
+            raise Refusal("STEP_UP_INVALID", detail={"cause": "assertion carried no credential id"})
+        stored = self.passkeys.get(response["id"])
+        if not stored or stored["credentialId"] != caller["credentialId"]:
+            raise Refusal("STEP_UP_INVALID", detail={"cause": "the asserting passkey is not the signing credential"})
+        try:
+            stored["signCount"] = PK.verify_assertion(response, expected, self.origin, self.rp_id, stored["publicKey"], stored["signCount"])
+        except PK.PasskeyRefused as err:
+            raise Refusal("STEP_UP_INVALID", detail={"cause": str(err)[:200]})
+        stored["lastAuthAtMs"] = body["issuedAtMs"]
+        proposal = self.roster_change_proposals().get(pending_tx_id)
+        if proposal is None:
+            raise Refusal("ROSTER_CHANGE_UNKNOWN", detail={"pendingTxId": pending_tx_id, "cause": "not_proposed_here"}, provenance={"source": "aap_policy", "reference": pending_tx_id})
+        names = self.register_names()
+        signing = self.roster_by_id(proposal["requiredMultisigId"])
+        if signing is None:
+            raise Refusal("CHANGE_GOVERNANCE_UNREADABLE", detail={"pendingTxId": pending_tx_id, "requiredMultisigId": proposal["requiredMultisigId"], "ceremony": T.ROSTER_CHANGE_PURPOSE, "question": "C12C"},
+                          provenance={"source": "aap_policy"})
+        active = [s for s in signing["signers"] if s["status"] == "active"]
+        addresses = self.addresses_of_caller(caller["credentialId"])
+        # THE ROSTER DECIDES WHO MAY SIGN — before the platform is asked to sign anything
+        seat = self.caller_seat(active, caller["credentialId"], addresses)
+        if seat is None:
+            members = [self.seat_name(s, names) for s in active]
+            detail = {"cause": NOT_ON_ROSTER_CAUSE, "roster": signing["name"], "rosterId": signing["id"], "purpose": "multisig_mutation", "question": "C12C",
+                      "ceremony": T.ROSTER_CHANGE_PURPOSE, "members": ", ".join(members), "credentialId": caller["credentialId"]}
+            if addresses:
+                detail["addresses"] = ", ".join(sorted(addresses))
+            raise Refusal("CHANGE_SIGNER_NOT_ON_ROSTER", not_on_change_roster_sentence(members), detail, provenance={"source": "aap_policy", "reference": signing["id"]})
+        record = next((c for c in self.ceremonies if c["id"] == pending_tx_id and c["accountId"] == AAP_ACCOUNT_ID), None)
+        if record is None:
+            raise Refusal("ROSTER_CHANGE_UNKNOWN", detail={"pendingTxId": pending_tx_id, "cause": "not_listed", "platformSaid": "not found"}, provenance={"source": "aap_policy", "reference": pending_tx_id})
+        collected = record["collected"]
+        mine = next((c for c in collected if c["credential_id"] == caller["credentialId"]), None)
+        if mine is None and self.seat_has_signed(seat, collected):
+            mine = next((c for c in collected if (seat["credential_id"] and c["credential_id"] == seat["credential_id"]) or (c.get("user_id") and c["user_id"].lower() == seat["user_id"].lower())), None)
+        if mine is not None:
+            # ALREADY ON THE PLATFORM'S RECORD: refused from that record, and the platform is not asked to count what it has counted
+            at = (" (collected %s)" % mine["collected_at"]) if mine.get("collected_at") else ""
+            detail = {"pendingTxId": pending_tx_id, "credentialId": caller["credentialId"], "signaturesCollected": str(len(collected)), "requiredSignatures": str(record["requiredSignatures"]),
+                      "platformStatus": record["status"]}
+            if mine.get("collected_at"):
+                detail["signedAt"] = mine["collected_at"]
+            raise Refusal("APPROVER_ALREADY_SIGNED",
+                          "You have already signed this change: the access platform’s record of ceremony %s… carries your signature%s, and it counts each signatory once. %d of %d stand; nothing was signed again." % (
+                              T.credential_short_form(pending_tx_id), at, len(collected), record["requiredSignatures"]),
+                          detail, provenance={"source": "aap_policy", "reference": pending_tx_id})
+        # THE PLATFORM'S SIGNATURES ROAD (test/aapDouble.ts): the lapse read off expires_at; the status; the signer matched by credential, or bound by user_id
+        now = time.time()
+        if record["expiresAtEpoch"] <= now:
+            raise Refusal("PLATFORM_REFUSED", platform_refused_sentence(409, PLATFORM_EXPIRED),
+                          {"outcome": "refused", "platformStatus": "409", "platformSaid": PLATFORM_EXPIRED, "route": SIGNATURES_ROAD}, provenance={"source": "aap"})
+        if record["status"] != "pending":
+            said = PLATFORM_NOT_PENDING % record["status"]
+            raise Refusal("PLATFORM_REFUSED", platform_refused_sentence(409, said), {"outcome": "refused", "platformStatus": "409", "platformSaid": said, "route": SIGNATURES_ROAD},
+                          provenance={"source": "aap"})
+        signer = next((s for s in active if s["credential_id"] and s["credential_id"] == caller["credentialId"]), None)
+        if signer is None and seat["user_id"] and not seat["credential_id"]:
+            seat["credential_id"] = caller["credentialId"]  # the enrolment bind (spec 76)
+            signer = seat
+        if signer is None:
+            raise Refusal("SIGNATURE_NOT_COUNTED", detail={"pendingTxId": pending_tx_id, "credentialId": caller["credentialId"], "roster": signing["name"], "rosterId": signing["id"],
+                                                           "platformStatus": "403", "platformSaid": PLATFORM_NOT_AUTHORIZED_SENTENCE},
+                          provenance={"source": "aap_policy", "reference": pending_tx_id})
+        collected.append({"credential_id": caller["credentialId"], "user_id": seat["user_id"], "collected_at": self._now_iso()})
+        if len(collected) >= record["requiredSignatures"]:
+            record["status"] = "approved"
+        elif self.lapse_after_first_signature and len(collected) == 1:
+            # THE CLOCK PASSES THE CEREMONY'S EXPIRY between the first signature and the next: the platform sweeps nothing, so the record keeps
+            # `pending` and the next signature meets "conflict: pending transaction expired" in the platform's own words
+            record["expiresAtEpoch"] = now - 60
+            record["expiresAt"] = self._iso(record["expiresAtEpoch"])
+        answer = {"pendingTxId": pending_tx_id, "requiredSignatures": record["requiredSignatures"], "signaturesCollected": len(collected),
+                  "signedBy": [self.signer_view(c, active, names) for c in collected], "maySign": [self.seat_name(s, names) for s in active if not self.seat_has_signed(s, collected)]}
+        if record["status"] != "approved":
+            view = dict(answer, state="awaiting", rebound=None, reopened=None)
+            return 200, dict(view, sentence=roster_change_signed_sentence(view))
+        return 200, self.apply_roster_change(proposal, record, answer, caller["credentialId"])
+
+    def apply_roster_change(self, proposal: Dict[str, Any], record: Dict[str, Any], answer: Dict[str, Any], actor: str) -> Dict[str, Any]:
+        """
+        `applyRosterChange` (Spec 99, item 3): the count met, Spec 95's change is presented to the platform again — the same roster read again, the
+        same signer list derived the same way, so the digest reaches the approved ceremony and the platform applies and consumes it — and the seat is
+        marked rebound only from the roster the platform returns, the trail row naming the ceremony and every signer.
+        """
+        roster = self.roster_by_id(proposal["rosterId"])
+        who = (proposal.get("seatName") or "").strip() or proposal["seatEmail"]
+        def held(because: str, reopened: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+            view = dict(answer, state="approved", rebound=None, reopened=reopened)
+            return dict(view, sentence=roster_change_signed_sentence(view, because))
+        if roster is None:
+            return held("the access platform’s list of rosters no longer carries “%s” active, so there is nothing to present the change against" % proposal["rosterName"])
+        wanted = proposal["seatEmail"].lower()
+        moving = [s for s in roster["signers"] if s["status"] == "active" and s["user_id"].lower() == wanted and s["credential_id"] and s["credential_id"] != proposal["newCredentialId"]]
+        rebound = {"email": proposal["seatEmail"], "name": proposal.get("seatName") or None, "oldCredentialId": T.credential_short_form(proposal["oldCredentialId"]),
+                   "newCredentialId": T.credential_short_form(proposal["newCredentialId"]), "rosterId": roster["id"], "rosterName": roster["name"]}
+        def mark_rebound() -> Dict[str, Any]:
+            detail = {"rosterId": roster["id"], "rosterName": roster["name"], "purposes": ",".join(roster["purposes"]), "seatEmail": proposal["seatEmail"]}
+            if proposal.get("seatName"):
+                detail["seatName"] = proposal["seatName"]
+            detail.update({"oldCredentialId": proposal["oldCredentialId"], "newCredentialId": proposal["newCredentialId"], "via": T.VIA_ROSTER_CHANGE,
+                           "pendingTxId": proposal["pendingTxId"], "requiredSignatures": str(answer["requiredSignatures"]),
+                           "signerCredentialIds": ",".join(c["credential_id"] for c in record["collected"]), "signerNames": ", ".join(s["name"] for s in answer["signedBy"])})
+            self.append_trail(T.ROSTER_SEAT_REBOUND, actor, detail)
+            view = dict(answer, state="applied", rebound=rebound, reopened=None)
+            return dict(view, sentence=roster_change_signed_sentence(view))
+        if not moving:
+            stands = any(s["status"] == "active" and s["user_id"].lower() == wanted and s["credential_id"] == proposal["newCredentialId"] for s in roster["signers"])
+            if stands:
+                return mark_rebound()
+            return held("the roster “%s” no longer carries %s’s seat bound to the credential the change moves it from, so there is nothing to present" % (roster["name"], who))
+        signers = [dict(s, credential_id=proposal["newCredentialId"]) if any(s is m for m in moving) else s for s in roster["signers"]]
+        answered = self.replace_multisig_signers(roster, signers, actor)
+        ceremony = answered["ceremony"]
+        if ceremony is not None:
+            if ceremony["id"] == proposal["pendingTxId"]:
+                return held("the access platform answered the change with the same ceremony, at %d of %d, and did not apply it" % (len(ceremony["collected"]), ceremony["requiredSignatures"]))
+            for s in moving:
+                self.record_roster_change_proposed(actor, T.VIA_ROSTER_CHANGE, ceremony, {"rosterId": roster["id"], "rosterName": roster["name"], "purposes": list(roster["purposes"]),
+                                                                                          "seatEmail": wanted, "seatName": (s.get("display_name") or "").strip() or proposal.get("seatName"),
+                                                                                          "oldCredentialId": s["credential_id"], "newCredentialId": proposal["newCredentialId"]})
+            return held("", {"pendingTxId": ceremony["id"], "requiredSignatures": ceremony["requiredSignatures"], "signaturesCollected": len(ceremony["collected"])})
+        confirmed = any(s["status"] == "active" and s["user_id"].lower() == wanted and s["credential_id"] == proposal["newCredentialId"] for s in roster["signers"])
+        if not confirmed:
+            raise Refusal("ROSTER_SEAT_NOT_REBOUND", detail={"outcome": "answered", "pendingTxId": proposal["pendingTxId"], "seatEmail": wanted, "platformStatus": "200",
+                                                             "platformSaid": "the roster returned does not carry the seat on the new credential", "route": "PATCH /v1/multisigs-v2/{id}", "via": T.VIA_ROSTER_CHANGE})
+        return mark_rebound()
+
+    def audit_export(self, headers: Dict[str, str]) -> Tuple[int, Any]:
+        """GET /v1/export/audit (routes/exports.ts): the trail, oldest first, `items` with audit_id, at, action, credential_id, subject_id, detail; the draw is itself a row."""
+        caller = self.require_caller(headers, "viewer")
+        limit = 500
+        try:
+            limit = max(1, min(5000, int((self._query.get("limit") or ["500"])[0])))
+        except ValueError:
+            raise Malformed("limit: Expected number")
+        page = list(self.trail[:limit])
+        self.append_trail("export.generated", caller["credentialId"], {"register": "audit", "format": "json", "rows": len(page)})
+        return 200, {"items": page, "nextCursor": None, "rateSource": "double", "generatedAt": self._now_iso()}
 
     # -- sets (routes/sets.ts, setgates.ts, roles.ts, destinationlaw.ts) ------------------------------------------
     def review_or_create(self, headers: Dict[str, str], body: Any, create: bool) -> Tuple[int, Any]:
@@ -3026,8 +3676,12 @@ class TheDoubleLearnsSpec91(unittest.TestCase):
         ceremony = double.addresses[address_id]["ceremony"]
         self.assertEqual(ceremony["signatures"], [ada.credential_id, ben.credential_id])
 
-    def test_a_seat_bound_to_the_shared_credential_refuses_the_persons_own_credential(self):
-        """Spec T12: the roster stands (governance established once), Ada's seat is bound to the founder's retired credential, and her own is "not authorized" — SIGNATURE_NOT_COUNTED — while Ben and Cora, on seats never bound, count and the payee is whitelisted, so S6 passes past the one press that cannot count."""
+    def test_a_seat_bound_to_the_shared_credential_is_moved_when_the_census_signs_the_change_and_the_persons_own_credential_then_counts(self):
+        """
+        Spec T12 met the seat bound to the founder's retired credential and Ada's own credential "not authorized" — SIGNATURE_NOT_COUNTED.
+        Spec T15: the roster stands (governance established once), Ada's re-invitation proposes the move (Spec 95) and the platform holds it
+        as a ceremony at the charter's count of two; S4 has the census sign it (Spec 99), the platform applies it, and Ada's own press counts.
+        """
         double = EstateDouble(before_spec_91=True)
         runner = runner_on(double, self.tmp, invite=double.mint_founder_link())
         runner.run()  # Ada's press in S6 bound her seat to the shared credential
@@ -3040,15 +3694,18 @@ class TheDoubleLearnsSpec91(unittest.TestCase):
         ada = again.people["ada"]
         self.assertNotEqual(ada.credential_id, founder.credential_id, "brought in again on her own")
         self.assertIn("approver", ada.roles, "seated on redemption")
+        # the redemption proposed the move, and the platform held it as a ceremony at two (Spec 95); S4 signed it (Spec 99)
+        signing = again.facts["roster_signing"]
+        self.assertEqual([r["outcome"] for r in signing], ["applied"], signing)
+        self.assertEqual(signing[0]["seat"]["email"], ada.email)
+        self.assertEqual(next(s for s in double.whitelist_seats if s["user_id"] == A.PEOPLE["ada"].email)["credential_id"], ada.credential_id, "the platform moved the seat to Ada's own credential")
         press = [c for c in again.calls if c.station == "S6" and c.route.endswith("/approve") and c.who == "Ada Approver"][0]
-        self.assertEqual(press.status, 403)
-        body = json.loads(press.text)
-        self.assertEqual(body["error"]["code"], "SIGNATURE_NOT_COUNTED")
-        self.assertEqual(body["error"]["detail"]["platformSaid"], PLATFORM_NOT_AUTHORIZED)
-        self.assertEqual(body["error"]["detail"]["platformStatus"], "403")
+        self.assertEqual(press.status, 200, press.text)
+        self.assertEqual(json.loads(press.text)["approvals"], {"required": 2, "collected": 1, "remaining": 1})
         self.assertEqual(outcomes["S6"].outcome, H.PASS, outcomes["S6"].line)
+        self.assertIn("Ada Approver counted (1 of 2); Ben Signatory counted (2 of 2): whitelisted", outcomes["S6"].line)
         for record in again.facts["payees"]:
-            self.assertEqual(record["register_status"], "whitelisted", "Ben and Cora, on seats never bound, carried the quorum past Ada's refused press")
+            self.assertEqual(record["register_status"], "whitelisted")
 
     def test_people_already_on_a_shared_credential_are_marked_refused_a_seat_and_given_their_own_by_a_fresh_invitation(self):
         """Spec 91's own scenario (owncredential.test.ts, 'marks them on the register...'), against this double."""
