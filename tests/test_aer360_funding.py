@@ -21,7 +21,7 @@ import aer360_harness as H  # noqa: E402
 import aer360_passkey as PK  # noqa: E402
 import aer360_tables as T  # noqa: E402
 from tests.test_aer360_double import (  # noqa: E402
-    ESTIMATE_REVERTED, EstateDouble, FaucetDouble, GATEWAY_NOT_CONFIGURED, NO_FUNDING_WALLET_SENTENCE, TestnetRpcDouble,
+    EstateDouble, FaucetDouble, GATEWAY_NOT_CONFIGURED, NO_FUNDING_WALLET_SENTENCE, TestnetRpcDouble,
     WALLET_BIRTH_REFUSED_ON_21_SEPTEMBER, WORKSPACE_ID, runner_on,
 )
 
@@ -89,7 +89,7 @@ class TheHarnessPressesForTheFundingWallet(unittest.TestCase):
         # the balance was read from the chain's public RPC as the corridor reads a chain: eth_getBalance for the wallet, latest
         self.assertEqual(self.double.rpc.calls[0]["body"], {"jsonrpc": "2.0", "id": 1, "method": "eth_getBalance", "params": [self.wallet["address"], "latest"]})
         self.assertEqual(self.runner.facts["gas_balance"], {"wei": 0, "said": "0 SEAR (0 wei) read from %s" % RPC, "address": self.wallet["address"]})
-        outside = [c for c in self.runner.calls if c.outside]
+        outside = [c for c in self.runner.calls if c.outside and c.station == "S5"]
         self.assertEqual([(c.station, c.route, c.status) for c in outside], [("S5", "POST %s" % RPC, 200), ("S5", "POST %s" % FAUCET, 200)])
         self.assertEqual(outside[1].who, "Harriet Founder (at the faucet page)")
         # asking again in the same run asks nothing: once per run
@@ -100,7 +100,9 @@ class TheHarnessPressesForTheFundingWallet(unittest.TestCase):
 
     def test_s7_pays_and_s8_reads_transactable_true_and_names_the_wallet(self):
         self.assertEqual(self.outcomes["S7"].outcome, H.PASS, self.outcomes["S7"].line)
-        self.assertNotIn("US$18,249.99", self.outcomes["S7"].line, "nothing was refused, so no asset line")
+        # Spec T14: the Treasury paid the shortfall through the estate's own road, S7a was proved, and the three payments landed
+        self.assertIn("Harness Treasury pays Harness Holdings (%s) the shortfall of US$18.24" % self.wallet["address"], self.outcomes["S7"].line)
+        self.assertIn("S7a proved", self.outcomes["S7"].line)
         s8 = self.outcomes["S8"]
         self.assertEqual(s8.outcome, H.PASS, s8.line)
         self.assertIn("readiness: transactable True, reason None; funding wallet: %s on double-stack-1, key %s" % (self.wallet["address"], self.wallet["keyId"]), s8.line)
@@ -110,7 +112,8 @@ class TheHarnessPressesForTheFundingWallet(unittest.TestCase):
         self.assertIn("Funding wallet: %s on double-stack-1, key %s (GET /v1/workspace; https://testnet.explorer.aeredium.io/address/%s)." % (
             self.wallet["address"], self.wallet["keyId"], self.wallet["address"]), summary)
         self.assertIn("Gas: 0 SEAR (0 wei) read from %s; the faucet paid: paid true, tx_hash %s, times_paid 1." % (RPC, self.double.faucet.tx_hash), summary)
-        self.assertIn("The asset: the three payments together need US$18,249.99 of USDC; the harness never mints or moves it.", summary)
+        self.assertIn("The asset: the three payments together need US$18.24 of USDC; Harness Treasury pays Harness Holdings the shortfall through the estate's own road (Spec T14); the harness never mints the asset and holds no key.", summary)
+        self.assertIn("Harness Treasury: funding wallet %s — the float Bear funds with USDC on ethereum, once" % self.double.treasury.source_account, summary)
         path = self.runner.write_report()
         read = H.read_report(path)
         self.assertEqual(read["outcomes"]["S5"], "pass")
@@ -183,7 +186,7 @@ class TheGatewayRefusesOrIsAway(unittest.TestCase):
         self.assertEqual([(c.status, c.retry_of) for c in presses], [(503, None)])
         self.assertIn('"setting": "GATEWAY_ADDRESS"', presses[0].text)
         self.assertEqual(outcomes["S7"].outcome, H.FAIL)
-        self.assertIn("GAS_PREFLIGHT_UNAVAILABLE: No funding account has been set for this workspace", outcomes["S7"].line)
+        self.assertIn("refused at creation — WORKSPACE_NOT_PROVISIONED: %s (no funding wallet)" % NO_FUNDING_WALLET_SENTENCE, outcomes["S7"].line, "Spec 104: requireSourceAccount, in the wallet's own sentence")
 
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
@@ -286,28 +289,6 @@ class TheRegisterIsTheJudge(unittest.TestCase):
         self.assertIsNone(H.Runner.mirror_sentence({"count": {"collected": 2, "required": 2}}, "pending_promotion"), "pending after a met count is the platform not activating, another truth")
         self.assertIsNone(H.Runner.mirror_sentence({}, "proposed"), "nobody's press counted")
         self.assertEqual(H.Runner.mirror_sentence({"count": {"collected": 2, "required": 2}}, "proposed"), H.MIRROR_DISAGREES % (2, 2, "proposed"))
-
-
-@unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
-class WhatThePaymentsNeed(unittest.TestCase):
-    """Spec T13 §4: with a funding wallet present and the payments refused for want of the asset, one line says what they need together."""
-
-    def test_the_line_names_the_address_the_asset_and_the_figure(self):
-        double, runner, outcomes = run_against(asset_short=True)
-        wallet = double.funding_wallet_view()
-        self.assertEqual(outcomes["S5"].outcome, H.PASS, outcomes["S5"].line)
-        o = outcomes["S7"]
-        self.assertEqual(o.outcome, H.FAIL, o.line)
-        self.assertIn("P1 (1250.00, expected to proceeds to approval): refused at creation — GAS_PREFLIGHT_UNAVAILABLE: Network fees for this run could not be estimated, so it was not submitted. (%s)" % ESTIMATE_REVERTED, o.line)
-        line = "funding wallet %s: the three payments together need US$18,249.99 of USDC on ethereum (1250.00 + 4999.99 + 12000.00 = 18249.99 USDC) — the harness never mints or moves the asset; fund it by hand" % wallet["address"]
-        self.assertTrue(o.line.endswith(line), o.line)
-        self.assertEqual(o.line.count("the three payments together need"), 1, "one line")
-        self.assertIn(line, runner.notes["S7"])
-        step = next(s for s in runner.evidence["S7"] if s["route"] == "POST /v1/sets")
-        self.assertIn(ESTIMATE_REVERTED.replace('"', '\\"'), step["came_back"], "the estate's refusal, verbatim")
-        self.assertEqual(H.Runner.payments_need(), ("18249.99", "US$18,249.99"))
-        self.assertEqual([p.amount for p in A.PAYMENTS], ["1250.00", "4999.99", "12000.00"], "the amounts are unchanged")
-        self.assertIn("The asset: the three payments together need US$18,249.99 of USDC; the harness never mints or moves it.", summary_of(runner))
 
 
 class TheTablesFacts(unittest.TestCase):

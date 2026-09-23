@@ -33,9 +33,13 @@ class EstateHarnessReadmeTest(unittest.TestCase):
 
     def test_it_names_the_estate_the_people_and_the_money(self):
         for words in ("Harness Holdings Pty Ltd", "Harriet Founder", "Ada Approver", "Ben Signatory", "Cora Clerk", "Operating account",
-                      "10,000", "50,000", "250,000", "Northwind Supplies", "Contoso Legal", "1,250", "4,999.99", "12,000"):
+                      "10,000", "50,000", "250,000", "Northwind Supplies", "Contoso Legal", "1,250", "4,999.99", "12,000",
+                      # Spec T14: the book pays in cents, and the paragraph says so beside the figures it had
+                      "in cents since Spec T14", "US$10.00", "US$50.00", "US$250.00", "US$2.00 and US$10.00", "US$1.25", "US$4.99", "US$12.00",
+                      "scaled every money answer by a thousand", "Harness Treasury, a second workspace, pays Holdings the shortfall first"):
             self.assertIn(words, self.section, words)
         self.assertIn("harness+<first>@aeredium.io", self.section)
+        self.assertIn("`--treasury-invite <link>`", self.section)
 
     def test_it_names_the_twelve_stations_and_the_three_hats(self):
         for station, title in H.STATIONS:
@@ -212,7 +216,52 @@ class EstateHarnessReadmeTest(unittest.TestCase):
             self.assertIn(words, self.section, words)
         self.assertLess(self.section.index("Spec T15, 22 September 2026"), self.section.index("Spec T17, 23 September 2026"))
 
+    def test_it_says_the_harness_pays_in_cents_and_funds_holdings_from_the_treasury_since_spec_t14(self):
+        self.assertIn("Spec T14, 22 September 2026, amended 22:35; built 24 September 2026", self.section)
+        for words in ("US$18,249.99", "we are only using threshold signatures. There is no key anywhere to be found", "AER 360 Spec 104", "commit 8812c64", "platform Spec 154",
+                      "*The book pays in cents.*", "US$2.00 (WO3) and US$10.00 (WO4)", "P1 US$1.25 (within the holder's figure), P2 US$4.99 (two signatures), P3 US$12.00 (three)",
+                      "*The float is a workspace, not a file.*", "`~/.aer360-harness/harness-treasury/`", "`harness+treasury@aeredium.io`", "`--treasury-invite <link>`",
+                      "`addressesOfCaller`", "`completeSeatOnCharterWrite`", "a funding wallet that did not stand before this run — the birth run",
+                      "fund Harness Treasury: <address> on ethereum, then rerun", "US$50.00 covers two runs", "a Treasury born and already funded pays without a rerun",
+                      "`GET /v1/workspace/funding-account/balances`", "one payment of one set, a declared one-off, approved with the Treasury founder's passkey", "`POST /v1/sets/{id}/execute`",
+                      "Harness Treasury holds US$<x>; the run needs US$<y>; fund <address> on <chain>", "brings the Treasury in only where Holdings is short",
+                      "an estate with no funding wallet has no address to fund", "*Harriet Founder (Harness Treasury)*", "refused at creation — <the estate's sentence>",
+                      "*Gas is credited as the sandbox may, and the refusal is proved first.*", "`GET /v1/gas/account`", "Gas account: US$…",
+                      "Your gas account holds US$… This set needs at most US$… of gas. Nothing was sent. Buy gas below.", "That is S7a",
+                      "`POST /v1/admin/accounts/{id}/gas-account/credits`", "sandbox run <run id>", "`aer360-harness-<run>-<workspace>-gas-<n>`", "`~/.aer360-harness/admin.env`",
+                      "`AAP_ADMIN_BASE_URL` and `AAP_ADMIN_KEY`", "never in the repository, never printed",
+                      "no gas credit road: the sandbox credits gas through the platform's admin road; file the credential in ~/.aer360-harness/admin.env",
+                      "The card road is not walked by the harness", "*S7 is judged on money that moved.*", "Ben Signatory, Cora Clerk, then Ada Approver and Harriet Founder",
+                      "`instruction.confirmed`", "`GET /v1/export/audit`", "`eth_call balanceOf`", "read at run time and never copied", "a missing RPC should make anybody worry",
+                      "*The auditor counts the money.*", "reconcile to the cent", "*Two disagreements carried to Bear, not silently resolved.*", "This action needs an approver",
+                      "*The minor-unit law reads a JSON integer.*", "`PlatformDouble`", "`UsdcChainDouble`", "159 → 193", "No ship: pull the run folder and rerun",
+                      "the corridor's first real payment judged by the tiers and paid for from a gas account", "Each of the spec's tests was red on main"):
+            self.assertIn(words, self.section, words)
+        self.assertLess(self.section.index("Spec T17, 23 September 2026"), self.section.index("Spec T14, 22 September 2026"))
+
+
 class ChangelogTest(unittest.TestCase):
+    def test_the_changelog_records_spec_t14_before_t17_and_names_every_change(self):
+        text = read("CHANGELOG.md")
+        self.assertIn("## Spec T14 — The harness pays in cents, funds Harness Holdings from a treasury workspace whose key lives only in the enclave, credits the gas account as the sandbox may, proves the gas refusal, and S7 passes with money that moved (24 September 2026)", text)
+        self.assertLess(text.index("## Spec T14"), text.index("## Spec T17"))
+        t14 = text.split("## Spec T14", 1)[1].split("## Spec T17", 1)[0]
+        for words in ("amended on 22 September 2026 at 22:35", "commit 8812c64", "commit e7dc195", "commit 451b998", "US$18,249.99", "`aer360_answers.py`", "`per_payment_cents` `\"1000\"`",
+                      "`holder_alone_cents` `\"200\"`", "`two_signatures_cents` `\"1000\"`", "P1 `\"1.25\"`", "P2 `\"4.99\"`", "P3 `\"12.00\"`",
+                      "`aer360_tables.py`", "`TREASURY`", "`ADMIN_ENV_FILE`", "`ADMIN_CREDIT_ROUTE`", "`ADMIN_CREDIT_REASON`", "`GAS_CREDIT_USD_CENTS`", "`format_usd_cents`",
+                      "`gas_set_shortfall_sentence`", "`usdc_dollars`", "`parse_env_file`", "`public_rpc_url`", "`balance_of_call_data`",
+                      "`for_treasury`", "`bring_in_the_treasury`", "`treasury_overrides`", "`override_answer`", "`--treasury-invite`", "`born_this_run`", "`treasury_passkey_stored`", "`who_suffix`",
+                      "fund Harness Treasury: <address> on ethereum, then rerun", "Harness Treasury holds US$<x>; the run needs US$<y>; fund <address> on <chain>",
+                      "`read_usdc_balance`", "`read_gas_account`", "`read_token_balance`", "`treasury_pays_the_shortfall`", "`pay`", "`sign_the_run`", "`read_until_terminal`", "`read_trail`", "`judge_landing`",
+                      "`prove_the_gas_refusal`", "`gas_shortfall_of`", "S7a not proved", "S7a failed", "`read_admin_env`", "`credit_gas`", "`credit_words`", "`gas_credit_for`",
+                      "`aer360-harness-<run>-<workspace>-gas-<n>`", "no gas credit road: the sandbox credits gas through the platform's admin road; file the credential in ~/.aer360-harness/admin.env",
+                      "`walk_s7`", "S7a is *not made*", "`WORKSPACE_NOT_PROVISIONED`", "refused at creation — <the estate's sentence>", "`TIER_ROAD_WORDS`", "`SIGNERS_IN_ORDER`",
+                      "`audit_the_money_moved`", "money moved: <pair> does not reconcile to the cent", "`audit_money`", "`payments_need_line` is retired", "159 → 193 lines",
+                      "TWO DISAGREEMENTS CARRIED TO BEAR, NOT SILENTLY RESOLVED", "This action needs an approver", "`PlatformDouble`", "`UsdcChainDouble`", "`gas_account_preflight`",
+                      "`execute_set`", "`drive_payment`", "`funding_account_balances`", "`complete_seat_on_charter_write`", "`PAYMENT_UNPRICED` (502)", "`treasury_funding_wallet=\"born\"`",
+                      "`tests/test_aer360_treasury.py`", "the birth run stops with the fund sentence and the rerun pays", "the passkey files' law of T10", "the estate, the platform, the gateway"):
+            self.assertIn(words, t14, words)
+
     def test_the_changelog_records_spec_t17_before_t15_and_names_every_change(self):
         text = read("CHANGELOG.md")
         self.assertIn("## Spec T17 — S4 grants a stale seat again before signing, one seat at a time, and S6 counts Ada (23 September 2026)", text)

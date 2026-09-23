@@ -248,3 +248,138 @@ AUDIT_EXPORT_LIMIT = 5000                                                  # rou
 def credential_short_form(credential_id: Any) -> str:
     """`credentialIdShortForm` (packages/shared/src/enrolment.ts): a credential id's first eight characters, for a line a person reads."""
     return str(credential_id or "")[:8]
+
+
+# ---------------------------------------------------------------------------
+# THE TREASURY, THE GAS ACCOUNT AND THE ADMIN CREDIT ROAD (Spec T14, 22 September 2026, amended 22:35; built 24 September 2026).
+# Facts, never inventions, read from AER 360 Spec 104 (aeredium/AERAccounts, commit 8812c64 — routes/gas.ts, routes/workspace.ts,
+# routes/sets.ts, services/execution.ts, services/accountabstraction.ts, services/fundingwallet.ts, packages/shared/src/states.ts)
+# and from platform Spec 154 and 154b (aeredium/aegiskey-access-platform, commits e7dc195 and 451b998 — internal/api/router.go,
+# gas_handlers.go, middleware.go, internal/gas/credit.go, ledger.go).
+#
+# The float is a WORKSPACE, not a file (Bear, 22 September: "we are only using threshold signatures. There is no key anywhere to be
+# found"): Harness Treasury is a second sandbox workspace the harness births exactly as Harness Holdings was born — its own founder
+# passkey under ~/.aer360-harness/harness-treasury/, its funding wallet a key allocated on the platform and held in the enclave. Bear
+# funds that wallet's address with USDC once; the harness holds no key for it and pays from it only through the estate's own road.
+# Gas is a balance in dollars on the platform's gas ledger (U3), credited for the sandbox through the platform's ADMIN credit road with
+# the admin credential Bear files in ~/.aer360-harness/admin.env — never in the repository, never printed. The card road is Bear's.
+# ---------------------------------------------------------------------------
+TREASURY = {
+    "company": "Harness Treasury Pty Ltd",   # the workspace's name, as the birth script names it; the session's workspace must begin with the short name
+    "short": "Harness Treasury",
+    "client_id": "harness-treasury",         # the folder under ~/.aer360-harness/ the Treasury founder's passkey lives in
+    # The address the Treasury's estate is opened under, which the estate attributes to the founder's own key (services/approverseats.ts,
+    # addressesOfCaller: the account's own address, for a key the register attaches to nobody) — so the Treasury's charter names it as the
+    # payment approver (C11) and the founder's compile seats her (completeSeatOnCharterWrite): the one approver the float needs.
+    "email": "harness+treasury@aeredium.io",
+}
+ADMIN_ENV_FILE = "admin.env"                 # under ~/.aer360-harness/: the platform's admin credential, in the estate's own setting names
+ADMIN_ENV_URL_KEY = "AAP_ADMIN_BASE_URL"     # AERAccounts .env.example: the access platform's base URL
+ADMIN_ENV_KEY_KEY = "AAP_ADMIN_KEY"          # AERAccounts .env.example: the admin key, `aek-admin-…` (internal/api/middleware.go)
+ADMIN_KEY_PREFIX = "aek-admin-"
+ADMIN_CREDIT_ROUTE = "/v1/admin/accounts/%s/gas-account/credits"   # router.go: the admin credit road of the gas account (Spec 154 §1): the account's id
+ADMIN_CREDIT_REASON = "sandbox run %s"                             # gas_handlers.go PostAdminGasAccountCredit: reason required; the harness names the run
+GAS_CREDIT_USD_CENTS = 1000                  # U3 (Bear, 22 September 2026): "put $10 on our account every time"; accountabstraction.ts GAS_DEFAULT_TOP_UP_USD_CENTS
+GAS_ACCOUNT_ROUTE = "/v1/gas/account"        # routes/gas.ts: the balance, read live from the platform; `account.sentence` is "Gas account: US$<available>"
+GAS_ACCOUNT_LABEL = "Gas account"            # accountabstraction.ts GAS_ACCOUNT_LABEL
+FUNDING_BALANCES_ROUTE = "/v1/workspace/funding-account/balances"  # routes/workspace.ts: the stablecoin the funding wallet holds, per chain, in dollars
+SET_EXECUTE_ROUTE = "/v1/sets/%s/execute"    # routes/sets.ts: execute an approved run (author-gated); the estate waits for the platform to report it landed
+GAS_GATE = "gas_preflight"                   # setgates.ts: the fourth gate's name in the review payload, the gas account preflight (Spec 104 §4)
+GAS_SHORTFALL = "GAS_SHORTFALL"              # refusals.ts; execution.ts gasAccountPreflight: U3's sentence with the set's figures
+PAYMENT_UNPRICED = "PAYMENT_UNPRICED"        # 502: the platform answered and refused the quote — "This payment could not be priced: <their sentence>"
+PAYMENT_PRICING_UNAVAILABLE = "PAYMENT_PRICING_UNAVAILABLE"  # 503: the platform did not answer, or answered a fault
+WORKSPACE_NOT_PROVISIONED = "WORKSPACE_NOT_PROVISIONED"      # 503: routes/sets.ts requireSourceAccount — a run asked of an estate with no funding wallet
+INSTRUCTION_CONFIRMED = "instruction.confirmed"   # services/audit.ts: the trail's row for a landed payment — txHash, userOpHash, gasDebitUsdCents, gasDebit
+INSTRUCTION_TERMINAL_STATES = ("confirmed", "failed", "rejected")          # packages/shared/src/states.ts TERMINAL_INSTRUCTION_STATES
+SET_TERMINAL_STATES = ("settled", "partially_settled", "cancelled")        # states.ts TERMINAL_SET_STATES
+PLATFORM_LANDED = "landed"                   # the platform's word for an operation whose receipt the sponsor read (GET /v1/gas/operations/{hash}); the estate's is `confirmed`
+SET_SETTLED = "settled"                      # states.ts resolveSetOutcome: every instruction confirmed
+INSTRUCTION_CONFIRMED_STATE = "confirmed"    # states.ts: the instruction landed and its receipt was read
+# The sandbox chain's names as the estate speaks them: the compiled charter's `allowedChains` word (onboardingcompiler.ts) and the
+# registry's short name (packages/shared/src/chains.ts). Either names the AEREDIUM testnet whose RPC Spec T13 pinned above.
+TESTNET_CHAIN_NAMES = ("aeredium-testnet", "aeredium")
+ERC20_BALANCE_OF = "balanceOf(address)"
+ERC20_BALANCE_OF_SELECTOR = "0x" + keccak256(ERC20_BALANCE_OF.encode("ascii"))[:4].hex()   # 0x70a08231, the ERC-20 selector
+# The sentences this spec adds, word for word (SPEC.md §2 and §3, the ship note).
+NO_GAS_CREDIT_ROAD_SENTENCE = ("no gas credit road: the sandbox credits gas through the platform's admin road; file the credential in "
+                               "~/.aer360-harness/admin.env")
+TREASURY_SHORT_SENTENCE = "Harness Treasury holds %s; the run needs %s; fund %s on %s"
+FUND_TREASURY_SENTENCE = "fund Harness Treasury: %s on %s, then rerun"
+
+
+def public_rpc_url(chain: str) -> Optional[str]:
+    """
+    THE PUBLIC RPC THE HARNESS MAY READ A PAYEE'S BALANCE FROM, and nothing else: the AEREDIUM testnet's (Spec T13, from the faucet
+    record) for the sandbox chain under either of the estate's names for it, else the endpoint the corridor harness's own run-file
+    skeleton names for the chain (`corridor_harness.default_run_file`, read at run time and never copied here). None for a chain
+    neither names: the harness never invents an endpoint, and says so.
+    """
+    if chain in TESTNET_CHAIN_NAMES:
+        return TESTNET_RPC_URL
+    from corridor_harness import default_run_file  # the corridor harness's skeleton, beside this file
+
+    row = (default_run_file().get("chains") or {}).get(chain)
+    return str(row["rpc"]) if isinstance(row, dict) and row.get("rpc") else None
+
+
+def balance_of_call_data(address: str) -> str:
+    """The ERC-20 `balanceOf(address)` call: the selector and the address left-padded to thirty-two bytes, as eth_call takes it."""
+    body = address.lower()[2:] if address.lower().startswith("0x") else address.lower()
+    if len(body) != 40 or any(c not in "0123456789abcdef" for c in body):
+        raise ValueError("an EVM address is 0x and forty hexadecimal characters: %r" % address)
+    return ERC20_BALANCE_OF_SELECTOR + body.rjust(64, "0")
+
+
+def format_usd_cents(cents: Any) -> str:
+    """`formatUsdCents` (services/accountabstraction.ts), the estate's own spelling on the gas roads: US$12.34, no grouping, a leading minus."""
+    n = int(cents)
+    negative = n < 0
+    n = -n if negative else n
+    return "%sUS$%d.%02d" % ("-" if negative else "", n // 100, n % 100)
+
+
+def gas_set_shortfall_sentence(available_cents: Any, ceiling_cents: Any) -> str:
+    """`gasSetShortfallSentence` (Spec 104 §4), U3's sentence for a set, word for word."""
+    return "Your gas account holds %s. This set needs at most %s of gas. Nothing was sent. Buy gas below." % (
+        format_usd_cents(available_cents), format_usd_cents(ceiling_cents))
+
+
+def gas_debit_words(actual_cents: Any) -> str:
+    """`gasDebitWords` (Spec 104 §5; Spec 154 §4): the debit's words on the trail and the export."""
+    return "gas, %s, paid in advance from your gas account" % format_usd_cents(actual_cents)
+
+
+def usdc_dollars(minor: Any) -> str:
+    """
+    USDC minor units (six decimals) as dollars, by integer arithmetic — the asset is the dollar-pegged one the payments are made in
+    (Spec T11 §4): 18240000 → "US$18.24"; dust below a cent is shown whole rather than rounded away: 18240001 → "US$18.240001".
+    """
+    n = int(minor)
+    if n < 0:
+        raise ValueError("a balance is a non-negative integer of minor units: %r" % (minor,))
+    whole, fraction = divmod(n, 10 ** ASSET_DECIMALS[PAYMENT_ASSET])
+    if fraction % 10 ** (ASSET_DECIMALS[PAYMENT_ASSET] - 2) == 0:
+        return "US$%d.%02d" % (whole, fraction // 10 ** (ASSET_DECIMALS[PAYMENT_ASSET] - 2))
+    return "US$%d.%0*d" % (whole, ASSET_DECIMALS[PAYMENT_ASSET], fraction)
+
+
+def usdc_minor_of_cents(cents: Any) -> int:
+    """Cents to USDC minor units: the payments' figures are dollars, and USDC carries six decimals."""
+    return int(cents) * 10 ** (ASSET_DECIMALS[PAYMENT_ASSET] - 2)
+
+
+def parse_env_file(text: str) -> Dict[str, str]:
+    """A shell-style environment file: KEY=value lines, an optional `export`, quotes stripped, comments and blanks ignored."""
+    out: Dict[str, str] = {}
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].strip()
+        key, _, value = line.partition("=")
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        out[key.strip()] = value
+    return out

@@ -357,7 +357,8 @@ class TheEstateBeforeSpec99AndTheDayAfter(unittest.TestCase):
         self.assertIn("Ada Approver not counted (SIGNATURE_NOT_COUNTED", self.before_99["S6"].line)
         self.assertEqual(self.before_99["S6"].outcome, H.PASS, "Ben and Cora carried the count, as on 22 September")
         self.assertTrue(any(n.startswith("S6: Ada Approver's whitelist press was not counted (SIGNATURE_NOT_COUNTED)") for n in self.second.notes["S10"]))
-        self.assertEqual(self.trail_before_99, [], "Spec 95 alone recorded no seat row for the ceremony it opened")
+        self.assertEqual([r for r in self.trail_before_99 if not str(r).startswith(("set.", "instruction.", "export."))], [],
+                         "Spec 95 alone recorded no seat row for the ceremony it opened (S7's execution rows and its reads of the trail aside, Spec T14)")
 
     def test_the_ceremony_of_spec_95_is_listed_as_one_this_estate_did_not_propose_and_the_grant_proposes_the_move_afresh(self):
         o = self.after_99["S4"]
@@ -403,7 +404,7 @@ class AFreshEstateIsUnchanged(unittest.TestCase):
         self.assertEqual([c.route for c in runner.calls if c.station == "S4" and "/v1/roster/changes" in c.route], ["GET /v1/roster/changes"])
         self.assertEqual(runner.facts["roster_signing"], [])
         self.assertEqual(runner.facts["seats_moved"], [])
-        self.assertEqual([c.route for c in runner.calls if "/v1/export/audit" in c.route], [], "nothing moved, so the trail is not read")
+        self.assertEqual([c.route for c in runner.calls if "/v1/export/audit" in c.route and c.station in ("S4", "S10")], [], "nothing moved, so S10 does not read the trail for a seat (S7 reads it for its payments, Spec T14)")
         self.assertEqual(double.ceremonies, [])
         self.assertEqual(outcomes["S6"].outcome, H.PASS, outcomes["S6"].line)
 

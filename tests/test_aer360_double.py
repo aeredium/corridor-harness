@@ -217,6 +217,47 @@ ceremony born lapse at birth (the platform's clock past its expires_at), `2` the
 a ceremony's expiry once its first signature is counted, so the second meets the platform's "conflict: pending transaction expired";
 `account_email` is the AAP account's own address, which the estate attributes to the founder's key (`addressesOfCaller`) — None, the default,
 is an account whose address the double does not know, so the founder's key is attributed no census seat.
+
+Spec T14 (22 September 2026, amended 22:35; built 24 September 2026) taught the double AER 360 Spec 104 (aeredium/AERAccounts, commit 8812c64)
+and platform Spec 154 and 154b (aeredium/aegiskey-access-platform, commits e7dc195 and 451b998), read from their code, because the harness now
+pays real USDC through the estate's own road and buys its gas from the platform's ledger:
+
+  routes/workspace.ts, services/fundingwallet.ts     the funding wallet view carries the fund sentence and the chains this deployment pays on (Spec 104
+                                                     §1); GET /v1/workspace/funding-account/balances answers the stablecoin the key holds per chain in
+                                                     dollars — chain, asset, the token contract, balanceMinor, usdMinor, the sentence — read from the
+                                                     chain double (UsdcChainDouble)
+  routes/gas.ts, services/accountabstraction.ts      GET /v1/gas/account: the balance read live from the platform double's ledger, "Gas account: US$…",
+                                                     the platform's low flag (twice the median of the last ten debits, or US$1.00), the press not open
+  routes/sets.ts requireSourceAccount                a run asked of an estate with no funding wallet is WORKSPACE_NOT_PROVISIONED (503) in the
+                                                     funding wallet's own sentence — GAS_PREFLIGHT_UNAVAILABLE is gone with the pre-flight
+  services/execution.ts gasAccountPreflight          THE FOURTH GATE (`gas_account_preflight`): the balance read before the quotes, one dry quote
+                                                     per payment — the chain's dry run of the transfer refuses where the key holds less than the
+                                                     amount (PAYMENT_UNPRICED, "This payment could not be priced: <their sentence>"), the platform
+                                                     refuses each quote the balance cannot cover (insufficient_gas) and its ceiling still counts —
+                                                     and U3's sentence with the set's figures under GAS_SHORTFALL where the balance is below the sum;
+                                                     the review's reservations are released by the platform's poller at valid_until, which in this
+                                                     double is the review's end
+  routes/sets.ts, services/execution.ts executeSet   POST /v1/sets/{id}/execute (`execute_set`, `drive_payment`): an approved run executed by its
+                                                     author — the ceiling reserved, U3's per-payment refusal where the balance cannot cover it, the
+                                                     transfer on the chain double, the debit at actual cost, the instruction confirmed with its txHash
+                                                     and gasValue, the run settled or partially settled (states.ts resolveSetOutcome), and the trail's
+                                                     instruction.confirmed row with userOpHash, txHash, gasDebitUsdCents and gasDebit
+  services/approverseats.ts completeSeatOnCharterWrite the confirming credential is seated where the charter names an address the estate attributes
+                                                     to it (addressesOfCaller) — the account's own address for the founder's key (`account_email`)
+  internal/api/gas_handlers.go, middleware.go        THE PLATFORM (PlatformDouble): the gas ledger per account and the ADMIN credit road, POST
+  internal/gas/credit.go, ledger.go                  /v1/admin/accounts/{id}/gas-account/credits under the admin key — 401 in adminAuth's three
+                                                     sentences, reason required, an unknown account 404, a repeated key deduped, 201 with the line and
+                                                     the balance; the door road and the card road are not walked by the harness
+  the payment chain (UsdcChainDouble)                the token contract the estate names, every holder's USDC in minor units, the transfers the
+                                                     payments make, and the chain's public RPC answering eth_call balanceOf as a node does
+
+and the sandbox is TWO WORKSPACES ON ONE ESTATE: every EstateDouble births a Treasury double beside it (Harness Treasury, `T.TREASURY`), sharing the
+platform, the chain and the step-up secret, and answers a request the Treasury owns — its session's cookie, its invitation's token, its passkey at the
+sign-in road — by handing it over (`owns`). Knobs: `treasury_usdc_cents` (US$100.00: what Bear funded the float with), `holdings_usdc_cents` (US$0.00),
+`treasury_funding_wallet` ("born": Bear birthed and funded it before this run; "press": this run births it and stops), `gas_refusal_names_other_figures`
+(a review whose sentence names other figures), `review_refuses_but_pays` (a review that says nothing was sent while money moved), `UsdcChainDouble(
+lose_transfers=True)` (a payee whose balance does not rise), `PlatformDouble(debit_gap_cents=1)` (a ledger one cent apart from the trail), and
+`runner_on(..., admin_env=False)` (no credential filed). `asset_short` is gone: the chain's balances decide.
 """
 from __future__ import annotations
 
@@ -264,6 +305,8 @@ STATUS = {
     "WALLET_BIRTH_REFUSED": 502, "GATEWAY_UNAVAILABLE": 503, "FUNDING_WALLET_ALREADY_BORN": 409, "GAS_SHORTFALL": 422,
     "CHANGE_SIGNER_NOT_ON_ROSTER": 403, "ROSTER_CHANGE_UNKNOWN": 404, "PLATFORM_REFUSED": 502, "CHANGE_GOVERNANCE_UNREADABLE": 503,
     "ROSTER_SEAT_NOT_REBOUND": 502,
+    # Spec 104 (accountabstraction.ts paymentUnpricedRefusal): the platform answered and refused a quote, 502; did not answer, or answered a fault, 503
+    "PAYMENT_UNPRICED": 502, "PAYMENT_PRICING_UNAVAILABLE": 503,
 }
 MESSAGES = {
     "NOT_AUTHENTICATED": "You are not signed in.",
@@ -314,6 +357,9 @@ MESSAGES = {
     # Spec 97 (refusals.ts): the default sentence; every raise composes its own through platform_refused_sentence
     "PLATFORM_REFUSED": "The access platform did not carry out this request, so nothing was changed. Its own status and words are below.",
     "ROSTER_SEAT_NOT_REBOUND": "The access platform would not move this person’s roster seat to their new credential, so the seat stays bound to the credential it held. Nothing was marked rebound. The platform’s own words are below.",
+    # Spec 104: every raise composes its own — "This payment could not be priced: <the platform's sentence>." — these stand where none was composed
+    "PAYMENT_UNPRICED": "This payment could not be priced: the access platform refused the quote. The answer will be the same until what it named is resolved.",
+    "PAYMENT_PRICING_UNAVAILABLE": "This payment could not be priced: the access platform could not be asked. Nothing was sent.",
 }
 ESTATE_KEY_CURE = ("If you meant a different estate, sign out and choose that estate’s key when your device offers the picker — "
                    "each key is labelled with its estate’s name.")
@@ -760,6 +806,218 @@ class TestnetRpcDouble:
         return 200, [("Content-Type", "application/json")], json.dumps({"jsonrpc": "2.0", "id": rpc_id, "result": result})
 
 
+# ---------------------------------------------------------------------------
+# THE ACCESS PLATFORM'S GAS LEDGER AND THE PAYMENT CHAIN'S USDC (Spec T14), each as its own code answers.
+# ---------------------------------------------------------------------------
+PLATFORM_BASE = "https://platform.test"  # the access platform's base URL the tests file in admin.env (AAP_ADMIN_BASE_URL)
+PLATFORM_HOST = urllib.parse.urlparse(PLATFORM_BASE).netloc
+PUBLIC_RPC_HOST = urllib.parse.urlparse(T.public_rpc_url(T.PAYEE_CHAIN) or "https://rpc.invalid").netloc
+TREASURY_ACCOUNT_ID = "aap-account-treasury"
+TREASURY_WORKSPACE_ID = "ws-treasury"
+QUOTE_CEILING_USD_CENTS = 40  # the ceiling one dry quote reserves in this double, so a set of three needs at most US$1.20, as Spec 104's own test has it
+ACTUAL_GAS_USD_CENTS = 31  # the debit the platform takes when an operation lands, at actual cost (Spec 154 §4)
+# The platform's own sentences (internal/api/middleware.go adminAuth; gas_handlers.go PostAdminGasAccountCredit; internal/gas/credit.go; internal/identity/errors.go), word for word.
+PLATFORM_ADMIN_MISSING = "missing or malformed Authorization header"
+PLATFORM_ADMIN_FORMAT = "invalid admin key format"
+PLATFORM_ADMIN_INVALID = "invalid admin key"
+PLATFORM_REASON_REQUIRED = "reason is required on an admin credit: the road exists for the sandbox and for goodwill, and the row says which"
+PLATFORM_AMOUNT_NOT_POSITIVE = "amount_usd_cents must be a positive whole number of cents, got %d"
+PLATFORM_ACCOUNT_NOT_FOUND = "identity: not found"
+PLATFORM_BELOW_MINIMUM = "%s was credited; the minimum top-up is %s, and a top-up below it is accepted and recorded as it came"
+PLATFORM_INSUFFICIENT_GAS = "Your gas account holds %s. This %s needs at most %s of gas. Nothing was sent. Top up %s or more."  # test/gasRoadsDouble.ts insufficientGasSentence, the platform's per-operation sentence
+# The chain's refusal of a transfer the key cannot cover, as the token contract words it and the platform relays it (the sentence the live run of 23 September met).
+ESTIMATE_REVERTED_SAID = "the chain refused the dry run of the operation: %s" % ESTIMATE_REVERTED  # the platform's quote road, refusing in the chain's words
+ESTIMATE_REVERTED_CLAUSE = "the access platform said: “%s”" % ESTIMATE_REVERTED_SAID  # GasRoadError.clause() for a refusal (services/accountabstraction.ts)
+GAS_LOW_SENTENCE = ("Your gas account is low: the access platform says it holds less than the cost of two typical operations. Buy gas below; a payment the balance cannot "
+                    "cover is refused before anything is sent.")  # services/accountabstraction.ts GAS_LOW_SENTENCE
+BUYING_GAS_NOT_OPEN = "buying gas is not open on this estate yet"  # accountabstraction.ts BUYING_GAS_NOT_OPEN
+AFTER_CHECKOUT_SENTENCES = {"bought": "Your card payment is with the payment desk. The gas account updates when the desk confirms it; this page reads the balance live.",
+                            "cancelled": "The card payment was cancelled at the payment desk. Nothing was charged."}  # routes/gas.ts
+
+
+def us_dollars(cents: int) -> str:
+    """`usDollars` (services/fundingwallet.ts): US$1,234.56 from cents, grouped, by integer arithmetic."""
+    negative = cents < 0
+    n = -cents if negative else cents
+    return "%sUS$%s.%02d" % ("-" if negative else "", "{:,}".format(n // 100), n % 100)
+
+
+class PlatformDouble:
+    """
+    THE ACCESS PLATFORM'S GAS LEDGER AND ITS ADMIN CREDIT ROAD, as Spec 154 and 154b built them (aegiskey-access-platform: internal/gas/ledger.go —
+    one line per credit, reservation or debit, in USD cents, with a unique idempotency key; internal/gas/credit.go — a repeated key answers the line
+    that stands, `deduped`; internal/api/gas_handlers.go PostAdminGasAccountCredit — the admin key, `reason` required, 201 with the line and the
+    balance, 200 deduped; internal/api/middleware.go adminAuth — a bearer missing, malformed or wrong is 401 in three sentences; response.go writeError
+    — every refusal is {"error": <sentence>}). The estate doubles read and move this ledger in process, as the estate reads the platform's roads;
+    the harness reaches only the admin credit road, over HTTP, with the credential admin.env names. `down` is a platform that cannot be reached;
+    `debit_gap_cents` a ledger that debits more than the trail says, for S10's one-cent finding.
+    """
+
+    def __init__(self, admin_key: Optional[str] = None, down: bool = False, debit_gap_cents: int = 0):
+        self.admin_key = admin_key or (T.ADMIN_KEY_PREFIX + secrets.token_hex(16))
+        self.down = down
+        self.debit_gap_cents = debit_gap_cents
+        self.accounts: Set[str] = set()
+        self.lines: List[Dict[str, Any]] = []
+        self.requests: List[Dict[str, Any]] = []
+        self.audit: List[Dict[str, Any]] = []
+
+    # -- the ledger (ledger.go) ----------------------------------------------------------------------------------------
+    def balance(self, account_id: str) -> Dict[str, int]:
+        mine = [l for l in self.lines if l["account_id"] == account_id]
+        credits = sum(l["amount_usd_cents"] for l in mine if l["kind"] == "credit")
+        debits = sum(l["amount_usd_cents"] for l in mine if l["kind"] == "debit")
+        reserved = sum(l["amount_usd_cents"] for l in mine if l["kind"] == "reservation" and l.get("released_at") is None)
+        return {"balance_usd_cents": credits - debits, "reserved_usd_cents": reserved, "available_usd_cents": credits - debits - reserved}
+
+    def debits_of(self, account_id: str) -> List[int]:
+        return [l["amount_usd_cents"] for l in self.lines if l["account_id"] == account_id and l["kind"] == "debit"]
+
+    def low(self, account_id: str) -> bool:
+        """Spec 154 §2: below twice the median actual cost of the account's last ten operations, or US$1.00 where there are none."""
+        recent = self.debits_of(account_id)[-10:]
+        if not recent:
+            figure = 100
+        else:
+            ordered = sorted(recent)
+            middle = len(ordered) // 2
+            median = ordered[middle] if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) // 2
+            figure = 2 * median
+        return self.balance(account_id)["balance_usd_cents"] < figure
+
+    def _line(self, account_id: str, kind: str, cents: int, key: str, **extra: Any) -> Dict[str, Any]:
+        line = {"id": str(uuid.uuid4()), "account_id": account_id, "kind": kind, "amount_usd_cents": cents, "amount": T.format_usd_cents(cents),
+                "idempotency_key": key, "created_at": EstateDouble._now_iso()}
+        line.update(extra)
+        self.lines.append(line)
+        return line
+
+    def credit(self, account_id: str, cents: int, key: str, reason: str, source: str, actor: str) -> Tuple[Dict[str, Any], bool]:
+        existing = next((l for l in self.lines if l["idempotency_key"] == key), None)
+        if existing is not None:
+            return existing, False
+        return self._line(account_id, "credit", cents, key, actor=actor, source=source, reason=reason, words="credit, %s, %s" % (T.format_usd_cents(cents), reason)), True
+
+    def reserve(self, account_id: str, cents: int, key: str, chain: str, words: str) -> Dict[str, Any]:
+        return self._line(account_id, "reservation", cents, key, chain=chain, words=words, released_at=None)
+
+    def release(self, key: str) -> None:
+        for line in self.lines:
+            if line["kind"] == "reservation" and line["idempotency_key"] == key and line.get("released_at") is None:
+                line["released_at"] = EstateDouble._now_iso()
+
+    def debit(self, account_id: str, cents: int, key: str, chain: str, user_op_hash: str, tx_hash: str) -> Dict[str, Any]:
+        return self._line(account_id, "debit", cents, key, chain=chain, user_op_hash=user_op_hash, transaction_hash=tx_hash, words=T.gas_debit_words(cents))
+
+    # -- the admin credit road (gas_handlers.go, middleware.go) ------------------------------------------------------------
+    def __call__(self, request: urllib.request.Request) -> Tuple[int, List[Tuple[str, str]], str]:
+        method = request.get_method()
+        url = urllib.parse.urlparse(request.full_url)
+        headers = {k.lower(): v for k, v in request.header_items()}
+        raw_body = request.data.decode("utf-8") if request.data else ""
+        self.requests.append({"method": method, "path": url.path, "headers": headers, "body": raw_body})
+        if self.down:
+            raise H.Unreachable("%s %s could not be reached: [Errno 61] Connection refused" % (method, request.full_url))
+        m = re.match(r"^/v1/admin/accounts/([^/]+)/gas-account/credits$", url.path)
+        if not m or method != "POST":
+            return self._json(404, {"error": "not found"})
+        authorization = headers.get("authorization", "")
+        if not authorization.startswith("Bearer ") or not authorization[len("Bearer "):].strip():
+            return self._json(401, {"error": PLATFORM_ADMIN_MISSING})
+        bearer = authorization[len("Bearer "):].strip()
+        if not bearer.startswith(T.ADMIN_KEY_PREFIX):
+            return self._json(401, {"error": PLATFORM_ADMIN_FORMAT})
+        if bearer != self.admin_key:
+            return self._json(401, {"error": PLATFORM_ADMIN_INVALID})
+        account_id = m.group(1)
+        if account_id not in self.accounts:
+            return self._json(404, {"error": PLATFORM_ACCOUNT_NOT_FOUND})
+        try:
+            body = json.loads(raw_body) if raw_body else {}
+        except ValueError as err:
+            return self._json(400, {"error": str(err)})
+        if not isinstance(body, dict):
+            return self._json(400, {"error": "json: cannot unmarshal into Go value of type api.gasCreditBody"})
+        unknown = [k for k in body if k not in ("account_id", "amount_usd_cents", "stripe_event_id", "idempotency_key", "reason", "reference")]
+        if unknown:
+            return self._json(400, {"error": 'json: unknown field "%s"' % unknown[0]})
+        reason = str(body.get("reason") or "").strip()
+        if not reason:
+            return self._json(400, {"error": PLATFORM_REASON_REQUIRED})
+        amount = body.get("amount_usd_cents")
+        if not isinstance(amount, int) or isinstance(amount, bool) or amount <= 0:
+            return self._json(400, {"error": PLATFORM_AMOUNT_NOT_POSITIVE % (amount if isinstance(amount, int) else 0), "code": "validation"})
+        key = str(body.get("idempotency_key") or "").strip() or ("admin:" + str(uuid.uuid4()))
+        line, created = self.credit(account_id, amount, key, reason, "admin", "admin:bearer")
+        answer: Dict[str, Any] = {"line": line, "deduped": not created, "below_minimum": line["amount_usd_cents"] < T.GAS_CREDIT_USD_CENTS,
+                                  "minimum_top_up_usd_cents": T.GAS_CREDIT_USD_CENTS, "balance": self.balance(account_id)}
+        if answer["below_minimum"]:
+            answer["note"] = PLATFORM_BELOW_MINIMUM % (T.format_usd_cents(line["amount_usd_cents"]), T.format_usd_cents(T.GAS_CREDIT_USD_CENTS))
+        self.audit.append({"type": "gas.credited_by_admin", "result": "success", "account_id": account_id, "outcome": "deduped" if not created else "credited",
+                           "amount_usd_cents": line["amount_usd_cents"], "reason": reason, "idempotency_key": line["idempotency_key"]})
+        return self._json(200 if not created else 201, answer)
+
+    @staticmethod
+    def _json(status: int, payload: Any) -> Tuple[int, List[Tuple[str, str]], str]:
+        return status, [("Content-Type", "application/json")], json.dumps(payload)
+
+
+class UsdcChainDouble:
+    """
+    THE PAYMENT CHAIN'S USDC, as the estate reads it and the harness reads it: the token contract the estate names on the chain (a derived test
+    address, never a real one), every holder's balance in minor units, the transfers the estate's payments make, and the chain's public RPC
+    answering `eth_call` balanceOf(address) as a node does — a 32-byte hex word — and `eth_chainId`. `lose_transfers` is a chain on which the
+    sender is debited and the payee credited nothing: a payment whose payee's balance does not rise, which the harness must fail naming it.
+    `fault` is "down" (the RPC cannot be reached) or "not_json" (a proxy answering HTML).
+    """
+
+    def __init__(self, lose_transfers: bool = False, fault: Optional[str] = None):
+        self.token = T.derive_address("the estate double's %s contract/%s" % (T.PAYMENT_ASSET, T.PAYEE_CHAIN))
+        self.balances: Dict[str, int] = {}
+        self.transfers: List[Dict[str, Any]] = []
+        self.lose_transfers = lose_transfers
+        self.fault = fault
+        self.calls: List[Dict[str, Any]] = []
+
+    def balance_of(self, address: str) -> int:
+        return self.balances.get(address.lower(), 0)
+
+    def credit(self, address: str, minor: int) -> None:
+        self.balances[address.lower()] = self.balance_of(address) + int(minor)
+
+    def transfer(self, sender: str, payee: str, minor: int) -> None:
+        if self.balance_of(sender) < minor:
+            raise ValueError(ESTIMATE_REVERTED)
+        self.balances[sender.lower()] = self.balance_of(sender) - minor
+        if not self.lose_transfers:
+            self.credit(payee, minor)
+        self.transfers.append({"from": sender.lower(), "to": payee.lower(), "minor": minor})
+
+    def __call__(self, request: urllib.request.Request) -> Tuple[int, List[Tuple[str, str]], str]:
+        body = json.loads(request.data.decode("utf-8")) if request.data else {}
+        self.calls.append({"method": request.get_method(), "body": body})
+        if self.fault == "down":
+            raise H.Unreachable("%s %s could not be reached: [Errno 8] nodename nor servname provided, or not known" % (request.get_method(), request.full_url))
+        if self.fault == "not_json":
+            return 502, [("Content-Type", "text/html")], "<html><body>502 Bad Gateway</body></html>"
+        rpc_id = body.get("id")
+        method = body.get("method")
+        if method == "eth_chainId":
+            result: Any = hex(1)
+        elif method == "eth_call":
+            params = body.get("params") or [{}]
+            call = params[0] if params and isinstance(params[0], dict) else {}
+            data = str(call.get("data") or "")
+            if str(call.get("to") or "").lower() != self.token.lower() or not data.lower().startswith(T.ERC20_BALANCE_OF_SELECTOR.lower()) or len(data) != 2 + 8 + 64:
+                result = "0x"
+            else:
+                holder = "0x" + data[-40:]
+                result = "0x" + ("%064x" % self.balance_of(holder))
+        else:
+            return 200, [("Content-Type", "application/json")], json.dumps({"jsonrpc": "2.0", "id": rpc_id, "error": {"code": -32601, "message": "the method %s does not exist/is not available" % method}})
+        return 200, [("Content-Type", "application/json")], json.dumps({"jsonrpc": "2.0", "id": rpc_id, "result": result})
+
+
 class EstateDouble:
     """The estate, in memory. Strict as the code; every answer is the code's own shape."""
 
@@ -769,9 +1027,13 @@ class EstateDouble:
                  pending_approval_says_why: bool = True, whitelist_roster: Optional[Sequence[str]] = None, platform_never_activates: bool = False,
                  before_spec_91: bool = False, seat_completes_on_redemption: bool = True, second_authorship_entry: bool = False,
                  platform_names_approver: Sequence[str] = (), mirror_lags: bool = False, register_corrects: bool = True,
-                 asset_short: bool = False, faucet: Optional[FaucetDouble] = None, rpc: Optional[TestnetRpcDouble] = None,
+                 faucet: Optional[FaucetDouble] = None, rpc: Optional[TestnetRpcDouble] = None,
                  change_roster: Optional[Sequence[str]] = None, before_spec_99: bool = False, ceremony_lapses: int = 0, account_email: Optional[str] = None,
-                 lapse_after_first_signature: bool = False, seats_override: Optional[List[Dict[str, Any]]] = None):
+                 lapse_after_first_signature: bool = False, seats_override: Optional[List[Dict[str, Any]]] = None,
+                 platform: Optional[PlatformDouble] = None, chain: Optional[UsdcChainDouble] = None, treasury: bool = True, is_treasury: bool = False,
+                 aap_account_id: Optional[str] = None, secret: Optional[bytes] = None, initial_usdc_cents: Optional[int] = None, holdings_usdc_cents: int = 0,
+                 treasury_usdc_cents: int = 10000, treasury_funding_wallet: str = "born", quote_ceiling_usd_cents: int = QUOTE_CEILING_USD_CENTS,
+                 actual_gas_usd_cents: int = ACTUAL_GAS_USD_CENTS, gas_refusal_names_other_figures: bool = False, review_refuses_but_pays: bool = False):
         self.currency_spoken_as_code = currency_spoken_as_code  # False: main's default arm (JSON); True: Spec 88's code
         # The payee door and a venue's contract (Spec T11). None: the door follows the written policy charter, as Spec 92 built it —
         # PAYEE_IS_VENUE_CONTRACT where the charter says refused and the address is on the venue table. True: Spec T8's stand-in, a door
@@ -824,9 +1086,25 @@ class EstateDouble:
         parsed = urllib.parse.urlparse(self.base)
         self.origin = "%s://%s" % (parsed.scheme, parsed.netloc)
         self.rp_id = parsed.hostname or RP_ID
-        self.secret = b"double-secret"
+        self.secret = secret if secret is not None else b"double-secret"  # shared with the Treasury double, so a sign-in's challenge verifies at either workspace
         self.catalog_version = catalog_version
-        self.workspace = {"id": WORKSPACE_ID, "name": company, "aapAccountId": AAP_ACCOUNT_ID, "realm": "sandbox", "sandboxMarkLetter": "S",
+        # Spec T14 — the sandbox's platform and chain, shared by the two workspaces; this workspace's platform account; the Treasury's knobs
+        self.is_treasury = is_treasury
+        self.platform = platform if platform is not None else PlatformDouble()
+        self.chain = chain if chain is not None else UsdcChainDouble()
+        self.aap_account_id = aap_account_id or AAP_ACCOUNT_ID
+        self.platform.accounts.add(self.aap_account_id)
+        self.workspace_id = TREASURY_WORKSPACE_ID if is_treasury else WORKSPACE_ID
+        self.initial_usdc_cents = initial_usdc_cents if initial_usdc_cents is not None else holdings_usdc_cents  # what the wallet holds when born: Bear's funding
+        self.quote_ceiling_usd_cents = quote_ceiling_usd_cents
+        self.actual_gas_usd_cents = actual_gas_usd_cents
+        self.gas_refusal_names_other_figures = gas_refusal_names_other_figures  # a review whose GAS_SHORTFALL names other figures than the account's
+        self.review_refuses_but_pays = review_refuses_but_pays  # a review that says nothing was sent while money moved behind it
+        self.delegated = False  # the key delegated on the payment chain at its first payment (Spec 104 §1)
+        self.sponsor = T.derive_address("the platform double's sponsor account/%s" % T.PAYEE_CHAIN)
+        self.paymaster = T.derive_address("the platform double's paymaster/%s" % T.PAYEE_CHAIN)
+        self.implementation = T.derive_address("the platform double's Simple7702Account implementation/%s" % T.PAYEE_CHAIN)
+        self.workspace = {"id": self.workspace_id, "name": company, "aapAccountId": self.aap_account_id, "realm": "sandbox", "sandboxMarkLetter": "S",
                           "baseCurrency": "USD", "displayCurrency": "AUD", "status": "active", "provisioning": "provisioned",
                           "rateSource": "double", "createdAt": "2026-09-19T00:00:00.000Z"}
         # Spec T13 — the funding wallet (Spec 98): BOTH columns, or none. "press": born by the founder's press; "born": already held;
@@ -844,8 +1122,6 @@ class EstateDouble:
         # the platform counted 2 of 2; `register_corrects` is Spec 100, the register reading whitelisted on the next GET /v1/payees
         self.mirror_lags = mirror_lags
         self.register_corrects = register_corrects
-        # Spec T13 §4 — the gas pre-flight's estimate of the USDC transfer reverts at the RPC: the wallet holds no USDC
-        self.asset_short = asset_short
         self.faucet = faucet if faucet is not None else FaucetDouble()
         self.rpc = rpc if rpc is not None else TestnetRpcDouble()
         # The account's ONE role-bearing credential (the founder's author token drawn up by the birth script), on the account's
@@ -867,6 +1143,14 @@ class EstateDouble:
         self.calls: List[Dict[str, Any]] = []
         self.audit: List[str] = []
         self.founder_invite_token: Optional[str] = None
+        # Spec T14 — the second workspace of the sandbox: Harness Treasury, beside every Holdings double, on the same platform and chain
+        self.treasury: Optional["EstateDouble"] = None
+        if treasury and not is_treasury:
+            self.treasury = EstateDouble(base=base, funding_wallet=treasury_funding_wallet, company=T.TREASURY["company"], catalog_version=catalog_version,
+                                         currency_spoken_as_code=currency_spoken_as_code, faucet=self.faucet, rpc=self.rpc, platform=self.platform, chain=self.chain,
+                                         treasury=False, is_treasury=True, aap_account_id=TREASURY_ACCOUNT_ID, secret=self.secret, account_email=T.TREASURY["email"],
+                                         initial_usdc_cents=treasury_usdc_cents if treasury_funding_wallet == "born" else 0,  # Bear funds an address he has seen: a wallet that stood
+                                         quote_ceiling_usd_cents=quote_ceiling_usd_cents, actual_gas_usd_cents=actual_gas_usd_cents)
         if funding_wallet == "born":
             self.birth_funding_wallet(None, "account_creation_interview")
 
@@ -879,7 +1163,10 @@ class EstateDouble:
         if not self.has_funding_wallet():
             return None
         return {"address": self.source_account, "keyId": self.custody_key_id, "homeStack": self.home_stack, "bornAt": self.wallet_born_at,
-                "sentence": "Funding wallet: %s, on %s." % (self.source_account, self.home_stack)}
+                "sentence": "Funding wallet: %s, on %s." % (self.source_account, self.home_stack),
+                # Spec 104 §1 (services/fundingwallet.ts FundingWalletView): the key's own address, the fund sentence and the chains this deployment pays on
+                "keyAddress": self.source_account, "fundSentence": "Fund this account with %s on %s. Gas is bought separately, below." % (T.PAYMENT_ASSET, T.PAYEE_CHAIN),
+                "chains": [T.PAYEE_CHAIN], "retiredAccount": None, "retiredSentence": None}
 
     def birth_funding_wallet(self, credential_id: Optional[str], via: str) -> Dict[str, Any]:
         """birthFundingWallet: refused before the gateway is asked where a key stands; else both columns in one write, and wallet.born."""
@@ -892,9 +1179,11 @@ class EstateDouble:
         if self.funding_wallet == "refused":
             raise Refusal("WALLET_BIRTH_REFUSED", WALLET_BIRTH_REFUSED_ON_21_SEPTEMBER, {"gatewaySaid": GATEWAY_SAID_ON_21_SEPTEMBER, "kind": "refused"},
                           provenance={"source": "gateway"})
-        self.source_account = T.derive_address("the estate double's funding wallet/%s" % T.TESTNET_NAME)
+        self.source_account = T.derive_address("the estate double's funding wallet/%s/%s" % (self.workspace["name"], T.TESTNET_NAME))
         self.custody_key_id = "key-" + secrets.token_hex(6)
         self.wallet_born_at = self._now_iso()
+        if self.initial_usdc_cents:
+            self.chain.credit(self.source_account, T.usdc_minor_of_cents(self.initial_usdc_cents))  # what Bear funded the wallet with (Spec T14: the Treasury's float)
         self.audit.append("wallet.born %s key %s on %s via %s by %s" % (self.source_account, self.custody_key_id, self.home_stack, via, credential_id))
         return {"address": self.source_account, "keyId": self.custody_key_id, "homeStack": self.home_stack, "bornAt": self.wallet_born_at}
 
@@ -958,12 +1247,19 @@ class EstateDouble:
         method = request.get_method()
         url = urllib.parse.urlparse(request.full_url)
         path = url.path
-        # Spec T13: the faucet and the chain's RPC are other hosts; each answers for itself, in its own shape
+        # Spec T13: the faucet and the chain's RPC are other hosts; each answers for itself, in its own shape. Spec T14: so are the platform's admin road
+        # and the payment chain's public RPC; and a request the Treasury workspace owns is answered by its own double
         if url.netloc == FAUCET_HOST and path.startswith("/faucet-api/"):
             return self.faucet(request)
         if url.netloc == RPC_HOST:
             return self.rpc(request)
+        if url.netloc == PLATFORM_HOST:
+            return self.platform(request)
+        if url.netloc == PUBLIC_RPC_HOST:
+            return self.chain(request)
         headers = {k.lower(): v for k, v in request.header_items()}
+        if self.treasury is not None and self.treasury.owns(path, headers, request.data):
+            return self.treasury(request)
         self._query = urllib.parse.parse_qs(url.query)
         body: Any = None
         if request.data:
@@ -1123,7 +1419,7 @@ class EstateDouble:
         if route == "GET /v1/sets":
             caller = self.require_caller(headers, "viewer")
             return 200, {"sets": [self.set_view(s, caller) for s in sorted(self.sets.values(), key=lambda s: s["createdAt"], reverse=True)]}
-        m = re.match(r"^/v1/sets/([^/]+)(/submit)?$", path)
+        m = re.match(r"^/v1/sets/([^/]+)(/submit|/execute)?$", path)
         if m:
             if method == "GET" and not m.group(2):
                 caller = self.require_caller(headers, "viewer")
@@ -1133,9 +1429,15 @@ class EstateDouble:
                 return 200, {"set": self.set_view(row, caller)}
             if method == "POST" and m.group(2) == "/submit":
                 return self.submit_set(headers, m.group(1))
+            if method == "POST" and m.group(2) == "/execute":
+                return self.execute_set(headers, m.group(1))
         m = re.match(r"^/v1/approvals/([^/]+)/(challenge|approve)$", path)
         if m and method == "POST":
             return self.approval(headers, m.group(1), m.group(2), body)
+        if route == "GET %s" % T.FUNDING_BALANCES_ROUTE:
+            return self.funding_account_balances(headers)
+        if route == "GET %s" % T.GAS_ACCOUNT_ROUTE:
+            return self.gas_account(headers)
         if route == "GET /v1/workspace":
             self.require_session(headers)
             wallet = self.funding_wallet_view()
@@ -2119,7 +2421,31 @@ class EstateDouble:
         return {"charterNamedThem": True, "granted": True, "note": None}
 
     def complete_seat_on_charter_write(self, credential_id: str) -> Dict[str, Any]:
-        return {"charterNamedThem": False, "granted": False, "note": None}
+        """
+        `completeSeatOnCharterWrite` → `seatCompletesItself` (services/approverseats.ts, Spec 81 as Spec 91 left it): the CONFIRMING credential is
+        seated where the newest written charter names an address the estate attributes to it — `addressesOfCaller`: the invitation it redeemed, else
+        the account's own address for a key the register attaches to nobody and no second key speaks for (the founder's, where `account_email` is
+        known) — never by name, never a guess between candidates; a credential other people's keys speak for is refused by name, audited, never
+        thrown. This is how the Treasury's founder becomes its one payment approver (Spec T14 §2).
+        """
+        no_seat = {"charterNamedThem": False, "granted": False, "note": None}
+        charter = self.newest_written_charter()
+        if not charter:
+            return no_seat
+        mine = self.addresses_of_caller(credential_id)
+        person = next((p for p in self.parse_roster(charter.get("signers") or []) if p["email"].lower() in mine), None)
+        if person is None:
+            return no_seat
+        wanted = person["email"].lower()
+        if not self.before_spec_91:
+            shared = self.others_holding(credential_id, wanted)
+            if shared:
+                self.audit.append("approver_seat.grant_refused %s APPROVER_SEAT_CREDENTIAL_SHARED via charter_write" % credential_id)
+                return {"charterNamedThem": True, "granted": False, "note": approver_seat_shared_sentence(person["name"] or wanted, shared)}
+        if credential_id not in self.second_approvers:
+            self.second_approvers.append(credential_id)
+            self.audit.append("approver_seat.granted %s via charter_write" % credential_id)
+        return {"charterNamedThem": True, "granted": True, "note": None}
 
     def seats(self, headers: Dict[str, str]) -> Tuple[int, Any]:
         caller = self.require_caller(headers, "author")
@@ -2502,10 +2828,10 @@ class EstateDouble:
     def roster_by_id(self, roster_id: Any) -> Optional[Dict[str, Any]]:
         return next((r for r in self.rosters() if r["id"] == roster_id), None)
 
-    def append_trail(self, action: str, credential_id: Optional[str], detail: Dict[str, Any]) -> Dict[str, Any]:
-        """`appendAudit` (services/audit.ts), in the shape the audit export reads it back (routes/exports.ts, auditRegister)."""
+    def append_trail(self, action: str, credential_id: Optional[str], detail: Dict[str, Any], subject_id: Optional[str] = None) -> Dict[str, Any]:
+        """`appendAudit` (services/audit.ts), in the shape the audit export reads it back (routes/exports.ts, auditRegister): the row's subject is the thing acted on, else the workspace."""
         row = {"audit_id": "aud-" + secrets.token_hex(6), "at": self._now_iso(), "action": action, "credential_id": credential_id or "",
-               "subject_id": WORKSPACE_ID, "detail": detail}
+               "subject_id": subject_id or self.workspace["id"], "detail": detail}
         self.trail.append(row)
         return row
 
@@ -2887,8 +3213,9 @@ class EstateDouble:
                 if not isinstance(body.get(field), str) or not body[field]:
                     raise Malformed("%s: Required" % field)
         charter = self.newest_written_charter()
-        if not self.source_account:
-            raise Refusal("GAS_PREFLIGHT_UNAVAILABLE", NO_FUNDING_ACCOUNT, {"cause": "workspace has no source account"})
+        if not self.has_funding_wallet():
+            # routes/sets.ts requireSourceAccount (Spec 104): a run asked of an estate with no funding wallet, in the wallet's own sentence
+            raise Refusal("WORKSPACE_NOT_PROVISIONED", NO_FUNDING_WALLET_SENTENCE, {"cause": NO_FUNDING_WALLET_REASON}, provenance={"source": "workspace"})
         rows = []
         for index, p in enumerate(pays):
             amount = p.get("amountMinor")
@@ -2901,6 +3228,8 @@ class EstateDouble:
                 return 200, {"set": self.set_view(existing, caller), "alreadyExisted": True, "review": existing["review"]}
         review = self.review(caller, charter, rows, body.get("duplicatesAcknowledged") is True)
         if not create:
+            if self.review_refuses_but_pays and not review["payload"]["acceptable"]:
+                self.pay_behind_the_review(caller, review)  # a double that lies: "Nothing was sent", and money moved
             return 200, review["payload"]
         if not review["payload"]["acceptable"]:
             blocking = [r for g in review["payload"]["gates"] if not g["passed"] for r in g["refusals"]]
@@ -2932,7 +3261,7 @@ class EstateDouble:
         mode = charter.get("whitelistMode") if charter else None
         for r in rows:
             p = r["pay"]
-            out = {"index": r["index"], "payeeId": None, "payeeName": (p.get("oneOff") or {}).get("payeeName") or "One-off payee", "address": (p.get("oneOff") or {}).get("address", ""),
+            out = {"index": r["index"], "payeeId": None, "payeeName": (p.get("oneOff") or {}).get("payeeName") or "One-off payee", "address": str((p.get("oneOff") or {}).get("address", "")).lower(),
                    "isOneOff": bool(p.get("oneOff")), "standing": "declared_one_off" if p.get("oneOff") else "undeclared", "chain": p.get("chain"), "asset": str(p.get("asset", "")).upper(),
                    "amountMinor": r["amountMinor"], "invoiceRef": p.get("invoiceRef"), "refusals": [], "usdMinor": 0}
             if r["amountMinor"] <= 0:
@@ -3001,7 +3330,7 @@ class EstateDouble:
              else "%d on the approved list, %d one-off" % (sum(1 for o in resolved if o["standing"] == "whitelisted"), sum(1 for o in resolved if o["isOneOff"]))},
             {"gate": "pricing", "passed": not pricing_refusals and bool(resolved), "refusals": pricing_refusals, "evidence": "priced from double"},
             {"gate": "quota", "passed": True, "refusals": [], "evidence": "this plan has no monthly signature ceiling"},
-            self.gas_preflight_gate(resolved),
+            self.gas_account_preflight(resolved),
             {"gate": "duplicate_screen", "passed": True, "refusals": [], "evidence": "no matching payment in the last 7 days"},
         ]
         payload = {"rows": [{"index": o["index"], "payeeName": o["payeeName"], "chain": o["chain"], "address": o["address"], "isOneOff": o["isOneOff"], "asset": o["asset"],
@@ -3016,19 +3345,197 @@ class EstateDouble:
                    "acceptable": bool(resolved) and all(g["passed"] for g in gates), "acknowledgeable": []}
         return {"payload": payload, "resolved": [o for o in resolved], "aggregateUsd": aggregate, "threshold": threshold, "approvalsRequired": approvals_required}
 
-    def gas_preflight_gate(self, resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def gas_account_preflight(self, resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Gate 4 (setgates.ts gasPreflight). With `asset_short`, the estimate of each ERC-20 transfer reverts at the RPC — the wallet holds
-        none of the asset — and wrapRpc (chains.ts) carries the RPC's words as the cause under GAS_PREFLIGHT_UNAVAILABLE, per row.
+        THE FOURTH GATE (Spec 104 §4; services/execution.ts gasAccountPreflight): the gas balance read from the platform before the quotes,
+        one dry quote per payment — the chain's dry run of the transfer refuses where the key holds less than the amount, relayed as
+        PAYMENT_UNPRICED in the platform's words; the platform refuses a quote the balance cannot cover (insufficient_gas) and its ceiling
+        still counts toward the set's; a quote admitted reserves its ceiling — and U3's sentence with the set's figures under GAS_SHORTFALL
+        where the balance is below the sum. The review's reservations are released by the platform's poller at valid_until, which in this
+        double is the review's end, so the next read of the account sees the balance whole.
         """
         payable = [o for o in resolved if not o["refusals"] and o["address"]]
         if not payable:
-            return {"gate": "gas_preflight", "passed": True, "refusals": [], "evidence": "nothing to estimate"}
-        if self.asset_short:
-            refusals = [{"code": "GAS_PREFLIGHT_UNAVAILABLE", "message": MESSAGES["GAS_PREFLIGHT_UNAVAILABLE"], "rowIndex": o["index"],
-                         "detail": {"chain": o["chain"], "cause": ESTIMATE_REVERTED}} for o in payable if o["asset"] not in ("ETH",)]
-            return {"gate": "gas_preflight", "passed": not refusals, "refusals": refusals, "evidence": "no chains to check"}
-        return {"gate": "gas_preflight", "passed": True, "refusals": [], "evidence": "ethereum: needs 0, holds 1"}
+            return {"gate": "gas_preflight", "passed": True, "refusals": [], "evidence": "nothing to price"}
+        account = self.aap_account_id
+        available = self.platform.balance(account)["available_usd_cents"]
+        review_id = secrets.token_hex(4)
+        refusals: List[Dict[str, Any]] = []
+        reserved: List[str] = []
+        ceiling = quoted = shortfalls = 0
+        for o in payable:
+            if self.chain.balance_of(self.source_account) < o["amountMinor"]:
+                refusals.append({"code": "PAYMENT_UNPRICED", "message": "This payment could not be priced: %s. The answer will be the same until what it named is resolved." % ESTIMATE_REVERTED_CLAUSE,
+                                 "rowIndex": o["index"], "detail": {"party": "the access platform", "outcome": "refused", "route": "POST /v1/gas/quote", "said": ESTIMATE_REVERTED_SAID, "status": "400",
+                                                                    "platformCode": "refused", "chain": o["chain"], "asset": o["asset"]},
+                                 "provenance": {"source": "aap", "reference": "POST /v1/gas/quote"}})
+                continue
+            if self.platform.balance(account)["available_usd_cents"] < self.quote_ceiling_usd_cents:
+                ceiling += self.quote_ceiling_usd_cents
+                shortfalls += 1
+                continue
+            key = "review:%s:%s:%d" % (self.workspace["id"], review_id, o["index"])
+            self.platform.reserve(account, self.quote_ceiling_usd_cents, key, o["chain"], "gas reserved, at most %s, for review:%s:%d on %s" % (
+                T.format_usd_cents(self.quote_ceiling_usd_cents), review_id, o["index"], o["chain"]))
+            reserved.append(key)
+            ceiling += self.quote_ceiling_usd_cents
+            quoted += 1
+        if (quoted or shortfalls) and available < ceiling:
+            said_available, said_ceiling = (available + 1, ceiling + 100) if self.gas_refusal_names_other_figures else (available, ceiling)
+            refusals.append({"code": "GAS_SHORTFALL", "message": T.gas_set_shortfall_sentence(said_available, said_ceiling),
+                             "detail": {"availableUsdCents": str(said_available), "ceilingUsdCents": str(said_ceiling), "payments": str(quoted + shortfalls), "account": self.source_account, "minimumTopUpUsdCents": "1000"},
+                             "provenance": {"source": "aap", "reference": "GET /v1/gas-account"}})
+        n = quoted + shortfalls
+        evidence = "gas account: %s available; this set needs at most %s of gas over %d payment%s" % (T.format_usd_cents(available), T.format_usd_cents(ceiling), n, "" if n == 1 else "s")
+        if quoted:
+            evidence += "; the review’s %s (review:%s) %s on the gas account until the access platform releases %s at %s" % (
+                "1 quote" if quoted == 1 else "%d quotes" % quoted, review_id, "holds its ceiling" if quoted == 1 else "hold their ceilings", "it" if quoted == 1 else "them", self._iso(time.time() + 300))
+        for key in reserved:
+            self.platform.release(key)  # valid_until, in this double, is the review's end
+        return {"gate": "gas_preflight", "passed": not refusals, "refusals": refusals, "evidence": evidence}
+
+    def pay_behind_the_review(self, caller: Dict[str, Any], review: Dict[str, Any]) -> None:
+        """A double that lies (`review_refuses_but_pays`): the review said nothing was sent, and a run leaves anyway, so the harness must catch the money that moved."""
+        rows = [o for o in review["resolved"] if o["address"]]
+        set_row = {"id": "set-" + secrets.token_hex(6), "reference": "S-behind the review", "realm": "sandbox", "idempotencyKey": "behind-" + secrets.token_hex(4), "status": "settled",
+                   "sourceAccount": self.source_account, "authorCredentialId": caller["credentialId"], "setDigest": "0x" + secrets.token_hex(32),
+                   "aggregateBaseMinor": str(review["aggregateUsd"]), "aggregateUsdMinor": str(review["aggregateUsd"]), "approvalsRequired": 0, "bandThresholdBaseMinor": "0",
+                   "createdAt": self._now_iso(), "submittedAt": self._now_iso(), "approvedAt": self._now_iso(), "executedAt": self._now_iso(), "instructions": [], "review": review["payload"]}
+        for r in rows:
+            try:
+                self.chain.transfer(self.source_account, r["address"], r["amountMinor"])
+            except ValueError:
+                continue
+            set_row["instructions"].append({"id": "ins-" + secrets.token_hex(6), "setId": set_row["id"], "sequence": r["index"], "payeeId": r["payeeId"], "payeeName": r["payeeName"],
+                                            "chain": r["chain"], "address": r["address"], "isOneOff": r["isOneOff"], "asset": r["asset"], "amountMinor": str(r["amountMinor"]),
+                                            "invoiceRef": r["invoiceRef"], "memo": None, "glCode": None, "status": "confirmed", "clientRequestId": "req-" + secrets.token_hex(4),
+                                            "txHash": "0x" + secrets.token_hex(32), "failureReason": None, "holdId": None, "heldReason": None, "heldWaitSentence": None,
+                                            "entryValue": None, "executionValue": None, "gasValue": None, "feeAccrual": None, "lockedValue": None})
+        self.sets[set_row["id"]] = set_row
+        self.approvals[set_row["id"]] = []
+
+    # -- the funding account's balances and the gas account (Spec 104 §1, §3) ---------------------------------------------------------
+    def funding_account_balances(self, headers: Dict[str, str]) -> Tuple[int, Any]:
+        """GET /v1/workspace/funding-account/balances (routes/workspace.ts, services/fundingwallet.ts readFundingAccountState): the stablecoin the key holds per chain, in dollars."""
+        self.require_session(headers)
+        if not self.has_funding_wallet():
+            return 200, {"account": None, "balances": [], "delegations": [], "delegatedSentence": None, "retired": None, "absence": NO_FUNDING_WALLET_SENTENCE}
+        minor = self.chain.balance_of(self.source_account)
+        usd = minor // 10 ** (T.ASSET_DECIMALS[T.PAYMENT_ASSET] - 2)
+        row = {"chain": T.PAYEE_CHAIN, "asset": T.PAYMENT_ASSET, "token": self.chain.token, "balanceMinor": str(minor), "usdMinor": str(usd),
+               "sentence": "This account holds %s of %s on %s." % (us_dollars(usd), T.PAYMENT_ASSET, T.PAYEE_CHAIN)}
+        return 200, {"account": self.source_account, "balances": [row],
+                     "delegations": [{"chain": T.PAYEE_CHAIN, "delegated": self.delegated, "implementation": self.implementation, "sentence": None}],
+                     "delegatedSentence": ("delegated on %s" % T.PAYEE_CHAIN) if self.delegated else None, "retired": None}
+
+    def gas_account(self, headers: Dict[str, str]) -> Tuple[int, Any]:
+        """GET /v1/gas/account (routes/gas.ts): the balance read live from the platform, the Wallets screen's sentence, the platform's low flag, and the press that is not open."""
+        self.require_session(headers)
+        balance = self.platform.balance(self.aap_account_id)
+        low = self.platform.low(self.aap_account_id)
+        account = {"availableUsdCents": balance["available_usd_cents"], "balanceUsdCents": balance["balance_usd_cents"], "reservedUsdCents": balance["reserved_usd_cents"],
+                   "available": T.format_usd_cents(balance["available_usd_cents"]), "balance": T.format_usd_cents(balance["balance_usd_cents"]), "reserved": T.format_usd_cents(balance["reserved_usd_cents"]),
+                   "sentence": "%s: %s" % (T.GAS_ACCOUNT_LABEL, T.format_usd_cents(balance["available_usd_cents"])), "low": low, "lowSentence": GAS_LOW_SENTENCE if low else None,
+                   "lowPots": False, "lowPotsSentence": None, "minimumTopUpUsdCents": T.GAS_CREDIT_USD_CENTS, "operationsSettled": len(self.platform.debits_of(self.aap_account_id))}
+        return 200, {"account": account, "unreadable": None,
+                     "buying": {"open": False, "sentence": BUYING_GAS_NOT_OPEN, "missing": ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_GAS_PRICE_UNIT"]},
+                     "purchases": [], "afterCheckout": dict(AFTER_CHECKOUT_SENTENCES)}
+
+    # -- the run executed through the gas roads (Spec 104 §2; services/execution.ts executeSet, drivePayment) --------------------------
+    def execute_set(self, headers: Dict[str, str], set_id: str) -> Tuple[int, Any]:
+        caller = self.require_caller(headers, "author", mutating=True)
+        row = self.sets.get(set_id)
+        if not row:
+            raise Refusal("SET_NOT_APPROVABLE", detail={"cause": "no such run"})
+        if row["status"] not in ("approved", "executing"):
+            raise Refusal("SET_NOT_APPROVABLE", detail={"status": row["status"], "cause": "this run has not been approved for execution"})
+        if not self.has_funding_wallet():
+            raise Refusal("WORKSPACE_NOT_PROVISIONED", NO_FUNDING_WALLET_SENTENCE, {"cause": NO_FUNDING_WALLET_REASON}, provenance={"source": "workspace"})
+        if row["status"] == "approved":
+            row["status"] = "executing"
+            row["executedAt"] = self._now_iso()
+            self.append_trail("set.execution_started", caller["credentialId"], {"setDigest": row["setDigest"], "road": "gas_roads", "account": self.source_account}, subject_id=set_id)
+        for instruction in row["instructions"]:
+            if instruction["status"] in T.INSTRUCTION_TERMINAL_STATES or instruction["status"] == "held":
+                continue
+            self.drive_payment(caller, instruction)
+        statuses = [i["status"] for i in row["instructions"]]
+        if statuses and all(s in T.INSTRUCTION_TERMINAL_STATES for s in statuses) and row["status"] == "executing":
+            row["status"] = "settled" if all(s == "confirmed" for s in statuses) else "partially_settled"  # states.ts resolveSetOutcome
+            self.append_trail("set.settled", caller["credentialId"], {"outcome": row["status"], "confirmed": statuses.count("confirmed"), "failed": statuses.count("failed"),
+                                                                       "rejected": statuses.count("rejected")}, subject_id=set_id)
+        return 200, {"setId": set_id, "setStatus": row["status"],
+                     "instructions": [{"instructionId": i["id"], "sequence": i["sequence"], "status": i["status"], "txHash": i["txHash"], "holdId": i["holdId"],
+                                       "failureReason": i["failureReason"], "waiting": None} for i in row["instructions"]]}
+
+    def drive_payment(self, caller: Dict[str, Any], instruction: Dict[str, Any]) -> None:
+        """
+        `drivePayment`: the quote reserves the platform's ceiling (U3's per-payment refusal where the balance cannot cover it — the instruction
+        fails naming it), the chain's dry run refuses a transfer the key cannot cover, the key is delegated on its first payment, the operation
+        is signed, sponsored and sent, and when the platform reports it landed the debit is taken at actual cost, the instruction is confirmed
+        with its txHash and gasValue, and the trail's instruction.confirmed row carries the platform's own figures and words.
+        """
+        account = self.aap_account_id
+        key = "op:%s" % instruction["id"]
+        amount = int(instruction["amountMinor"])
+        ceiling = self.quote_ceiling_usd_cents
+        balance = self.platform.balance(account)
+        if balance["available_usd_cents"] < ceiling:
+            sentence = PLATFORM_INSUFFICIENT_GAS % (T.format_usd_cents(balance["available_usd_cents"]), "payment", T.format_usd_cents(ceiling), T.format_usd_cents(T.GAS_CREDIT_USD_CENTS))
+            self.fail_instruction(caller, instruction, "GAS_SHORTFALL: %s" % sentence, {"platformCode": "insufficient_gas", "said": sentence})
+            return
+        if self.chain.balance_of(self.source_account) < amount:
+            self.fail_instruction(caller, instruction, "PAYMENT_UNPRICED: This payment could not be priced: %s. The answer will be the same until what it named is resolved." % ESTIMATE_REVERTED_CLAUSE,
+                                  {"said": ESTIMATE_REVERTED_SAID})
+            return
+        user_op_hash = "0x" + secrets.token_hex(32)
+        tx_hash = "0x" + secrets.token_hex(32)
+        self.platform.reserve(account, ceiling, key, instruction["chain"], "gas reserved, at most %s, for %s on %s" % (T.format_usd_cents(ceiling), user_op_hash, instruction["chain"]))
+        self.delegated = True
+        self.chain.transfer(self.source_account, instruction["address"], amount)
+        actual = self.actual_gas_usd_cents
+        self.platform.release(key)
+        self.platform.debit(account, actual + self.platform.debit_gap_cents, key + ":debit", instruction["chain"], user_op_hash, tx_hash)
+        now = self._now_iso()
+        instruction["status"] = "confirmed"
+        instruction["txHash"] = tx_hash
+        instruction["executionValue"] = dict(instruction["entryValue"] or {}, kind="execution", occurredAt=now, valuationId="val-" + secrets.token_hex(4))
+        gas_wei = actual * 10 ** 14  # the native coin at US$1,000.00 in this double: one cent is 10^14 wei
+        instruction["gasValue"] = {"asset": "ETH", "assetDecimals": 18, "amountAssetMinor": str(gas_wei), "baseCurrency": "USD", "baseDecimals": 2, "amountBaseMinor": str(actual),
+                                   "amountUsdMinor": str(actual), "rate": {"source": "double", "observedAt": now, "rateE8": "100000000000"}, "kind": "execution",
+                                   "valuationId": "val-" + secrets.token_hex(4), "occurredAt": now}
+        self.append_trail(T.INSTRUCTION_CONFIRMED, caller["credentialId"], {
+            "txHash": tx_hash, "userOpHash": user_op_hash, "payloadKind": "user_operation", "road": "gas_roads", "sponsor": self.sponsor, "paymaster": self.paymaster,
+            "gasDebitUsdCents": str(actual), "gasDebit": T.format_usd_cents(actual), "gasWords": T.gas_debit_words(actual), "reservationUsdCents": str(ceiling),
+            "actualCostWei": str(gas_wei), "gasUsed": "150000", "effectiveGasPrice": str(gas_wei // 150000), "settlePriceUsd": "1000.00", "blockNumber": str(20000000 + len(self.trail)),
+            "executionValuationId": instruction["executionValue"]["valuationId"], "gasValuationId": instruction["gasValue"]["valuationId"]}, subject_id=instruction["id"])
+
+    def fail_instruction(self, caller: Dict[str, Any], instruction: Dict[str, Any], reason: str, detail: Dict[str, Any]) -> None:
+        """`failInstruction`: one payee's failure is recorded on that payee and nothing else."""
+        instruction["status"] = "failed"
+        instruction["failureReason"] = reason
+        self.append_trail("instruction.failed", caller["credentialId"], dict(detail, reason=reason, payloadKind="user_operation", road="gas_roads"), subject_id=instruction["id"])
+
+    # -- two workspaces on one estate (Spec T14) ------------------------------------------------------------------------------------
+    def owns(self, path: str, headers: Dict[str, str], data: Optional[bytes]) -> bool:
+        """Whether this workspace's own records answer a request: its session's cookie, its invitation's token at the invitation road, or its passkey at the sign-in road."""
+        for part in headers.get("cookie", "").split(";"):
+            name, _, value = part.strip().partition("=")
+            if name == H.SESSION_COOKIE and value in self.sessions:
+                return True
+        if path not in ("/v1/auth/invite/options", "/v1/auth/invite/verify", "/v1/auth/login/verify"):
+            return False
+        try:
+            body = json.loads(data.decode("utf-8")) if data else {}
+        except ValueError:
+            return False
+        if not isinstance(body, dict):
+            return False
+        if path.startswith("/v1/auth/invite/"):
+            token = body.get("token")
+            return isinstance(token, str) and hashlib.sha256(token.encode()).hexdigest() in self.invites
+        response = body.get("response") if isinstance(body.get("response"), dict) else {}
+        return isinstance(response.get("id"), str) and response["id"] in self.passkeys
 
     def set_view(self, row: Dict[str, Any], caller: Dict[str, Any]) -> Dict[str, Any]:
         current = [a for a in self.approvals.get(row["id"], []) if a["setDigest"] == row["setDigest"]]
@@ -3106,9 +3613,26 @@ class EstateDouble:
 # ---------------------------------------------------------------------------
 # A runner wired to the double, for the tests that follow.
 # ---------------------------------------------------------------------------
-def runner_on(double: EstateDouble, tmp: str, invite: Optional[str] = None, start_at: Optional[str] = None, said: Optional[List[str]] = None, **kwargs: Any) -> H.Runner:
-    return H.Runner(double.base, os.path.join(tmp, "store"), invite, False, start_at, os.path.join(tmp, "out"), transport=double,
-                    say=(said.append if said is not None else (lambda s: None)), sleep=lambda s: None, **kwargs)
+def runner_on(double: EstateDouble, tmp: str, invite: Optional[str] = None, start_at: Optional[str] = None, said: Optional[List[str]] = None,
+              treasury_invite: Optional[str] = None, admin_env: bool = True, **kwargs: Any) -> H.Runner:
+    """
+    A runner wired to the double. Spec T14: unless told otherwise it is given the Treasury founder's invitation (the Treasury double mints one; a
+    stored passkey makes it unspent) and the platform's admin credential is filed in the store's admin.env, as Bear files it — `admin_env=False`
+    is the estate whose operator filed nothing.
+    """
+    store = os.path.join(tmp, "store")
+    os.makedirs(store, exist_ok=True)
+    platform = getattr(double, "platform", None)
+    env_path = os.path.join(store, T.ADMIN_ENV_FILE)
+    if admin_env and platform is not None and not os.path.exists(env_path):
+        with open(env_path, "w", encoding="utf-8") as handle:
+            handle.write("%s=%s\n%s=%s\n" % (T.ADMIN_ENV_URL_KEY, PLATFORM_BASE, T.ADMIN_ENV_KEY_KEY, platform.admin_key))
+        os.chmod(env_path, 0o600)
+    treasury = getattr(double, "treasury", None)
+    if treasury_invite is None and treasury is not None:
+        treasury_invite = treasury.mint_founder_link()
+    return H.Runner(double.base, store, invite, False, start_at, os.path.join(tmp, "out"), transport=double,
+                    say=(said.append if said is not None else (lambda s: None)), sleep=lambda s: None, treasury_invite=treasury_invite, **kwargs)
 
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
@@ -3417,13 +3941,13 @@ class TheDoubleTellsTheTruth(unittest.TestCase):
         self.assertEqual(lines["WO1"]["spoken"], "Ben Signatory — %s." % A.PEOPLE["ben"].email)
         self.assertEqual(lines["WO1_TITLE"]["spoken"], "Ben Signatory is this wallet’s Officer: the one person who receives it and opens it on their own device.")
         self.assertEqual(lines["WO2"]["spoken"], "Harriet — %s — CEO — Founder" % A.PEOPLE["harriet"].email)
-        self.assertEqual(lines["WO3"]["spoken"], "US$2,000 and 00 cents.")
-        self.assertEqual(lines["WO4"]["spoken"], "US$10,000 and 00 cents.")
+        self.assertEqual(lines["WO3"]["spoken"], "US$2 and 00 cents.")
+        self.assertEqual(lines["WO4"]["spoken"], "US$10 and 00 cents.")
         self.assertEqual(lines["HOLD_NOT_WRITTEN"]["spoken"], TIER_HOLD_NOT_WRITTEN)
         self.assertEqual(lines["WQ_TIERS"]["spoken"], TIER_QUORUM_STANDS_ASIDE)
         compiled = self.runner.confirm_and_compile("test", "wallet_account", iv, self.founder, page)["charter"]
         self.assertEqual(compiled["holder"], {"held": "by_person", "name": "Ben Signatory", "email": A.PEOPLE["ben"].email, "title": "Officer"})
-        self.assertEqual(compiled["signingTiers"], {"holderAloneUpToCents": "200000", "twoSignaturesUpToCents": "1000000",
+        self.assertEqual(compiled["signingTiers"], {"holderAloneUpToCents": "200", "twoSignaturesUpToCents": "1000",
                                                     "thirdParty": {"name": "Harriet", "surname": "Founder", "email": A.PEOPLE["harriet"].email, "title": "CEO"},
                                                     "holdNotWritten": TIER_HOLD_NOT_WRITTEN})
         self.assertEqual(compiled["signers"], ["Ada Approver <%s>" % A.PEOPLE["ada"].email, "Ben Signatory <%s>" % A.PEOPLE["ben"].email, "Harriet Founder <%s>" % A.PEOPLE["harriet"].email])
@@ -3455,14 +3979,14 @@ class TheDoubleTellsTheTruth(unittest.TestCase):
     def test_the_tiers_two_contradictions_are_refused_at_the_read_back_in_the_specs_sentences(self):
         self.runner.enrol_by_invite(self.founder, self.link, "test")
         # WO4 not above WO3
-        iv, page = self.walk("wallet_account", {"WO4": {"cents": "200000"}})
+        iv, page = self.walk("wallet_account", {"WO4": {"cents": A.MONEY["holder_alone_cents"]}})  # WO4 equal to WO3: not above it
         self.assertEqual(page["state"], "at_read_back", "the page does not judge the tiers; the read-back does")
         readback = self.request(self.founder, "GET", "/v1/onboarding/interviews/%s/readback" % iv)
         self.assertEqual(readback.status, 409)
         self.assertEqual(readback.refusal["code"], "CHARTER_INCOMPLETE")
         self.assertEqual(readback.refusal["message"], TIER_TWO_NOT_ABOVE_ONE)
         self.assertEqual(readback.refusal["walkBackTo"], {"questionId": "WO4"})
-        self.assertEqual(readback.refusal["detail"], {"cause": TIER_TWO_NOT_ABOVE_ONE, "holderAloneUpToCents": "200000", "twoSignaturesUpToCents": "200000"})
+        self.assertEqual(readback.refusal["detail"], {"cause": TIER_TWO_NOT_ABOVE_ONE, "holderAloneUpToCents": A.MONEY["holder_alone_cents"], "twoSignaturesUpToCents": A.MONEY["holder_alone_cents"]})
         compiled = self.request(self.founder, "POST", "/v1/onboarding/interviews/%s/compile" % iv, {})
         self.assertEqual(compiled.status, 409, "the compile reads only confirmed interviews, and the confirm judges the tiers too")
         self.assertEqual(self.request(self.founder, "DELETE", "/v1/onboarding/interviews/%s" % iv).status, 200)
@@ -3470,10 +3994,10 @@ class TheDoubleTellsTheTruth(unittest.TestCase):
         iv, page = self.walk("wallet_account", {"WA1": {"entries": [{"name": A.PEOPLE["ada"].name, "email": A.PEOPLE["ada"].email}]}})
         readback = self.request(self.founder, "GET", "/v1/onboarding/interviews/%s/readback" % iv)
         self.assertEqual(readback.status, 409)
-        self.assertEqual(readback.refusal["message"], "Three signatures are asked above US$10,000 and 00 cents but only 2 people are named; name more or lower the tiers.")
+        self.assertEqual(readback.refusal["message"], "Three signatures are asked above US$10 and 00 cents but only 2 people are named; name more or lower the tiers.")
         self.assertEqual(readback.refusal["walkBackTo"], {"questionId": "WA1"})
         self.assertEqual(readback.refusal["detail"]["named"], "2")
-        self.assertEqual(tiers_need_three_people(usd_figure("1000000"), 1), "Three signatures are asked above US$10,000 and 00 cents but only 1 person is named; name more or lower the tiers.")
+        self.assertEqual(tiers_need_three_people(usd_figure("1000"), 1), "Three signatures are asked above US$10 and 00 cents but only 1 person is named; name more or lower the tiers.")
         self.assertEqual(self.request(self.founder, "DELETE", "/v1/onboarding/interviews/%s" % iv).status, 200)
         # a title not of the three is the compiler's refusal, at the compile
         iv, page = self.walk("wallet_account", {"WO2": {"entries": [{"name": "Harriet", "surname": "Founder", "email": A.PEOPLE["harriet"].email, "title": "Chair"}]}})
@@ -3513,9 +4037,11 @@ class TheDoubleTellsTheTruth(unittest.TestCase):
         founder = runner.people[A.FOUNDER]
         runner.enrol_by_invite(founder, link, "test")
         answer = runner.request(founder, "POST", "/v1/sets/review", {"pays": [{"oneOff": {"chain": "ethereum", "address": T.address("UNLISTED_ETHEREUM"), "declared": True}, "asset": "USDC", "chain": "ethereum", "amountMinor": "1000000"}], "duplicatesAcknowledged": False}, "test")
+        # Spec 104 (routes/sets.ts requireSourceAccount): the pre-flight is gone; a run asked of an estate with no funding wallet is refused in the wallet's own sentence
         self.assertEqual(answer.status, 503)
-        self.assertEqual(answer.refusal["code"], "GAS_PREFLIGHT_UNAVAILABLE")
-        self.assertEqual(answer.refusal["message"], NO_FUNDING_ACCOUNT)
+        self.assertEqual(answer.refusal["code"], "WORKSPACE_NOT_PROVISIONED")
+        self.assertEqual(answer.refusal["message"], NO_FUNDING_WALLET_SENTENCE)
+        self.assertEqual(answer.refusal["detail"], {"cause": NO_FUNDING_WALLET_REASON})
 
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
