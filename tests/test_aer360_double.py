@@ -771,7 +771,7 @@ class EstateDouble:
                  platform_names_approver: Sequence[str] = (), mirror_lags: bool = False, register_corrects: bool = True,
                  asset_short: bool = False, faucet: Optional[FaucetDouble] = None, rpc: Optional[TestnetRpcDouble] = None,
                  change_roster: Optional[Sequence[str]] = None, before_spec_99: bool = False, ceremony_lapses: int = 0, account_email: Optional[str] = None,
-                 lapse_after_first_signature: bool = False):
+                 lapse_after_first_signature: bool = False, seats_override: Optional[List[Dict[str, Any]]] = None):
         self.currency_spoken_as_code = currency_spoken_as_code  # False: main's default arm (JSON); True: Spec 88's code
         # The payee door and a venue's contract (Spec T11). None: the door follows the written policy charter, as Spec 92 built it —
         # PAYEE_IS_VENUE_CONTRACT where the charter says refused and the address is on the venue table. True: Spec T8's stand-in, a door
@@ -811,6 +811,11 @@ class EstateDouble:
         self.ceremony_lapses = ceremony_lapses  # the next ceremonies born lapse at birth: the platform's clock is past their expires_at
         self.lapse_after_first_signature = lapse_after_first_signature  # the platform's clock passes a ceremony's expires_at once its first signature is counted
         self.account_email = account_email  # the AAP account's own address, attributed to the founder's key (addressesOfCaller); None: not known here
+        # Spec T17 / AER 360 Spec 105 — the seat view reads the roster. None (the default): the seat view has no onRoster, and the
+        # harness behaves as T15. A list of seat specs {email, name?, state?, credentialId, ambiguous?, onRoster} makes GET
+        # /v1/approver-seats answer those seats with onRoster (and rosterSaid where null); onRoster "compute" is read from the
+        # live rosters by `seat_on_roster` (Spec 105 §1's shared predicate), so a seat flips true the moment a move applies.
+        self.seats_override = [dict(spec) for spec in seats_override] if seats_override is not None else None
         self.whitelist_id = "wl-" + secrets.token_hex(4)
         self._query: Dict[str, List[str]] = {}
         # The bindings a re-invitation's redemption retired: (address, credential) pairs from person.credential_replaced.
@@ -2124,6 +2129,11 @@ class EstateDouble:
         charter = self.newest_written_charter()
         if not charter:
             return {"charterStands": False, "seats": [], "summary": "", "policyEntryId": None}
+        if self.seats_override is not None:
+            # AER 360 Spec 105: the seat view carries onRoster (and rosterSaid where null). The listed people are the test's, in the
+            # Spec-105 shape; onRoster is computed from the live rosters where the spec says "compute", so it is the estate's own truth.
+            seats = [self._override_seat_view(spec) for spec in self.seats_override]
+            return {"charterStands": True, "seats": seats, "summary": "%d seated" % sum(1 for s in seats if s["state"] == "seated"), "policyEntryId": "pe-estate"}
         by_email = self.enrolled_by_email()
         seats = []
         for person in self.parse_roster(charter["signers"]):
@@ -2134,6 +2144,49 @@ class EstateDouble:
                           "credentialId": held if held is not None else (candidates[0] if len(candidates) == 1 else None),
                           "ambiguous": held is None and len(candidates) > 1, "invitation": None, "selfSeatable": False})
         return {"charterStands": True, "seats": seats, "summary": "%d seated" % sum(1 for s in seats if s["state"] == "seated"), "policyEntryId": "pe-estate"}
+
+    def _override_seat_view(self, spec: Dict[str, Any]) -> Dict[str, Any]:
+        """One seat of the override, in the Spec 105 shape: state, credentialId, ambiguous, and onRoster (computed from the rosters where the spec says so)."""
+        email = spec.get("email")
+        credential_id = spec.get("credentialId")
+        onroster = spec.get("onRoster")
+        roster_said = spec.get("rosterSaid")
+        if onroster == "compute":
+            onroster, roster_said = self.seat_on_roster(email, credential_id)
+        seat = {"name": spec.get("name") or email, "email": email, "state": spec.get("state", "seated"),
+                "credentialId": credential_id, "ambiguous": bool(spec.get("ambiguous")),
+                "invitation": None, "selfSeatable": False, T.SEAT_ON_ROSTER: onroster}
+        if onroster is None:
+            seat[T.SEAT_ROSTER_SAID] = roster_said if roster_said is not None else "no roster names this person"
+        return seat
+
+    def seat_on_roster(self, email: Any, credential_id: Any) -> Tuple[Optional[bool], Optional[str]]:
+        """
+        AER 360 Spec 105 §1's shared predicate, in the double (services/approverseats.ts, `onRoster`): read the active rosters once and,
+        for a seat whose credentialId is not null, answer true where on every active roster the active signer for this email names this
+        credential (or another credential still enrolled for the person — "another of their passkeys"); false where some roster names the
+        signer under a credential that is no longer enrolled for the person (exactly `rebindRosterSeats`' `moving` filter); null where the
+        credential is null or no roster names the person at all, with the platform's sentence in rosterSaid.
+        """
+        if not credential_id:
+            return None, "the seat names no credential"
+        folded = str(email or "").strip().lower()
+        enrolled = set(self.enrolled_by_email().get(folded, []))
+        named = False
+        stale = False
+        for roster in self.rosters():
+            if not roster.get("active"):
+                continue
+            for signer in roster["signers"]:
+                if signer["status"] != "active" or signer["user_id"].strip().lower() != folded:
+                    continue
+                named = True
+                other = signer["credential_id"]
+                if other and other != credential_id and other not in enrolled:
+                    stale = True  # a credential this person no longer holds — the moving filter's seat
+        if not named:
+            return None, "no roster names this person"
+        return (False, None) if stale else (True, None)
 
     def grant_seat(self, headers: Dict[str, str], body: Any) -> Tuple[int, Any]:
         caller = self.require_caller(headers, "author", mutating=True)
