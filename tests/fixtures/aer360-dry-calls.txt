@@ -59,7 +59,7 @@ S4 — POST /v1/approver-seats/grant {"email": "harness+ada@aeredium.io"} (as Ha
 S4 — GET /v1/roster/changes (as Harriet Founder)
 S4 — GET /v1/approver-seats (as Harriet Founder) — the grant step's read, with onRoster (AER 360 Spec 105)
 S4 — POST /v1/approver-seats/grant {"email": "harness+ada@aeredium.io"} (as Harriet Founder) — only for a seat of a harness person reading onRoster false with no awaiting change
-S4 — POST /v1/roster/changes/<pendingTxId>/sign/options {} (as each person the list names as able to sign whose own seat reads onRoster true, in turn; never the stale seat's owner) — only for a change listed awaiting whose target credential is that person's stored passkey
+S4 — POST /v1/roster/changes/<pendingTxId>/sign/options {} (as each person the change's list names as able — not the stale seat's owner, and where they have a seat row reading onRoster true; a person the list names with no seat row is able on the list's word) — only for a change listed awaiting whose target credential is that person's stored passkey
 S4 — POST /v1/roster/changes/<pendingTxId>/sign {"issuedAtMs": "<issuedAtMs>", "response": "<assertion by the signer's passkey over the challenge>"}
 S4 — POST /v1/approver-seats/grant {"email": "harness+ada@aeredium.io"} (as Harriet Founder) — only for a change listed expired, or one this estate did not propose
 S4 — GET /v1/roster/changes (as Harriet Founder) — after the count is met

@@ -588,10 +588,18 @@ def _signs_after(runner, before):
 class S4GrantsAStaleSeatAgainThenSignsIt(unittest.TestCase):
     """Spec T17 §1 and §2: Ada onRoster false, Ben and Cora true, and the changes list empty — S4 grants Ada's seat, Ben and Cora sign, the seat reads true."""
 
-    def test_the_grant_comes_before_any_sign_call_ben_and_cora_sign_and_the_seat_reads_true(self):
-        double, runner, founder = stale_seat_estate(clear_changes=True)
-        ada, ben, cora = runner.people["ada"], runner.people["ben"], runner.people["cora"]
-        double.seats_override = onroster_seats(runner)  # Ada compute (false now), Ben and Cora true
+    def test_one_seat_ada_false_ben_and_cora_able_on_the_lists_word_the_grant_then_the_signatures_the_seat_reads_true(self):
+        """
+        Spec T17 §2, on Harness Holdings' own shape (amended 23 September 2026): the seats view carries ONE seat — Ada's, onRoster false,
+        because the charter seats only Ada under C11 — while the whitelist roster carries Ada, Ben and Cora, so the change's maySign names
+        Ben and Cora after the grant. Ben and Cora have no seat row, so they are able on the list's word alone; S4 grants Ada's seat,
+        they sign, and Ada's seat reads on the roster.
+        """
+        double, runner, founder = stale_seat_estate(clear_changes=True)  # change_roster ("ben","cora"): maySign is Ben and Cora
+        ada = runner.people["ada"]
+        # ONE seat in the view, Ada's — as GET /v1/approver-seats answers charterApprovers (C11) on Harness Holdings; Ben and Cora are on
+        # the roster but not on the seats view, so the harness reads no onRoster for them and takes the list's word that they may sign.
+        double.seats_override = [{"email": ada.email, "name": ada.name, "state": "seated", "credentialId": ada.credential_id, "onRoster": "compute"}]
         self.assertEqual(double.ceremonies, [], "no ceremony is on record for the move")
         f_before, before = len(runner.findings), len(runner.calls)
         grant_said, changes_said, ok = runner.sign_the_roster_changes("S4", founder)
@@ -602,8 +610,9 @@ class S4GrantsAStaleSeatAgainThenSignsIt(unittest.TestCase):
         first_grant = next(i for i, c in enumerate(runner.calls[before:]) if c.route == "POST /v1/approver-seats/grant")
         first_sign = next(i for i, c in enumerate(runner.calls[before:]) if c.route.endswith("/sign"))
         self.assertLess(first_grant, first_sign, "the double records the grant before any sign call")
-        self.assertEqual([(c.who, c.status) for c in signs], [("Ben Signatory", 200), ("Cora Clerk", 200)], "sign calls as Ben and Cora only")
+        self.assertEqual([(c.who, c.status) for c in signs], [("Ben Signatory", 200), ("Cora Clerk", 200)], "sign calls as Ben and Cora, able on the list's word (no seat row of their own)")
         self.assertIn("Ada Approver's seat: granted again", grant_said)
+        self.assertIn("found awaiting at 0 of 2, Ben Signatory and Cora Clerk able to sign", changes_said)
         self.assertIn("moved: Ada Approver's seat now reads on the roster, signed by Ben Signatory and Cora Clerk", changes_said)
         self.assertEqual([m["key"] for m in runner.facts["seats_moved"]], ["ada"])
         self.assertEqual(next(s for s in double.whitelist_seats if s["user_id"] == ada.email)["credential_id"], ada.credential_id, "the platform moved the seat")

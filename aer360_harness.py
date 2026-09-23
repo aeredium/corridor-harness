@@ -1621,8 +1621,9 @@ class Runner:
         """
         Spec T17 §2. Sign one change with two rules added to T15's pass: sign only where the seat's person is of the harness and the
         target credential is that person's stored passkey (else a finding, not signed); and sign only as persons whose own seat reads
-        `onRoster: true`, never the stale seat's owner. Where such persons are fewer than requiredSignatures, S4 fails naming the count.
-        Returns the outcome (`moved`, `not_moved`, `not_signed`, `count_short`, `awaiting`) and the words for the line.
+        the list names as able (`maySign`), never the stale seat's owner, and — where they have a seat row in the seats view — reading
+        `onRoster: true` there; a signer the list names with no seat row is able on the list's word alone (§2, amended). Where such
+        persons are fewer than requiredSignatures, S4 fails naming the count. Returns the outcome and the words for the line.
         """
         pending_tx_id = str(change.get("pendingTxId"))
         seat = change.get("seat") if isinstance(change.get("seat"), dict) else {}
@@ -1641,7 +1642,12 @@ class Runner:
             if signer is None or not signer.signed_in or signer.email.lower() == owner.email.lower():
                 return None  # the stale seat's owner never signs her own move (§2)
             row = seats_by_email.get(signer.email.lower())
-            return signer if isinstance(row, dict) and row.get(T.SEAT_ON_ROSTER) is True else None
+            # A signer WITH a seat row must read onRoster true there; a signer the list names with NO seat row is able on the list's word
+            # alone — Ben and Cora on Harness Holdings, whose charter seats only Ada under C11 while the whitelist roster carries all
+            # three (§2, amended 23 September 2026; the earlier rule required a seat row of every signer, which here leaves nobody able).
+            if isinstance(row, dict) and row.get(T.SEAT_ON_ROSTER) is not True:
+                return None
+            return signer
 
         may = list(change.get("maySign") or [])
         able_names = [name for name in may if able(name) is not None]
@@ -3789,7 +3795,7 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
         founder.name, T.SEAT_ON_ROSTER, T.SEAT_ON_ROSTER))
     line("S4", "POST /v1/approver-seats/grant %s (as %s) — only for a seat of a harness person reading %s false with no awaiting change → expect Spec 95 to propose the move afresh at the seat grant, one call, listed awaiting and signed below; where the grant's answer carries no pendingTxId the line says \"moved at once\" and the signing is skipped" % (
         _j({"email": approver.email}), founder.name, T.SEAT_ON_ROSTER))
-    line("S4", "POST %s {} (as each person the list names as able to sign whose own seat reads %s true, in turn; never the stale seat's owner) — only for a change listed awaiting whose target credential is that person's stored passkey → expect 200: options with the challenge the estate derives from %s under the purpose %s, and issuedAtMs; where the able persons are fewer than requiredSignatures S4 fails \"<n> required, <m> able\" and grants no further seat" % (
+    line("S4", "POST %s {} (as each person the change's list names as able — not the stale seat's owner, and where they have a seat row reading %s true; a person the list names with no seat row is able on the list's word) — only for a change listed awaiting whose target credential is that person's stored passkey → expect 200: options with the challenge the estate derives from %s under the purpose %s, and issuedAtMs; where the able persons are fewer than requiredSignatures S4 fails \"<n> required, <m> able\" and grants no further seat" % (
         T.ROSTER_CHANGE_SIGN_OPTIONS_ROUTE % "<pendingTxId>", T.SEAT_ON_ROSTER, T.ROSTER_CHANGE_BINDING % ("<workspace id>", "<pendingTxId>", "<issuedAtMs>"), T.ROSTER_CHANGE_PURPOSE))
     line("S4", "POST %s %s → expect 200: signaturesCollected of requiredSignatures, state awaiting until the count is met, then applied with rebound naming %s's current credential; a change moving a harness seat to a credential the harness does not hold is the finding \"change <id> moves <who>'s seat to a credential the harness does not hold; not signed\"; a refusal (%s, %s, %s, %s) is judged for Rule 13 and reported in the estate's words, never retried" % (
         T.ROSTER_CHANGE_SIGN_ROUTE % "<pendingTxId>", _j({"issuedAtMs": "<issuedAtMs>", "response": "<assertion by the signer's passkey over the challenge>"}), approver.name,
