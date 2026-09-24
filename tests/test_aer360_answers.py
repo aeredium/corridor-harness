@@ -9,6 +9,11 @@ harness on the night of 21 September — the run that stopped at C11A and WO1 �
 questions Spec 92 added, in the catalog's own words; the book must answer every one of them, in
 the kind and with an option the page offers, WO1 in the estate's person_or_none shape, WO2 with a
 title of the three, WO4 above WO3, and state the version it answers.
+
+Spec T18 (24 September 2026): the book answers C9 with `Arbitrum One`, which AER 360 Spec 106 added to the catalog's offer after
+the run of 21 September was recorded. The fixture keeps that night's pages as served and carries Spec 106's offer for C9 and X1
+in its `spec106` block; the pages are held to the book with that offer laid over the two questions, and the page of 21 September
+is kept as the estate before Spec 106, which S3 stops on.
 """
 import json
 import os
@@ -31,8 +36,16 @@ def served_fixture():
         return json.load(handle)
 
 
+def as_spec_106_serves(interview_type, page, data):
+    """The page as an estate at Spec 106 serves it: C9 and X1 offer the four networks (the fixture's `spec106` block); every other page is as recorded."""
+    spec106 = data["spec106"]
+    if page["questionId"] in spec106["questions"][interview_type]:
+        return dict(page, options=list(spec106["options"]))
+    return page
+
+
 def served_and_added():
-    """(interview type, page) for every page the run of 21 September served, then the seven version 14 added — the two served among them once."""
+    """(interview type, page) for every page the run of 21 September served, then the seven version 14 added — the two served among them once — with Spec 106's offer laid over C9 and X1."""
     data = served_fixture()
     out = []
     seen = set()
@@ -41,7 +54,7 @@ def served_and_added():
             if (interview_type, page["questionId"]) in seen:
                 continue
             seen.add((interview_type, page["questionId"]))
-            out.append((interview_type, page))
+            out.append((interview_type, as_spec_106_serves(interview_type, page, data)))
     return out
 
 
@@ -336,6 +349,23 @@ class TheBookAnswersCatalogVersion14(unittest.TestCase):
         self.assertEqual(A.WHITELIST_QUORUM, int(A.POLICY_ANSWERS["C12"]["choice"]))
         self.assertEqual(A.POLICY_ANSWERS["C11C"], {"entries": []}, "not served behind that answer; written all the same")
         self.assertNotIn("C11C", [q.id for q in A.expected_walk("policy")])
+
+    def test_c9_is_arbitrum_one_which_spec_106_offers_and_the_page_of_21_september_did_not(self):
+        """Spec T18 §1: the book answers C9 with Arbitrum One; OTHER_NETWORKS mirrors Spec 106's served list exactly; the page of 21 September offered three."""
+        self.assertEqual(A.POLICY_ANSWERS["C9"], {"choices": ["Arbitrum One"]})
+        self.assertEqual(A.ACCOUNT_ANSWERS["X1"], {"choices": ["Arbitrum One"]}, "X1 reads the same list and the book answers it the same")
+        self.assertEqual(A.OTHER_NETWORKS, ["Ethereum", "Arbitrum One", "Solana", "Bitcoin"])
+        self.assertEqual(A.question("policy", "C9").options, self.data["spec106"]["options"])
+        self.assertEqual(A.question("wallet_account", "X1").options, self.data["spec106"]["options"])
+        self.assertEqual(self.data["spec106"]["questions"], {"policy": ["C9"], "wallet_account": ["X1"]})
+        recorded = next(p for p in self.data["served"]["policy"] if p["questionId"] == "C9")
+        self.assertEqual(recorded["options"], ["Ethereum", "Solana", "Bitcoin"], "the record of 21 September is not rewritten")
+        self.assertEqual(recorded["options"], self.data["spec106"]["offeredOn21September"])
+        with self.assertRaises(A.AnswerDoesNotFit) as caught:
+            A.answer_for("policy", recorded)
+        self.assertEqual(caught.exception.offered, ["Ethereum", "Solana", "Bitcoin"], "the book refuses to improvise on a page before Spec 106; S3 stops with its own sentence first")
+        served_now = next(p for t, p in self.pages if p["questionId"] == "C9")
+        self.assertEqual(A.answer_for("policy", served_now), {"choices": ["Arbitrum One"]})
 
     def test_c19_is_no_only_wallets_held_by_people_or_companies(self):
         page = next(p for t, p in self.pages if p["questionId"] == "C19")

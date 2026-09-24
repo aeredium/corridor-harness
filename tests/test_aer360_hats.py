@@ -32,8 +32,9 @@ import aer360_passkey as PK  # noqa: E402
 import aer360_tables as T  # noqa: E402
 from tests.test_aer360_double import Clock, EstateDouble, VENUE_STIPULATION, runner_on  # noqa: E402
 
-# The payee door's sentence for the probe address (packages/shared/src/refusals.ts, payeeIsVenueContractSentence), word for word.
-VENUE_DOOR_SENTENCE = "This address is the contract of Uniswap v3 on ethereum. Your charter says a payee must be a wallet held by a person or a company (question C19). Nothing was saved."
+# The payee door's sentence for the probe address (packages/shared/src/refusals.ts, payeeIsVenueContractSentence), word for word — on the
+# payments' chain, which is `arbitrum` since Spec T18 (the probe moves with the payees).
+VENUE_DOOR_SENTENCE = "This address is the contract of Uniswap v3 on arbitrum. Your charter says a payee must be a wallet held by a person or a company (question C19). Nothing was saved."
 
 # The estate's own A8 line from the first live run, 20 September 2026 (report aer360-harness-2026-09-20.md), word for word:
 # the entries the book sends as name, email, role, spoken in the order jsonb stores them.
@@ -82,6 +83,8 @@ def fixture_charter(interview_type):
         # PayeeApproval, WalletHolder and SigningTiers as onboardingcompiler.ts types them
         charter["payeeApproval"] = {"answer": "change_approvers", "roster": list(CENSUS_ROSTER), "quorum": 2, "rosterQuestionId": "A8", "quorumQuestionId": "C12"}
         charter["payeeVenueContracts"] = "refused"
+        # Spec T18 / AER 360 Spec 106: the book answers C9 with Arbitrum One and the compiler writes the registry's id; the fixture of 21 September recorded ethereum
+        charter["recordedChains"] = ["aeredium", T.PAYEE_CHAIN]
         return charter
     charter["signers"] = ["%s <%s>" % (A.PEOPLE[k].name, A.PEOPLE[k].email) for k in ("ada", "ben", "harriet")]  # WA1's two, and WO2's third party once
     charter["payeeApproval"] = None
@@ -135,12 +138,15 @@ class TheAuditorOnAFixture(unittest.TestCase):
         self.assertEqual(H.audit_charter("policy", fixture_charter("policy"), policy), [])
         self.assertEqual(H.audit_charter("wallet_account", fixture_charter("wallet_account"), account), [])
         old_policy = H.audit_charter("policy", fixture_charter_of_21_september("policy"), policy)
-        self.assertEqual([f["probe"] for f in old_policy], ["charter (policy): who approves a new payee (C11A: the answer, its roster and its quorum)",
+        # Spec T18: the charter of 21 September recorded ethereum, and the book has chosen Arbitrum One since — the auditor names it first
+        self.assertEqual([f["probe"] for f in old_policy], ["charter (policy): the networks recorded (C9 plus Aeredium)",
+                                                            "charter (policy): who approves a new payee (C11A: the answer, its roster and its quorum)",
                                                             "charter (policy): may a payee be a venue's contract (C19)"])
-        self.assertEqual(old_policy[0]["expected"], json.dumps({"answer": "change_approvers", "roster": CENSUS_ROSTER, "quorum": 2}, ensure_ascii=False))
-        self.assertEqual(old_policy[0]["said"], "the charter carries null")
-        self.assertEqual(old_policy[0]["sent"], A.PAYEE_APPROVAL_CHANGE_APPROVERS)
-        self.assertEqual((old_policy[1]["expected"], old_policy[1]["said"]), ('"refused"', "the charter carries null"))
+        self.assertEqual((old_policy[0]["expected"], old_policy[0]["said"], old_policy[0]["sent"]), ('["aeredium", "arbitrum"]', 'the charter carries ["aeredium", "ethereum"]', ["Arbitrum One"]))
+        self.assertEqual(old_policy[1]["expected"], json.dumps({"answer": "change_approvers", "roster": CENSUS_ROSTER, "quorum": 2}, ensure_ascii=False))
+        self.assertEqual(old_policy[1]["said"], "the charter carries null")
+        self.assertEqual(old_policy[1]["sent"], A.PAYEE_APPROVAL_CHANGE_APPROVERS)
+        self.assertEqual((old_policy[2]["expected"], old_policy[2]["said"]), ('"refused"', "the charter carries null"))
         old_account = H.audit_charter("wallet_account", fixture_charter_of_21_september("wallet_account"), account)
         self.assertEqual([f["probe"] for f in old_account], ["charter (wallet_account): the signers (WA1, and WO2's third party once)",
                                                              "charter (wallet_account): who holds this wallet (WO1)",
@@ -236,16 +242,20 @@ class TheAuditorOnAFixture(unittest.TestCase):
         self.assertEqual(H.venue_law_of(None), "accepted")
         self.assertEqual(H.venue_law_of({"payeeVenueContracts": None}), "accepted")
         self.assertEqual(H.venue_law_of_the_book(), "refused", "the book answers C19 No")
-        self.assertEqual(H.payee_is_venue_contract_sentence("Uniswap v3", "ethereum"), VENUE_DOOR_SENTENCE)
+        self.assertEqual(H.payee_is_venue_contract_sentence("Uniswap v3", T.PAYEE_CHAIN), VENUE_DOOR_SENTENCE)
+        self.assertEqual(H.payee_is_venue_contract_sentence("Uniswap v3", "ethereum"), VENUE_DOOR_SENTENCE.replace("on arbitrum", "on ethereum"), "the sentence names the chain sent")
         self.assertEqual(H.PAYEE_IS_VENUE_CONTRACT_STATUS, 422)
         self.assertEqual(H.ESTATE_VENUE_NAMES[H.CORRIDOR_VENUE_IDS[T.venue_address_for_probe()["key"]]], "Uniswap v3")
 
     def test_a_sandbox_charter_naming_a_live_network_is_a_finding(self):
         answers = {q: v for q, v, _, _ in fixture_answers("policy")}
         charter = fixture_charter("policy")
-        charter["allowedChains"] = ["aeredium-testnet", "ethereum"]
+        charter["allowedChains"] = ["aeredium-testnet", "arbitrum"]
         findings = H.audit_charter("policy", charter, answers)
         self.assertEqual([f["probe"] for f in findings], ["charter (policy): a sandbox charter naming a live network"])
+        self.assertEqual((findings[0]["sent"], findings[0]["expected"]), (["arbitrum"], "allowedChains without ['arbitrum']"), "the chosen name is read as the compiler writes it (Spec 106)")
+        charter["allowedChains"] = ["aeredium-testnet", "ethereum"]
+        self.assertEqual(H.audit_charter("policy", charter, answers), [], "a live network the book did not choose is not this finding")
 
     def test_the_read_back_that_agrees_raises_no_finding_and_one_moved_word_is_one_finding(self):
         for interview_type in A.INTERVIEW_TYPES:
@@ -460,7 +470,7 @@ class TheAuditorOnAFixture(unittest.TestCase):
         stale = {"payees": [{"displayName": "Northwind Supplies", "addresses": [{"address": T.address("NORTHWIND_ETHEREUM").lower(), "whitelistStatus": "pending_promotion"}]}]}
         findings = H.audit_payees(stale, created, None)
         self.assertEqual([f["said"] for f in findings], ["the register says pending_promotion"])
-        listed = dict(fixture_charter("wallet_account"), whitelistEntries=[{"chain": "ethereum", "address": T.address("CONTOSO_ETHEREUM"), "label": "Contoso Legal"}])
+        listed = dict(fixture_charter("wallet_account"), whitelistEntries=[{"chain": T.PAYEE_CHAIN, "address": T.address("CONTOSO_ETHEREUM"), "label": "Contoso Legal"}])
         self.assertEqual([f["probe"] for f in H.audit_payees(register, created, listed)], ["payees register against the charter's list"])
 
 
@@ -547,7 +557,7 @@ class TheAttackerAgainstTheDouble(unittest.TestCase):
         came_back = json.loads(venue["came_back"])
         self.assertEqual(came_back["error"]["code"], "PAYEE_IS_VENUE_CONTRACT")
         self.assertEqual(came_back["error"]["message"], VENUE_DOOR_SENTENCE)
-        self.assertEqual(came_back["error"]["detail"], {"venue": "uniswap_v3", "chain": "ethereum", "address": T.venue_address_for_probe()["address"], "charterQuestionId": "C19"})
+        self.assertEqual(came_back["error"]["detail"], {"venue": "uniswap_v3", "chain": "arbitrum", "address": T.venue_address_for_probe()["address"], "charterQuestionId": "C19"})
         findings = {f.probe: f for f in self.runner.findings if f.station == "S11"}
         self.assertIn("a payee address with a wrong checksum", findings)
         self.assertTrue(findings["a payee address with a wrong checksum"].said.startswith("ACCEPTED: HTTP 201"))
@@ -590,7 +600,7 @@ class TheAttackerAgainstTheDouble(unittest.TestCase):
 class TheVenueProbeFollowsTheCharter(unittest.TestCase):
     """Spec T11 §3: the probe reads the compiled charter's answer at run time — refused by name under C19 No, the acceptance of 20 September under Yes."""
 
-    VENUE_PROBE = "a payee address that is a real venue contract (Uniswap v3 SwapRouter02 on Ethereum, read from the corridor's tables.py at run time)"
+    VENUE_PROBE = "a payee address that is a real venue contract (Uniswap v3 SwapRouter02 on Arbitrum, read from the corridor's tables.py at run time)"
 
     def run_against(self, **double_kwargs):
         double = EstateDouble(**double_kwargs)
@@ -913,7 +923,7 @@ class TheLastRunColumn(unittest.TestCase):
         self.assertIn("| S9 The tour | out of scope | last run out of scope | ", rows["S9"])
         self.assertIn("| S10 The auditor | pass | last run fail · 1 closed: read-back (policy) of A5 | ", rows["S10"])
         self.assertIn("| S11 The attacker | fail | last run fail · 1 still open: a payee address with a wrong checksum · "
-                      "1 new: a payee address that is a real venue contract (Uniswap v3 SwapRouter02 on Ethereum, read from the corridor's tables.py at run time) | ", rows["S11"])
+                      "1 new: a payee address that is a real venue contract (Uniswap v3 SwapRouter02 on Arbitrum, read from the corridor's tables.py at run time) | ", rows["S11"])
         self.assertIn("| S12 The optimizer | pass | last run pass | ", rows["S12"])
         since = report.split("Since the last run (", 1)[1]
         self.assertTrue(since.startswith("%s, started %s): 1 closed, 1 still open, 1 new." % (os.path.basename(first_path), first.started_at)), since[:240])

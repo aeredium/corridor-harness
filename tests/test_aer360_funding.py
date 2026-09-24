@@ -113,7 +113,7 @@ class TheHarnessPressesForTheFundingWallet(unittest.TestCase):
             self.wallet["address"], self.wallet["keyId"], self.wallet["address"]), summary)
         self.assertIn("Gas: 0 SEAR (0 wei) read from %s; the faucet paid: paid true, tx_hash %s, times_paid 1." % (RPC, self.double.faucet.tx_hash), summary)
         self.assertIn("The asset: the three payments together need US$18.24 of USDC; Harness Treasury pays Harness Holdings the shortfall through the estate's own road (Spec T14); the harness never mints the asset and holds no key.", summary)
-        self.assertIn("Harness Treasury: funding wallet %s — the float Bear funds with USDC on ethereum, once" % self.double.treasury.source_account, summary)
+        self.assertIn("Harness Treasury: funding wallet %s — the float Bear funds with USDC on arbitrum, once" % self.double.treasury.source_account, summary)
         path = self.runner.write_report()
         read = H.read_report(path)
         self.assertEqual(read["outcomes"]["S5"], "pass")
@@ -261,7 +261,7 @@ class TheRegisterIsTheJudge(unittest.TestCase):
         double, runner, outcomes = run_against(mirror_lags=True)
         o = outcomes["S6"]
         self.assertEqual(o.outcome, H.PASS, o.line)
-        self.assertIn("Northwind Supplies: created; promoted; Ada Approver counted (1 of 2); Ben Signatory counted (2 of 2): proposed", o.line, "the press's answer, recorded and not judged")
+        self.assertIn("Northwind Supplies: created on arbitrum; promoted; Ada Approver counted (1 of 2); Ben Signatory counted (2 of 2): proposed", o.line, "the press's answer, recorded and not judged")
         self.assertIn("register: Northwind Supplies whitelisted, Contoso Legal whitelisted", o.line)
         self.assertNotIn("mirror disagrees", o.line)
         for record in runner.facts["payees"]:

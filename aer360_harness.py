@@ -138,6 +138,20 @@ hash and the payee's USDC balance before and after, the gas debited beside — a
 walked by the harness. The order S7 walks, and the signatures the estate asks against those the tiers would, are two disagreements carried
 to Bear in S7's own comment.
 
+Spec T18 (24 September 2026, from Bear's ruling "Let's move to Arbitrum."; amended 16:55: no address changes, the chain is one word in one
+place): the book pays on Arbitrum. The run of 16:00 refused S7 on `ethereum` because no chain names a paymaster; P1c deploys the corridor's
+on Arbitrum One, and AER 360 Spec 106 (aeredium/AERAccounts, commit 2665c94) made C9 offer `Arbitrum One` and the compiler write a chosen
+network by the registry's id, `arbitrum`. So aer360_tables.py answers C9 with `Arbitrum One` and names PAYEE_CHAIN `arbitrum`, and every
+chain word the harness sends or expects reads that one name at run time: S3 first reads the served C9 options and, where `Arbitrum One` is
+absent, stops with "Spec 106 is not live: C9 offers <list>; nothing amended" — the draft stands unconfirmed and the standing charter is
+untouched — and, once compiled, judges the recorded networks against exactly ['aeredium', PAYEE_CHAIN], naming the difference (`allowed`
+is printed, not judged: a sandbox charter's allowedChains is the test set); S6 creates the payees on PAYEE_CHAIN and names, in its line, a
+same-named payee an earlier run left on another chain, which is left alone; S6 and S7 resolve a payee by (name, chain) before any payment
+and never pay a record whose chain differs; S7's funding note and T14's Treasury sentence name the chain; the register and asset reads
+(T3, T13) read on it; and S11's venue probe sends the corridor's UNISWAP_V3_ARBITRUM row (Uniswap v3 SwapRouter02 on chain 42161, checked
+once against Uniswap's published deployments) and expects PAYEE_IS_VENUE_CONTRACT for a payee registered on PAYEE_CHAIN. The pinned keys
+keep the names they were first minted under, so no address moved; the tiers, the holds, the three payments and their outcomes stand.
+
 Runs on the Mac's own Python 3.9.6 with the standard library only: urllib.request, http.cookiejar,
 json, hashlib, secrets, base64, struct, subprocess. The one binary it calls is /usr/bin/openssl,
 through aer360_passkey.py. Nothing to install; nothing is shipped to any box.
@@ -199,7 +213,12 @@ VENUE_CONTRACT_QUESTION_ID = "C19"  # services/payees.ts VENUE_CONTRACT_QUESTION
 # The estate's own names for the venues its closed table knows (packages/shared/src/venues.ts, VENUE_NAMES), and which of them the
 # corridor's pinned probe address is. The sentence the door says names the venue by its published name, never its id.
 ESTATE_VENUE_NAMES = {"uniswap_v3": "Uniswap v3", "pancakeswap_v3": "PancakeSwap v3"}
-CORRIDOR_VENUE_IDS = {"UNISWAP_V3_ETHEREUM": "uniswap_v3"}
+CORRIDOR_VENUE_IDS = {"UNISWAP_V3_ETHEREUM": "uniswap_v3", T.UNISWAP_V3_ARBITRUM: "uniswap_v3"}  # Spec T18: the probe sends the Arbitrum row
+# Spec T18 §4: the precondition, checked at C9 before anything is amended. The book answers C9 with T.C9_NETWORK_CHOICE, which AER 360 Spec 106
+# added to the catalog's OTHER_NETWORKS; an estate before Spec 106 — or a box whose seeded catalog rows still carry the three-network offer
+# (106's ship note) — serves C9 without it, and S3 stops with this sentence: the draft stands at C9, unconfirmed and uncompiled.
+NETWORKS_QUESTION_ID = "C9"
+SPEC_106_NOT_LIVE = "Spec 106 is not live: C9 offers %s; nothing amended"
 # What the estate tells a browser about its catalog version: nothing. routes/onboarding.ts answers an interview's id and state, and
 # the page carries none; the interview row's catalogVersion never leaves the server. So S3 reports the book's version beside this.
 ESTATE_STATES_NO_CATALOG_VERSION = ("the estate states no catalog version on the roads a browser walks (routes/onboarding.ts answers an "
@@ -377,6 +396,33 @@ def venue_law_of(charter: Optional[Dict[str, Any]]) -> str:
     default (onboardingcompiler.ts, venueContractsOf; Bear, 20 September 2026).
     """
     return "refused" if isinstance(charter, dict) and charter.get("payeeVenueContracts") == "refused" else "accepted"
+
+
+def expected_recorded_networks() -> List[str]:
+    """Spec T18 §2: the networks the compiled policy charter must record — Aeredium, the law (13v), then PAYEE_CHAIN — exactly these, in the compiler's order."""
+    return ["aeredium", T.PAYEE_CHAIN]
+
+
+def recorded_networks_difference(recorded: Any) -> Optional[str]:
+    """
+    S3's judgement of the recorded networks (Spec T18 §2): None where the charter records exactly ['aeredium', PAYEE_CHAIN]; else one sentence
+    naming the difference — what is recorded and not expected, and what is expected and not recorded. `allowed` is printed, never judged: a
+    sandbox charter's allowedChains is the test set, narrowed at compile (SANDBOX_CHAIN_SET), and says nothing of where the payees are.
+    """
+    expected = expected_recorded_networks()
+    if not isinstance(recorded, list):
+        return "the charter records no networks (recordedChains %s), not %s" % (json.dumps(recorded, ensure_ascii=False), expected)
+    got = [str(c) for c in recorded]
+    if sorted(got) == sorted(expected):
+        return None
+    extra = [c for c in got if c not in expected]
+    missing = [c for c in expected if c not in got]
+    parts: List[str] = []
+    if extra:
+        parts.append("%s %s recorded and not expected" % (", ".join(extra), "is" if len(extra) == 1 else "are"))
+    if missing:
+        parts.append("%s %s expected and not recorded" % (", ".join(missing), "is" if len(missing) == 1 else "are"))
+    return "the charter records the networks %s, not %s: %s" % (got, expected, "; ".join(parts))
 
 
 def venue_law_of_the_book() -> str:
@@ -626,6 +672,8 @@ class Runner:
             "roster_changes": None, "roster_signing": [], "seats_moved": [],
             # Spec T14: the Treasury as S7 brought it in, the money before and after, S7a, the gas credits, and the USDC contract the estate names
             "treasury": None, "money": {}, "s7a": None, "gas_credits": [], "usdc_token": None,
+            # Spec T18: how each listed payee was resolved by (name, chain) before its payment, in words
+            "payee_resolution": {},
         }
         self.started_at = now_iso()
         self.last_run_report: Optional[Dict[str, Any]] = None
@@ -1013,6 +1061,8 @@ class Runner:
             if qid in served:
                 self.facts["served_twice"][interview_type].append(qid)
             served.append(qid)
+            if interview_type == "policy" and qid == NETWORKS_QUESTION_ID:
+                self.require_the_network_offered(station, interview_type, interview_id, question)  # Spec T18 §4, before anything is amended
             try:
                 value = A.answer_for(interview_type, question)
             except A.UnknownQuestion as err:
@@ -1032,6 +1082,20 @@ class Runner:
             page = answer.json
         self.facts["interview_state"][interview_type] = page.get("state")
         return interview_id, page, answered
+
+    def require_the_network_offered(self, station: str, interview_type: str, interview_id: str, question: Dict[str, Any]) -> None:
+        """
+        Spec T18 §4: S3 first reads the served C9 options. The book answers C9 with T.C9_NETWORK_CHOICE, which AER 360 Spec 106 added to the
+        catalog's OTHER_NETWORKS; where the page does not offer it the run stops here with the spec's sentence, and nothing is amended — the
+        draft stands at C9, unconfirmed and uncompiled, the standing charter untouched, and the next run resumes the draft once C9 offers it.
+        """
+        offered = [str(o) for o in (question.get("options") or [])]
+        if T.C9_NETWORK_CHOICE in offered:
+            return
+        sentence = SPEC_106_NOT_LIVE % (offered,)
+        self.note(station, "%s — the book answers %s with %r (aer360_tables.py, C9_NETWORK_CHOICE); the %s draft %s stands at %s, unconfirmed and "
+                  "uncompiled, and the standing charter is untouched" % (sentence, NETWORKS_QUESTION_ID, T.C9_NETWORK_CHOICE, interview_type, interview_id, NETWORKS_QUESTION_ID))
+        raise StationStop(sentence)
 
     @staticmethod
     def book_version_words() -> str:
@@ -1165,6 +1229,10 @@ class Runner:
         # Spec T11: the book's catalog version beside the estate's — which the estate does not state, so what it served stands for it.
         detail += "; %s, and the estate served %d question(s), every one known to the book (%s)" % (self.book_version_words(), answered, ESTATE_STATES_NO_CATALOG_VERSION)
         problems: List[str] = []
+        # Spec T18 §2: the recorded networks are judged against exactly ['aeredium', PAYEE_CHAIN]; allowed is printed above, not judged
+        difference = recorded_networks_difference(charter.get("recordedChains"))
+        if difference:
+            problems.append(difference)
         if not (isinstance(standing.json, dict) and standing.json.get("standsWritten") is True):
             problems.append("GET /v1/onboarding/charter says %s" % (json.dumps(standing.json) if standing.json is not None else standing.sentence()))
         if not isinstance(current, int) or current < 2:
@@ -2144,10 +2212,11 @@ class Runner:
         all_whitelisted = True
         for payee in T.PAYEES:
             address = T.address(payee["key"])
-            body = {"displayName": payee["name"], "defaultAsset": T.PAYMENT_ASSET, "defaultChain": payee["chain"],
-                    "addresses": [{"chain": payee["chain"], "address": address}]}
+            # Spec T18 §2: the payee is created on PAYEE_CHAIN, read here and never copied into a row of the table
+            body = {"displayName": payee["name"], "defaultAsset": T.PAYMENT_ASSET, "defaultChain": T.PAYEE_CHAIN,
+                    "addresses": [{"chain": T.PAYEE_CHAIN, "address": address}]}
             created = self.request(founder, "POST", "/v1/payees", body, "S6")
-            self.step("S6", created, "201 with the payee and its proposed address", "created" if created.ok else created.sentence(), body, founder.name)
+            self.step("S6", created, "201 with the payee and its proposed address on %s" % T.PAYEE_CHAIN, "created" if created.ok else created.sentence(), body, founder.name)
             if not created.ok or not isinstance(created.json, dict):
                 said.append("%s: %s" % (payee["name"], created.sentence()))
                 all_whitelisted = False
@@ -2155,7 +2224,7 @@ class Runner:
             row = created.json.get("payee") or {}
             addresses = row.get("addresses") or []
             address_id = str(addresses[0].get("id")) if addresses else None
-            record = {"key": payee["key"], "name": payee["name"], "payee_id": row.get("id"), "address_id": address_id, "address": address, "chain": payee["chain"],
+            record = {"key": payee["key"], "name": payee["name"], "payee_id": row.get("id"), "address_id": address_id, "address": address, "chain": T.PAYEE_CHAIN,
                       "promoted": None, "approved": None, "presses": []}
             self.facts["payees"].append(record)
             if not address_id:
@@ -2166,7 +2235,7 @@ class Runner:
             self.step("S6", promoted, "a ceremony: status pending_promotion, platformMembershipId, ceremony", "answered" if promoted.ok else promoted.sentence(), {}, founder.name)
             record["promoted"] = promoted.json if promoted.ok else promoted.sentence()
             promote_said = "promoted" if promoted.ok else "promote answered %s" % promoted.sentence()
-            said.append("%s: created; %s; %s" % (payee["name"], promote_said, self.approve_to_quorum(record)))
+            said.append("%s: created on %s; %s; %s" % (payee["name"], T.PAYEE_CHAIN, promote_said, self.approve_to_quorum(record)))
         # Spec T13 §3: the register is the judge, not the press. After the presses, GET /v1/payees decides each payee on its
         # whitelistStatus; a register that reads proposed after the platform counted the quorum fails with the mirror sentence.
         register = self.request(founder, "GET", "/v1/payees", None, "S6")
@@ -2177,11 +2246,33 @@ class Runner:
             status = self.register_status_of(register.json, record)
             record["register_status"] = status
             record["mirror"] = self.mirror_sentence(record, status)
+            # Spec T18 §2: a same-named payee an earlier run left on another chain is left alone, named here, and never paid
+            record["elsewhere"] = self.same_name_elsewhere(register.json, record)
             if status != "whitelisted":
                 all_whitelisted = False
         detail = "payees: %s; register: %s" % ("; ".join(said), ", ".join(
-            "%s %s%s" % (r["name"], r.get("register_status"), (" (%s)" % r["mirror"]) if r.get("mirror") else "") for r in self.facts["payees"]) or "none")
+            "%s %s%s%s" % (r["name"], r.get("register_status"), (" (%s)" % r["mirror"]) if r.get("mirror") else "",
+                           (" (%s)" % self.elsewhere_words(r["name"], r["elsewhere"])) if r.get("elsewhere") else "") for r in self.facts["payees"]) or "none")
         return Outcome("S6", PASS if all_whitelisted and self.facts["payees"] else FAIL, detail)
+
+    @staticmethod
+    def same_name_elsewhere(register: Any, record: Dict[str, Any]) -> List[str]:
+        """The chains, each once and sorted, on which the register holds a payee of this name other than PAYEE_CHAIN (Spec T18 §2): earlier runs' rows."""
+        if not isinstance(register, dict):
+            return []
+        chains: set = set()
+        for row in register.get("payees") or []:
+            if str(row.get("displayName") or "") != record["name"]:
+                continue
+            for addr in row.get("addresses") or []:
+                chain = str(addr.get("chain") or "").lower()
+                if chain and chain != T.PAYEE_CHAIN:
+                    chains.add(chain)
+        return sorted(chains)
+
+    @staticmethod
+    def elsewhere_words(name: str, chains: Sequence[str]) -> str:
+        return "the register also holds %s on %s: left alone, never paid" % (name, ", ".join(chains))
 
     @staticmethod
     def mirror_sentence(record: Dict[str, Any], register_status: str) -> Optional[str]:
@@ -2347,17 +2438,55 @@ class Runner:
         cora = self.people[A.PAYMENT_CLERK]
         return cora if cora.signed_in else self.founder()
 
-    def payee_address_id(self, key: str) -> Optional[str]:
+    def resolve_payee(self, key: str, name: str) -> Tuple[Optional[str], str]:
+        """
+        Spec T18 §2: before any payment a payee is resolved by (name, chain) — this run's own record on PAYEE_CHAIN first, else the register's
+        row whose displayName is the payee's, whose address is the pinned bytes and whose chain is PAYEE_CHAIN (a whitelisted one before any
+        other) — and a record whose chain differs is never paid: it is named, and left alone. Answers the address id, or None, and the words.
+        """
         for record in self.facts["payees"]:
-            if record["key"] == key and record.get("address_id"):
-                return record["address_id"]
-        register = self.facts.get("payees_register") or {}
+            if record["key"] == key and record.get("address_id") and str(record.get("chain") or "").lower() == T.PAYEE_CHAIN:
+                return str(record["address_id"]), "this run's %s on %s" % (name, T.PAYEE_CHAIN)
+        register = self.facts.get("payees_register")
+        if not isinstance(register, dict):
+            return None, "no payee register was read, so %s could not be resolved on %s" % (name, T.PAYEE_CHAIN)
         wanted = T.address(key).lower()
+        on_chain: List[Dict[str, Any]] = []
+        elsewhere: set = set()
         for row in register.get("payees") or []:
+            if str(row.get("displayName") or "") != name:
+                continue
             for addr in row.get("addresses") or []:
-                if str(addr.get("address", "")).lower() == wanted:
-                    return str(addr.get("id"))
-        return None
+                chain = str(addr.get("chain") or "").lower()
+                if chain == T.PAYEE_CHAIN and str(addr.get("address", "")).lower() == wanted:
+                    on_chain.append(addr)
+                elif chain and chain != T.PAYEE_CHAIN:
+                    elsewhere.add(chain)
+        others = (" (%s)" % self.elsewhere_words(name, sorted(elsewhere))) if elsewhere else ""
+        if on_chain:
+            chosen = next((a for a in on_chain if a.get("whitelistStatus") == "whitelisted"), on_chain[0])
+            return str(chosen.get("id")), "the register's %s on %s, %s%s" % (name, T.PAYEE_CHAIN, chosen.get("whitelistStatus"), others)
+        if elsewhere:
+            return None, "no payee %s on %s: the register holds %s on %s only, which is never paid" % (name, T.PAYEE_CHAIN, name, ", ".join(sorted(elsewhere)))
+        return None, "no payee %s on %s in the register" % (name, T.PAYEE_CHAIN)
+
+    def payee_address_id(self, key: str, name: Optional[str] = None) -> Optional[str]:
+        """The address id a payment to this payee is made against — resolved by (name, chain), never by address alone (Spec T18 §2)."""
+        payee_name = name if name is not None else next((p["name"] for p in T.PAYEES if p["key"] == key), key)
+        return self.resolve_payee(key, payee_name)[0]
+
+    def read_the_register_for_s7(self, clerk: Person) -> None:
+        """
+        A run resumed at S7 (or one whose S6 left no record) holds no payee of its own, so the register is read once here, as the clerk, and each
+        listed payee is resolved from it by (name, chain) — Spec T18 §2 — before anything is paid.
+        """
+        if self.facts["payees"] or isinstance(self.facts.get("payees_register"), dict) or not any(p.payee_key for p in A.PAYMENTS):
+            return
+        register = self.request(clerk, "GET", "/v1/payees", None, "S7")
+        self.step("S7", register, "the payees register, read because S6 left no record of a payee (a run resumed at S7): each listed payee is resolved by (name, chain) — "
+                  "%s's row on %s at its pinned address, whitelisted before any other; a record on another chain is named and never paid (Spec T18 §2)" % (
+                      " and ".join(p["name"] for p in T.PAYEES), T.PAYEE_CHAIN), "answered" if register.ok else register.sentence(), None, clerk.name)
+        self.facts["payees_register"] = register.json if isinstance(register.json, dict) else None
 
     def fresh_unlisted_key(self, clerk: Person) -> str:
         """
@@ -2385,10 +2514,14 @@ class Runner:
             key = self.facts.get("unlisted_key") or self.fresh_unlisted_key(self.clerk())
             return {"oneOff": {"chain": T.PAYEE_CHAIN, "address": T.address(key), "declared": True, "payeeName": payment.payee_name},
                     "asset": T.PAYMENT_ASSET, "chain": T.PAYEE_CHAIN, "amountMinor": payment.amount_minor, "invoiceRef": payment.invoice}
-        address_id = self.payee_address_id(payment.payee_key)
+        address_id, resolved = self.resolve_payee(payment.payee_key, payment.payee_name)
+        self.facts["payee_resolution"][payment.key] = resolved
         if address_id is None:
             return None
         return {"payeeAddressId": address_id, "asset": T.PAYMENT_ASSET, "chain": T.PAYEE_CHAIN, "amountMinor": payment.amount_minor, "invoiceRef": payment.invoice}
+
+    def resolution_words(self, payment_key: str) -> str:
+        return str(self.facts["payee_resolution"].get(payment_key) or "the payee was not resolved")
 
     def tiers(self) -> Tuple[Optional[str], Optional[str], str]:
         """
@@ -3128,7 +3261,8 @@ class Runner:
                     failures += 1
         else:
             said.append("the Treasury was not asked to pay: %s" % ("Harness Holdings has no funding wallet" if funding is None else "Harness Holdings' %s could not be read" % T.PAYMENT_ASSET))
-        # 4. S7a: the gas refusal proved on Holdings, whose gas account nobody has credited yet (§3)
+        # 4. S7a: the gas refusal proved on Holdings, whose gas account nobody has credited yet (§3); the listed payees resolved by (name, chain) first (Spec T18 §2)
+        self.read_the_register_for_s7(clerk)
         rows: List[Dict[str, Any]] = []
         for payment in A.PAYMENTS:
             row = self.pay_row(payment)
@@ -3141,8 +3275,8 @@ class Runner:
         elif len(rows) == len(A.PAYMENTS):
             s7a = self.prove_the_gas_refusal(clerk, rows, h_gas, h_usdc)
         else:
-            s7a = {"verdict": "failed", "said": "S7a not made: no address id for %s, so the set of three could not be reviewed" % ", ".join(
-                p.payee_name for p in A.PAYMENTS if self.pay_row(p) is None), "ceiling": None}
+            s7a = {"verdict": "failed", "said": "S7a not made: %s, so the set of three could not be reviewed" % "; ".join(
+                self.resolution_words(p.key) for p in A.PAYMENTS if self.pay_row(p) is None), "ceiling": None}
             self.facts["s7a"] = s7a
         said.append(s7a["said"])
         if s7a["verdict"] == "failed":
@@ -3171,14 +3305,14 @@ class Runner:
             row = self.pay_row(payment)
             tier_words = under_the_tiers(payment.amount, holder_alone, two_signatures)
             if row is None:
-                said.append("%s (%s %s, expected to %s): no address id for %s, so nothing was sent; %s" % (payment.key, payment.amount, T.PAYMENT_ASSET, payment.expect, payment.payee_name, tier_words))
+                said.append("%s (%s %s, expected to %s): %s; nothing was sent; %s" % (payment.key, payment.amount, T.PAYMENT_ASSET, payment.expect, self.resolution_words(payment.key), tier_words))
                 failures += 1
                 continue
             address = row["oneOff"]["address"] if "oneOff" in row else T.address(payment.payee_key)
             expect_words = "%s; %s; expected to %s (figures from %s)" % (tier_words, self.TIER_ROAD_WORDS.get(payment.key, ""), payment.expect, tiers_read_from)
             record = self.pay(self, clerk, payment.key, row, int(payment.amount_minor), address, signers, expect_words,
                               lambda address=address: self.read_token_balance("S7", clerk.name, T.PAYEE_CHAIN, token, address), more_gas=more_gas_for_holdings)
-            record.update(expect=payment.expect, tier_words=tier_words, amount=payment.amount)
+            record.update(expect=payment.expect, tier_words=tier_words, amount=payment.amount, resolved=self.resolution_words(payment.key) if payment.payee_key else None)
             self.facts["sets"][payment.key] = record
             records.append(record)
         trail = self.read_trail(self, self.founder() if self.people[A.FOUNDER].signed_in else clerk, "S7",
@@ -3186,8 +3320,10 @@ class Runner:
         for record in records:
             self.judge_landing(record, trail)
             asked = record.get("approvals_required")
-            said.append("%s (%s %s, expected to %s): %s; the estate asked %s signature(s) and %s; %s" % (
-                record["key"], record["amount"], T.PAYMENT_ASSET, record["expect"], record["said"], asked if asked is not None else "?",
+            resolved = record.get("resolved")
+            paid_words = ("paid to %s; " % resolved) if resolved and not resolved.startswith("this run's") else ""
+            said.append("%s (%s %s, expected to %s): %s%s; the estate asked %s signature(s) and %s; %s" % (
+                record["key"], record["amount"], T.PAYMENT_ASSET, record["expect"], paid_words, record["said"], asked if asked is not None else "?",
                 self.TIER_ROAD_WORDS.get(record["key"], ""), record["tier_words"]))
             money["payments"].append({"key": record["key"], "amount_minor": record["amount_minor"], "landed": record["landed"], "gas_debit_cents": record.get("gas_debit_cents"),
                                       "user_op_hash": record.get("user_op_hash"), "tx_hash": record.get("tx_hash")})
@@ -4082,7 +4218,7 @@ def audit_charter(interview_type: str, charter: Dict[str, Any], answers: Dict[st
         census = ["%s <%s>" % (e.get("name", "").strip(), e.get("email", "").strip()) if e.get("name", "").strip() else e.get("email", "").strip()
                   for e in entries("A8") if e.get("email", "").strip()]
         expect("the change approvers (A8's census)", census, charter.get("changeApprovers"), entries("A8"))
-        recorded = sorted({"aeredium"} | {c.lower() for c in choices("C9")})
+        recorded = sorted({"aeredium"} | {T.chain_id_for_name(c) for c in choices("C9")})  # Spec 106: the compiler writes the registry's id
         expect("the networks recorded (C9 plus Aeredium)", recorded, sorted(charter.get("recordedChains") or []), choices("C9"))
         expect("the preparer may release (C15)", None if choice("C15") is None else choice("C15") == "Yes", charter.get("requesterCountsAsSigner"), choice("C15"))
         expect("the destination rule (version 12 asks none)", None, charter.get("whitelistMode"))
@@ -4161,12 +4297,12 @@ def audit_charter(interview_type: str, charter: Dict[str, Any], answers: Dict[st
             expect("the treasury ceiling (T1)", cents("T1"), amounts.get("denyCeiling"), cents("T1"))
         expect("the submitter may approve (WA2)", A.WA2_YES == choice("WA2") if choice("WA2") in (A.WA2_YES, A.WA2_NO) else None,
                charter.get("requesterCountsAsSigner"), choice("WA2"))
-        recorded = sorted({"aeredium"} | {c.lower() for c in choices("X1")})
+        recorded = sorted({"aeredium"} | {T.chain_id_for_name(c) for c in choices("X1")})
         if "X1" in answers:
             expect("the networks recorded (X1 plus Aeredium)", recorded, sorted(charter.get("recordedChains") or []), choices("X1"))
     if charter.get("realm") == "sandbox":
         allowed = [str(c).lower() for c in charter.get("allowedChains") or []]
-        live = {c.lower() for c in choices("C9" if interview_type == "policy" else "X1")}
+        live = {T.chain_id_for_name(c) for c in choices("C9" if interview_type == "policy" else "X1")}
         crossed = sorted(live & set(allowed))
         if crossed:
             findings.append({"probe": "charter (%s): a sandbox charter naming a live network" % interview_type, "sent": sorted(live), "expected": "allowedChains without %s" % crossed,
@@ -4401,21 +4537,37 @@ def audit_payees(register: Optional[Dict[str, Any]], created: Sequence[Dict[str,
     findings: List[Dict[str, Any]] = []
     if register is None:
         return findings
-    statuses: Dict[str, Tuple[str, str]] = {}
+    # Spec T18 §2: an EVM address is the same bytes on every chain, and earlier runs left the payees on another chain and in other states —
+    # so a record is matched to the register's row by this run's own address id first, else by (chain, address), a whitelisted row before
+    # any other, the address alone standing in only where one side names no chain
+    rows: List[Tuple[str, str, str, str, str]] = []  # (address id, chain, address, status, displayName)
     for row in register.get("payees") or []:
         for addr in row.get("addresses") or []:
-            statuses[str(addr.get("address", "")).lower()] = (str(addr.get("whitelistStatus")), str(row.get("displayName")))
+            rows.append((str(addr.get("id") or ""), str(addr.get("chain") or "").lower(), str(addr.get("address", "")).lower(), str(addr.get("whitelistStatus")), str(row.get("displayName"))))
+
+    def status_of(address: str, chain: str, address_id: str = "") -> Optional[Tuple[str, str]]:
+        wanted = address.lower()
+        if address_id:
+            for row_id, _, _, status, name in rows:
+                if row_id == address_id:
+                    return status, name
+        matches = [(status, name) for _, row_chain, row_address, status, name in rows
+                   if row_address == wanted and (not chain or not row_chain or row_chain == chain.lower())]
+        if not matches:
+            return None
+        return next((m for m in matches if m[0] == "whitelisted"), matches[0])
+
     for record in created:
         approved = record.get("approved")
         if isinstance(approved, dict) and approved.get("whitelistStatus") == "whitelisted":
-            status = statuses.get(record["address"].lower())
+            status = status_of(record["address"], str(record.get("chain") or ""), str(record.get("address_id") or ""))
             if status is None or status[0] != "whitelisted":
                 findings.append({"probe": "payees register: %s" % record["name"], "sent": record["address"], "expected": "whitelisted, as Ada's approval answered",
-                                 "said": "the register says %s" % (status[0] if status else "the address is absent")})
+                                 "said": "the register says %s" % (status[0] if status else "the address is absent on %s" % (record.get("chain") or T.PAYEE_CHAIN))})
     if account_charter:
         for entry in account_charter.get("whitelistEntries") or []:
             address = str(entry.get("address", "")).lower()
-            if address and address not in statuses:
+            if address and status_of(address, str(entry.get("chain") or "")) is None:
                 findings.append({"probe": "payees register against the charter's list", "sent": entry, "expected": "the charter's entry in the register",
                                  "said": "the charter lists %s (%s) and the register does not carry it" % (entry.get("address"), entry.get("label"))})
     return findings
@@ -4597,11 +4749,15 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     line("S3", "POST /v1/onboarding/interviews %s → expect 200: the interview id and its first page; the answer book answers catalog version %d, and %s" % (
         _j({"interviewType": "policy"}), A.CATALOG_VERSION_ANSWERED, ESTATE_STATES_NO_CATALOG_VERSION))
     for q in A.expected_walk("policy"):
+        if q.id == NETWORKS_QUESTION_ID:
+            line("S3", "POST /v1/onboarding/interviews/<policy interview>/answers %s → expect 200: the next page (%s) — first, the served options must offer %r (AER 360 Spec 106), else S3 stops: \"%s\" and the draft stands at %s, unconfirmed (Spec T18 §4)" % (
+                _j({"questionId": q.id, "value": A.POLICY_ANSWERS[q.id]}), q.kind, T.C9_NETWORK_CHOICE, SPEC_106_NOT_LIVE % ([o for o in A.OTHER_NETWORKS if o != T.C9_NETWORK_CHOICE],), NETWORKS_QUESTION_ID))
+            continue
         line("S3", "POST /v1/onboarding/interviews/<policy interview>/answers %s → expect 200: the next page (%s)" % (_j({"questionId": q.id, "value": A.POLICY_ANSWERS[q.id]}), q.kind))
     line("S3", "GET /v1/onboarding/interviews/<policy interview>/readback → expect the charter in plain sentences, the sandbox realm first")
     line("S3", "POST /v1/onboarding/interviews/<policy interview>/confirm/options {} → expect the digest-bound challenge, issuedAtMs, digest")
     line("S3", "POST /v1/onboarding/interviews/<policy interview>/confirm %s → expect 200: state confirmed" % _j({"issuedAtMs": "<issuedAtMs>", "response": "<assertion by the founder's passkey over the challenge>"}))
-    line("S3", "POST /v1/onboarding/interviews/<policy interview>/compile {} → expect 200: charter (name, quorum 1, signers, recordedChains, allowedChains aeredium-testnet), receipt, seat")
+    line("S3", "POST /v1/onboarding/interviews/<policy interview>/compile {} → expect 200: charter (name, quorum 1, signers, recordedChains exactly %s — judged, naming any difference (Spec T18 §2); allowedChains aeredium-testnet, printed and not judged), receipt, seat" % (expected_recorded_networks(),))
     line("S3", "GET /v1/onboarding/charter → expect standsWritten true")
     line("S3", "GET /v1/journey → expect currentStage 2 of %d" % JOURNEY_STAGE_COUNT)
     # S4 — Spec T10: every person is brought in on their own credential
@@ -4673,13 +4829,13 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     quorum = A.WHITELIST_QUORUM
     roster_pressers = [k for k in A.CENSUS_ORDER if k != A.FOUNDER]  # ada, ben, cora; the founder is the last resort
     for payee in T.PAYEES:
-        line("S6", "POST /v1/payees %s (as %s) → expect 201: the payee with its address proposed" % (
-            _j({"displayName": payee["name"], "defaultAsset": T.PAYMENT_ASSET, "defaultChain": payee["chain"], "addresses": [{"chain": payee["chain"], "address": T.address(payee["key"])}]}), founder.name))
+        line("S6", "POST /v1/payees %s (as %s) → expect 201: the payee with its address proposed on %s (Spec T18: the chain is aer360_tables.PAYEE_CHAIN, read at run time)" % (
+            _j({"displayName": payee["name"], "defaultAsset": T.PAYMENT_ASSET, "defaultChain": T.PAYEE_CHAIN, "addresses": [{"chain": T.PAYEE_CHAIN, "address": T.address(payee["key"])}]}), founder.name, T.PAYEE_CHAIN))
         line("S6", "POST /v1/payees/addresses/<address of %s>/promote {} (as %s) → expect a ceremony: status pending_promotion, platformMembershipId, ceremony" % (payee["name"], founder.name))
         for key in roster_pressers:
             line("S6", "POST /v1/payees/addresses/<address of %s>/approve {} (as %s, the roster in order, the founder last) → expect the estate to count it toward the quorum of %s (approvals, may_still_approve, sentence; Spec 89) — with every seat on its holder's current credential, %s counted (1 of 2) and %s counted (2 of 2), the count met, so %s is not asked (Spec T15 §2); a SIGNATURE_NOT_COUNTED for a person whose seat S4 just moved is a finding, one for a seat S4 could not move is recorded and the next person presses, until whitelisted or nobody is left" % (
                 payee["name"], A.PEOPLE[key].name, Runner.COUNT_WORDS.get(quorum, str(quorum)), A.PEOPLE[roster_pressers[0]].name, A.PEOPLE[roster_pressers[1]].name, A.PEOPLE[roster_pressers[2]].name))
-    line("S6", "GET /v1/payees → expect both addresses whitelisted, read by this run's payee ids; the judgement is the register's, not the press's — a register reading proposed after the platform counted %s of %s fails with the mirror sentence (Spec T13 §3)" % (quorum, quorum))
+    line("S6", "GET /v1/payees → expect both addresses whitelisted, read by this run's payee ids; the judgement is the register's, not the press's — a register reading proposed after the platform counted %s of %s fails with the mirror sentence (Spec T13 §3); a same-named payee an earlier run left on a chain other than %s is named in the line, left alone and never paid (Spec T18 §2)" % (quorum, quorum, T.PAYEE_CHAIN))
     # S7 — Spec T14: the Treasury, the money before, the shortfall paid, S7a, the gas credits, the three payments judged on money that moved, the money after
     clerk = A.PEOPLE[A.PAYMENT_CLERK]
     treasurer = "%s at %s" % (founder.name, T.TREASURY["short"])
@@ -4728,6 +4884,7 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
                           "asset": T.PAYMENT_ASSET, "chain": T.PAYEE_CHAIN, "amountMinor": payment.amount_minor, "invoiceRef": payment.invoice})
         else:
             three.append({"payeeAddressId": "<address of %s>" % payment.payee_name, "asset": T.PAYMENT_ASSET, "chain": T.PAYEE_CHAIN, "amountMinor": payment.amount_minor, "invoiceRef": payment.invoice})
+    line("S7", "GET /v1/payees (as %s) — only where S6 left no record of a payee (a run resumed at S7) → expect the register; each listed payee is resolved by (name, chain): its row on %s at its pinned address, whitelisted before any other; a record on another chain is named and never paid (Spec T18 §2)" % (clerk.name, T.PAYEE_CHAIN))
     line("S7", "GET /v1/sets (as %s) → the runs register before S7a's review, so a run the review created would be seen" % clerk.name)
     line("S7", "POST /v1/sets/review %s (as %s) — S7a, with Harness Holdings' gas account below the set's ceiling → expect the gas gate (%s) refusing %s in U3's sentence with the figures the harness read: \"Your gas account holds US$<available>. This set needs at most US$<ceiling> of gas. Nothing was sent. Buy gas below.\" (Spec 104 §4); a gate that admits the set because the balance covers the ceiling is reported, not failed; a refusal naming other figures, or a payment that left, fails S7" % (
         _j({"pays": three, "duplicatesAcknowledged": False}), clerk.name, T.GAS_GATE, T.GAS_SHORTFALL))
@@ -4792,7 +4949,7 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     line("S11", "POST /v1/auth/login/options then /verify twice with the same nonce, issuedAtMs and challenge → expect the second refused 403 STEP_UP_STALE: challenge already used")
     line("S11", "POST /v1/auth/login/verify with an assertion whose rpIdHash is SHA-256('not-the-estate.invalid') → expect 403 STEP_UP_INVALID")
     line("S11", "POST /v1/payees %s → expect a refusal, or the estate's acceptance recorded" % _j({"displayName": "Checksum probe", "addresses": [{"chain": T.PAYEE_CHAIN, "address": T.wrong_checksum(T.address("CHECKSUM_PROBE_ETHEREUM"))}]}))
-    venue_body = _j({"displayName": "Venue probe", "addresses": [{"chain": T.PAYEE_CHAIN, "address": "<the corridor's tables.py UNISWAP_V3_ETHEREUM, read at run time>"}]})
+    venue_body = _j({"displayName": "Venue probe", "addresses": [{"chain": T.PAYEE_CHAIN, "address": "<the corridor's tables.py %s, read at run time>" % T.UNISWAP_V3_ARBITRUM}]})
     if venue_law_of_the_book() == "refused":
         line("S11", "POST /v1/payees %s → expect %d %s: %s (the book answers %s %s; the live run reads the compiled policy charter's payeeVenueContracts); an acceptance is the finding" % (
             venue_body, PAYEE_IS_VENUE_CONTRACT_STATUS, PAYEE_IS_VENUE_CONTRACT, payee_is_venue_contract_sentence(ESTATE_VENUE_NAMES["uniswap_v3"], T.PAYEE_CHAIN),

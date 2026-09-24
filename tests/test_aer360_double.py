@@ -218,6 +218,17 @@ a ceremony's expiry once its first signature is counted, so the second meets the
 `account_email` is the AAP account's own address, which the estate attributes to the founder's key (`addressesOfCaller`) — None, the default,
 is an account whose address the double does not know, so the founder's key is attributed no census seat.
 
+Spec T18 (24 September 2026) taught the double AER 360 Spec 106 (aeredium/AERAccounts, commit 2665c94 — `packages/shared/src/chains.ts`
+chainIdForName; `services/onboardingcompiler.ts` chainAllowlist; `services/questioncatalog.ts` OTHER_NETWORKS), read from its code: C9 and X1
+offer Ethereum, Arbitrum One, Solana, Bitcoin (the book's own catalog serves the list), and the compiler writes a chosen network by the
+registry's id — `arbitrum` for "Arbitrum One" — lower-casing only a name the registry does not know (`chain_allowlist`, `chain_id_for_name`,
+`CHAIN_DISPLAY_NAMES`). `before_spec_106=True` is the estate before it, or a box whose seeded catalog rows still carry the three-network
+offer (106's ship note): C9 and X1 serve the three of 21 September, a choice not offered is refused in validateValue's words, and the
+compiler lower-cases. `recorded_chains=[…]` is a compiler that records those networks whatever was chosen — the charter double S3 is judged
+against. `hold_payee(name, chain, address, status)` is a payee an earlier run left in the register, so a run can meet Northwind on
+`ethereum` beside or instead of `arbitrum`. The venue table already held Uniswap v3 SwapRouter02 on `arbitrum` (the engine's row), so the
+door's refusal on the payments' chain is the estate's own.
+
 Spec T14 (22 September 2026, amended 22:35; built 24 September 2026) taught the double AER 360 Spec 104 (aeredium/AERAccounts, commit 8812c64)
 and platform Spec 154 and 154b (aeredium/aegiskey-access-platform, commits e7dc195 and 451b998), read from their code, because the harness now
 pays real USDC through the estate's own road and buys its gas from the platform's ledger:
@@ -400,6 +411,41 @@ NOT_ON_ROSTER_CAUSE = ("a change of who the approvers are is signed by the activ
                        "estate attributes to it. Nothing was signed.")
 STEPUP_MAX_AGE_MS = 120 * 1000
 KNOWN_CHAINS = ("ethereum", "polygon", "arbitrum", "optimism", "base", "avalanche", "bsc", "solana", "anvil")
+# packages/shared/src/chains.ts SPECS (Spec 106): each registry row's display name beside its id, and the one dev-only row, which
+# `chainIdForName` never matches — a display name that resolved to anvil would put the house's own chain on a client's policy.
+CHAIN_DISPLAY_NAMES = {"ethereum": "Ethereum", "polygon": "Polygon", "arbitrum": "Arbitrum One", "optimism": "OP Mainnet", "base": "Base",
+                       "avalanche": "Avalanche C-Chain", "bsc": "BNB Smart Chain", "solana": "Solana", "anvil": "Local (anvil)"}
+DEV_ONLY_CHAINS = ("anvil",)
+# questioncatalog.ts OTHER_NETWORKS before Spec 106, as the estate served C9 on 21 September 2026 (tests/fixtures/aer360-served-2026-09-21.json)
+OTHER_NETWORKS_BEFORE_SPEC_106 = ["Ethereum", "Solana", "Bitcoin"]
+NETWORK_QUESTIONS = ("C9", "X1")  # the two questions that read OTHER_NETWORKS
+
+
+def chain_id_for_name(name: str) -> Optional[str]:
+    """`chainIdForName` (chains.ts, Spec 106): after a trim, a case-insensitive exact match on a non-dev-only row's display name or id answers the id."""
+    wanted = str(name).strip().lower()
+    if not wanted:
+        return None
+    for chain_id in KNOWN_CHAINS:
+        if chain_id in DEV_ONLY_CHAINS:
+            continue
+        if chain_id.lower() == wanted or CHAIN_DISPLAY_NAMES[chain_id].lower() == wanted:
+            return chain_id
+    return None
+
+
+def chain_allowlist(chosen: Sequence[str], before_spec_106: bool = False) -> List[str]:
+    """
+    `chainAllowlist` (onboardingcompiler.ts): aeredium first, always (13v); every other choice written as the registry's id (Spec 106), the
+    choice lower-cased where the registry knows no such name (Bitcoin → bitcoin), each once. Before Spec 106 every choice was lower-cased.
+    """
+    extra: List[str] = []
+    for choice in chosen or []:
+        chain_id = (None if before_spec_106 else chain_id_for_name(choice)) or str(choice).lower()
+        if chain_id == "aeredium" or chain_id in extra:
+            continue
+        extra.append(chain_id)
+    return ["aeredium"] + extra
 KNOWN_ASSETS = ("AERX", "AVAX", "BNB", "DAI", "ETH", "MATIC", "POL", "SOL", "USDC", "USDT", "WBTC", "WETH")
 STANDING_WORDS = {"author": "an author", "approver": "an approver", "viewer": "a viewer"}
 
@@ -1033,8 +1079,15 @@ class EstateDouble:
                  platform: Optional[PlatformDouble] = None, chain: Optional[UsdcChainDouble] = None, treasury: bool = True, is_treasury: bool = False,
                  aap_account_id: Optional[str] = None, secret: Optional[bytes] = None, initial_usdc_cents: Optional[int] = None, holdings_usdc_cents: int = 0,
                  treasury_usdc_cents: int = 10000, treasury_funding_wallet: str = "born", quote_ceiling_usd_cents: int = QUOTE_CEILING_USD_CENTS,
-                 actual_gas_usd_cents: int = ACTUAL_GAS_USD_CENTS, gas_refusal_names_other_figures: bool = False, review_refuses_but_pays: bool = False):
+                 actual_gas_usd_cents: int = ACTUAL_GAS_USD_CENTS, gas_refusal_names_other_figures: bool = False, review_refuses_but_pays: bool = False,
+                 before_spec_106: bool = False, recorded_chains: Optional[Sequence[str]] = None):
         self.currency_spoken_as_code = currency_spoken_as_code  # False: main's default arm (JSON); True: Spec 88's code
+        # Spec T18's dials. `before_spec_106`: the estate before AER 360 Spec 106 — or a box whose seeded catalog rows still carry the
+        # three-network offer (106's ship note) — serves C9 and X1 as on 21 September (Ethereum, Solana, Bitcoin), refuses a choice not
+        # offered in validateValue's words, and its compiler lower-cases a chosen name. `recorded_chains`: a compiler that records these
+        # networks whatever was chosen — the charter double S3 is judged against.
+        self.before_spec_106 = before_spec_106
+        self.recorded_chains = list(recorded_chains) if recorded_chains is not None else None
         # The payee door and a venue's contract (Spec T11). None: the door follows the written policy charter, as Spec 92 built it —
         # PAYEE_IS_VENUE_CONTRACT where the charter says refused and the address is on the venue table. True: Spec T8's stand-in, a door
         # that refuses the probe address regardless of its charter under ADDRESS_PROPOSAL_REFUSED. False: a door that saves it regardless.
@@ -1150,7 +1203,7 @@ class EstateDouble:
                                          currency_spoken_as_code=currency_spoken_as_code, faucet=self.faucet, rpc=self.rpc, platform=self.platform, chain=self.chain,
                                          treasury=False, is_treasury=True, aap_account_id=TREASURY_ACCOUNT_ID, secret=self.secret, account_email=T.TREASURY["email"],
                                          initial_usdc_cents=treasury_usdc_cents if treasury_funding_wallet == "born" else 0,  # Bear funds an address he has seen: a wallet that stood
-                                         quote_ceiling_usd_cents=quote_ceiling_usd_cents, actual_gas_usd_cents=actual_gas_usd_cents)
+                                         quote_ceiling_usd_cents=quote_ceiling_usd_cents, actual_gas_usd_cents=actual_gas_usd_cents, before_spec_106=before_spec_106)
         if funding_wallet == "born":
             self.birth_funding_wallet(None, "account_creation_interview")
 
@@ -1646,7 +1699,7 @@ class EstateDouble:
             # THE FIGURE THAT ARRIVES WRITTEN (Spec 92): WO3 and WO4 carry the catalog's written dollar as the value on record where no
             # answer stands yet; every other page reads exactly as before
             written = PROMPTS.get(q.id, {}).get("written")
-            question = {"questionId": q.id, "part": part, "kind": q.kind, "prompt": PROMPTS.get(q.id, {}).get("prompt", q.id), "options": list(q.options) if q.options else None,
+            question = {"questionId": q.id, "part": part, "kind": q.kind, "prompt": PROMPTS.get(q.id, {}).get("prompt", q.id), "options": self.options_of(q),
                         "listFields": PROMPTS.get(q.id, {}).get("listFields"), "recommended": None, "note": PROMPTS.get(q.id, {}).get("note"), "required": q.required,
                         "priorValue": latest[q.id]["value"] if q.id in latest else (dict(written) if written else None)}
             if q.kind == "currency":
@@ -1716,12 +1769,20 @@ class EstateDouble:
                             "sentence": "Answering “No” beside a single named approver is refused: nobody would be left who could release a payment. Name a second approver first, or answer Yes."}
         return None
 
+    def options_of(self, q: A.Question) -> Optional[List[str]]:
+        """The options the estate serves for a question: the catalog's, and for C9 and X1 the three-network offer of an estate before Spec 106."""
+        if q.id in NETWORK_QUESTIONS and self.before_spec_106:
+            return list(OTHER_NETWORKS_BEFORE_SPEC_106)
+        return list(q.options) if q.options else None
+
     def validate_value(self, q: A.Question, value: Any) -> None:
         def refuse(cause: str) -> None:
             raise Refusal("ANSWER_INVALID", detail={"questionId": q.id, "cause": cause})
         if not isinstance(value, dict):
             raise Malformed("value: Expected object")
         kind = q.kind
+        if q.id in NETWORK_QUESTIONS:
+            q = q._replace(options=self.options_of(q))  # validateValue judges against the options the seeded row offers (Spec 106's ship note)
         if kind == "statement":
             if value.get("acknowledged") is not True:
                 refuse("a statement page is acknowledged by Next")
@@ -2226,7 +2287,8 @@ class EstateDouble:
         if agent:
             mode = "allow_only"
         chosen = list(((latest.get("X1") if is_account else latest.get("C9")) or {}).get("choices") or [])
-        recorded = sorted({"aeredium"} | {c.lower() for c in chosen})
+        # Spec 106 (onboardingcompiler.ts chainAllowlist): aeredium first, every choice by the registry's id; the dial records other networks
+        recorded = list(self.recorded_chains) if (self.recorded_chains is not None and not is_account) else chain_allowlist(chosen, self.before_spec_106)
         wa2 = choice("WA2")
         requester = ({A.WA2_YES: True, A.WA2_NO: False}.get(wa2) if is_account else (None if choice("C15") is None else choice("C15") == "Yes"))
         contact_entry = next(({"name": e.get("name", "").strip(), "email": e.get("email", "").strip()} for e in ((latest.get("C18") or {}).get("entries") or []) if str(e.get("email", "")).strip()), None)
@@ -2670,6 +2732,20 @@ class EstateDouble:
                    "promotedAt": None, "platformMembershipId": None, "proposedBy": caller["credentialId"]}
             self.addresses[row["id"]] = row
         return 201, {"payee": self.payee_view(payee)}
+
+    def hold_payee(self, display_name: str, chain: str, address: str, whitelist_status: str = "whitelisted") -> Dict[str, Any]:
+        """
+        A payee an earlier run left in the register (Spec T18's register double): one row with one address on `chain`, in the status the
+        register would read — whitelisted where an earlier run's presses met the count, proposed where they did not. Answers the address row.
+        """
+        payee = {"id": "payee-" + secrets.token_hex(6), "displayName": display_name, "defaultAsset": T.PAYMENT_ASSET, "defaultChain": chain,
+                 "references": {}, "labels": [], "createdAt": self._now_iso()}
+        self.payees[payee["id"]] = payee
+        row = {"id": "addr-" + secrets.token_hex(6), "payeeId": payee["id"], "chain": chain, "address": address.lower(), "whitelistStatus": whitelist_status,
+               "promotedAt": self._now_iso() if whitelist_status != "proposed" else None,
+               "platformMembershipId": ("wm-" + secrets.token_hex(4)) if whitelist_status != "proposed" else None, "proposedBy": self.founder_credential}
+        self.addresses[row["id"]] = row
+        return row
 
     def payee_view(self, payee: Dict[str, Any]) -> Dict[str, Any]:
         addresses = sorted([a for a in self.addresses.values() if a["payeeId"] == payee["id"]], key=lambda a: a["chain"])

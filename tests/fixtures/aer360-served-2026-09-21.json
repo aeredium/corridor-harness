@@ -613,5 +613,27 @@
         "servedOn": null
       }
     ]
+  },
+  "spec106": {
+    "what": "AER 360 Spec 106 (aeredium/AERAccounts, commit 2665c94, 24 September 2026: services/questioncatalog.ts OTHER_NETWORKS): C9 and X1 offer Arbitrum One after Ethereum, in this order, and nothing else on either page moves. The pages above are the record of 21 September and are not rewritten; the book answers C9 with Arbitrum One since Spec T18, so a test holds the book against this offer for the two questions, and an estate still serving the three of 21 September stops S3 with 'Spec 106 is not live: C9 offers <list>; nothing amended'.",
+    "questions": {
+      "policy": [
+        "C9"
+      ],
+      "wallet_account": [
+        "X1"
+      ]
+    },
+    "options": [
+      "Ethereum",
+      "Arbitrum One",
+      "Solana",
+      "Bitcoin"
+    ],
+    "offeredOn21September": [
+      "Ethereum",
+      "Solana",
+      "Bitcoin"
+    ]
   }
 }
