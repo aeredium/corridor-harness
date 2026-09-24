@@ -240,7 +240,51 @@ class EstateHarnessReadmeTest(unittest.TestCase):
         self.assertLess(self.section.index("Spec T17, 23 September 2026"), self.section.index("Spec T14, 22 September 2026"))
 
 
+    def test_it_says_the_book_pays_on_arbitrum_since_spec_t18(self):
+        self.assertIn("Spec T18, 24 September 2026, amended 16:55", self.section)
+        for words in ("Let's move to Arbitrum.", "AER 360 Spec 106", "commit 2665c94", "`chainIdForName`: `arbitrum`, display name Arbitrum One, chain 42161",
+                      "*The chain is one word in one place.*", "`PAYEE_CHAIN = \"arbitrum\"`", "`C9_NETWORK_CHOICE = \"Arbitrum One\"`",
+                      "*fund Harness Treasury: <address> on arbitrum, then rerun*", "the suffix records where a label was minted, not where the payee pays", "so no address moved",
+                      "`Ethereum, Arbitrum One, Solana, Bitcoin`", "proves the five move together",
+                      "*The precondition is checked before anything is amended.*", "*Spec 106 is not live: C9 offers <list>; nothing amended*", "unconfirmed and uncompiled",
+                      "*S3 judges the recorded networks, and prints the allowed ones.*", "`['aeredium', 'arbitrum']`",
+                      "*the charter records the networks ['aeredium', 'ethereum'], not ['aeredium', 'arbitrum']: ethereum is recorded and not expected; arbitrum is expected and not recorded*",
+                      "printed and not judged", "*S6 creates the payees on arbitrum and names what earlier runs left.*", "*created on arbitrum*",
+                      "*the register also holds Northwind Supplies on ethereum: left alone, never paid*", "*S6 and S7 resolve a payee by (name, chain).*",
+                      "*paid to the register's Northwind Supplies on arbitrum, whitelisted*",
+                      "*no payee Northwind Supplies on arbitrum: the register holds Northwind Supplies on ethereum only, which is never paid; nothing was sent*",
+                      "*The venue probe moves with them.*", "`UNISWAP_V3_ARBITRUM`", "`https://developers.uniswap.org/docs/protocols/v3/deployments/v3-arbitrum-deployments`",
+                      "`0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45`", "the same address as on Ethereum", "read at run time, never written in a table of the harness's",
+                      "*This address is the contract of Uniswap v3 on arbitrum. Your charter says a payee must be a wallet held by a person or a company (question C19). Nothing was saved.*",
+                      "the checksum probe is unchanged", "193 → 194 lines", "`before_spec_106` and `recorded_chains`", "`hold_payee`",
+                      "the tiers, the holds, the three payments and their outcomes stand as T14 left them", "USDC put on Ethereum under T14 stays there and does not count",
+                      "Each of the spec's tests was red on main"):
+            self.assertIn(words, self.section, words)
+        self.assertLess(self.section.index("Spec T14, 22 September 2026"), self.section.index("Spec T18, 24 September 2026"))
+        self.assertLess(self.section.index("Spec T18, 24 September 2026"), self.section.index("**Running it.**"))
+        # the living paragraph names the chain the payees are created on
+        self.assertIn("created on `arbitrum` since Spec T18", self.section)
+        self.assertIn("The payments, in USDC on Arbitrum One from Cora:", self.section)
+
+
 class ChangelogTest(unittest.TestCase):
+    def test_the_changelog_records_spec_t18_first_and_names_every_change(self):
+        text = read("CHANGELOG.md")
+        title = "## Spec T18 — The book pays on Arbitrum: C9 answers Arbitrum One, the payees and the venue probe live there, and S7 follows the paymaster (24 September 2026)"
+        self.assertIn(title, text)
+        self.assertLess(text.index(title), text.index("## Spec P1d"))
+        t18 = text.split(title, 1)[1].split("## Spec P1d", 1)[0]
+        for words in ("Let's move to Arbitrum.", "amended 16:55", "commit 2665c94", "`chainIdForName`", "`chainAllowlist`", "`OTHER_NETWORKS`",
+                      "`PAYEE_CHAIN = \"arbitrum\"`", "`C9_NETWORK_CHOICE = \"Arbitrum One\"`", "`REGISTRY_IDS_BY_NAME`", "`chain_id_for_name`", "so no address moved",
+                      "`UNISWAP_V3_ARBITRUM`", "`UNISWAP_V3_ARBITRUM_SOURCE`", "`venue_address_for_probe`",
+                      "`require_the_network_offered`", "`SPEC_106_NOT_LIVE`", "Spec 106 is not live: C9 offers <list>; nothing amended",
+                      "`expected_recorded_networks`", "`recorded_networks_difference`", "`same_name_elsewhere`", "`elsewhere_words`",
+                      "`resolve_payee`", "`read_the_register_for_s7`", "`resolution_words`", "`audit_charter`", "`audit_payees`", "`CORRIDOR_VENUE_IDS`",
+                      "193 → 194 lines", "`chain_allowlist`", "`before_spec_106`", "`recorded_chains`", "`hold_payee`", "`spec106` block",
+                      "`tests/test_aer360_arbitrum.py`", "`single_source_evidence`", "Not touched, as the fence requires"):
+            self.assertIn(words, t18, words)
+
+
     def test_the_changelog_records_spec_t14_before_t17_and_names_every_change(self):
         text = read("CHANGELOG.md")
         self.assertIn("## Spec T14 — The harness pays in cents, funds Harness Holdings from a treasury workspace whose key lives only in the enclave, credits the gas account as the sandbox may, proves the gas refusal, and S7 passes with money that moved (24 September 2026)", text)

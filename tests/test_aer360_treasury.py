@@ -171,7 +171,7 @@ class TheTreasuryPaysAndTheThreePaymentsLand(unittest.TestCase):
 
     def test_the_report_names_the_treasury_and_the_money_and_reads_back(self):
         report = self.runner.report()
-        self.assertIn("Harness Treasury: funding wallet %s — the float Bear funds with USDC on ethereum, once; it pays Harness Holdings' shortfall through the estate's own road, and the harness holds no key for it (Spec T14)." % self.treasury.source_account, report)
+        self.assertIn("Harness Treasury: funding wallet %s — the float Bear funds with USDC on arbitrum, once; it pays Harness Holdings' shortfall through the estate's own road, and the harness holds no key for it (Spec T14)." % self.treasury.source_account, report)
         self.assertIn("The asset: the three payments together need US$18.24 of USDC; Harness Treasury pays Harness Holdings the shortfall through the estate's own road (Spec T14); the harness never mints the asset and holds no key.", report)
         self.assertIn("| POST %s%s |" % (PLATFORM_BASE, T.ADMIN_CREDIT_ROUTE % AAP_ACCOUNT_ID), report, "the admin credit is in Every call")
         self.assertIn("| POST %s |" % T.public_rpc_url(T.PAYEE_CHAIN), report)
@@ -187,8 +187,8 @@ class TheTreasuryIsShort(unittest.TestCase):
         double, runner, outcomes = run_against(treasury_usdc_cents=1000)
         o = outcomes["S7"]
         self.assertEqual(o.outcome, H.FAIL, o.line)
-        sentence = T.TREASURY_SHORT_SENTENCE % ("US$10.00", "US$18.24", double.treasury.source_account, "ethereum")
-        self.assertEqual(sentence, "Harness Treasury holds US$10.00; the run needs US$18.24; fund %s on ethereum" % double.treasury.source_account)
+        sentence = T.TREASURY_SHORT_SENTENCE % ("US$10.00", "US$18.24", double.treasury.source_account, "arbitrum")
+        self.assertEqual(sentence, "Harness Treasury holds US$10.00; the run needs US$18.24; fund %s on arbitrum" % double.treasury.source_account)
         self.assertTrue(o.line.endswith("%s; nothing was sent" % sentence), o.line)
         self.assertIn("%s (the three payments need US$18.24 and Harness Holdings holds US$0.00); nothing was sent" % sentence, runner.notes["S7"])
         self.assertEqual([c.route for c in runner.calls if c.station == "S7" and c.method == "POST" and c.path.startswith("/v1/sets")], [], "nothing was submitted")
@@ -246,7 +246,7 @@ class TheAdminCreditRoad(unittest.TestCase):
         self.assertTrue(any(n.endswith("is not filed: the gas credits below will fail with %r" % T.NO_GAS_CREDIT_ROAD_SENTENCE) for n in runner.notes["S7"]), runner.notes["S7"])
         self.assertEqual(double.platform.requests, [])
         self.assertEqual(double.chain.transfers, [], "the Treasury's payment needs gas first, so nothing left")
-        self.assertIn("Harness Treasury holds US$100.00 of USDC on ethereum", o.line, "the Treasury was brought in and the balances read before the credit step stopped S7")
+        self.assertIn("Harness Treasury holds US$100.00 of USDC on arbitrum", o.line, "the Treasury was brought in and the balances read before the credit step stopped S7")
 
     def test_a_wrong_key_is_the_platforms_refusal_in_its_words_and_the_same_on_retry(self):
         double = EstateDouble()
@@ -358,12 +358,12 @@ class TheBirthRunStopsWithTheFundSentence(unittest.TestCase):
         o = outcomes["S7"]
         self.assertEqual(o.outcome, H.FAIL, o.line)
         address = double.treasury.source_account
-        sentence = T.FUND_TREASURY_SENTENCE % (address, "ethereum")
-        self.assertEqual(sentence, "fund Harness Treasury: %s on ethereum, then rerun" % address)
+        sentence = T.FUND_TREASURY_SENTENCE % (address, "arbitrum")
+        self.assertEqual(sentence, "fund Harness Treasury: %s on arbitrum, then rerun" % address)
         self.assertTrue(o.line.endswith(sentence), o.line)
         self.assertIn("the interviews walked from the book with the Treasury's own name, approver and account approvers (23 and 18 questions)", o.line)
         self.assertIn("funding wallet: %s on double-stack-1, key %s (born by this run's press)" % (address, double.treasury.custody_key_id), o.line)
-        self.assertTrue(any(n.startswith("%s — the estate's own words: Fund this account with USDC on ethereum. Gas is bought separately, below." % sentence) for n in runner.notes["S7"]), runner.notes["S7"])
+        self.assertTrue(any(n.startswith("%s — the estate's own words: Fund this account with USDC on arbitrum. Gas is bought separately, below." % sentence) for n in runner.notes["S7"]), runner.notes["S7"])
         self.assertEqual(double.platform.requests, [], "nothing credited")
         self.assertEqual(double.chain.transfers, [], "nothing sent")
         presses = [c for c in runner.calls if c.station == "S7" and c.route == "POST /v1/workspace/funding-wallet"]
@@ -385,7 +385,7 @@ class TheBirthRunStopsWithTheFundSentence(unittest.TestCase):
         self.assertEqual(o2.outcome, H.PASS, o2.line)
         self.assertIn("Harness Treasury: the Treasury founder signed in with the stored passkey; funding wallet: %s on double-stack-1, key %s (already born; not pressed for again); before:" % (address, double.treasury.custody_key_id), o2.line)
         self.assertEqual([c.route for c in runner2.calls if c.station == "S7" and "/onboarding/" in c.path], ["GET /v1/onboarding/charter"])
-        self.assertIn("Harness Treasury holds US$50.00 of USDC on ethereum", o2.line)
+        self.assertIn("Harness Treasury holds US$50.00 of USDC on arbitrum", o2.line)
         self.assertIn("Harness Treasury pays Harness Holdings (%s) the shortfall of US$18.24" % double.source_account, o2.line)
         self.assertEqual(sorted(os.listdir(os.path.join(runner2.store_dir, T.TREASURY["client_id"]))), ["harriet.json"], "one passkey, kept across the runs")
 
@@ -416,11 +416,13 @@ class TheTablesFacts(unittest.TestCase):
         self.assertEqual(T.usdc_minor_of_cents(1824), 18240000)
         with self.assertRaises(ValueError):
             T.usdc_dollars(-1)
-        self.assertEqual(T.TREASURY_SHORT_SENTENCE % ("US$10.00", "US$18.24", "0xabc", "ethereum"), "Harness Treasury holds US$10.00; the run needs US$18.24; fund 0xabc on ethereum")
-        self.assertEqual(T.FUND_TREASURY_SENTENCE % ("0xabc", "ethereum"), "fund Harness Treasury: 0xabc on ethereum, then rerun")
+        self.assertEqual(T.TREASURY_SHORT_SENTENCE % ("US$10.00", "US$18.24", "0xabc", "arbitrum"), "Harness Treasury holds US$10.00; the run needs US$18.24; fund 0xabc on arbitrum")
+        self.assertEqual(T.FUND_TREASURY_SENTENCE % ("0xabc", "arbitrum"), "fund Harness Treasury: 0xabc on arbitrum, then rerun")
 
     def test_the_public_rpc_is_read_from_the_corridors_skeleton_at_run_time_and_the_balance_call_is_the_erc20_selector(self):
         self.assertEqual(T.public_rpc_url("ethereum"), "https://ethereum-rpc.publicnode.com")
+        self.assertEqual(T.public_rpc_url("arbitrum"), "https://arb1.arbitrum.io/rpc", "Spec T18: the payments' chain, from the corridor's skeleton")
+        self.assertEqual(T.public_rpc_url(T.PAYEE_CHAIN), "https://arb1.arbitrum.io/rpc")
         self.assertEqual(T.public_rpc_url("aeredium-testnet"), T.TESTNET_RPC_URL)
         self.assertIsNone(T.public_rpc_url("solana"))
         self.assertEqual(T.ERC20_BALANCE_OF_SELECTOR, "0x70a08231")

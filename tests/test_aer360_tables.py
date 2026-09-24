@@ -1,7 +1,9 @@
 """
 Every address in aer360_tables.py is a valid checksummed EVM address and none appears in the
 corridor's tables.py; the one venue address S11 sends on purpose is read from the corridor's table
-at run time and is never in the harness's own (Spec T7).
+at run time and is never in the harness's own (Spec T7). Since Spec T18 the chain is one word in one
+place, `arbitrum`, the venue probe sends the corridor's Arbitrum row, and the pinned keys keep the
+names they were first minted under, so no address moved.
 """
 import os
 import re
@@ -44,8 +46,10 @@ class TheTables(unittest.TestCase):
 
     def test_the_venue_probe_reads_the_corridors_table_at_run_time_and_is_never_ours(self):
         venue = T.venue_address_for_probe()
-        self.assertEqual(venue["address"], corridor.address("UNISWAP_V3_ETHEREUM"))
-        self.assertEqual(venue["what"], "Uniswap v3 SwapRouter02 on Ethereum")
+        self.assertEqual(venue["key"], T.UNISWAP_V3_ARBITRUM, "Spec T18 §3: the probe moves with the payees")
+        self.assertEqual(venue["address"], corridor.address("UNISWAP_V3_ARBITRUM"))
+        self.assertEqual(venue["what"], "Uniswap v3 SwapRouter02 on Arbitrum")
+        self.assertEqual(T.venue_address_for_probe("UNISWAP_V3_ETHEREUM")["what"], "Uniswap v3 SwapRouter02 on Ethereum", "the Ethereum row is still readable by name")
         self.assertFalse(T.is_pinned(venue["address"]))
         with open(os.path.join(ROOT, "aer360_tables.py"), "r", encoding="utf-8") as handle:
             text = handle.read()
@@ -68,12 +72,14 @@ class TheTables(unittest.TestCase):
         self.assertEqual(len({T.address(k) for k in T.UNLISTED_KEYS}), 6)
 
     def test_the_payee_chain_and_the_payees(self):
-        self.assertEqual(T.PAYEE_CHAIN, "ethereum")
-        self.assertEqual(T.C9_NETWORK_CHOICE, "Ethereum")
+        """Spec T18 §1: the chain is one word in one place; no row of the payees copies it, and the pinned keys keep their minted names."""
+        self.assertEqual(T.PAYEE_CHAIN, "arbitrum")
+        self.assertEqual(T.C9_NETWORK_CHOICE, "Arbitrum One")
         self.assertEqual([p["name"] for p in T.PAYEES], ["Northwind Supplies", "Contoso Legal"])
+        self.assertEqual([p["key"] for p in T.PAYEES], ["NORTHWIND_ETHEREUM", "CONTOSO_ETHEREUM"], "the keys record where the labels were first minted")
         for p in T.PAYEES:
             self.assertIn(p["key"], T.PINNED)
-            self.assertEqual(p["chain"], T.PAYEE_CHAIN)
+            self.assertNotIn("chain", p, "the chain is read from PAYEE_CHAIN at run time, never copied into a row")
         with self.assertRaises(KeyError):
             T.address("NOT_PINNED")
 

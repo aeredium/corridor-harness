@@ -28,14 +28,31 @@ from corridor_harness import checksum_address, keccak256  # noqa: E402  the corr
 # which is the point: no address here was ever typed, so none can be a real one mistyped.
 SEED = "aer360-harness test addresses — Spec T7, 19 September 2026"
 
-# The chain a payee's address lives on, and where that word comes from. The harness answers
-# C9 (the networks beside Aeredium) with 'Ethereum'; the compiler lower-cases the choice into
-# the chain allowlist (`onboardingcompiler.ts`, chainAllowlist), and `packages/shared/src/chains.ts`
-# names the chain `ethereum` (family evm, chain id 1). The sandbox's own network,
-# `aeredium-testnet`, is not in that registry, so the payee road (`isKnownChain`) would refuse
-# a payee address declared on it; the harness records which networks the compiled charter names.
-PAYEE_CHAIN = "ethereum"
-C9_NETWORK_CHOICE = "Ethereum"
+# THE CHAIN IS ONE WORD IN ONE PLACE (Spec T18, 24 September 2026; Bear: "Let's move to Arbitrum."). The chain a payee's
+# address lives on, the chain every payment is made on, and where that word comes from. The harness answers C9 (the networks
+# beside Aeredium) with the display name below; since AER 360 Spec 106 the compiler writes the choice by the registry's id
+# (`packages/shared/src/chains.ts`, chainIdForName; `onboardingcompiler.ts`, chainAllowlist — until 106 it lower-cased the
+# display name, which is the id for "Ethereum" and a chain nothing knows for "Arbitrum One"), and the registry names the
+# chain `arbitrum`: display name "Arbitrum One", family evm, chain id 42161, payouts true. Everything the harness sends or
+# expects about a chain reads PAYEE_CHAIN at run time — S3's expected recorded networks, the payees' chain, the payee
+# resolution, S7's notes and the Treasury sentence, the register and asset reads, the venue probe — so moving the chain is
+# moving these two lines and nothing else. The sandbox's own network, `aeredium-testnet`, is not in that registry, so the
+# payee road (`isKnownChain`) would refuse a payee address declared on it; the harness records which networks the compiled
+# charter names.
+PAYEE_CHAIN = "arbitrum"
+C9_NETWORK_CHOICE = "Arbitrum One"
+
+# Spec 106's rule, mirrored for the auditor's read-back of the networks (packages/shared/src/chains.ts, chainIdForName;
+# onboardingcompiler.ts, chainAllowlist): after a trim, a case-insensitive exact match on a served display name or on the id of
+# a chain the platform serves answers the id; anything else the compiler lower-cases exactly as it always did (Bitcoin → bitcoin),
+# so every standing charter reads back unchanged. The rows are the registry's for the names C9 serves, read on 24 September 2026.
+REGISTRY_IDS_BY_NAME = {"ethereum": "ethereum", "arbitrum one": "arbitrum", "arbitrum": "arbitrum", "solana": "solana"}
+
+
+def chain_id_for_name(name: Any) -> str:
+    """The id the compiler writes for a network a person chose (Spec 106), else the choice lower-cased, as the compiler falls back."""
+    wanted = str(name).strip().lower()
+    return REGISTRY_IDS_BY_NAME.get(wanted, wanted)
 
 
 class Derived(NamedTuple):
@@ -56,9 +73,13 @@ def _pin(label: str, what: str) -> Derived:
     return Derived(derive_address(label), what, label)
 
 
+# THE KEYS AND THEIR LABELS KEEP THE NAMES THEY WERE FIRST MINTED UNDER (Spec T7, on ethereum; Spec T18 moved the chain without
+# moving an address): `_pin` derives the bytes from the label, so renaming a key or a label would move its address. The `_ETHEREUM`
+# suffix records where a label was first minted, not where the payee pays — that is PAYEE_CHAIN, above, and an EVM address is the
+# same twenty bytes on every EVM chain.
 PINNED: Dict[str, Derived] = {
-    "NORTHWIND_ETHEREUM": _pin("Northwind Supplies/ethereum", "the test payee Northwind Supplies, on ethereum"),
-    "CONTOSO_ETHEREUM": _pin("Contoso Legal/ethereum", "the test payee Contoso Legal, on ethereum"),
+    "NORTHWIND_ETHEREUM": _pin("Northwind Supplies/ethereum", "the test payee Northwind Supplies"),
+    "CONTOSO_ETHEREUM": _pin("Contoso Legal/ethereum", "the test payee Contoso Legal"),
     # The address S11 spells with a wrong checksum: derived here, mis-cased on purpose in `wrong_checksum`.
     "CHECKSUM_PROBE_ETHEREUM": _pin("Checksum probe/ethereum", "a test address S11 sends with its checksum broken"),
 }
@@ -72,10 +93,11 @@ UNLISTED_KEYS: List[str] = ["UNLISTED_ETHEREUM"] + ["UNLISTED_ETHEREUM_%d" % n f
 for _n, _key in enumerate(UNLISTED_KEYS, 1):
     PINNED[_key] = _pin("Unlisted destination %d/ethereum" % _n, "test address %d on nobody's list, paid once to prove the wait" % _n)
 
-# The two payees of the whitelist (Spec T7, "The estate, its people and its money").
+# The two payees of the whitelist (Spec T7, "The estate, its people and its money"), created on PAYEE_CHAIN and resolved by
+# (name, chain) before any payment (Spec T18 §2). No row copies the chain: the harness reads PAYEE_CHAIN where it creates or resolves one.
 PAYEES: List[Dict[str, str]] = [
-    {"key": "NORTHWIND_ETHEREUM", "name": "Northwind Supplies", "chain": PAYEE_CHAIN},
-    {"key": "CONTOSO_ETHEREUM", "name": "Contoso Legal", "chain": PAYEE_CHAIN},
+    {"key": "NORTHWIND_ETHEREUM", "name": "Northwind Supplies"},
+    {"key": "CONTOSO_ETHEREUM", "name": "Contoso Legal"},
 ]
 
 # The asset the payments are made in, and its decimals as `packages/shared/src/money.ts` knows them.
@@ -126,10 +148,21 @@ def is_checksummed(addr: str) -> bool:
     return checksum_address(addr) == addr
 
 
-def venue_address_for_probe(key: str = "UNISWAP_V3_ETHEREUM") -> Dict[str, str]:
+# THE VENUE PROBE'S ROW (Spec T18 §3): Uniswap v3 SwapRouter02 on Arbitrum One, chain 42161 — the KEY of the corridor's tables.py row
+# whose bytes S11 reads at run time (`venue_address_for_probe`) and which are never written here. Read once, on 24 September 2026, from
+# Uniswap's published deployments (UNISWAP_V3_ARBITRUM_SOURCE, the row "SwapRouter02") and found to be the corridor's row: SwapRouter02 is
+# one address on Ethereum and on Arbitrum One. The estate's own closed venue table (packages/shared/src/venues.ts, copied row for row
+# from the engine's) holds the same row on `arbitrum`, so a payee registered on PAYEE_CHAIN with this address is refused
+# PAYEE_IS_VENUE_CONTRACT where the charter says so (C19 No); tests/test_aer360_tables.py holds the corridor's row to the published bytes.
+UNISWAP_V3_ARBITRUM = "UNISWAP_V3_ARBITRUM"
+UNISWAP_V3_ARBITRUM_SOURCE = "https://developers.uniswap.org/docs/protocols/v3/deployments/v3-arbitrum-deployments"
+
+
+def venue_address_for_probe(key: str = UNISWAP_V3_ARBITRUM) -> Dict[str, str]:
     """
     THE ONE VENUE ADDRESS S11 SENDS ON PURPOSE, read from the corridor's own table at run time
-    and never from this file. Refuses if the corridor's row is somehow one of ours.
+    and never from this file — Uniswap v3 SwapRouter02 on PAYEE_CHAIN since Spec T18. Refuses if
+    the corridor's row is somehow one of ours.
     """
     import tables as corridor  # the corridor harness's pinned table, beside this file
 

@@ -137,8 +137,8 @@ class TheApproversSignAdasSeatHome(unittest.TestCase):
     def test_s6_counts_ada_then_ben_stops_at_the_count_and_the_platform_would_refuse_cora_as_unneeded(self):
         o = self.outcomes["S6"]
         self.assertEqual(o.outcome, H.PASS, o.line)
-        self.assertEqual(o.line, "payees: Northwind Supplies: created; promoted; Ada Approver counted (1 of 2); Ben Signatory counted (2 of 2): whitelisted; "
-                                 "Contoso Legal: created; promoted; Ada Approver counted (1 of 2); Ben Signatory counted (2 of 2): whitelisted; "
+        self.assertEqual(o.line, "payees: Northwind Supplies: created on arbitrum; promoted; Ada Approver counted (1 of 2); Ben Signatory counted (2 of 2): whitelisted; "
+                                 "Contoso Legal: created on arbitrum; promoted; Ada Approver counted (1 of 2); Ben Signatory counted (2 of 2): whitelisted; "
                                  "register: Northwind Supplies whitelisted, Contoso Legal whitelisted")
         for record in self.runner.facts["payees"]:
             self.assertEqual([(p["who"], p["status"]) for p in record["presses"]], [("Ada Approver", 200), ("Ben Signatory", 200)], "Cora is not asked")

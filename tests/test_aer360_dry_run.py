@@ -13,6 +13,8 @@ S10 the trail's roster.seat_rebound row (150 → 156 lines). Spec T17 added S4's
 file, the Treasury's sign-in or birth, its charter and funding wallet, the four money reads before, the Treasury's gas credit and its payment of the
 shortfall, S7a's review of the set of three, Holdings' gas credit, each payment's balance reads on the chain, its review, creation, submission,
 approvals in the spec's order, execution and register reads, the trail, and the four money reads after; and under S10 the money moved (159 → 193 lines).
+Spec T18 moved the chain word: every S6, S7 and S11 call that names a chain names `arbitrum`, C9 is answered `Arbitrum One`, the venue body names the
+corridor's UNISWAP_V3_ARBITRUM row, and S7 gains one conditional call — the payees register read where S6 left no record (193 → 194 lines).
 """
 import contextlib
 import io
@@ -178,7 +180,7 @@ class DryRunTest(unittest.TestCase):
         """Spec T8: --dry unchanged in its calls. The fixture is the dry run at main after PR #5, its expectations cut off at the arrow."""
         with open(FROZEN_CALLS, "r", encoding="utf-8") as handle:
             frozen = handle.read().splitlines()
-        self.assertEqual(len(frozen), 193, "Spec T14 rewrites S7 for the Treasury, the money, S7a, the gas credits and the payments judged on money that moved, and adds S10's money line (159 → 193)")
+        self.assertEqual(len(frozen), 194, "Spec T14 rewrote S7 (159 → 193); Spec T18 adds S7's conditional register read for a run resumed at S7 (193 → 194)")
         self.assertEqual(calls_of(H.dry_lines()), frozen)
         self.assertEqual(len([l for l in frozen if l.startswith("S4 — ") and "/v1/roster/changes" in l]), 4, "the list, the options, the press, the read-back after the count")
         self.assertEqual(len([l for l in frozen if l.startswith("S4 — ") and "/v1/approver-seats/grant" in l]), 3, "Spec T10's grant, Spec T17's grant of a stale seat, and Spec T15's seat granted again for an expired change")
@@ -251,7 +253,7 @@ class DryRunTest(unittest.TestCase):
         """Spec T11 §3: the book answers C19 No, so the dry line expects the payee door's own refusal by name, in the estate's sentence; an acceptance is the finding."""
         s11 = [l for l in H.dry_lines() if l.startswith("S11 — ") and "Venue probe" in l]
         self.assertEqual(len(s11), 1)
-        self.assertIn("→ expect 422 PAYEE_IS_VENUE_CONTRACT: This address is the contract of Uniswap v3 on ethereum. Your charter says a payee must be a wallet held by a person or a company (question C19). Nothing was saved."
+        self.assertIn("→ expect 422 PAYEE_IS_VENUE_CONTRACT: This address is the contract of Uniswap v3 on arbitrum. Your charter says a payee must be a wallet held by a person or a company (question C19). Nothing was saved."
                       " (the book answers C19 \"No — only wallets held by people or companies\"; the live run reads the compiled policy charter's payeeVenueContracts); an acceptance is the finding", s11[0])
         self.assertNotIn("expect 201", s11[0])
         checksum = [l for l in H.dry_lines() if l.startswith("S11 — ") and "Checksum probe" in l]

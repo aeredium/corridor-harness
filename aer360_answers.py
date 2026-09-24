@@ -78,7 +78,14 @@ WHAT THE SPEC DECIDED, AND WHAT THE BOOK DECIDED WHERE THE SPEC LEFT IT TO THE H
   treasury dialect the operating account does not walk), the tiers 2.00 (WO3) and 10.00 (WO4); the
   payments P1 1.25 (within the holder's figure), P2 4.99 (two signatures) and P3 12.00 (three). The
   payments are made in USDC, so 12.00 is above 10.00 whatever the day's AUD rate; the display lens
-  the page returns is printed in the report. Nothing else in the book changed. The wallet account is an OPERATIONS account, because the operations
+  the page returns is printed in the report. Nothing else in the book changed. SPEC T18 (24 September 2026,
+  from Bear's ruling "Let's move to Arbitrum."): THE BOOK PAYS ON ARBITRUM. C9 answers the network AER 360
+  Spec 106 added to the catalog's offer, `Arbitrum One`, which the compiler writes as the registry's id
+  `arbitrum`; the chain is one word in one place, aer360_tables.PAYEE_CHAIN, and the payments, the payees,
+  the venue probe and every sentence that names a chain follow it. OTHER_NETWORKS mirrors 106's served list
+  exactly. The tiers, the holds, the three payments and their outcomes stand as T14 left them; the payee keys
+  keep the names they were first minted under (`NORTHWIND_ETHEREUM`, `CONTOSO_ETHEREUM`: the suffix records
+  where the label was minted, not where the payee pays), so no address moved. The wallet account is an OPERATIONS account, because the operations
   dialect is the one that asks a per-payment hold (O2), a daily figure (O1) and the pause on a
   new destination (O3, Spec 69) that the three payments exercise.
 """
@@ -208,6 +215,8 @@ class Payment(NamedTuple):
         return T.minor_units(self.amount, T.ASSET_DECIMALS[T.PAYMENT_ASSET])
 
 
+# The payee keys are the pinned labels' names (aer360_tables.py PINNED): `_ETHEREUM` records where a label was first minted, never where
+# the payee pays — every payment is made on T.PAYEE_CHAIN, and S6 and S7 resolve a payee by (name, chain) before paying it (Spec T18 §2).
 PAYMENTS: List[Payment] = [
     Payment("P1", "NORTHWIND_ETHEREUM", "Northwind Supplies", "1.25", "HH-0001", "proceeds to approval",
             "listed, within limits; within the holder's own figure (WO3)"),
@@ -235,7 +244,10 @@ LEVELS_BENEATH = [
     "Yes — divisions of this company with their own limits",
     "Yes — more than one of these",
 ]
-OTHER_NETWORKS = ["Ethereum", "Solana", "Bitcoin"]
+# The networks C9 and X1 offer beside Aeredium, exactly as AER 360 Spec 106 serves them (questioncatalog.ts OTHER_NETWORKS, 24 September
+# 2026): Arbitrum One after Ethereum, and nothing else in the list moved. The book answers both with T.C9_NETWORK_CHOICE; a page still
+# offering the three of 21 September is an estate before Spec 106, and S3 stops at C9 before anything is amended (Spec T18 §4).
+OTHER_NETWORKS = ["Ethereum", "Arbitrum One", "Solana", "Bitcoin"]
 ONE_TO_FIVE = ["1", "2", "3", "4", "5"]
 PAYROLL = "Payroll — paying the people who work here"
 TREASURY = "Treasury — holding and protecting the company’s digital assets"

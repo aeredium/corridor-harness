@@ -94,7 +94,8 @@ class TheFoundersRoad(unittest.TestCase):
                                                     "quorum": 2, "rosterQuestionId": "A8", "quorumQuestionId": "C12"})
         self.assertEqual(charter["payeeVenueContracts"], "refused")
         self.assertEqual(self.runner.facts["charter"]["policy"]["allowedChains"], ["aeredium-testnet"])
-        self.assertEqual(self.runner.facts["charter"]["policy"]["recordedChains"], ["aeredium", "ethereum"])
+        self.assertEqual(self.runner.facts["charter"]["policy"]["recordedChains"], ["aeredium", "arbitrum"], "Spec T18: C9 answered Arbitrum One, written by the registry's id (Spec 106)")
+        self.assertIn("networks recorded ['aeredium', 'arbitrum'], allowed ['aeredium-testnet']", o.line, "allowed is printed, not judged")
         self.assertEqual(self.runner.facts["charter_standing"], {"standsWritten": True, "inForceSince": self.runner.facts["compile"]["policy"]["receipt"]["completedAt"]})
         self.assertIs(self.runner.facts["compile"]["policy"]["receipt"]["governanceAlreadyStood"], False, "the first compile establishes the change governance")
 
@@ -169,10 +170,12 @@ class TheFoundersRoad(unittest.TestCase):
         """
         o = self.outcomes["S6"]
         self.assertEqual(o.outcome, H.PASS, o.line)
-        self.assertIn("Northwind Supplies: created; promoted; Ada Approver counted (1 of 2); Ben Signatory counted (2 of 2): whitelisted", o.line)
-        self.assertIn("Contoso Legal: created; promoted; Ada Approver counted (1 of 2); Ben Signatory counted (2 of 2): whitelisted", o.line)
+        self.assertIn("Northwind Supplies: created on arbitrum; promoted; Ada Approver counted (1 of 2); Ben Signatory counted (2 of 2): whitelisted", o.line)
+        self.assertIn("Contoso Legal: created on arbitrum; promoted; Ada Approver counted (1 of 2); Ben Signatory counted (2 of 2): whitelisted", o.line)
         self.assertIn("register: Northwind Supplies whitelisted, Contoso Legal whitelisted", o.line)
         for record in self.runner.facts["payees"]:
+            self.assertEqual(record["chain"], "arbitrum", "Spec T18: the payees are created on PAYEE_CHAIN")
+            self.assertEqual(record["elsewhere"], [], "a fresh estate holds no same-named payee on another chain")
             self.assertEqual([(p["who"], p["status"]) for p in record["presses"]], [("Ada Approver", 200), ("Ben Signatory", 200)], "the quorum is met at Ben; Cora is not reached")
             self.assertEqual(record["presses"][0]["answer"], PENDING_FIRST_ANSWER, "the first approval's answer says why (Spec 89)")
             self.assertEqual(record["register_status"], "whitelisted")
@@ -262,7 +265,7 @@ class TheFoundersRoad(unittest.TestCase):
         venue = [s for s in self.runner.evidence["S11"] if "a real venue contract" in str(s.get("probe", ""))]
         self.assertEqual(len(venue), 1)
         self.assertEqual(venue[0]["status"], 422)
-        sentence = "This address is the contract of Uniswap v3 on ethereum. Your charter says a payee must be a wallet held by a person or a company (question C19). Nothing was saved."
+        sentence = "This address is the contract of Uniswap v3 on arbitrum. Your charter says a payee must be a wallet held by a person or a company (question C19). Nothing was saved."
         self.assertEqual(venue[0]["expected"], "HTTP 422 PAYEE_IS_VENUE_CONTRACT: %s (this run's compiled policy charter says payeeVenueContracts \"refused\")" % sentence)
         self.assertEqual(venue[0]["result"], "refused as the charter says (C19 No): PAYEE_IS_VENUE_CONTRACT: %s" % sentence)
         self.assertIn('"code": "PAYEE_IS_VENUE_CONTRACT"', venue[0]["came_back"])
@@ -362,7 +365,7 @@ class TheEstateBeforeSpec91(unittest.TestCase):
         """The platform matches a press to a seat by credential (Spec T10, from Spec 91's builder): one shared credential, one signature, however many roster members press it."""
         o = self.outcomes["S6"]
         self.assertEqual(o.outcome, H.FAIL, o.line)
-        self.assertIn("Northwind Supplies: created; promoted; Ada Approver counted (1 of 2); Ben Signatory counted (1 of 2); Cora Clerk counted (1 of 2); Harriet Founder counted (1 of 2): pending_promotion", o.line)
+        self.assertIn("Northwind Supplies: created on arbitrum; promoted; Ada Approver counted (1 of 2); Ben Signatory counted (1 of 2); Cora Clerk counted (1 of 2); Harriet Founder counted (1 of 2): pending_promotion", o.line)
         for record in self.runner.facts["payees"]:
             self.assertEqual([p["who"] for p in record["presses"]], ["Ada Approver", "Ben Signatory", "Cora Clerk", "Harriet Founder"])
             self.assertEqual(record["presses"][1]["answer"], PENDING_FIRST_ANSWER, "Ben's press is told what Ada's was told: the platform counted the one credential once")
@@ -784,8 +787,8 @@ class EveryPersonOnTheirOwnCredential(unittest.TestCase):
         o6 = self.outcomes["S6"]
         self.assertEqual(o6.outcome, H.PASS, o6.line)
         sig = "Ada Approver counted (1 of 2); Ben Signatory counted (2 of 2): whitelisted"
-        self.assertIn("Northwind Supplies: created; promoted; %s" % sig, o6.line)
-        self.assertIn("Contoso Legal: created; promoted; %s" % sig, o6.line)
+        self.assertIn("Northwind Supplies: created on arbitrum; promoted; %s" % sig, o6.line)
+        self.assertIn("Contoso Legal: created on arbitrum; promoted; %s" % sig, o6.line)
         for payee in self.runner.facts["payees"]:
             self.assertEqual([(p["who"], p["status"]) for p in payee["presses"]], [("Ada Approver", 200), ("Ben Signatory", 200)], "the count is met at Ben; Cora is not asked")
             self.assertEqual(payee["register_status"], "whitelisted")
