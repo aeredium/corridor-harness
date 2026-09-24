@@ -150,3 +150,110 @@ def is_pinned(addr: Optional[str]) -> bool:
         return False
     low = addr.lower()
     return any(row.address.lower() == low for row in PINNED.values())
+
+
+# ---------------------------------------------------------------------------
+# THE REHEARSAL (Spec P1d, 24 September 2026): the corridor's first sponsored
+# operation, walked by the harness's own agent on the tester's own road — Police,
+# Wallet, platform, gateway, chain — and judged in dollars against the chain's
+# receipt (`corridor_harness.py rehearse`). Nothing pinned here is a secret. The
+# agent's bearer, the sandbox account's credential and the admin credential are
+# read from files outside the repository, named below by file and key and never
+# by value; no file of this repository holds a bearer, a credential or a key.
+# ---------------------------------------------------------------------------
+class PublicRpc(NamedTuple):
+    """One keyless public JSON-RPC endpoint the rehearsal may READ a receipt from, and where it was read."""
+
+    url: str
+    what: str
+    source: str
+
+
+# The chain the rehearsal may walk, and the public RPC it reads `eth_getTransactionReceipt`
+# from (standard library, reads only). A chain not named here is refused by name: the
+# corridor's first sponsored operation is on Arbitrum One (P1c deploys the paymaster there).
+REHEARSAL_RPC: Dict[str, PublicRpc] = {
+    "arbitrum": PublicRpc(
+        "https://arb1.arbitrum.io/rpc",
+        "Arbitrum One's own public JSON-RPC endpoint (chain 42161), keyless; the harness only reads from it",
+        "Arbitrum docs, 'RPC endpoints and providers', Arbitrum One row; the same endpoint the run-file skeleton "
+        "has named since Spec T1 §3 (corridor_harness.default_run_file)",
+    ),
+}
+
+# The harness's own agent on AER Connect: the sandbox the rehearsal walks as. Its wallet is a
+# key allocated on the platform and held in the enclave, born with the agent on the owner's
+# account page (the Wallet's mint road, Spec 66 §1); the harness holds no key for it and only
+# ever speaks to it through the Police and the Wallet under the agent's own OAuth consent.
+SANDBOX: Dict[str, str] = {
+    # The consent label. The bearer lives in ~/.corridor-harness/<label>.json (mode 600), written by
+    # the consent and never by hand — exactly where the series stores every agent's tokens.
+    "label": "harness-payer",
+    # The platform account the harness's owner pays with: the `account_id` GET /v1/gas-account names
+    # for the sandbox's credential, and the `{id}` of the admin credit road. Pinned by Bear from the
+    # first run's own reading; while it is empty the rehearsal names the id the platform states and stops.
+    "account_id": "",
+    # The wallet's address as the Wallet's live key record states it (`wallet_status` → `account.address`,
+    # Spec 66 §1 as amended: the address the key signs from). Pinned by Bear from the first consent; the
+    # rehearsal reads the live record every run and refuses to go on where the two differ. It is the one
+    # destination the rehearsal sends to: the wallet's own address (Spec T1 §5 — a destination comes from
+    # the pinned tables or the run file, and from nowhere else).
+    "wallet_address": "",
+}
+
+# The sandbox account's platform credential (the account's own key), read from
+# ~/.corridor-harness/sandbox.env, never printed. The platform admits it on GET /v1/gas-account and
+# GET /v1/gas/operations/{userOpHash} (aegiskey-access-platform internal/api/gas_handlers.go,
+# gasCredentialAuth: an account key or an agent's pact credential; a service identity on the read alone).
+SANDBOX_ENV_FILE = "sandbox.env"
+SANDBOX_ENV_KEY_KEY = "AAP_ACCOUNT_KEY"
+
+# The admin credential, exactly as Spec T14 names it (aer360_tables.py; AERAccounts .env.example): the
+# file Bear keeps under ~/.aer360-harness/, the platform's base URL and the admin key — never in the
+# repository, never printed. tests/test_rehearsal.py proves these agree with aer360_tables.py.
+ADMIN_ENV_DIR = "~/.aer360-harness"
+ADMIN_ENV_FILE = "admin.env"
+ADMIN_ENV_URL_KEY = "AAP_ADMIN_BASE_URL"
+ADMIN_ENV_KEY_KEY = "AAP_ADMIN_KEY"
+
+# The platform's roads the rehearsal asks (aegiskey-access-platform internal/api/router.go, Spec 154, 154c).
+ADMIN_CREDIT_ROUTE = "/v1/admin/accounts/%s/gas-account/credits"  # the admin credit road: the account's id (Spec 154 §1)
+GAS_ACCOUNT_ROUTE = "/v1/gas-account"                              # the balance, with the ledger's recent lines (Spec 154 §2)
+GAS_OPERATION_ROUTE = "/v1/gas/operations/%s"                      # one operation by its userOpHash, or a delegation by its transaction hash (Spec 154 §6, 154c §4)
+
+# The rehearsal's figures (SPEC.md §2, §3): the send, the credit, the balance the credit is made below,
+# the poll, the deadline. The reason and the idempotency key carry the run id, the UTC start time.
+REHEARSAL_SEND_USD = 0.01
+REHEARSAL_SEND_ASSET = "USDC"
+REHEARSAL_CREDIT_USD_CENTS = 500
+REHEARSAL_CREDIT_BELOW_USD_CENTS = 100
+REHEARSAL_INTERVAL_SECONDS = 5.0
+REHEARSAL_DEADLINE_SECONDS = 180.0
+REHEARSAL_REASON = "rehearsal %s"
+REHEARSAL_IDEMPOTENCY_KEY = "rehearsal-%s"
+RUN_ID_FORMAT = "%Y%m%d-%H%M%S"
+
+
+def format_usd_cents(cents: Any) -> str:
+    """The platform's own spelling of money (internal/gas/dollars.go FormatUSD): US$12.34, no grouping, a leading minus."""
+    n = int(cents)
+    negative = n < 0
+    n = -n if negative else n
+    return "%sUS$%d.%02d" % ("-" if negative else "", n // 100, n % 100)
+
+
+def parse_env_file(text: str) -> Dict[str, str]:
+    """A shell-style environment file, as Spec T14 reads admin.env: KEY=value lines, an optional `export`, quotes stripped, comments and blanks ignored."""
+    out: Dict[str, str] = {}
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].strip()
+        key, _, value = line.partition("=")
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        out[key.strip()] = value
+    return out

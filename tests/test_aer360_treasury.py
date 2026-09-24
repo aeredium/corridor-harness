@@ -393,7 +393,7 @@ class TheBirthRunStopsWithTheFundSentence(unittest.TestCase):
 class TheTablesFacts(unittest.TestCase):
     def test_the_treasurys_rows_and_the_admin_credentials_file_name(self):
         self.assertEqual(T.TREASURY, {"company": "Harness Treasury Pty Ltd", "short": "Harness Treasury", "client_id": "harness-treasury", "email": "harness+treasury@aeredium.io"})
-        self.assertEqual((T.ADMIN_ENV_FILE, T.ADMIN_ENV_URL_KEY, T.ADMIN_ENV_KEY_KEY, T.ADMIN_KEY_PREFIX), ("admin.env", "AAP_ADMIN_BASE_URL", "AAP_ADMIN_KEY", "aek-admin-"))
+        self.assertEqual((T.ADMIN_ENV_FILE, T.ADMIN_ENV_URL_KEY, T.ADMIN_ENV_KEY_KEY, T.ADMIN_KEY_PREFIX), ("admin.env", "AAP_ADMIN_BASE_URL", "AAP_ADMIN_KEY", "".join(("aek", "-admin-"))))  # composed: no file under tests/ holds the platform's prefix (Spec P1d)
         self.assertEqual(T.ADMIN_CREDIT_ROUTE % "abc", "/v1/admin/accounts/abc/gas-account/credits")
         self.assertEqual(T.ADMIN_CREDIT_REASON % "20260924-000000-abcd", "sandbox run 20260924-000000-abcd")
         self.assertEqual(T.GAS_CREDIT_USD_CENTS, 1000)

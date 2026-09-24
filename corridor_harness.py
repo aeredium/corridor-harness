@@ -3390,6 +3390,833 @@ def fee_words_found(text: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# THE REHEARSAL (Spec P1d, 24 September 2026): the corridor's first sponsored
+# operation on the tester's own road — Police, Wallet, platform, gateway, chain —
+# walked by the harness's own agent and judged in dollars against the chain's
+# receipt. A mode of its own (`corridor_harness.py rehearse`): not part of the
+# acceptance series, and it changes no series answer. Nothing here holds a key:
+# the wallet is a key allocated on the platform and held in the enclave, and the
+# agent bearer, the account credential and the admin credential are read from
+# files outside the repository and replaced by <redacted> wherever they appear.
+# No record file is written: the printed output is the record.
+# ---------------------------------------------------------------------------
+# The platform's own prefixes (aegiskey-access-platform internal/api/middleware.go
+# adminAuth and accountKeyPrefix; gas_handlers.go gasCredentialAuth): every credential
+# it admits begins `aek-`; the account's own key `aek-acct-`; the admin key `aek-admin-`.
+# A bearer of another shape is refused before anything is judged ("invalid credential
+# format", "invalid admin key format"), so the harness reads the shape first and names
+# the file to fix, and asks nothing with a credential the platform would not read.
+PLATFORM_CREDENTIAL_PREFIX = "aek-"
+ACCOUNT_KEY_PREFIX = "aek-acct-"
+ADMIN_KEY_PREFIX = "aek-admin-"
+# Spec 154c §3: the one debit line's words open and close so, and the figures between them are judged.
+DEBIT_WORDS_HEAD = "gas and service, US$"
+DEBIT_WORDS_TAIL = "paid in advance from your gas account"
+# U3's sentence, as the platform writes it (internal/gas/errors.go InsufficientGasSentence) and as the
+# Wallet's desk repeats it (stablepro-agent-server internal/api/account_road.go u3Sentence): the first
+# figure is what the account holds, the second what this operation needs at most. The tail differs by
+# door ("Top up US$10.00 or more." / "Ask your owner to buy gas on AER Connect.") and is not judged.
+U3_SENTENCE = re.compile(r"Your gas account holds US\$(\d+\.\d\d)\. This (\w+) needs at most US\$(\d+\.\d\d) of gas\. Nothing was sent\.")
+# The platform's words for an operation's state (internal/gas/ledger.go, Spec 154 §3–§6).
+OPERATION_OPEN = ("quoted", "submitted")
+OPERATION_LANDED = "landed"
+OPERATION_ENDED_BADLY = ("reverted", "expired", "failed")
+# The rehearsal's own sentences (SPEC.md §1, §2, §3), word for word.
+FUND_SENTENCE = "fund %s with US$0.01 or more of USDC on %s, then rerun"
+REFUSAL_SKIPPED_SENTENCE = "refusal not provable at %s; skipped"
+NOT_JUDGED_SENTENCE = "not judged; rerun with --resume %s"
+# The exit codes: judged and passed; failed, naming it; stopped before the walk (a wallet to fund, a
+# credential to file, a fact to pin); not judged at the deadline, which is not a failure.
+REHEARSAL_PASSED = 0
+REHEARSAL_FAILED = 1
+REHEARSAL_STOPPED = 2
+REHEARSAL_NOT_JUDGED = 3
+WEI_PER_ETHER = 10 ** 18
+REHEARSE_ID = "rehearse"  # the test id every call of the mode is recorded under
+
+
+class RehearsalStop(Exception):
+    """Stopped before the walk, in one sentence: a wallet to fund, a credential to file, a fact to pin. Not a failure, not a pass."""
+
+
+class RehearsalFailed(Exception):
+    """The rehearsal failed, and the sentence names what."""
+
+
+class RehearsalNotJudged(Exception):
+    """The deadline passed before the operation landed: the hash is printed, and the run is neither a pass nor a failure."""
+
+
+def usd_cents(value: Any) -> Optional[int]:
+    """Cents from money as the doors write it — "US$12.34", "-US$0.05", or a plain "12.34" (the Wallet's reserved_usd) — or None."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    match = re.fullmatch(r"\s*(-?)(?:US\$)?(\d+)\.(\d\d)\s*", str(value or ""))
+    if not match:
+        return None
+    cents = int(match.group(2)) * 100 + int(match.group(3))
+    return -cents if match.group(1) else cents
+
+
+def cents_from_wei(wei: int, cents_per_ether: int) -> int:
+    """Wei valued in cents at a price in cents per ether, rounded half up — the platform's own arithmetic (internal/gas/dollars.go CentsRoundFromWei)."""
+    return (wei * cents_per_ether * 2 + WEI_PER_ETHER) // (2 * WEI_PER_ETHER)
+
+
+def price_words(cents_per_ether: int) -> str:
+    """The recorded native price as the platform spells a price: dollars with cents, "2000.00"."""
+    return "%d.%02d" % (cents_per_ether // 100, cents_per_ether % 100)
+
+
+def hex_quantity(value: Any) -> Optional[int]:
+    """A JSON-RPC quantity — "0x186a0" — as an integer, or None where the receipt carries none."""
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    try:
+        return int(str(value), 16)
+    except ValueError:
+        return None
+
+
+def gas_account_in(data: Any) -> Dict[str, Any]:
+    """
+    The gas account as a door's answer carries it (Spec 66 §3, Spec 25): the Wallet's object —
+    `gas_account: {read, available, balance, reserved, low, minimum_top_up, said}` — or the Police's
+    and the connector's string, `gas_account: "US$<available>"`. `present` says whether the answer
+    carried the field at all; `read` whether it carried a figure; the figures are cents.
+    """
+    out: Dict[str, Any] = {"present": False, "read": False, "available": None, "balance": None, "reserved": None,
+                           "low": None, "said": None, "raw": None}
+    if not isinstance(data, (dict, list)):
+        return out
+    found = find_key(data, ["gas_account"])
+    if found is None:
+        return out
+    out["present"] = True
+    out["raw"] = found
+    if isinstance(found, str):
+        out["available"] = usd_cents(found)
+        out["read"] = out["available"] is not None
+        return out
+    if isinstance(found, dict):
+        out["available"] = usd_cents(found.get("available"))
+        out["balance"] = usd_cents(found.get("balance"))
+        out["reserved"] = usd_cents(found.get("reserved"))
+        out["low"] = found.get("low") if isinstance(found.get("low"), bool) else None
+        out["said"] = found.get("said") if isinstance(found.get("said"), str) else None
+        out["read"] = bool(found.get("read")) if "read" in found else out["available"] is not None
+    return out
+
+
+def gas_account_words(reading: Dict[str, Any]) -> str:
+    """One line for a reading: balance, reserved, available, and low where the platform says so."""
+    if not reading.get("read"):
+        return "not read (%s)" % (reading.get("said") or "the answer carries no figure")
+    parts = ["balance %s" % (T.format_usd_cents(reading["balance"]) if reading.get("balance") is not None else "not stated"),
+             "reserved %s" % (T.format_usd_cents(reading["reserved"]) if reading.get("reserved") is not None else "not stated"),
+             "available %s" % (T.format_usd_cents(reading["available"]) if reading.get("available") is not None else "not stated")]
+    if reading.get("low"):
+        parts.append("low")
+    return ", ".join(parts)
+
+
+def usdc_row_in(data: Any, chain: str, asset: str = T.REHEARSAL_SEND_ASSET) -> Optional[Dict[str, Any]]:
+    """The asset's row for the chain, where the Wallet puts it: get_balances' tokens.balances (Spec 49, Spec T3 §2)."""
+    rows, _, _ = wallet_tokens(data)
+    for row in rows or []:
+        if isinstance(row, dict) and str(row.get("asset") or "").upper() == asset and str(row.get("chain") or chain).lower() == chain:
+            return row
+    return None
+
+
+class Rehearsal:
+    """
+    One rehearsal, start to finish (SPEC.md §1–§5). Every collaborator can be handed in, so the unit
+    tests run it against doubles of the Police, the Wallet, the platform and the chain's RPC: `session_factory`
+    stands in for the MCP session, `http` for `http_request`, `sleep` and `clock` for time, `admin_env` and
+    `sandbox_env` for the two credential files, `store_dir` for the token store, `started_at` for the run id.
+    """
+
+    def __init__(self, chain: str, resume: Optional[str] = None, interval: float = T.REHEARSAL_INTERVAL_SECONDS,
+                 deadline: float = T.REHEARSAL_DEADLINE_SECONDS, say: Callable[[str], None] = print,
+                 sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic,
+                 http: Optional[Callable[..., HttpAnswer]] = None, session_factory: Optional[Callable[[str], Any]] = None,
+                 oauth: Optional[Oauth] = None, store_dir: str = STORE_DIR, admin_env: Optional[str] = None,
+                 sandbox_env: Optional[str] = None, issuer: str = DEFAULT_ISSUER, started_at: Optional[_dt.datetime] = None):
+        self.chain = (chain or "").strip().lower()
+        self.resume = resume.strip().lower() if resume else None
+        self.interval = float(interval)
+        self.deadline = float(deadline)
+        self._say = say
+        self.sleep = sleep
+        self.clock = clock
+        self.http = http
+        self.session_factory = session_factory
+        self.oauth = oauth
+        self.store_dir = store_dir
+        self.admin_env_path = admin_env or os.path.join(os.path.expanduser(T.ADMIN_ENV_DIR), T.ADMIN_ENV_FILE)
+        self.sandbox_env_path = sandbox_env or os.path.join(store_dir, T.SANDBOX_ENV_FILE)
+        self.issuer = issuer.rstrip("/")
+        self.started_at = started_at or _dt.datetime.now(_dt.timezone.utc)
+        self.run_id = self.started_at.strftime(T.RUN_ID_FORMAT)
+        self.label = T.SANDBOX["label"]
+        self.secrets: List[str] = []
+        self.session: Any = None
+        self.born = False
+        self.facts: Dict[str, Any] = {}
+        self.key_record: Dict[str, Any] = {}
+        self.platform_base: str = ""
+        self.admin_key: str = ""
+        self.account_key: str = ""
+        self.baseline: Optional[Dict[str, Any]] = None  # the gas account as read after the credit (or before the walk where no credit was made)
+        self.usdc_before: Optional[int] = None
+        self.operations: List[Dict[str, Any]] = []  # the walk's operations, in order: a delegation where the wallet was delegated first, then the send
+        self.totals: List[int] = []
+        self.refusal_reservation: Optional[int] = None
+
+    # -- printing, with every secret replaced by value -----------------------------------------------
+    def all_secrets(self) -> List[str]:
+        out = [s for s in self.secrets if s]
+        out.extend(s for s in (getattr(self.session, "secrets_seen", None) or []) if s)
+        return out
+
+    def redact(self, text: str) -> str:
+        out = text
+        for secret in sorted(set(self.all_secrets()), key=len, reverse=True):
+            if len(secret) >= 8 and secret in out:
+                out = out.replace(secret, REDACTED)
+        # An Authorization value is redacted wherever it appears, by value; the header's own line says so too.
+        return re.sub(r"(Authorization:\s*Bearer\s+)(?!<redacted>)\S+", r"\1" + REDACTED, out)
+
+    def say(self, text: str) -> None:
+        self._say(self.redact(text))
+
+    def note_secrets(self, *values: Any) -> None:
+        for value in values:
+            for secret in secret_values(value):
+                if secret not in self.secrets:
+                    self.secrets.append(secret)
+
+    # -- the run --------------------------------------------------------------------------------------
+    def run(self) -> int:
+        self.say("rehearsal %s on %s — the corridor's first sponsored operation on the tester's own road: Police, Wallet, platform, "
+                 "gateway, chain (Spec P1d). No record file is written; this output is the record, with every secret replaced by %s."
+                 % (self.run_id, self.chain or "(no chain)", REDACTED))
+        try:
+            self.refuse_unknown_chain()
+            self.load_credentials()
+            self.connect()
+            self.read_key_record()
+            self.check_wallet_pin()
+            self.read_platform_account()
+            if self.resume:
+                self.resume_walk()
+            else:
+                self.say("— the gas account, before (through the Wallet, Spec 66 §3) —")
+                before = self.read_gas_account("before")
+                self.usdc_before = self.read_usdc("before")
+                self.refusal_walk(before)
+                self.credit(before)
+                self.send()
+                self.poll_all()
+            self.judge_all()
+        except RehearsalStop as stop:
+            self.say("rehearsal %s stopped before the walk: %s" % (self.run_id, stop))
+            return REHEARSAL_STOPPED
+        except RehearsalNotJudged as not_judged:
+            self.say("rehearsal %s %s" % (self.run_id, not_judged))
+            return REHEARSAL_NOT_JUDGED
+        except RehearsalFailed as failed:
+            self.say("rehearsal %s FAILED: %s" % (self.run_id, failed))
+            return REHEARSAL_FAILED
+        except (HarnessError, Unreachable) as err:
+            self.say("rehearsal %s FAILED: the harness could not complete it (a fault, not a judgment): %s" % (self.run_id, err))
+            return REHEARSAL_FAILED
+        self.say("rehearsal %s PASSED: %d operation(s) landed on %s and judged against the chain's receipt in dollars; the walk's totals %s"
+                 % (self.run_id, len(self.operations), self.chain, ", ".join(T.format_usd_cents(t) for t in self.totals) or "none"))
+        return REHEARSAL_PASSED
+
+    # -- 1. the chain, the credentials, the session, the key record, the pins -----------------------
+    def refuse_unknown_chain(self) -> None:
+        if self.chain not in T.REHEARSAL_RPC:
+            raise RehearsalFailed("tables.py names no public RPC for %r; the rehearsal runs on %s and nowhere else"
+                                  % (self.chain, ", ".join(sorted(T.REHEARSAL_RPC))))
+        rpc = T.REHEARSAL_RPC[self.chain]
+        self.say("the chain: %s; the receipt is read from %s — %s (read from %s)" % (self.chain, rpc.url, rpc.what, rpc.source))
+
+    def env_file(self, path: str, what: str) -> Dict[str, str]:
+        if not os.path.exists(path):
+            raise RehearsalStop("%s is not filed: the rehearsal reads %s from it; file it, then rerun" % (path, what))
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                return T.parse_env_file(handle.read())
+        except OSError as err:
+            raise RehearsalStop("%s could not be read (%s): the rehearsal reads %s from it" % (path, err, what))
+
+    def load_credentials(self) -> None:
+        admin = self.env_file(self.admin_env_path, "the platform's base URL (%s) and the admin credential (%s), as Spec T14 files them"
+                              % (T.ADMIN_ENV_URL_KEY, T.ADMIN_ENV_KEY_KEY))
+        base = admin.get(T.ADMIN_ENV_URL_KEY, "").strip().rstrip("/")
+        key = admin.get(T.ADMIN_ENV_KEY_KEY, "").strip()
+        if not base or not key:
+            missing = " and no ".join(name for name, value in ((T.ADMIN_ENV_URL_KEY, base), (T.ADMIN_ENV_KEY_KEY, key)) if not value)
+            raise RehearsalStop("%s names no %s; file it, then rerun" % (self.admin_env_path, missing))
+        if not key.startswith(ADMIN_KEY_PREFIX):
+            raise RehearsalStop("%s's %s does not begin %s, the platform's own prefix for an admin key (internal/api/middleware.go adminAuth "
+                                "answers 401 \"invalid admin key format\" to any other); nothing was asked" % (self.admin_env_path, T.ADMIN_ENV_KEY_KEY, ADMIN_KEY_PREFIX))
+        sandbox = self.env_file(self.sandbox_env_path, "the sandbox account's platform credential (%s)" % T.SANDBOX_ENV_KEY_KEY)
+        account_key = sandbox.get(T.SANDBOX_ENV_KEY_KEY, "").strip()
+        if not account_key:
+            raise RehearsalStop("%s names no %s; file it, then rerun" % (self.sandbox_env_path, T.SANDBOX_ENV_KEY_KEY))
+        if not account_key.startswith(PLATFORM_CREDENTIAL_PREFIX):
+            raise RehearsalStop("%s's %s does not begin %s, the prefix of every credential the platform admits (internal/api/gas_handlers.go "
+                                "gasCredentialAuth answers 401 \"invalid credential format\" to any other); nothing was asked"
+                                % (self.sandbox_env_path, T.SANDBOX_ENV_KEY_KEY, PLATFORM_CREDENTIAL_PREFIX))
+        self.platform_base, self.admin_key, self.account_key = base, key, account_key
+        self.secrets.extend([key, account_key])
+        self.say("credentials loaded, and replaced by %s in every line below: the agent bearer (%s), the account credential (%s, %s), "
+                 "the admin credential (%s, %s); the platform is at %s" % (
+                     REDACTED, os.path.join(self.store_dir, "%s.json" % self.label), self.sandbox_env_path, T.SANDBOX_ENV_KEY_KEY,
+                     self.admin_env_path, T.ADMIN_ENV_KEY_KEY, base))
+
+    def connect(self) -> None:
+        oauth = self.oauth or Oauth(self.issuer, self.store_dir, say=self.say)
+        stored = oauth.tokens(self.label)
+        if stored is None:
+            # Where the wallet does not exist for the harness it is born to it here: the harness's agent, and with
+            # it its wallet — a key allocated on the platform and held in the enclave — is created by the owner on
+            # the account page (the Wallet's mint road, Spec 66 §1), and the consent is how the harness comes to hold it.
+            self.born = True
+            self.say("No consent is stored for %s under %s, so the harness holds no wallet yet: the consent runs now. Choose the "
+                     "harness's own Payer on the consent page and press Finish." % (self.label, self.store_dir))
+            stored = oauth.consent(self.label)
+        self.secrets.extend(str(v) for v in (stored.get("access_token"), stored.get("refresh_token")) if v)
+        self.session = self.session_factory(self.label) if self.session_factory is not None else Mcp(oauth, self.label, record=lambda **line: None)
+        self.say("→ initialize, tools/list (as %s)" % self.label)
+        answer = self.session.initialize(REHEARSE_ID)
+        tools = self.session.tools_list(REHEARSE_ID)
+        info = getattr(self.session, "server_info", None) or {}
+        self.say("← %s; %d tool(s): %s" % (
+            ("%s %s" % (info.get("name"), info.get("version"))).strip() if info else ("HTTP %d" % answer.status if answer is not None else "connected"),
+            len(tools), ", ".join(sorted(str(t.get("name")) for t in tools if isinstance(t, dict)))))
+        answer = self.call(MY_AGENT_TOOL, {})
+        data = answer.data if isinstance(answer.data, dict) else {}
+        agent = data.get("agent") or {}
+        wallet = data.get("wallet") or {}
+        self.facts = {"name": agent.get("name"), "role_id": agent.get("roleId"), "wallet_id": wallet.get("id"),
+                      "address": wallet.get("address"), "chain": str(wallet.get("chain") or "").strip().lower()}
+        if answer.is_error or not self.facts["wallet_id"] or not self.facts["address"]:
+            who = who_answered(answer, "connector")
+            raise RehearsalFailed("aerconnect_my_agent names no wallet for %s (id %r, address %r) — %s: “%s”; the harness's agent has no "
+                                  "wallet to rehearse with, and a wallet is born with its agent on the account page, never by the harness"
+                                  % (self.label, self.facts["wallet_id"], self.facts["address"], who["party"], who.get("sentence")))
+        self.say("connected as %s: %s (%s), wallet %s at %s on %s" % (
+            self.label, self.facts["name"], self.facts["role_id"], self.facts["wallet_id"], self.facts["address"], self.facts["chain"]))
+        if "payer" not in str(self.facts["role_id"] or "").lower():
+            self.say("Note: the agent behind %s reports role %r, not a Payer's; a Trader cannot send, and the rehearsal sends." % (self.label, self.facts["role_id"]))
+        if self.facts["chain"] and self.facts["chain"] != self.chain:
+            raise RehearsalFailed("the harness's wallet is on %s, and the rehearsal was asked for %s: it sends on the wallet's own chain and no other"
+                                  % (self.facts["chain"], self.chain))
+
+    def call(self, tool: str, args: Dict[str, Any]) -> McpAnswer:
+        """One tools/call, printed whole — what was sent and what came back, word for word, secrets redacted."""
+        self.note_secrets(args)
+        self.say("→ tools/call %s %s" % (tool, json.dumps(args, ensure_ascii=False)))
+        answer = self.session.call(tool, args, REHEARSE_ID)
+        self.note_secrets(answer.body)
+        self.say("← HTTP %d in %d ms: %s" % (answer.status, answer.elapsed_ms, answer.quoted()))
+        return answer
+
+    def call_facts(self) -> Dict[str, Any]:
+        return {"wallet_id": self.facts["wallet_id"]}
+
+    def wallet_status(self) -> McpAnswer:
+        args, _ = arguments_for(self.session.schema_of("wallet.wallet_status"), {}, self.call_facts())
+        return self.call("wallet.wallet_status", args)
+
+    def read_key_record(self) -> None:
+        self.say("— the wallet's live key record (wallet_status → account, Spec 66 §1) —")
+        answer = self.wallet_status()
+        data = answer.data if isinstance(answer.data, dict) else None
+        if answer.is_error or data is None:
+            who = who_answered(answer, "wallet")
+            raise RehearsalFailed("wallet_status did not answer with the wallet's key record — %s: “%s”" % (who["party"], who.get("sentence") or answer.text[:400]))
+        account = data.get("account") if isinstance(data.get("account"), dict) else None
+        if account is None or not account.get("address"):
+            raise RehearsalFailed("wallet_status carries no `account` block naming the key's address (the wallet's live key record, Spec 66 §1); "
+                                  "the Wallet answered: %s" % answer.text[:600])
+        correction = account.get("correction") if isinstance(account.get("correction"), dict) else None
+        self.key_record = {"address": str(account.get("address")), "key_id": account.get("key_id"), "road": account.get("road"),
+                           "delegated_on": account.get("delegated_on"), "said": account.get("said"), "correction": correction,
+                           "retired_addresses": account.get("retired_addresses")}
+        self.say("the key record: address %s, key %s, road %s, delegated on %s; the Wallet says: “%s”" % (
+            self.key_record["address"], self.key_record["key_id"] or "not stated", self.key_record["road"] or "not stated",
+            ", ".join(str(c) for c in self.key_record["delegated_on"]) if isinstance(self.key_record["delegated_on"], list) and self.key_record["delegated_on"] else "no chain yet",
+            self.key_record["said"] or ""))
+        if correction:
+            self.say("the Wallet corrected this wallet's address from %s to %s at %s: “%s”" % (
+                correction.get("from"), correction.get("to"), correction.get("at"), correction.get("said")))
+
+    def check_wallet_pin(self) -> None:
+        live = self.key_record["address"]
+        pinned = (T.SANDBOX.get("wallet_address") or "").strip()
+        if self.born:
+            words = FUND_SENTENCE % (live, self.chain)
+            if not pinned:
+                words += "; and pin %s as SANDBOX['wallet_address'] in tables.py, the address the key signs from (key %s)" % (live, self.key_record["key_id"] or "not stated")
+            raise RehearsalStop(words)
+        if not pinned:
+            raise RehearsalStop("tables.py pins no address for the harness wallet (SANDBOX['wallet_address']); the Wallet's key record names %s "
+                                "(key %s): pin it, then rerun — nothing is sent to an address the tables do not pin (Spec T1 §5)"
+                                % (live, self.key_record["key_id"] or "not stated"))
+        if live.lower() != pinned.lower():
+            said = ""
+            if self.key_record.get("correction"):
+                said = "; the Wallet says: “%s”" % self.key_record["correction"].get("said")
+            raise RehearsalFailed("the Wallet's live key record names %s and tables.py pins %s for the harness wallet; nothing was sent%s" % (live, pinned, said))
+        if str(self.facts.get("address") or "").lower() != pinned.lower():
+            self.say("Note: aerconnect_my_agent names %s for the wallet and the Wallet's key record names %s; the key record is the address the key signs from, and the rehearsal sends to it"
+                     % (self.facts.get("address"), live))
+        self.say("the pinned address agrees with the live key record: %s" % pinned)
+
+    # -- the platform, under the sandbox account's credential ----------------------------------------
+    def http_call(self, method: str, url: str, headers: Dict[str, str], body: Optional[bytes]) -> HttpAnswer:
+        road = self.http or http_request
+        try:
+            return road(method, url, headers, body)
+        except Unreachable as err:
+            return HttpAnswer(0, {}, str(err), 0)
+
+    def platform(self, method: str, path: str, bearer: str, expected: str, body: Optional[Dict[str, Any]] = None) -> Tuple[HttpAnswer, Any]:
+        """One call to the platform, printed whole: the road, the bearer redacted, the body, the status and the answer word for word."""
+        url = self.platform_base + path
+        headers = {"Authorization": "Bearer " + bearer, "Accept": "application/json"}
+        payload = None
+        if body is not None:
+            headers["Content-Type"] = "application/json"
+            payload = json.dumps(body).encode("utf-8")
+        self.say("→ %s %s (Authorization: Bearer %s)%s — expect %s" % (method, url, REDACTED, (" " + json.dumps(body, ensure_ascii=False)) if body is not None else "", expected))
+        answer = self.http_call(method, url, headers, payload)
+        if answer.status == 0:
+            self.say("← the platform could not be reached: %s" % answer.text)
+        else:
+            self.say("← HTTP %d in %d ms: %s" % (answer.status, answer.elapsed_ms, answer.text))
+        return answer, (json_in(answer.text) if answer.text else None)
+
+    @staticmethod
+    def platform_said(answer: HttpAnswer, parsed: Any) -> str:
+        if isinstance(parsed, dict) and isinstance(parsed.get("error"), str):
+            code = parsed.get("code")
+            return ("%s: %s" % (code, parsed["error"])) if isinstance(code, str) and code else parsed["error"]
+        return answer.text[:400] if answer.text else "(an empty body)"
+
+    def platform_refusal(self, road: str, answer: HttpAnswer, parsed: Any, credential_file: str) -> RehearsalFailed:
+        """Every catch classifies (the ruling of 4 September 2026): a refusal, a fault, a malformed question, each in the platform's words."""
+        said = self.platform_said(answer, parsed)
+        if answer.status == 0:
+            return RehearsalFailed("the platform could not be reached at %s: %s" % (road, answer.text))
+        if answer.status in (401, 403):
+            return RehearsalFailed("refused: the platform refused the credential at %s (HTTP %d): %s — the answer will be the same until the credential in %s is replaced"
+                                   % (road, answer.status, said, credential_file))
+        if answer.status == 404:
+            return RehearsalFailed("the platform answered 404 at %s: %s" % (road, said))
+        if 400 <= answer.status < 500:
+            return RehearsalFailed("the platform refused the harness's question at %s (HTTP %d): %s — a mistake of the harness or of the deployment, not the corridor's judgment"
+                                   % (road, answer.status, said))
+        if answer.status >= 500:
+            return RehearsalFailed("the platform answered a fault at %s (HTTP %d): %s" % (road, answer.status, said))
+        return RehearsalFailed("the platform answered %s in a shape the harness will not read (HTTP %d): %s" % (road, answer.status, answer.text[:400]))
+
+    def read_platform_account(self) -> None:
+        self.say("— the sandbox account on the platform (GET %s under the account's credential): the account id, and any reservation still open —" % T.GAS_ACCOUNT_ROUTE)
+        answer, view = self.platform("GET", T.GAS_ACCOUNT_ROUTE, self.account_key,
+                                     "200 with account_id, balance_usd_cents, reserved_usd_cents, available_usd_cents and recent_lines (Spec 154 §2)")
+        if answer.status != 200 or not isinstance(view, dict):
+            raise self.platform_refusal("GET %s" % T.GAS_ACCOUNT_ROUTE, answer, view, self.sandbox_env_path)
+        account_id = str(view.get("account_id") or "")
+        pinned = (T.SANDBOX.get("account_id") or "").strip()
+        if not pinned:
+            raise RehearsalStop("tables.py pins no account id for the harness's sandbox account (SANDBOX['account_id']); the platform names %s for the "
+                                "credential in %s: pin it, then rerun — the admin credit road credits a pinned account and no other" % (account_id or "(no account_id)", self.sandbox_env_path))
+        if account_id != pinned:
+            raise RehearsalFailed("the credential in %s belongs to account %s and tables.py pins %s for the harness's sandbox account; nothing was credited and nothing was sent"
+                                  % (self.sandbox_env_path, account_id or "(no account_id)", pinned))
+        self.say("the platform's own reading of account %s: balance %s, reserved %s, available %s" % (
+            account_id, view.get("balance"), view.get("reserved"), view.get("available")))
+        lines = view.get("recent_lines") if isinstance(view.get("recent_lines"), list) else []
+        open_lines = [line for line in lines if isinstance(line, dict) and line.get("kind") == "reservation" and not line.get("released_at")]
+        for line in open_lines:
+            op_hash = str(line.get("user_op_hash") or line.get("transaction_hash") or "").lower()
+            if self.resume and op_hash == self.resume:
+                continue
+            if not op_hash:
+                raise RehearsalFailed("a reservation of %s is still open on the account's ledger (line %s, operation %s) and names no hash; two rehearsals never cross"
+                                      % (line.get("amount"), line.get("id"), line.get("operation_id")))
+            row_answer, row = self.platform("GET", T.GAS_OPERATION_ROUTE % op_hash, self.account_key, "the operation the open reservation belongs to")
+            status = row.get("status") if isinstance(row, dict) else None
+            if row_answer.status == 200 and isinstance(row, dict) and status in OPERATION_OPEN:
+                sender = str(row.get("sender") or "")
+                whose = "this wallet" if sender.lower() == self.key_record["address"].lower() else "another wallet of the owner, %s" % (sender or "unnamed")
+                raise RehearsalFailed("an operation of this account is still %s: %s (%s); two rehearsals never cross" % (status, op_hash, whose))
+            if row_answer.status != 200:
+                raise self.platform_refusal("GET %s" % (T.GAS_OPERATION_ROUTE % op_hash), row_answer, row, self.sandbox_env_path)
+        reserved = view.get("reserved_usd_cents")
+        if isinstance(reserved, int) and not isinstance(reserved, bool) and reserved > 0 and not open_lines:
+            raise RehearsalFailed("the platform reserves %s on this account and its recent lines name no open reservation the harness could read; two rehearsals never cross"
+                                  % T.format_usd_cents(reserved))
+        self.say("no operation of this account is quoted or submitted%s" % ("" if not self.resume else " but the one resumed"))
+
+    # -- 2. the gas account through the Wallet, the refusal, the credit ------------------------------
+    def read_gas_account(self, when: str) -> Dict[str, Any]:
+        answer = self.wallet_status()
+        reading = gas_account_in(answer.data)
+        if not reading["present"]:
+            raise RehearsalFailed("wallet_status carries no gas_account (Spec 66 §3), so the gas account could not be read through the Wallet %s" % when)
+        if not reading["read"] or reading["balance"] is None or reading["reserved"] is None or reading["available"] is None:
+            raise RehearsalFailed("the Wallet could not read the gas account %s: %s" % (when, reading.get("said") or json.dumps(reading["raw"], ensure_ascii=False)))
+        self.say("the gas account %s, through the Wallet: %s" % (when, gas_account_words(reading)))
+        return reading
+
+    def read_usdc(self, when: str) -> int:
+        args, _ = arguments_for(self.session.schema_of("wallet.get_balances"), {}, self.call_facts())
+        answer = self.call("wallet.get_balances", args)
+        row = usdc_row_in(answer.data, self.chain)
+        if row is None:
+            raise RehearsalFailed("get_balances states no %s row for %s in tokens.balances, where the Wallet puts the token balances (Spec T3), so the balance %s could not be read"
+                                  % (T.REHEARSAL_SEND_ASSET, self.chain, when))
+        try:
+            raw = int(str(row.get("raw")).strip())
+            decimals = int(row.get("decimals"))
+        except (TypeError, ValueError):
+            raise RehearsalFailed("get_balances states %s on %s as raw %r with decimals %r, which the harness cannot read as a figure"
+                                  % (T.REHEARSAL_SEND_ASSET, self.chain, row.get("raw"), row.get("decimals")))
+        self.say("%s on %s %s, where the Wallet puts it (tokens.balances): %s %s (%d minor units%s)%s" % (
+            T.REHEARSAL_SEND_ASSET, self.chain, when, format_units(raw, decimals), T.REHEARSAL_SEND_ASSET, raw,
+            (", US$%s" % row["usd"]) if row.get("usd") else "", ("; the Wallet's road: “%s”" % wallet_tokens(answer.data)[1]) if wallet_tokens(answer.data)[1] else ""))
+        if when == "before" and raw < int(round(T.REHEARSAL_SEND_USD * 10 ** decimals)):
+            raise RehearsalStop(FUND_SENTENCE % (self.key_record["address"], self.chain))
+        return raw
+
+    def send_fields(self) -> Dict[str, Any]:
+        """The send, in the Guide's vocabulary: 0.01 USDC from the wallet to the wallet's own pinned address (Spec T1 §5: the tables, not the run file, name it)."""
+        return {"action": "transfer_stable", "chain": self.chain, "asset": T.REHEARSAL_SEND_ASSET, "amount_usd": T.REHEARSAL_SEND_USD,
+                "to_address": T.SANDBOX["wallet_address"]}
+
+    def walk(self, submit: bool) -> Dict[str, Any]:
+        """Police, then the Wallet's build, then — where asked — the Wallet's submit, exactly as the series walks a token send (step_walk)."""
+        fields = self.send_fields()
+        walk: Dict[str, Any] = {"fields": fields}
+        check_args, omitted = arguments_for(self.session.schema_of("police.check_action"), fields, self.call_facts())
+        if omitted:
+            self.say("Note: the Police's schema declares no field for: %s" % ", ".join(sorted(set(omitted))))
+        answer = self.call("police.check_action", check_args)
+        walk["police_answer"] = answer
+        walk["police"] = classify_police(answer)
+        walk["police_gas"] = gas_account_in(answer.data)
+        if walk["police"]["kind"] != "allow":
+            return walk
+        build_facts = dict(self.call_facts())
+        if walk["police"].get("receipt"):
+            build_facts["police_receipt"] = walk["police"]["receipt"]
+        build_args, omitted = arguments_for(self.session.schema_of("wallet.build_transaction"), fields, build_facts)
+        if omitted:
+            self.say("Note: the Wallet's build schema declares no field for: %s" % ", ".join(sorted(set(omitted))))
+        answer = self.call("wallet.build_transaction", build_args)
+        walk["build_answer"] = answer
+        walk["build"] = classify_wallet(answer)
+        if walk["build"]["kind"] != "ticket" or not submit:
+            return walk
+        ticket_id = walk["build"].get("ticket_id")
+        if not ticket_id:
+            raise RehearsalFailed("the Wallet's build answer carries no ticket id the harness could read, so nothing was submitted: %s" % answer.text[:600])
+        submit_args, omitted = arguments_for(self.session.schema_of("wallet.submit_transaction"), {}, {"wallet_id": self.facts["wallet_id"], "ticket_id": ticket_id})
+        answer = self.call("wallet.submit_transaction", submit_args)
+        walk["submit_answer"] = answer
+        walk["submit"] = classify_wallet(answer)
+        return walk
+
+    def refusal_walk(self, before: Dict[str, Any]) -> None:
+        self.say("— the refusal (U3's sentence from the Wallet; the Police refuses nothing for gas) —")
+        if before["balance"] != 0:
+            self.say(REFUSAL_SKIPPED_SENTENCE % T.format_usd_cents(before["balance"]))
+            return
+        self.say("the gas account holds US$0.00, so the send of item 3 is asked once and the Wallet's refusal is expected; nothing may leave")
+        walk = self.walk(submit=False)
+        police = walk["police"]
+        if police["kind"] != "allow":
+            who = police.get("who") or {}
+            raise RehearsalFailed("the Police did not allow the send, where it refuses nothing for gas — %s: “%s”; U3's refusal could not be met at the Wallet"
+                                  % (who.get("party", "MCP Police"), police.get("sentence") or ""))
+        build = walk["build"]
+        if build["kind"] == "ticket":
+            raise RehearsalFailed("the Wallet minted ticket %s for the send where U3's refusal was expected at US$0.00; the harness submitted nothing"
+                                  % (build.get("ticket_id") or "(no id)"))
+        sentence = str(build.get("sentence") or (build.get("who") or {}).get("sentence") or walk["build_answer"].text)
+        match = U3_SENTENCE.search(sentence)
+        if not match:
+            raise RehearsalFailed("the Wallet refused the send, but not in U3's sentence — %s (%s): “%s”"
+                                  % ((build.get("who") or {}).get("party", "the MCP Wallet"), (build.get("who") or {}).get("reason") or build["kind"], sentence))
+        first, kind, second = usd_cents(match.group(1)), match.group(2), usd_cents(match.group(3))
+        if first != before["balance"]:
+            raise RehearsalFailed("U3's sentence says the account holds %s where the gas account read %s: “%s”"
+                                  % (T.format_usd_cents(first), T.format_usd_cents(before["balance"]), sentence))
+        self.refusal_reservation = second
+        self.say("the refusal proved: the Wallet said “%s” — the first figure, %s, is the balance read; the second, %s, is the reservation this %s needs at most; nothing left"
+                 % (sentence, T.format_usd_cents(first), T.format_usd_cents(second), kind))
+
+    def credit(self, before: Dict[str, Any]) -> None:
+        self.say("— the credit (the platform's admin credit road, Spec 154 §1, with the credential of Spec T14) —")
+        if before["balance"] >= T.REHEARSAL_CREDIT_BELOW_USD_CENTS:
+            self.say("no credit: the gas account holds %s, not below %s" % (T.format_usd_cents(before["balance"]), T.format_usd_cents(T.REHEARSAL_CREDIT_BELOW_USD_CENTS)))
+            self.baseline = before
+            return
+        body = {"amount_usd_cents": T.REHEARSAL_CREDIT_USD_CENTS, "reason": T.REHEARSAL_REASON % self.run_id,
+                "idempotency_key": T.REHEARSAL_IDEMPOTENCY_KEY % self.run_id}
+        road = T.ADMIN_CREDIT_ROUTE % T.SANDBOX["account_id"]
+        answer, parsed = self.platform("POST", road, self.admin_key, "201 with the line and the balance, or 200 deduped", body)
+        if answer.status not in (200, 201) or not isinstance(parsed, dict):
+            raise self.platform_refusal("POST %s" % road, answer, parsed, self.admin_env_path)
+        if parsed.get("deduped") is True:
+            raise RehearsalFailed("the platform deduped the credit %s (HTTP %d): a credit under this run id already stands and nothing was credited now; the platform answered: %s"
+                                  % (body["idempotency_key"], answer.status, answer.text[:600]))
+        line = parsed.get("line") if isinstance(parsed.get("line"), dict) else {}
+        balance = parsed.get("balance") if isinstance(parsed.get("balance"), dict) else {}
+        self.say("credited %s (line %s, %s): the platform's balance %s, reserved %s, available %s%s" % (
+            T.format_usd_cents(line.get("amount_usd_cents") or T.REHEARSAL_CREDIT_USD_CENTS), line.get("id"), body["reason"],
+            T.format_usd_cents(balance.get("balance_usd_cents") or 0), T.format_usd_cents(balance.get("reserved_usd_cents") or 0),
+            T.format_usd_cents(balance.get("available_usd_cents") or 0), (" — %s" % parsed["note"]) if isinstance(parsed.get("note"), str) else ""))
+        after = self.read_gas_account("after the credit")
+        rise = after["balance"] - before["balance"]
+        if rise != T.REHEARSAL_CREDIT_USD_CENTS:
+            raise RehearsalFailed("the gas account rose by %s, not %s, after the credit (before %s, after %s); the platform answered: %s"
+                                  % (T.format_usd_cents(rise), T.format_usd_cents(T.REHEARSAL_CREDIT_USD_CENTS), T.format_usd_cents(before["balance"]),
+                                     T.format_usd_cents(after["balance"]), answer.text[:600]))
+        self.say("the balance rose by exactly %s" % T.format_usd_cents(rise))
+        self.baseline = after
+
+    # -- 3. the send, and the poll ------------------------------------------------------------------
+    def send(self) -> None:
+        self.say("— the send: %s %s from the wallet to its own address %s on %s — through the Police with the harness agent's bearer, then the Wallet's build and submit "
+                 "(transfer_stable, the tool the series uses for a token send) —" % (T.REHEARSAL_SEND_USD, T.REHEARSAL_SEND_ASSET, T.SANDBOX["wallet_address"], self.chain))
+        walk = self.walk(submit=True)
+        police = walk["police"]
+        who = police.get("who") or {}
+        if police["kind"] != "allow":
+            raise RehearsalFailed("the Police did not allow the send — %s (%s): “%s”" % (who.get("party", "MCP Police"), police["kind"], police.get("sentence") or ""))
+        if not walk["police_gas"]["present"]:
+            raise RehearsalFailed("the Police's ALLOW receipt carries no gas_account (Spec 25); Police answered: %s" % walk["police_answer"].text[:600])
+        self.say("the Police allowed: receipt %s, gas_account %s%s" % (
+            police.get("receipt_id") or "issued", json.dumps(walk["police_gas"]["raw"], ensure_ascii=False),
+            (", gas_low %s" % json.dumps(find_key(walk["police_answer"].data, ["gas_low"]))) if isinstance(walk["police_answer"].data, dict) and "gas_low" in walk["police_answer"].data else ""))
+        build = walk["build"]
+        if build["kind"] != "ticket":
+            who = build.get("who") or {}
+            raise RehearsalFailed("the Wallet did not mint a ticket for the send — %s (%s): “%s”" % (who.get("party", "the MCP Wallet"), build["kind"], build.get("sentence") or ""))
+        self.say("the Wallet built ticket %s%s" % (build.get("ticket_id"), (" with %d leg(s)" % build["legs"]) if build.get("legs") is not None else ""))
+        answer = walk["submit_answer"]
+        submit = walk["submit"]
+        data = answer.data if isinstance(answer.data, dict) else {}
+        if answer.is_error or submit["kind"] in ("refused", "held", "no_judgment"):
+            who = submit.get("who") or {}
+            raise RehearsalFailed("the Wallet refused the submit — %s (%s): “%s”" % (who.get("party", "the MCP Wallet"), submit["kind"], submit.get("sentence") or answer.text[:600]))
+        operation = find_key(data, ["user_operation"], dict) or {}
+        user_op_hash = str(operation.get("user_op_hash") or find_key(data, ["user_op_hash", "userOpHash"], str) or "").lower()
+        if not HEX64.fullmatch(user_op_hash):
+            raise RehearsalFailed("the Wallet's submit answer carries no userOpHash (Spec 66 §2): %s" % answer.text[:600])
+        gas = gas_account_in(data)
+        if not gas["present"]:
+            raise RehearsalFailed("the Wallet's submit answer carries no gas_account (Spec 66 §3): %s" % answer.text[:600])
+        delegation = str(operation.get("delegation_tx_hash") or "").lower()
+        message = find_key(data, ["message"], str) or ""
+        self.say("the Wallet's answer: userOpHash %s; the platform's status %s; reserved %s, debited %s; handleOps %s; gas_account %s; the Wallet says: “%s”" % (
+            user_op_hash, operation.get("status") or "not stated",
+            ("US$%s" % operation["reserved_usd"]) if operation.get("reserved_usd") else "not stated",
+            ("US$%s" % operation["debited_usd"]) if operation.get("debited_usd") else "not yet",
+            operation.get("handle_ops_tx_hash") or "not yet", json.dumps(gas["raw"], ensure_ascii=False), message))
+        if delegation:
+            if not HEX64.fullmatch(delegation):
+                raise RehearsalFailed("the Wallet says the wallet was delegated first, but names the delegation as %r, which is not a transaction hash" % delegation)
+            self.say("the wallet was delegated first (Spec 154 §5): the delegation %s is an operation of this walk too, and is polled and judged like the send" % delegation)
+            self.operations.append({"label": "the delegation", "hash": delegation})
+        self.operations.append({"label": "the send", "hash": user_op_hash})
+
+    def resume_walk(self) -> None:
+        self.say("— --resume %s: polling and judging without sending —" % self.resume)
+        answer, row = self.platform("GET", T.GAS_OPERATION_ROUTE % self.resume, self.account_key, "the operation to resume, and the delegation it names where the wallet was delegated first")
+        if answer.status != 200 or not isinstance(row, dict):
+            raise self.platform_refusal("GET %s" % (T.GAS_OPERATION_ROUTE % self.resume), answer, row, self.sandbox_env_path)
+        sender = str(row.get("sender") or "")
+        if sender and sender.lower() != self.key_record["address"].lower():
+            raise RehearsalFailed("the operation %s was sent by %s, not by the harness wallet %s; it is not this rehearsal's to judge" % (self.resume, sender, self.key_record["address"]))
+        delegation = str(row.get("delegation_transaction_hash") or "").lower()
+        if delegation and HEX64.fullmatch(delegation):
+            self.say("the platform says the wallet was delegated at the quote (Spec 154 §5): the delegation %s is polled and judged too" % delegation)
+            self.operations.append({"label": "the delegation", "hash": delegation})
+        self.operations.append({"label": "the send", "hash": self.resume})
+        self.poll_all()
+
+    def poll_all(self) -> None:
+        self.say("— the poll: GET %s under the sandbox account's credential every %s s until landed, deadline %s s —" % (T.GAS_OPERATION_ROUTE % "{userOpHash}", self.interval, self.deadline))
+        deadline_at = self.clock() + self.deadline
+        for operation in self.operations:
+            operation["row"] = self.poll(operation["hash"], operation["label"], deadline_at)
+
+    def poll(self, op_hash: str, label: str, deadline_at: float) -> Dict[str, Any]:
+        road = T.GAS_OPERATION_ROUTE % op_hash
+        while True:
+            answer, row = self.platform("GET", road, self.account_key, "%s: status quoted, submitted, landed, reverted, expired or failed, with both hashes (Spec 154 §6)" % label)
+            if answer.status == 0 or answer.status >= 500:
+                # A fault, not a judgment: the same question may answer later, so it is asked again until the deadline.
+                self.say("%s: the platform did not answer (%s); asking again in %s s" % (label, "unreachable" if answer.status == 0 else "HTTP %d" % answer.status, self.interval))
+            elif answer.status != 200 or not isinstance(row, dict):
+                raise self.platform_refusal("GET %s" % road, answer, row, self.sandbox_env_path)
+            else:
+                status = str(row.get("status") or "")
+                if status == OPERATION_LANDED:
+                    self.say("%s landed: %s %s, transaction %s, block %s" % (label, row.get("kind"), op_hash, row.get("transaction_hash"), row.get("block_number") or "not stated"))
+                    return row
+                if status in OPERATION_ENDED_BADLY:
+                    raise RehearsalFailed("%s %s — the platform says: %s" % (label, status, row.get("refusal") or row.get("revert_reason") or row.get("words") or answer.text[:600]))
+                self.say("%s is %s%s" % (label, status or "in a state the platform did not name", ("; asking again in %s s" % self.interval) if self.clock() < deadline_at else ""))
+            if self.clock() >= deadline_at:
+                resume_hash = next((o["hash"] for o in self.operations if o["label"] == "the send"), op_hash)
+                self.say(op_hash)
+                raise RehearsalNotJudged("%s (%s) had not landed at the deadline of %s s: %s" % (label, op_hash, self.deadline, NOT_JUDGED_SENTENCE % resume_hash))
+            self.sleep(self.interval)
+
+    # -- 4. the debit, judged against the chain in dollars ------------------------------------------
+    def rpc(self, method: str, params: List[Any]) -> Any:
+        url = T.REHEARSAL_RPC[self.chain].url
+        body = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
+        self.say("→ POST %s %s" % (url, json.dumps(body)))
+        answer = self.http_call("POST", url, {"Content-Type": "application/json"}, json.dumps(body).encode("utf-8"))
+        if answer.status == 0:
+            raise RehearsalFailed("%s could not be reached for %s: %s" % (url, method, answer.text))
+        self.say("← HTTP %d in %d ms: %s" % (answer.status, answer.elapsed_ms, answer.text))
+        parsed = json_in(answer.text)
+        if not isinstance(parsed, dict):
+            raise RehearsalFailed("%s answered %s without JSON (HTTP %d): %s" % (url, method, answer.status, answer.text[:300]))
+        if parsed.get("error") is not None:
+            raise RehearsalFailed("%s refused %s: %s" % (url, method, json.dumps(parsed["error"], ensure_ascii=False)))
+        return parsed.get("result")
+
+    def receipt(self, tx_hash: str, label: str) -> Dict[str, Any]:
+        for attempt in range(3):
+            result = self.rpc("eth_getTransactionReceipt", [tx_hash])
+            if isinstance(result, dict):
+                return result
+            if attempt < 2:
+                self.say("%s: the chain names no receipt for %s yet; asking again in %s s" % (label, tx_hash, self.interval))
+                self.sleep(self.interval)
+        raise RehearsalFailed("%s: %s names no receipt for %s, so the debit cannot be judged against the chain" % (label, T.REHEARSAL_RPC[self.chain].url, tx_hash))
+
+    def judge(self, operation: Dict[str, Any]) -> int:
+        row, label = operation["row"], operation["label"]
+        self.say("— %s, judged against the chain in dollars (Spec 154c) —" % label)
+        wanted = ("words", "reservation_usd_cents", "gas_usd_cents", "service_usd_cents", "total_usd_cents", "margin_bps", "native_usd_cents_per_ether", "transaction_hash")
+        missing = [name for name in wanted if row.get(name) in (None, "")]
+        if missing:
+            raise RehearsalFailed("%s: the platform's operation carries no %s (Spec 154c §4), so the debit cannot be judged; the operation: %s"
+                                  % (label, ", ".join(missing), json.dumps(row, ensure_ascii=False)[:800]))
+        figures: Dict[str, int] = {}
+        for name in ("reservation_usd_cents", "gas_usd_cents", "service_usd_cents", "total_usd_cents", "margin_bps", "native_usd_cents_per_ether"):
+            value = row.get(name)
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise RehearsalFailed("%s: the platform states %s as %r, which is not an integer" % (label, name, value))
+            figures[name] = value
+        words = str(row["words"])
+        tx_hash = str(row["transaction_hash"])
+        self.say("the platform's debit: “%s” — reservation %s, gas %s, service %s, total %s, margin %d bps, at US$%s per ether; handleOps %s" % (
+            words, T.format_usd_cents(figures["reservation_usd_cents"]), T.format_usd_cents(figures["gas_usd_cents"]), T.format_usd_cents(figures["service_usd_cents"]),
+            T.format_usd_cents(figures["total_usd_cents"]), figures["margin_bps"], price_words(figures["native_usd_cents_per_ether"]), tx_hash))
+        receipt = self.receipt(tx_hash, label)
+        gas_used = hex_quantity(receipt.get("gasUsed"))
+        price_wei = hex_quantity(receipt.get("effectiveGasPrice"))
+        status = hex_quantity(receipt.get("status"))
+        if gas_used is None or price_wei is None:
+            raise RehearsalFailed("%s: the receipt for %s carries gasUsed %r and effectiveGasPrice %r, which the harness cannot read" % (label, tx_hash, receipt.get("gasUsed"), receipt.get("effectiveGasPrice")))
+        cost_wei = gas_used * price_wei
+        receipt_cents = cents_from_wei(cost_wei, figures["native_usd_cents_per_ether"])
+        self.say("the chain's receipt: gasUsed %d × effectiveGasPrice %d wei = %d wei, at the recorded price US$%s per ether = %s%s" % (
+            gas_used, price_wei, cost_wei, price_words(figures["native_usd_cents_per_ether"]), T.format_usd_cents(receipt_cents),
+            "" if status in (None, 1) else "; the receipt's status is %s" % hex(status)))
+        gas, service, total, reservation, bps = (figures["gas_usd_cents"], figures["service_usd_cents"], figures["total_usd_cents"],
+                                                 figures["reservation_usd_cents"], figures["margin_bps"])
+        problems: List[str] = []
+        if not (words.startswith(DEBIT_WORDS_HEAD) and words.endswith(DEBIT_WORDS_TAIL)):
+            problems.append("the words “%s” do not begin “%s” and end “%s”" % (words, DEBIT_WORDS_HEAD, DEBIT_WORDS_TAIL))
+        if abs(gas - receipt_cents) > 1:
+            problems.append("gas_usd_cents %s is %d cent(s) from the receipt's %s" % (T.format_usd_cents(gas), abs(gas - receipt_cents), T.format_usd_cents(receipt_cents)))
+        if abs(service * 10000 - gas * bps) > 10000:
+            problems.append("service_usd_cents %s is more than a cent from gas × %d/10000 = %.4f cents" % (T.format_usd_cents(service), bps, gas * bps / 10000.0))
+        if service < 1:
+            problems.append("service_usd_cents is %d, below the one cent every operation carries at least" % service)
+        if total != gas + service:
+            problems.append("total_usd_cents %s is not gas + service = %s" % (T.format_usd_cents(total), T.format_usd_cents(gas + service)))
+        if total > reservation:
+            problems.append("total_usd_cents %s is above the reservation %s" % (T.format_usd_cents(total), T.format_usd_cents(reservation)))
+        if status == 0:
+            problems.append("the receipt says the transaction reverted (status 0x0) where the platform says landed")
+        if problems:
+            raise RehearsalFailed("%s: %s" % (label, "; ".join(problems)))
+        self.say("%s judged: gas %s is within a cent of the receipt's %s; service %s is within a cent of gas × %d/10000 and at least a cent; total %s = gas + service; total ≤ reservation %s; the words begin “%s” and end “%s”" % (
+            label, T.format_usd_cents(gas), T.format_usd_cents(receipt_cents), T.format_usd_cents(service), bps, T.format_usd_cents(total),
+            T.format_usd_cents(reservation), DEBIT_WORDS_HEAD, DEBIT_WORDS_TAIL))
+        return total
+
+    def judge_all(self) -> None:
+        for operation in self.operations:
+            self.totals.append(self.judge(operation))
+        self.say("— the gas account, after (through the Wallet) —")
+        after = self.read_gas_account("after the walk")
+        total = sum(self.totals)
+        if self.baseline is None:
+            self.say("the fall of the balance is not judged: this run made no reading after the credit (--resume); the account now holds %s" % T.format_usd_cents(after["balance"]))
+        else:
+            expected = self.baseline["balance"] - total
+            if after["balance"] != expected:
+                raise RehearsalFailed("the gas account fell by %s, not by the walk's totals %s (%s before the walk, %s after)" % (
+                    T.format_usd_cents(self.baseline["balance"] - after["balance"]), T.format_usd_cents(total),
+                    T.format_usd_cents(self.baseline["balance"]), T.format_usd_cents(after["balance"])))
+            self.say("the gas account fell by exactly %s, the sum of the walk's totals: %s → %s" % (
+                T.format_usd_cents(total), T.format_usd_cents(self.baseline["balance"]), T.format_usd_cents(after["balance"])))
+        if after["reserved"] != 0:
+            raise RehearsalFailed("the gas account still reserves %s after the walk; every reservation should have been released" % T.format_usd_cents(after["reserved"]))
+        self.say("reserved is US$0.00: every reservation released")
+        if self.resume is None:
+            usdc_after = self.read_usdc("after")
+            if usdc_after != self.usdc_before:
+                raise RehearsalFailed("finding: the wallet's %s moved from %d to %d minor units across a send to its own address; unchanged to the cent was expected"
+                                      % (T.REHEARSAL_SEND_ASSET, self.usdc_before or 0, usdc_after))
+            self.say("%s unchanged to the cent: %d minor units before and after" % (T.REHEARSAL_SEND_ASSET, usdc_after))
+
+
+def rehearse_main(argv: Sequence[str], **inject: Any) -> int:
+    """`corridor_harness.py rehearse --chain arbitrum [--resume <userOpHash>] [--interval 5] [--deadline 180]` (Spec P1d §1)."""
+    parser = argparse.ArgumentParser(prog="corridor_harness.py rehearse",
+                                     description="The rehearsal: one sponsored operation on the tester's own road, judged in dollars against the chain's receipt (Spec P1d).")
+    parser.add_argument("--chain", required=True, help="the chain to walk on; refused unless tables.py names a public RPC for it")
+    parser.add_argument("--resume", metavar="USEROPHASH", help="poll and judge an operation already sent, without sending")
+    parser.add_argument("--interval", type=float, default=T.REHEARSAL_INTERVAL_SECONDS, help="seconds between polls of the platform (default 5)")
+    parser.add_argument("--deadline", type=float, default=T.REHEARSAL_DEADLINE_SECONDS, help="seconds to wait for the operation to land (default 180)")
+    parser.add_argument("--run-file", default=os.path.join(STORE_DIR, "harness_run.json"), help="the run file, read for the connector's issuer only")
+    parser.add_argument("--issuer", default=None, help="the connector's issuer (default from the run file, else %s)" % DEFAULT_ISSUER)
+    args = parser.parse_args(list(argv))
+    if args.resume and not HEX64.fullmatch(args.resume.strip()):
+        parser.error("--resume takes a userOpHash: 0x and sixty-four hexadecimal characters")
+    if args.interval <= 0 or args.deadline <= 0:
+        parser.error("--interval and --deadline are seconds above zero")
+    run_file = read_json(args.run_file) if not inject.get("session_factory") else None
+    issuer = args.issuer or (run_file or {}).get("issuer") or DEFAULT_ISSUER
+    rehearsal = Rehearsal(args.chain, resume=args.resume, interval=args.interval, deadline=args.deadline, issuer=issuer, **inject)
+    return rehearsal.run()
+
+
+# ---------------------------------------------------------------------------
 # The command line (Spec T1 §8).
 # ---------------------------------------------------------------------------
 def load_run_file(path: str, say: Callable[[str], None]) -> Dict[str, Any]:
@@ -3424,6 +4251,10 @@ def dry_lines(series: Sequence[str], run_file: Optional[Dict[str, Any]] = None, 
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    argv = list(argv) if argv is not None else sys.argv[1:]
+    if argv and argv[0] == REHEARSE_ID:
+        # The rehearsal is a mode of its own (Spec P1d §1): it is not part of the acceptance series and touches none of its options.
+        return rehearse_main(argv[1:])
     parser = argparse.ArgumentParser(description="The Corridor Harness: runs the acceptance series as the agent (Spec T1).")
     parser.add_argument("--tester", help="which tester's agents to run as (a key under testers in the run file)")
     parser.add_argument("--series", nargs="*", default=list(S.SELECTABLE_SERIES), choices=list(S.SELECTABLE_SERIES), help="which series to run (default all of A B C D E F H)")
