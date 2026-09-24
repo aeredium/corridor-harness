@@ -122,6 +122,22 @@ afresh and records it — the platform's ceremony is content-bound, so a live ce
 born afresh — then re-reads the list and signs. If Bear would rather the harness only report such a change, the one branch to remove is
 named in `sign_the_roster_changes`.
 
+Spec T14 (22 September 2026, amended 22:35 — replacing a text that kept a float wallet's key in a file, which the corridor's law forbids:
+Bear, "we are only using threshold signatures. There is no key anywhere to be found" — built 24 September 2026, after AER 360 Spec 104 and
+platform Spec 154 went live): the harness pays in cents. Every money answer and expectation of Harness Holdings is scaled by one thousand
+(aer360_answers.py: the tiers US$2.00 and US$10.00, the hold US$10.00, the daily US$50.00, the payments US$1.25, US$4.99 and US$12.00),
+because the sandbox estate pays on real chains with real USDC. The float is a WORKSPACE, not a file: Harness Treasury, born once by the
+harness exactly as Harness Holdings is (its founder's passkey under ~/.aer360-harness/harness-treasury/, its funding wallet a key allocated
+on the platform and held in the enclave), whose address Bear funds with USDC once; before the three payments, where Holdings' USDC is below
+their sum, the Treasury pays the shortfall to Holdings' address as one payment of one set, approved with the Treasury founder's passkey,
+through the estate's own road, and the harness waits for the run to land. Gas is a balance in dollars on the platform's ledger (U3): S7
+reads both workspaces' gas accounts from the estate, proves the review's refusal for want of gas in U3's sentence with the figures it read
+(S7a), then credits each gas account through the platform's ADMIN credit road with the credential Bear files in ~/.aer360-harness/admin.env
+(never in the repository, never printed). S7 is judged on money that moved — the run's status, the userOpHash, the handleOps transaction
+hash and the payee's USDC balance before and after, the gas debited beside — and S10 counts the money to the cent. The card road is not
+walked by the harness. The order S7 walks, and the signatures the estate asks against those the tiers would, are two disagreements carried
+to Bear in S7's own comment.
+
 Runs on the Mac's own Python 3.9.6 with the standard library only: urllib.request, http.cookiejar,
 json, hashlib, secrets, base64, struct, subprocess. The one binary it calls is /usr/bin/openssl,
 through aer360_passkey.py. Nothing to install; nothing is shipped to any box.
@@ -230,6 +246,14 @@ REPROPOSALS_AT_MOST = 1  # Spec T15 §1: a move whose change is listed expired i
 PROPOSED_AFRESH = "proposed afresh"  # the pass's word for a change it could not sign as listed, whose move the founder's grant proposed again
 SEAT_REREAD_ATTEMPTS = 3  # Spec T17 §2: after the count is met S4 re-reads the seat up to three times over a bounded wait, and says "moved" only on a true read
 SEAT_REREAD_WAIT_SECONDS = 1.0  # the bounded wait between those re-reads (no-op under the test clock)
+# Spec T14 (22 September 2026, amended 22:35; built 24 September 2026): the harness pays in cents, funds Harness Holdings from Harness Treasury —
+# a second sandbox workspace whose key lives only in the enclave — credits the gas account through the platform's admin road as the sandbox may,
+# proves the gas refusal (S7a) and judges S7 on money that moved. The rows, roads, codes and sentences are pinned in aer360_tables.py, read from
+# AER 360 Spec 104 and platform Spec 154; these are the harness's own bounds and the spec's order of signers.
+LANDING_READS = 30  # after POST /v1/sets/{id}/execute answers, GET /v1/sets/{id} is read up to this many times while an instruction is not terminal
+LANDING_WAIT_SECONDS = 3.0  # the bounded wait between those reads (no-op under the test clock)
+TRAIL_PAGES_AT_MOST = 40  # GET /v1/export/audit is followed by its nextCursor up to this many pages of AUDIT_EXPORT_LIMIT rows
+SIGNERS_IN_ORDER = ("ben", "cora", "ada", "harriet")  # SPEC.md §4's order for a run that waits: the holder, the clerk, then the approver and the third party
 
 STATIONS: List[Tuple[str, str]] = [
     ("S1", "Enrol"), ("S2", "Journey"), ("S3", "Policy Interview"), ("S4", "People"),
@@ -549,12 +573,20 @@ class Runner:
                  fresh: bool = False, start_at: Optional[str] = None, out_dir: str = ".", dry: bool = False,
                  transport: Optional[Transport] = None, say: Callable[[str], None] = print,
                  sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic,
-                 openssl: str = PK.OPENSSL):
+                 openssl: str = PK.OPENSSL, treasury_invite: Optional[str] = None, estate: Optional[Dict[str, str]] = None,
+                 admin_env: Optional[str] = None):
         self.base = base.rstrip("/")
         parsed = urllib.parse.urlparse(self.base)
         self.origin = "%s://%s" % (parsed.scheme, parsed.netloc)
         self.store_dir = store_dir
-        self.estate_dir = os.path.join(store_dir, A.ESTATE["client_id"])
+        # Spec T14: the workspace this runner is the founder of — Harness Holdings, or Harness Treasury for the float's own runner (for_treasury)
+        self.estate: Dict[str, str] = dict(estate or A.ESTATE)
+        self.estate_dir = os.path.join(store_dir, self.estate["client_id"])
+        self.treasury_invite = treasury_invite
+        self.admin_env_path = admin_env or os.path.join(store_dir, T.ADMIN_ENV_FILE)
+        self.treasury: Optional["Runner"] = None
+        self.answer_overrides: Dict[str, Dict[str, Dict[str, Any]]] = {}  # this workspace's own answers over the book's (the Treasury's A1, C11, WA1)
+        self.who_suffix = ""  # " (Harness Treasury)" on the Treasury's runner, so Every call tells the two workspaces' founders apart
         self.invite = invite
         self.fresh = fresh
         self.start_at = start_at
@@ -566,11 +598,12 @@ class Runner:
         self.clock = clock
         self.openssl = openssl
         self.secrets = Secrets()
-        if invite:
-            try:
-                self.secrets.add(token_of_link(invite))
-            except HarnessError:
-                pass
+        for link in (invite, treasury_invite):
+            if link:
+                try:
+                    self.secrets.add(token_of_link(link))
+                except HarnessError:
+                    pass
         self.people: Dict[str, Person] = {key: Person(spec) for key, spec in A.PEOPLE.items()}
         self.calls: List[Call] = []
         self.outcomes: List[Outcome] = []
@@ -591,6 +624,8 @@ class Runner:
             "funding_wallet": None, "funding_wallet_absence": None, "funding_press": None, "gas_balance": None, "faucet": None,
             # Spec T15: the roster changes as GET /v1/roster/changes last answered them, the signing pass's record per change, and each seat S4 moved
             "roster_changes": None, "roster_signing": [], "seats_moved": [],
+            # Spec T14: the Treasury as S7 brought it in, the money before and after, S7a, the gas credits, and the USDC contract the estate names
+            "treasury": None, "money": {}, "s7a": None, "gas_credits": [], "usdc_token": None,
         }
         self.started_at = now_iso()
         self.last_run_report: Optional[Dict[str, Any]] = None
@@ -665,7 +700,7 @@ class Runner:
             sent_headers[CSRF_HEADER] = person.csrf
         sent_headers.update(headers or {})
         answer = self._send(person, method, url, data, sent_headers, path)
-        who_said = who or (person.name if person else "nobody (no session)")
+        who_said = who or ((person.name + self.who_suffix) if person else "nobody (no session)")
         call = self.record(station, who_said, method, path, body, answer)
         if retry and 500 <= answer.status < 600:
             self.say("  (%s %s answered %d; retrying once after %d seconds, both answers kept)" % (method, path, answer.status, int(RETRY_AFTER_5XX_SECONDS)))
@@ -690,18 +725,20 @@ class Runner:
                     self.secrets.add(value.split(";", 1)[0].split("=", 1)[-1])
         return Answer(method, path, status, {k: v for k, v in answer_headers}, text, elapsed)
 
-    def request_outside(self, who: str, method: str, url: str, body: Any, station: str) -> Answer:
+    def request_outside(self, who: str, method: str, url: str, body: Any, station: str, headers: Optional[Dict[str, str]] = None) -> Answer:
         """
         Spec T13: one call to a road that is not the estate's — the chain's public RPC, the faucet — made as the faucet page
         makes it: JSON in and out, no cookie, no CSRF token, and never retried (the faucet is asked once per run). A road that
         cannot be reached is recorded as a fault, status 0 and the fault's words, and never raised: the estate is not the one
-        that failed, so no station is judged on it.
+        that failed, so no station is judged on it. Spec T14: the platform's admin credit road takes its bearer in `headers`, which
+        are never recorded.
         """
         sent_headers = {"Accept": "application/json", "User-Agent": USER_AGENT}
         data: Optional[bytes] = None
         if body is not None:
             data = json.dumps(body, ensure_ascii=False).encode("utf-8")
             sent_headers["Content-Type"] = "application/json"
+        sent_headers.update(headers or {})
         request = urllib.request.Request(url, data=data, method=method, headers=sent_headers)
         started = self.clock()
         try:
@@ -895,7 +932,7 @@ class Runner:
         how = ""
         if person.passkey is not None:
             verified, _ = self.sign_in(person, "S1")
-            self.step("S1", verified, "200 with a session in the workspace %s" % A.ESTATE["company"],
+            self.step("S1", verified, "200 with a session in the workspace %s" % self.estate["company"],
                       "signed in" if verified.ok else verified.sentence(), {"nonce": "<nonce>", "issuedAtMs": "<issuedAtMs>", "response": "<assertion>"}, person.name)
             if not verified.ok:
                 if self.invite:
@@ -920,8 +957,8 @@ class Runner:
         workspace = person.session.get("workspace") or {}
         name = str(workspace.get("name") or "")
         self.facts["workspace"] = workspace
-        if name.strip().lower() != A.ESTATE["company"].lower():
-            raise StationStop("%s; the session names the workspace %r, not %r" % (how, name, A.ESTATE["company"]))
+        if name.strip().lower() != self.estate["company"].lower():
+            raise StationStop("%s; the session names the workspace %r, not %r" % (how, name, self.estate["company"]))
         return Outcome("S1", PASS, "%s as %s; session in %s (%s), roles %s, credential %s" % (
             how, person.name, name, workspace.get("realm"), ", ".join(person.roles) or "none", last4(person.credential_id)))
 
@@ -983,6 +1020,7 @@ class Runner:
                 raise StationStop("%s — %s; %s, and it served a question the book does not know, so its catalog is later than %d or is "
                                   "not the one the book read (%s)" % (err, self.book_version_words(), ESTATE_STATES_NO_CATALOG_VERSION,
                                                                         A.CATALOG_VERSION_ANSWERED, A.CATALOG_SOURCE))
+            value = self.override_answer(interview_type, qid, value)
             body = {"questionId": qid, "value": value}
             answer = self.request(who, "POST", "/v1/onboarding/interviews/%s/answers" % interview_id, body, station)
             self.step(station, answer, "200 with the next page (%s: %s)" % (qid, question.get("kind")),
@@ -998,6 +1036,11 @@ class Runner:
     @staticmethod
     def book_version_words() -> str:
         return "the answer book answers catalog version %d" % A.CATALOG_VERSION_ANSWERED
+
+    def override_answer(self, interview_type: str, qid: str, value: Dict[str, Any]) -> Dict[str, Any]:
+        """The book's answer, or this workspace's own where it has one (Spec T14: the Treasury's name, its payment approver and its account approvers)."""
+        own = (self.answer_overrides.get(interview_type) or {}).get(qid)
+        return own if own is not None else value
 
     def confirm_and_compile(self, station: str, interview_type: str, interview_id: str, who: Person, page: Dict[str, Any]) -> Dict[str, Any]:
         walked_back: Dict[str, str] = {}  # Spec T12 §1: a question walked back to once, so a second is a failure and never a loop
@@ -1074,7 +1117,7 @@ class Runner:
         book = A.ANSWERS.get(interview_type, {})
         if qid not in book:
             raise StationStop("the estate walked back to %s (%s), which the answer book has no answer for" % (qid, sentence))
-        value = book[qid]
+        value = self.override_answer(interview_type, qid, book[qid])
         body = {"questionId": qid, "value": value}
         answered = self.request(who, "POST", "/v1/onboarding/interviews/%s/answers" % interview_id, body, station)
         self.step(station, answered, "200 with the next page (%s answered from the book on the walk-back)" % qid,
@@ -1095,7 +1138,7 @@ class Runner:
             if question is None or page.get("state") not in ("in_progress", "at_read_back"):
                 return page
             qid = str(question.get("questionId"))
-            value = A.answer_for(interview_type, question)
+            value = self.override_answer(interview_type, qid, A.answer_for(interview_type, question))
             body = {"questionId": qid, "value": value}
             answer = self.request(who, "POST", "/v1/onboarding/interviews/%s/answers" % interview_id, body, station)
             self.step(station, answer, "200 with the next page (%s: %s, resumed toward the read-back)" % (qid, question.get("kind")),
@@ -2050,7 +2093,12 @@ class Runner:
         faucet = self.facts.get("faucet")
         if isinstance(gas, dict):
             lines.append("Gas: %s%s" % (gas["said"], ("; %s." % faucet["said"]) if isinstance(faucet, dict) else "; the faucet was not asked."))
-        lines.append("The asset: the three payments together need %s of %s; the harness never mints or moves it." % (self.payments_need()[1], T.PAYMENT_ASSET))
+        treasury = self.facts.get("treasury")
+        if isinstance(treasury, dict) and treasury.get("address"):
+            lines.append("Harness Treasury: funding wallet %s — the float Bear funds with %s on %s, once; it pays Harness Holdings' shortfall through the estate's own road, and the harness holds no key for it (Spec T14)." % (
+                treasury["address"], T.PAYMENT_ASSET, T.PAYEE_CHAIN))
+        lines.append("The asset: the three payments together need %s of %s; Harness Treasury pays Harness Holdings the shortfall through the estate's own road (Spec T14); the harness never mints the asset and holds no key." % (
+            self.payments_need()[1], T.PAYMENT_ASSET))
         return lines
 
     @staticmethod
@@ -2058,15 +2106,6 @@ class Runner:
         """What the three payments need together: the plain total of the asset, and the same figure as US dollars (USDC is the dollar-pegged asset, Spec T11 §4)."""
         total = T.payments_total([p.amount for p in A.PAYMENTS], T.ASSET_DECIMALS[T.PAYMENT_ASSET])
         return total, usd(int(T.minor_units(total, 2)))
-
-    def payments_need_line(self, wallet: Dict[str, Any]) -> str:
-        """
-        Spec T13 §4: with a funding wallet present and a payment refused, one line says what the three payments need together —
-        the wallet's address, the asset and the amount — so Bear can fund it by hand. The harness never mints or moves the asset.
-        """
-        total, dollars = self.payments_need()
-        return "funding wallet %s: the three payments together need %s of %s on %s (%s = %s %s) — the harness never mints or moves the asset; fund it by hand" % (
-            wallet.get("address"), dollars, T.PAYMENT_ASSET, T.PAYEE_CHAIN, " + ".join(p.amount for p in A.PAYMENTS), total, T.PAYMENT_ASSET)
 
     # -- S6 Payees ----------------------------------------------------------------------
     # Spec T9 (20 September 2026): who presses after Ada, and how a count is spoken. Ben Signatory, who signs
@@ -2276,7 +2315,34 @@ class Runner:
             return "in the register without its address"
         return "absent from the register"
 
-    # -- S7 Payments --------------------------------------------------------------------
+    # -- S7 Payments (Spec T14, 22 September 2026, amended 22:35; built 24 September 2026) -------------------------------------------
+    # The harness pays in cents, funds Harness Holdings from a treasury workspace whose key lives only in the enclave, credits the gas
+    # account as the sandbox may, proves the gas refusal (S7a), and judges S7 on money that moved. Read from AER 360 Spec 104 and
+    # platform Spec 154 (aer360_tables.py names the files and commits); every sentence the estate or the platform speaks travels verbatim.
+    #
+    # THE ORDER S7 WALKS, AND WHY — A DISAGREEMENT CARRIED TO BEAR, NOT SILENTLY RESOLVED. SPEC.md §3 says the two gas accounts are
+    # credited AFTER S7a's refusal is proved; §2 says the Treasury pays Holdings' shortfall BEFORE S7. The Treasury's own payment is
+    # quoted, sponsored and sent by the platform's gas roads, so it cannot leave until the Treasury's gas account holds gas; and the
+    # review's dry quote of a payment simulates the transfer (Spec 154: the call gas from the chain's dry run of the callData), so an
+    # estate holding no USDC is refused for an unpriceable transfer, not for want of gas. So S7 credits the Treasury's gas first (§3's
+    # road, U3's US$10.00), has the Treasury pay the shortfall (§2), proves S7a on Holdings — whose gas nobody has credited yet (§3) —
+    # then credits Holdings' gas (§3) and makes the three payments (§4). Every other word of §2 to §4 is kept.
+    #
+    # THE SIGNATURES — A SECOND DISAGREEMENT CARRIED TO BEAR. SPEC.md §4 says P1 lands with one signature (the holder's), P2 waits for two
+    # and lands when Ben and Cora sign, P3 waits for three. Those are the signing tiers of Spec 92 (WO3, WO4), which the estate RECORDS
+    # in the compiled charter and enforces nowhere on the payments road: at 8812c64 `signingTiers` is written by onboardingcompiler.ts
+    # and read by no route; the approvals road asks `approvalsRequired` from the band (the per-payment hold) and the destination rule
+    # (Spec 69), and admits the `approver` standing alone (routes/approvals.ts, requireCaller 'approver'), which the charter seats Ada
+    # in. So the harness walks the spec's road — the signers press in the spec's order, Ben, Cora, then Ada and Harriet, while the run
+    # waits — reports each answer in the estate's words, never retries a refusal, and judges each payment on the four proofs §4 names:
+    # the run's status, the userOpHash, the handleOps transaction hash and the payee's USDC balance before and after. The count the
+    # estate asked and the count the tiers would ask stand side by side in the line, for Bear to rule on.
+    TIER_ROAD_WORDS = {
+        "P1": "the spec: lands with one signature, the holder's (Ben Signatory)",
+        "P2": "the spec: waits for two and lands when Ben Signatory and Cora Clerk sign",
+        "P3": "the spec: waits for three and lands when the third signs",
+    }
+
     def clerk(self) -> Person:
         cora = self.people[A.PAYMENT_CLERK]
         return cora if cora.signed_in else self.founder()
@@ -2336,107 +2402,809 @@ class Runner:
         holder_named = (A.ACCOUNT_ANSWERS.get("WO1") or {}).get("choice") == A.HOLDER_PERSON
         return ((A.ACCOUNT_ANSWERS.get("WO3") or {}).get("cents") if holder_named else None), (A.ACCOUNT_ANSWERS.get("WO4") or {}).get("cents"), "the answer book"
 
+    # -- the admin credential and the Treasury (Spec T14 §2, §3) ------------------------------------------------------------------
+    def read_admin_env(self, station: str) -> Optional[Dict[str, str]]:
+        """
+        Spec T14 §3: the platform's admin credential Bear keeps in ~/.aer360-harness/admin.env, in the estate's own setting names
+        (AERAccounts .env.example): AAP_ADMIN_BASE_URL and AAP_ADMIN_KEY. Read once per run and never printed — the key joins the
+        secrets and is redacted from every record. A file absent or incomplete is noted here and fails S7 at the credit step with the
+        spec's sentence, so the Treasury's birth and the balances are still read and reported first.
+        """
+        path = self.admin_env_path
+        if not os.path.isfile(path):
+            self.note(station, "%s is not filed: the gas credits below will fail with %r" % (path, T.NO_GAS_CREDIT_ROAD_SENTENCE))
+            return None
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                values = T.parse_env_file(handle.read())
+        except OSError as err:
+            self.note(station, "%s could not be read (%s): the gas credits below will fail" % (path, err))
+            return None
+        base = values.get(T.ADMIN_ENV_URL_KEY, "").strip().rstrip("/")
+        key = values.get(T.ADMIN_ENV_KEY_KEY, "").strip()
+        if not base or not key:
+            missing = " and no ".join(name for name, value in ((T.ADMIN_ENV_URL_KEY, base), (T.ADMIN_ENV_KEY_KEY, key)) if not value)
+            self.note(station, "%s names no %s: the gas credits below will fail" % (path, missing))
+            return None
+        self.secrets.add(key)
+        if not key.startswith(T.ADMIN_KEY_PREFIX):
+            self.note(station, "%s's %s does not begin %s, which the platform's admin road requires (internal/api/middleware.go says \"invalid admin key format\"); the credit will be refused" % (
+                path, T.ADMIN_ENV_KEY_KEY, T.ADMIN_KEY_PREFIX))
+        return {"base": base, "key": key, "path": path}
+
+    @staticmethod
+    def treasury_overrides() -> Dict[str, Dict[str, Dict[str, Any]]]:
+        """
+        The Treasury's interviews are the book's, with three answers of its own (aer360_tables.py, TREASURY): its name (A1); its one
+        payment approver (C11) — the address the Treasury's estate is opened under, which the estate attributes to the founder's own
+        key (services/approverseats.ts, addressesOfCaller) so that the founder's compile seats her (completeSeatOnCharterWrite) and
+        her passkey can approve the float's payment; and that address first among the account's approvers (WA1), beside the book's.
+        Nothing else in the book changes.
+        """
+        return {"policy": {"A1": {"text": T.TREASURY["company"]}, "C11": {"people": [T.TREASURY["email"]]}},
+                "wallet_account": {"WA1": {"entries": [{"name": T.TREASURY["short"], "email": T.TREASURY["email"]}] + list(A.ACCOUNT_ANSWERS["WA1"]["entries"])}}}
+
+    def for_treasury(self) -> "Runner":
+        """The Treasury's own runner — its founder, cookie jar, passkey folder (~/.aer360-harness/harness-treasury/) and facts — sharing this run's records, secrets and stamp."""
+        if self.treasury is None:
+            t = Runner(self.base, self.store_dir, self.treasury_invite, False, None, self.out_dir, self.dry, self.transport, self.say, self.sleep, self.clock,
+                       self.openssl, estate=T.TREASURY, admin_env=self.admin_env_path)
+            for value in t.secrets.values:
+                self.secrets.add(value)
+            t.secrets, t.calls, t.evidence, t.notes, t.findings = self.secrets, self.calls, self.evidence, self.notes, self.findings
+            t.run_stamp = self.run_stamp
+            t.who_suffix = " (%s)" % T.TREASURY["short"]
+            t.answer_overrides = self.treasury_overrides()
+            t.load_passkeys()
+            self.treasury = t
+        return self.treasury
+
+    def treasury_passkey_stored(self) -> bool:
+        """Whether a passkey is stored for the Treasury's founder under ~/.aer360-harness/harness-treasury/: a Treasury born by an earlier run."""
+        return self.for_treasury().people[A.FOUNDER].passkey is not None
+
+    def bring_in_the_treasury(self, station: str) -> Dict[str, Any]:
+        """
+        Spec T14 §2: Harness Treasury, a second sandbox workspace born once by the harness exactly as Harness Holdings is (Spec T13).
+        Its founder signs in with the passkey stored under ~/.aer360-harness/harness-treasury/, or is enrolled by --treasury-invite; on
+        the birth run the policy and wallet-account interviews are walked from the book with the Treasury's three answers, and the
+        funding wallet is pressed for — a key allocated on the platform and held in the enclave (Spec 98, Spec 104 §1). The harness
+        then prints the address and stops S7 with "fund Harness Treasury: <address> on <chain>, then rerun"; a later run signs in and
+        reads the wallet the workspace answers. The harness holds no key for it, ever.
+        """
+        t = self.for_treasury()
+        founder = t.people[A.FOUNDER]
+        record: Dict[str, Any] = {"born_now": False, "interviews_walked": False, "wallet_born_now": False, "address": None, "said": "", "workspace": None, "wallet": None}
+        self.facts["treasury"] = record
+        if founder.passkey is not None:
+            verified, _ = t.sign_in(founder, station)
+            t.step(station, verified, "a session for %s at %s, with the Treasury founder's stored passkey" % (founder.name, T.TREASURY["short"]),
+                   "signed in" if verified.ok else verified.sentence(), {"nonce": "<nonce>", "issuedAtMs": "<issuedAtMs>", "response": "<assertion>"}, founder.name)
+            if verified.ok:
+                how = "the Treasury founder signed in with the stored passkey"
+            elif self.treasury_invite:
+                self.say("  %s: the Treasury founder's stored passkey was refused (%s); enrolling with --treasury-invite instead" % (station, verified.sentence()))
+                founder.passkey = None
+                founder.key_file = None
+                verified = t.enrol_by_invite(founder, self.treasury_invite, station)
+                how = "the Treasury founder enrolled by invitation after the stored passkey was refused"
+                record["born_now"] = True
+            else:
+                raise StationStop("no Harness Treasury session: POST /v1/auth/login/verify answered %s" % verified.sentence())
+        elif self.treasury_invite:
+            verified = t.enrol_by_invite(founder, self.treasury_invite, station)
+            how = "the Treasury founder enrolled by invitation"
+            record["born_now"] = True
+        else:
+            raise StationStop("no Harness Treasury: no passkey is stored for its founder at %s and no --treasury-invite <link> was given; the first run births the "
+                              "Treasury from the birth script's invitation, exactly as Harness Holdings was born" % t.key_path(founder))
+        if not verified.ok or founder.session is None:
+            raise StationStop("no Harness Treasury session: the invitation road answered %s" % verified.sentence())
+        workspace = founder.session.get("workspace") or {}
+        name = str(workspace.get("name") or "")
+        t.facts["workspace"] = workspace
+        record["workspace"] = workspace
+        if not name.strip().lower().startswith(T.TREASURY["short"].lower()):
+            raise StationStop("%s; the session names the workspace %r, not %s" % (how, name, T.TREASURY["short"]))
+        before = t.request(founder, "GET", "/v1/workspace", None, station)
+        t.step(station, before, "the Treasury's workspace before anything is walked: fundingWallet where the Treasury stood before this run, fundingWalletAbsence on the birth run",
+               "answered" if before.ok else before.sentence(), None, founder.name)
+        stood = before.ok and isinstance(before.json, dict) and isinstance(before.json.get("fundingWallet"), dict) and bool(before.json["fundingWallet"].get("address"))
+        record["wallet_stood_before"] = stood
+        standing = t.request(founder, "GET", "/v1/onboarding/charter", None, station)
+        t.step(station, standing, "the Treasury's policy charter: standsWritten true on a rerun; false on the birth run, which walks the interviews from the book",
+               json.dumps(standing.json) if standing.ok else standing.sentence(), None, founder.name)
+        stands = isinstance(standing.json, dict) and standing.json.get("standsWritten") is True
+        walked = ""
+        if not stands:
+            interview_id, page, answered = t.walk_interview(station, "policy", founder)
+            t.confirm_and_compile(station, "policy", interview_id, founder, page)
+            interview_id, page, answered_account = t.walk_interview(station, "wallet_account", founder)
+            t.confirm_and_compile(station, "wallet_account", interview_id, founder, page)
+            record["interviews_walked"] = True
+            walked = "; the interviews walked from the book with the Treasury's own name, approver and account approvers (%d and %d questions)" % (answered, answered_account)
+        wallet_said, wallet_failed = t.give_the_estate_its_funding_wallet(station, founder)
+        wallet = t.facts.get("funding_wallet")
+        if wallet_failed or not isinstance(wallet, dict) or not wallet.get("address"):
+            raise StationStop("Harness Treasury has no funding wallet: %s" % wallet_said)
+        press = t.facts.get("funding_press")
+        record.update(address=wallet["address"], wallet=wallet, wallet_born_now=bool(isinstance(press, dict) and press.get("status") == 200))
+        record["said"] = "%s: %s; %s%s" % (T.TREASURY["short"], how, wallet_said, walked)
+        # THE BIRTH RUN (Spec T14 §2, the ship note): the Treasury's funding wallet did not stand before this run — it was born by the wallet
+        # account's write (Spec 98) or by the press above — so Bear has never seen its address. S7 prints it and, once it has read the Treasury's
+        # USDC and found it short of the shortfall, stops with the spec's sentence; a wallet that stood before and is short is told the other.
+        record["born_this_run"] = not stood
+        if record["born_this_run"]:
+            sentence = T.FUND_TREASURY_SENTENCE % (wallet["address"], T.PAYEE_CHAIN)
+            self.say("  %s: %s" % (station, sentence))
+            self.note(station, "%s — the estate's own words: %s" % (sentence, (wallet.get("fundSentence") or "").strip() or "the workspace answered no fund sentence"))
+        return record
+
+    # -- the money reads: USDC through the estate's own road, gas from the platform, a payee from the chain ------------------------
+    def read_usdc_balance(self, runner: "Runner", person: Person, station: str, who: str) -> Tuple[Optional[int], str, Optional[str]]:
+        """
+        Spec 104 §1: the stablecoin the funding wallet holds on each chain this deployment pays on, read live through the estate's own
+        road (GET /v1/workspace/funding-account/balances) and said in dollars. The USDC row on the payments' chain is the figure — its
+        balanceMinor, exact — and its `token` is the contract the estate names, which a payee's balance is read against on the chain.
+        A road that cannot say (no wallet, no row, no RPC) is reported in the estate's words and answers None: no balance is invented.
+        """
+        answer = runner.request(person, "GET", T.FUNDING_BALANCES_ROUTE, None, station)
+        body = answer.json if answer.ok and isinstance(answer.json, dict) else None
+        rows = [r for r in ((body or {}).get("balances") or []) if isinstance(r, dict)]
+        row = next((r for r in rows if str(r.get("asset") or "").upper() == T.PAYMENT_ASSET and str(r.get("chain") or "").lower() == T.PAYEE_CHAIN), None)
+        expected = "%s's %s balance on %s in dollars (Spec 104 §1: balances[{chain, asset, token, balanceMinor, usdMinor, sentence}])" % (who, T.PAYMENT_ASSET, T.PAYEE_CHAIN)
+        if body is None:
+            runner.step(station, answer, expected, answer.sentence(), None, person.name)
+            return None, "%s's %s balance could not be read: %s" % (who, T.PAYMENT_ASSET, answer.sentence()), None
+        if row is None:
+            named = ", ".join("%s on %s" % (r.get("asset"), r.get("chain")) for r in rows)
+            said = "%s's %s balance on %s: the estate names no %s row on %s (%s)" % (
+                who, T.PAYMENT_ASSET, T.PAYEE_CHAIN, T.PAYMENT_ASSET, T.PAYEE_CHAIN, body.get("absence") or ("the rows name %s" % named if named else "no rows"))
+            runner.step(station, answer, expected, said, None, person.name)
+            return None, said, None
+        token = row.get("token")
+        minor = row.get("balanceMinor")
+        if not isinstance(minor, str) or not INTEGER_TEXT.match(minor):
+            said = "%s's %s balance on %s could not be read: %s" % (who, T.PAYMENT_ASSET, T.PAYEE_CHAIN, row.get("sentence") or json.dumps(row, ensure_ascii=False))
+            runner.step(station, answer, expected, said, None, person.name)
+            return None, said, token
+        said = "%s holds %s of %s on %s" % (who, T.usdc_dollars(int(minor)), T.PAYMENT_ASSET, T.PAYEE_CHAIN)
+        runner.step(station, answer, expected, "%s (%s)" % (said, row.get("sentence")), None, person.name)
+        return int(minor), said, token
+
+    def read_gas_account(self, runner: "Runner", person: Person, station: str, who: str) -> Tuple[Optional[Dict[str, Any]], str]:
+        """
+        Spec 104 §3: the gas account read live from the platform through the estate's own road (GET /v1/gas/account): `account` with
+        the figures in cents (availableUsdCents, balanceUsdCents, reservedUsdCents), the platform's `low`, and the Wallets screen's own
+        sentence, "Gas account: US$<available>"; or `unreadable`, the estate's sentence for a platform it could not ask.
+        """
+        answer = runner.request(person, "GET", T.GAS_ACCOUNT_ROUTE, None, station)
+        body = answer.json if answer.ok and isinstance(answer.json, dict) else None
+        account = body.get("account") if body is not None and isinstance(body.get("account"), dict) else None
+        expected = "%s's gas account: \"%s: US$…\" with availableUsdCents, balanceUsdCents, reservedUsdCents and low, read live from the platform (Spec 104 §3)" % (who, T.GAS_ACCOUNT_LABEL)
+        if account is None:
+            said = "%s's gas account could not be read: %s" % (who, (body or {}).get("unreadable") or answer.sentence())
+            runner.step(station, answer, expected, said, None, person.name)
+            return None, said
+        said = "%s's %s (balance %s, reserved %s%s)" % (who, account.get("sentence"), account.get("balance"), account.get("reserved"), "; low" if account.get("low") else "")
+        runner.step(station, answer, expected, said, None, person.name)
+        return account, said
+
+    def read_token_balance(self, station: str, who: str, chain: str, token: Optional[str], holder: str) -> Tuple[Optional[int], str]:
+        """
+        Spec T14 §4: a payee's USDC balance, read from the chain as the corridor reads one — eth_call balanceOf(address) on the token the
+        estate names (the USDC row of the balances road) through the chain's public RPC, pinned from the corridor harness's own skeleton
+        — because the estate offers a browser no road to a payee's balance. A fault is the RPC's, reported in its words, and answers None:
+        the harness never invents a balance, and a proof it could not read is not a pass (Bear, 14 September 2026: "a missing RPC should
+        make anybody worry").
+        """
+        url = T.public_rpc_url(chain)
+        if not url:
+            return None, "no public RPC is known for %s: neither the AEREDIUM testnet's nor the corridor harness's skeleton names one (aer360_tables.py, public_rpc_url)" % chain
+        if not token:
+            return None, "the estate names no %s contract on %s (the balances road's token), so there is nothing to read the balance against" % (T.PAYMENT_ASSET, chain)
+        data = T.balance_of_call_data(holder)
+        body = {"jsonrpc": "2.0", "id": 1, "method": "eth_call", "params": [{"to": token, "data": data}, "latest"]}
+        answer = self.request_outside(who, "POST", url, body, station)
+        self.step(station, answer, "a 32-byte hex word: %s's %s balance in minor units on %s (balanceOf on %s through the chain's public RPC)" % (holder, T.PAYMENT_ASSET, chain, token),
+                  "answered" if answer.ok else self.outside_sentence(answer), body, who)
+        if answer.status == 0:
+            return None, "the RPC at %s could not be reached: %s" % (url, answer.text)
+        parsed = answer.json
+        if not isinstance(parsed, dict):
+            return None, "the RPC at %s answered HTTP %d without JSON: %s" % (url, answer.status, answer.text[:200] or "<empty>")
+        if parsed.get("error") is not None:
+            return None, "the RPC at %s refused eth_call: %s" % (url, json.dumps(parsed["error"], ensure_ascii=False))
+        result = parsed.get("result")
+        if not isinstance(result, str) or not result.startswith("0x"):
+            return None, "the RPC at %s answered %r for balanceOf, which is not a hex word" % (url, result)
+        try:
+            minor = int(result, 16) if result not in ("0x", "") else 0
+        except ValueError:
+            return None, "the RPC at %s answered %r for balanceOf, which is not a number" % (url, result[:80])
+        return minor, "%s of %s (%d minor units) read from %s" % (T.usdc_dollars(minor), T.PAYMENT_ASSET, minor, url)
+
+    # -- the gas credits (Spec T14 §3): the platform's admin credit road, never the card road ----------------------------------------
+    def credit_gas(self, runner: "Runner", station: str, admin: Optional[Dict[str, str]], who: str, cents: int) -> Dict[str, Any]:
+        """
+        One credit to a workspace's gas account through the platform's admin credit road (Spec 154 §1: POST
+        /v1/admin/accounts/{id}/gas-account/credits under the admin key; reason required; audited gas.credited_by_admin), the reason
+        "sandbox run <run id>" and an idempotency key of this run's, so a post repeated credits once. The answer is classified as Rule
+        13 asks (`credit_words`): credited or deduped with the platform's balance; the platform's refusal of the credential in its own
+        words, the same on retry; the harness's or the deployment's mistake; a fault. Anything but a credit fails S7 naming it, and no
+        credential fails S7 with the spec's sentence.
+        """
+        if admin is None:
+            raise StationStop(T.NO_GAS_CREDIT_ROAD_SENTENCE)
+        workspace = runner.facts.get("workspace")
+        account_id = None
+        if isinstance(workspace, dict):  # the session's workspace (S1), or GET /v1/workspace's whole answer (S5, S7): either names the platform account
+            inner = workspace.get("workspace") if isinstance(workspace.get("workspace"), dict) else {}
+            account_id = workspace.get("aapAccountId") or inner.get("aapAccountId")
+        if not account_id:
+            raise StationStop("the gas credit for %s was not made: the estate's session names no platform account (workspace.aapAccountId), so the admin road has no account to credit" % who)
+        founder = runner.people[A.FOUNDER]
+        # one key per credit of this run for this workspace — the platform dedupes a repeated key, so a second credit (the review's shortfall
+        # cured with more gas) carries its own ordinal
+        ordinal = 1 + sum(1 for r in self.facts["gas_credits"] if r.get("who") == who)
+        body = {"amount_usd_cents": int(cents), "reason": T.ADMIN_CREDIT_REASON % self.run_stamp,
+                "idempotency_key": "aer360-harness-%s-%s-gas-%d" % (self.run_stamp, runner.estate["client_id"], ordinal)}
+        url = admin["base"] + T.ADMIN_CREDIT_ROUTE % account_id
+        who_said = "%s (at the platform's admin road)" % founder.name
+        answer = self.request_outside(who_said, "POST", url, body, station, headers={"Authorization": "Bearer %s" % admin["key"]})
+        outcome, words = self.credit_words(answer, who)
+        self.step(station, answer, "201 with the line and the balance (the platform's own figures: balance_usd_cents, reserved_usd_cents, available_usd_cents), or 200 deduped "
+                  "for a key already credited; a refusal in the platform's words (Spec 154 §1; the reason \"%s\")" % body["reason"], words, body, who_said)
+        balance = answer.json.get("balance") if isinstance(answer.json, dict) and isinstance(answer.json.get("balance"), dict) else None
+        record = {"who": who, "account_id": account_id, "amount_usd_cents": int(cents), "reason": body["reason"], "idempotency_key": body["idempotency_key"],
+                  "status": answer.status, "outcome": outcome, "said": words, "balance_after": balance}
+        self.facts["gas_credits"].append(record)
+        if outcome not in ("credited", "deduped"):
+            raise StationStop("the gas credit for %s was not made: %s" % (who, words))
+        return record
+
+    @staticmethod
+    def credit_words(answer: Answer, who: str) -> Tuple[str, str]:
+        """The platform's answer to a credit, classified — what happened, in the platform's own words (internal/api/middleware.go, gas_handlers.go, internal/gas/credit.go)."""
+        body = answer.json if isinstance(answer.json, dict) else None
+        said = body.get("error") if body is not None and isinstance(body.get("error"), str) else None
+        if answer.status == 0:
+            return "unreachable", "the platform could not be reached: %s" % answer.text
+        if answer.ok and body is not None and isinstance(body.get("balance"), dict):
+            balance = body["balance"]
+            line = body.get("line") if isinstance(body.get("line"), dict) else {}
+            outcome = "deduped" if body.get("deduped") else "credited"
+            return outcome, "%s %s %s (line %s): balance %s, available %s%s" % (
+                who, outcome, T.format_usd_cents(line.get("amount_usd_cents") or 0), line.get("id"), T.format_usd_cents(balance.get("balance_usd_cents") or 0),
+                T.format_usd_cents(balance.get("available_usd_cents") or 0), (" — %s" % body["note"]) if body.get("note") else "")
+        if answer.ok:
+            return "unreadable", "the platform answered HTTP %d in a shape the harness will not read: %s" % (answer.status, answer.text[:300])
+        if answer.status in (401, 403):
+            return "refused", "refused: the platform refused the admin credential (HTTP %d): %s — the answer will be the same until the credential in %s is replaced" % (
+                answer.status, said or answer.text[:300], T.ADMIN_ENV_FILE)
+        if 400 <= answer.status < 500:
+            return "malformed", "the platform refused the harness's question (HTTP %d): %s — a mistake of the harness or of the deployment, not the estate's" % (answer.status, said or answer.text[:300])
+        return "fault", "the platform answered a fault (HTTP %d): %s" % (answer.status, said or answer.text[:300])
+
+    @staticmethod
+    def gas_credit_for(ceiling_cents: Optional[int]) -> int:
+        """
+        What a workspace is credited (Spec T14 §3, "as the sandbox may"): U3's ten dollars — or, where a set's ceiling read at S7a says
+        the run's reservations (the creations' quotes and the executions') would exceed them, the next ten dollars above twice that
+        ceiling (U3: "if they estimate that their transactions are large, they will need to put more"). Pure arithmetic on the platform's
+        own figure; nothing marked up.
+        """
+        if not isinstance(ceiling_cents, int) or ceiling_cents <= 0:
+            return T.GAS_CREDIT_USD_CENTS
+        need = 2 * ceiling_cents
+        return max(T.GAS_CREDIT_USD_CENTS, -(-need // T.GAS_CREDIT_USD_CENTS) * T.GAS_CREDIT_USD_CENTS)
+
+    # -- S7a: the gas refusal, proved before any gas is credited (Spec T14 §3) ----------------------------------------------------
+    def prove_the_gas_refusal(self, clerk: Person, rows: List[Dict[str, Any]], gas: Optional[Dict[str, Any]], usdc_before: Optional[int]) -> Dict[str, Any]:
+        """
+        With Harness Holdings' gas account below the review's ceiling, the set of three is submitted to the review (POST /v1/sets/review,
+        which creates nothing) and the gas gate must refuse GAS_SHORTFALL in U3's sentence with both figures — "Your gas account holds
+        US$… This set needs at most US$… of gas. Nothing was sent. Buy gas below." — the first the figure the harness read from GET
+        /v1/gas/account, the second the gate's own ceilingUsdCents; and no payment may have left: the runs register carries no new run
+        and Holdings' USDC is unchanged. Proved, S7a passes. A gate that admits the set because the balance already covers the ceiling is
+        reported and not failed (the estate did right; the refusal cannot be met this run). A refusal naming other figures, a refusal
+        for another cause, or a payment that left fails S7 naming it.
+        """
+        record: Dict[str, Any] = {"verdict": "not proved", "available": None, "ceiling": None, "sentence": None, "said": None, "left": None, "detail": None}
+        self.facts["s7a"] = record
+        available = gas.get("availableUsdCents") if isinstance(gas, dict) else None
+        if not isinstance(available, int) or isinstance(available, bool):
+            record.update(verdict="failed", said="S7a failed: Harness Holdings' gas account could not be read, so there is no figure to hold the sentence against")
+            return record
+        record["available"] = available
+        register = self.request(clerk, "GET", "/v1/sets", None, "S7")
+        self.step("S7", register, "the runs register before S7a's review, so a run the review created would be seen", "answered" if register.ok else register.sentence(), None, clerk.name)
+        before_ids = {str(s.get("id")) for s in ((register.json or {}).get("sets") or [])} if isinstance(register.json, dict) else set()
+        body = {"pays": rows, "duplicatesAcknowledged": False}
+        review = self.request(clerk, "POST", "/v1/sets/review", body, "S7")
+        expected = ("S7a: the gas gate (%s) refusing %s in U3's sentence with the figures the harness read — \"Your gas account holds %s. This set needs at most US$<the gate's ceilingUsdCents> "
+                    "of gas. Nothing was sent. Buy gas below.\" — and nothing created (Spec 104 §4)" % (T.GAS_GATE, T.GAS_SHORTFALL, T.format_usd_cents(available)))
+        payload = review.json if review.ok and isinstance(review.json, dict) else None
+        if payload is None:
+            self.step("S7", review, expected, review.sentence(), body, clerk.name)
+            record.update(verdict="failed", said="S7a failed: the review answered %s, not the gas gate's refusal" % review.sentence())
+            return record
+        gates = [g for g in (payload.get("gates") or []) if isinstance(g, dict)]
+        gate = next((g for g in gates if g.get("gate") == T.GAS_GATE), None)
+        refusals = [r for r in ((gate or {}).get("refusals") or []) if isinstance(r, dict)]
+        shortfall = next((r for r in refusals if r.get("code") == T.GAS_SHORTFALL), None)
+        others = [r for g in gates for r in (g.get("refusals") or []) if isinstance(r, dict) and r.get("code") != T.GAS_SHORTFALL]
+        if gate is None:
+            result = "the review carries no %s gate (gates: %s)" % (T.GAS_GATE, ", ".join(str(g.get("gate")) for g in gates) or "none")
+            record.update(verdict="failed", said="S7a failed: " + result)
+        elif shortfall is None and gate.get("passed") is True:
+            result = "the gate admits the set: %s" % gate.get("evidence")
+            record["said"] = ("S7a not proved: Harness Holdings' gas account (%s available) covers the set's ceiling, so the review admits the set and the refusal cannot be met this run "
+                              "(the gate's evidence: %s)" % (T.format_usd_cents(available), gate.get("evidence")))
+        elif shortfall is None:
+            result = "the gate refused, but not for want of gas: %s" % ("; ".join("%s: %s" % (r.get("code"), r.get("message")) for r in refusals) or gate.get("evidence"))
+            record.update(verdict="failed", said="S7a failed: " + result)
+        else:
+            detail = shortfall.get("detail") if isinstance(shortfall.get("detail"), dict) else {}
+            ceiling_text = str(detail.get("ceilingUsdCents", ""))
+            ceiling = int(ceiling_text) if INTEGER_TEXT.match(ceiling_text) else None
+            record.update(ceiling=ceiling, sentence=shortfall.get("message"), detail=detail)
+            wanted = T.gas_set_shortfall_sentence(available, ceiling) if ceiling is not None else None
+            if wanted is not None and shortfall.get("message") == wanted and str(detail.get("availableUsdCents")) == str(available):
+                result = "refused as U3 says: %s" % shortfall.get("message")
+                record.update(verdict="proved", said="S7a proved: the review refused %s — \"%s\" — naming the %s the harness read and the gate's ceiling %s" % (
+                    T.GAS_SHORTFALL, shortfall.get("message"), T.format_usd_cents(available), T.format_usd_cents(ceiling)))
+            else:
+                result = "refused, but naming other figures: %r (the harness read %s available; the gate's detail says available %s, ceiling %s)" % (
+                    shortfall.get("message"), T.format_usd_cents(available), detail.get("availableUsdCents"), detail.get("ceilingUsdCents"))
+                record.update(verdict="failed", said="S7a failed: the refusal names other figures — it says %r; the harness read %s available, and the gate's detail says available %s, ceiling %s" % (
+                    shortfall.get("message"), T.format_usd_cents(available), detail.get("availableUsdCents"), detail.get("ceilingUsdCents")))
+        if others and record["verdict"] != "failed":
+            self.note("S7", "S7a: the review carried refusals beside the gas gate's: %s" % "; ".join("%s: %s" % (r.get("code"), r.get("message")) for r in others))
+        self.step("S7", review, expected, result, body, clerk.name)
+        register_after = self.request(clerk, "GET", "/v1/sets", None, "S7")
+        self.step("S7", register_after, "the runs register after S7a's review: no new run (nothing was sent)", "answered" if register_after.ok else register_after.sentence(), None, clerk.name)
+        after_ids = {str(s.get("id")) for s in ((register_after.json or {}).get("sets") or [])} if isinstance(register_after.json, dict) else set()
+        new_ids = sorted(after_ids - before_ids)
+        usdc_after, usdc_words, _ = self.read_usdc_balance(self, clerk, "S7", "Harness Holdings")
+        left: List[str] = []
+        if new_ids:
+            left.append("the review created run(s) %s" % ", ".join(new_ids))
+        if usdc_before is not None and usdc_after is not None and usdc_after != usdc_before:
+            left.append("Harness Holdings' %s moved from %s to %s" % (T.PAYMENT_ASSET, T.usdc_dollars(usdc_before), T.usdc_dollars(usdc_after)))
+        record["left"] = left
+        if left:
+            record.update(verdict="failed", said="S7a failed: a payment left — %s" % "; ".join(left))
+        elif record["verdict"] == "proved":
+            record["said"] += "; nothing left (no new run in the register; Holdings' %s unchanged at %s)" % (
+                T.PAYMENT_ASSET, T.usdc_dollars(usdc_after) if usdc_after is not None else "a figure the estate could not say")
+        return record
+
+    # -- one payment through the estate's own road, judged on money that moved (Spec 104 §2; Spec T14 §4) --------------------------
+    def pay(self, runner: "Runner", author: Person, key: str, row: Dict[str, Any], amount_minor: int, payee_address: str, signers: Sequence[Person],
+            expect_words: str, read_payee_balance: Callable[[], Tuple[Optional[int], str]], station: str = "S7",
+            cure: Optional[Callable[[Dict[str, Any]], bool]] = None, more_gas: Optional[Callable[[Optional[int]], bool]] = None) -> Dict[str, Any]:
+        """
+        The review; the run created and submitted; the signers pressing in the spec's order while the run waits, until the estate reports
+        it approved (each refusal in the estate's words, never retried; `cure` may mend one refusal once and ask for the same press again —
+        the Treasury founder's seat); the run executed by its author (POST /v1/sets/{id}/execute: the estate quotes, signs, sponsors and
+        sends through the platform's gas roads and waits for the platform to report the operation landed); the run read until its
+        instruction is terminal; the payee's USDC before and after. `more_gas` may credit the workspace once where the review's gas gate
+        refuses GAS_SHORTFALL, and the review is asked again. The trail's row is read afterwards by `judge_landing`.
+        """
+        record: Dict[str, Any] = {"key": key, "amount_minor": amount_minor, "payee": payee_address, "set_id": None, "instruction_id": None, "review": None, "created": None,
+                                  "refusal": None, "submitted": None, "approvals_required": None, "approvals": [], "executed": None, "view": None, "status": None,
+                                  "set_status": None, "tx_hash": None, "failure_reason": None, "gas_value": None, "user_op_hash": None, "gas_debit_cents": None,
+                                  "gas_debit": None, "balance_before": None, "balance_after": None, "before_words": None, "after_words": None, "landed": False,
+                                  "said": None, "failure": None, "spoken": []}
+        before, before_words = read_payee_balance()
+        record.update(balance_before=before, before_words=before_words)
+        review_body = {"pays": [row], "duplicatesAcknowledged": False}
+        for attempt in range(2):
+            review = runner.request(author, "POST", "/v1/sets/review", review_body, station)
+            runner.step(station, review, "the gates' review of the run before anything is created — the gas gate reading the gas account and one dry quote (Spec 104 §4); %s" % expect_words,
+                        "answered" if review.ok else review.sentence(), review_body, author.name)
+            record["review"] = review.json if review.ok else review.sentence()
+            shortfall = self.gas_shortfall_of(review)
+            if shortfall is None or more_gas is None or attempt:
+                break
+            detail = shortfall.get("detail") if isinstance(shortfall.get("detail"), dict) else {}
+            ceiling_text = str(detail.get("ceilingUsdCents", ""))
+            if not more_gas(int(ceiling_text) if INTEGER_TEXT.match(ceiling_text) else None):
+                break
+            record["spoken"].append("the review refused %s (%s); gas credited and the review asked again" % (T.GAS_SHORTFALL, shortfall.get("message")))
+        create_body = dict(review_body)
+        create_body.update({"idempotencyKey": "aer360-harness-%s-%s" % (self.run_stamp, key), "reference": "Harness payment %s" % key})
+        created = runner.request(author, "POST", "/v1/sets", create_body, station)
+        runner.step(station, created, "201 with the run in draft and its review", "created" if created.ok else created.sentence(), create_body, author.name)
+        if not created.ok or not isinstance(created.json, dict):
+            record.update(refusal=created.sentence(), failure="refused at creation", said="refused at creation — %s" % created.sentence())
+            return record
+        record["created"] = created.json
+        set_view = created.json.get("set") if isinstance(created.json.get("set"), dict) else {}
+        set_id = str(set_view.get("id"))
+        record["set_id"] = set_id
+        instructions = [i for i in (set_view.get("instructions") or []) if isinstance(i, dict)]
+        record["instruction_id"] = str(instructions[0].get("id")) if instructions else None
+        submitted = runner.request(author, "POST", "/v1/sets/%s/submit" % set_id, {}, station)
+        runner.step(station, submitted, "status pending_approval with approvalsRequired, or approved where the estate asks no second hand; %s" % expect_words,
+                    "answered" if submitted.ok else submitted.sentence(), {}, author.name)
+        record["submitted"] = submitted.json if submitted.ok else submitted.sentence()
+        if not submitted.ok or not isinstance(submitted.json, dict):
+            record.update(failure="not submitted", said="created; the submit answered %s" % submitted.sentence())
+            return record
+        status = str(submitted.json.get("status"))
+        required = submitted.json.get("approvalsRequired")
+        record["approvals_required"] = required
+        spoken: List[str] = record["spoken"] + ["submitted: status %s, approvalsRequired %s" % (status, required)]
+        cured = False
+        for signer in signers:
+            if status != "pending_approval":
+                break
+            if not signer.signed_in:
+                spoken.append("%s has no session to sign with" % signer.name)
+                continue
+            outcome = self.sign_the_run(runner, signer, set_id, station)
+            record["approvals"].append(outcome)
+            spoken.append(outcome["said"])
+            if outcome.get("status_after") is None and cure is not None and not cured and outcome.get("refusal_code") == "ROLE_NOT_GRANTED":
+                cured = True
+                if cure(outcome):
+                    outcome = self.sign_the_run(runner, signer, set_id, station)
+                    record["approvals"].append(outcome)
+                    spoken.append(outcome["said"])
+            if outcome.get("status_after") is not None:
+                status = str(outcome["status_after"])
+        record["status_after_signing"] = status
+        if status == "pending_approval":
+            record.update(status=status, set_status=status, failure="waits with nobody left to sign", said="; ".join(spoken) + "; nobody left to sign, so the run waits and nothing was sent")
+            return record
+        if status != "approved":
+            record.update(status=status, set_status=status, failure="not approved: %s" % status, said="; ".join(spoken))
+            return record
+        executed = runner.request(author, "POST", T.SET_EXECUTE_ROUTE % set_id, {}, station, retry=False)
+        runner.step(station, executed, "the run executed through the platform's gas roads (Spec 104 §2): the estate quotes, signs, sponsors and sends, waits for the platform to report the "
+                    "operation landed, and answers setStatus and each instruction's status and txHash; a refusal in the estate's words, never retried", "answered" if executed.ok else executed.sentence(), {}, author.name)
+        record["executed"] = executed.json if executed.ok else executed.sentence()
+        if not executed.ok:
+            spoken.append("execute answered %s" % executed.sentence())
+        view = self.read_until_terminal(runner, author, set_id, station, executed.ok)
+        record["view"] = view
+        set_row = view.get("set") if isinstance(view, dict) and isinstance(view.get("set"), dict) else {}
+        instruction = next((i for i in (set_row.get("instructions") or []) if isinstance(i, dict)), None) or {}
+        record.update(set_status=set_row.get("status"), status=instruction.get("status"), tx_hash=instruction.get("txHash"), failure_reason=instruction.get("failureReason"),
+                      gas_value=instruction.get("gasValue"))
+        if instruction.get("id") and not record["instruction_id"]:
+            record["instruction_id"] = str(instruction.get("id"))
+        after, after_words = read_payee_balance()
+        record.update(balance_after=after, after_words=after_words, spoken=spoken)
+        return record
+
+    def sign_the_run(self, runner: "Runner", signer: Person, set_id: str, station: str) -> Dict[str, Any]:
+        """One signer's press on a waiting run: the digest-bound challenge, then the approval with the passkey's assertion — once, never retried; a refusal in the estate's words."""
+        challenge = runner.request(signer, "POST", "/v1/approvals/%s/challenge" % set_id, {}, station)
+        expected = ("the digest-bound challenge %s's passkey signs; or a refusal in the estate's words — ROLE_NOT_GRANTED where the estate admits the approver standing alone, "
+                    "SUBMITTER_MAY_NOT_APPROVE where the charter says so — never retried" % signer.name)
+        record: Dict[str, Any] = {"who": signer.name, "key": signer.key, "credential": signer.credential_id, "status": challenge.status, "refusal_code": None, "status_after": None, "given": None, "said": None}
+        if not challenge.ok or not isinstance(challenge.json, dict):
+            runner.step(station, challenge, expected, challenge.sentence(), {}, signer.name)
+            record.update(refusal_code=(challenge.refusal or {}).get("code") if challenge.refusal else None, said="%s refused (%s)" % (signer.name, challenge.sentence()))
+            return record
+        runner.step(station, challenge, expected, "answered", {}, signer.name)
+        body = {"response": runner.assertion_for(signer, str(challenge.json.get("challenge")), station)}
+        approved = runner.request(signer, "POST", "/v1/approvals/%s/approve" % set_id, body, station, retry=False)
+        runner.step(station, approved, "status approved where %s's signature meets approvalsRequired, else pending_approval with approvalsGiven" % signer.name,
+                    "answered" if approved.ok else approved.sentence(), body, signer.name)
+        record["status"] = approved.status
+        if not approved.ok or not isinstance(approved.json, dict):
+            record.update(refusal_code=(approved.refusal or {}).get("code") if approved.refusal else None, said="%s refused at the press (%s)" % (signer.name, approved.sentence()))
+            return record
+        record.update(status_after=approved.json.get("status"), given=approved.json.get("approvalsGiven"),
+                      said="%s signed (%s of %s): %s" % (signer.name, approved.json.get("approvalsGiven"), approved.json.get("approvalsRequired"), approved.json.get("status")))
+        return record
+
+    def read_until_terminal(self, runner: "Runner", person: Person, set_id: str, station: str, executed: bool) -> Optional[Dict[str, Any]]:
+        """GET /v1/sets/{id} until every instruction is terminal (confirmed, failed, rejected) and the run is settled — a bounded number of reads over a bounded wait; once where nothing was executed."""
+        view: Optional[Dict[str, Any]] = None
+        reads = LANDING_READS if executed else 1
+        for attempt in range(reads):
+            answer = runner.request(person, "GET", "/v1/sets/%s" % set_id, None, station)
+            runner.step(station, answer, "the run as the register shows it: the instruction confirmed (the platform reported the operation landed) or failed, with its txHash; the run settled",
+                        "answered" if answer.ok else answer.sentence(), None, person.name)
+            if not answer.ok or not isinstance(answer.json, dict):
+                return view
+            view = answer.json
+            set_row = view.get("set") if isinstance(view.get("set"), dict) else {}
+            instructions = [i for i in (set_row.get("instructions") or []) if isinstance(i, dict)]
+            if all(str(i.get("status")) in T.INSTRUCTION_TERMINAL_STATES for i in instructions) and str(set_row.get("status")) in T.SET_TERMINAL_STATES:
+                return view
+            if attempt < reads - 1:
+                self.sleep(LANDING_WAIT_SECONDS)
+        return view
+
+    @staticmethod
+    def gas_shortfall_of(review: Answer) -> Optional[Dict[str, Any]]:
+        """The gas gate's GAS_SHORTFALL refusal in a review's payload, or None."""
+        payload = review.json if review.ok and isinstance(review.json, dict) else None
+        if payload is None:
+            return None
+        for gate in payload.get("gates") or []:
+            if isinstance(gate, dict) and gate.get("gate") == T.GAS_GATE:
+                return next((r for r in (gate.get("refusals") or []) if isinstance(r, dict) and r.get("code") == T.GAS_SHORTFALL), None)
+        return None
+
+    def read_trail(self, runner: "Runner", person: Person, station: str, expected: str) -> Optional[List[Dict[str, Any]]]:
+        """The accountant's audit export (GET /v1/export/audit, oldest first), every page followed by its nextCursor as `since`, up to a bound; None where it could not be read."""
+        rows: List[Dict[str, Any]] = []
+        since: Optional[str] = None
+        for page in range(TRAIL_PAGES_AT_MOST):
+            path = "%s?limit=%d%s" % (T.AUDIT_EXPORT_ROUTE, T.AUDIT_EXPORT_LIMIT, ("&since=%s" % urllib.parse.quote(since, safe="")) if since else "")
+            answer = runner.request(person, "GET", path, None, station)
+            body = answer.json if answer.ok and isinstance(answer.json, dict) else None
+            items = [r for r in (body.get("items") or []) if isinstance(r, dict)] if body is not None else None
+            runner.step(station, answer, expected, ("%d trail row(s)%s" % (len(items), (" on page %d" % (page + 1)) if page else "")) if items is not None else answer.sentence(), None, person.name)
+            if items is None:
+                return rows if rows else None
+            rows.extend(items)
+            since = body.get("nextCursor") if isinstance(body.get("nextCursor"), str) else None
+            if not since or not items:
+                break
+        return rows
+
+    def judge_landing(self, record: Dict[str, Any], trail: Optional[List[Dict[str, Any]]]) -> Dict[str, Any]:
+        """
+        Spec T14 §4: the four proofs — the run's status (the instruction confirmed, the run settled: the estate's words for an operation
+        the platform reported landed), the userOpHash and the handleOps transaction hash from the trail's instruction.confirmed row, and the
+        payee's USDC balance risen by the amount — with the gas debited read from the same row in dollars and reported beside. One proof
+        missing fails the payment naming it; a balance that could not be read is not a pass.
+        """
+        if record.get("executed") is None:
+            # THE RUN NEVER REACHED EXECUTION: refused at the review or the creation, not submitted, or waiting with nobody left to sign —
+            # told in the words it stopped with (the estate's, where the estate refused), and never judged on proofs it could not have.
+            record["landed"] = False
+            if record.get("refusal"):
+                record["said"] = "refused at creation — %s" % record["refusal"]
+                record["failure"] = record.get("failure") or "refused at creation"
+            elif not record.get("said"):
+                record["said"] = record.get("failure") or "not executed"
+            return record
+        hits = [r for r in (trail or []) if r.get("action") == T.INSTRUCTION_CONFIRMED and record.get("instruction_id") and str(r.get("subject_id")) == str(record["instruction_id"])]
+        detail = hits[-1].get("detail") if hits and isinstance(hits[-1].get("detail"), dict) else {}
+        record["user_op_hash"] = detail.get("userOpHash")
+        record["gas_debit"] = detail.get("gasDebit")
+        debit = str(detail.get("gasDebitUsdCents", ""))
+        record["gas_debit_cents"] = int(debit) if INTEGER_TEXT.match(debit) else None
+        if not record.get("tx_hash") and detail.get("txHash"):
+            record["tx_hash"] = detail.get("txHash")
+        before, after, amount = record.get("balance_before"), record.get("balance_after"), int(record["amount_minor"])
+        missing: List[str] = []
+        if record.get("failure"):
+            missing.append(record["failure"])
+        if record.get("status") != "confirmed":
+            missing.append("the instruction is %s%s" % (record.get("status"), (" (%s)" % record["failure_reason"]) if record.get("failure_reason") else ""))
+        if record.get("set_status") != "settled":
+            missing.append("the run is %s" % record.get("set_status"))
+        if not record.get("tx_hash"):
+            missing.append("no handleOps transaction hash")
+        if not record.get("user_op_hash"):
+            missing.append("no userOpHash on the trail's %s row%s" % (T.INSTRUCTION_CONFIRMED, "" if trail is not None else " (the trail could not be read)"))
+        if before is None or after is None:
+            missing.append("the payee's balance could not be read (%s)" % (record.get("before_words") if before is None else record.get("after_words")))
+        elif after - before != amount:
+            missing.append("the payee's %s balance did not rise by %s: %s → %s" % (T.PAYMENT_ASSET, T.usdc_dollars(amount), T.usdc_dollars(before), T.usdc_dollars(after)))
+        record["landed"] = not missing
+        proofs = "instruction %s, run %s, userOpHash %s, tx %s, payee %s → %s, gas %s" % (
+            record.get("status"), record.get("set_status"), record.get("user_op_hash"), record.get("tx_hash"),
+            T.usdc_dollars(before) if before is not None else "unread", T.usdc_dollars(after) if after is not None else "unread",
+            record.get("gas_debit") or "not on the trail")
+        spoken = list(record.get("spoken") or [])
+        if record["landed"]:
+            spoken.append("landed (+%s): %s" % (T.usdc_dollars(amount), proofs))
+            record["failure"] = None
+        else:
+            spoken.append("not landed — %s (%s)" % ("; ".join(missing), proofs))
+            record["failure"] = "; ".join(missing)
+        record["said"] = "; ".join(spoken) if spoken else (record.get("said") or "")
+        return record
+
+    def treasury_pays_the_shortfall(self, t: "Runner", founder: Person, clerk: Person, shortfall: int, holdings_address: str, admin: Optional[Dict[str, str]]) -> Dict[str, Any]:
+        """
+        Spec T14 §2: one payment of one set from Harness Treasury to Harness Holdings' address — a declared one-off of the shortfall —
+        approved with the Treasury founder's passkey (the charter names her the payment approver; where the estate refuses her at the
+        guard, her seat is granted once and she presses again), executed by her, and waited for until the estate reports it landed.
+        Holdings' balance is read before and after through the estate's own road, as the Treasury's payee.
+        """
+        row = {"oneOff": {"chain": T.PAYEE_CHAIN, "address": holdings_address, "declared": True, "payeeName": A.ESTATE["company"]},
+               "asset": T.PAYMENT_ASSET, "chain": T.PAYEE_CHAIN, "amountMinor": str(shortfall), "invoiceRef": "HT-%s" % self.run_stamp}
+
+        def cure(outcome: Dict[str, Any]) -> bool:
+            body = {"email": T.TREASURY["email"]}
+            granted = t.request(founder, "POST", "/v1/approver-seats/grant", body, "S7")
+            t.step("S7", granted, "the Treasury founder's own seat, granted once after the guard refused her (%s), so her passkey can approve the float's payment" % outcome.get("said"),
+                   "granted" if granted.ok else granted.sentence(), body, founder.name)
+            return granted.ok
+
+        def more_gas(ceiling: Optional[int]) -> bool:
+            credit = self.credit_gas(t, "S7", admin, T.TREASURY["short"], self.gas_credit_for(ceiling))
+            self.facts["money"]["treasury"]["credited"] = self.facts["money"]["treasury"].get("credited", 0) + credit["amount_usd_cents"]
+            return True
+
+        record = self.pay(t, founder, "HT", row, shortfall, holdings_address, [founder], "the Treasury's founder approves with her passkey; the run lands and Harness Holdings' %s rises by %s" % (
+            T.PAYMENT_ASSET, T.usdc_dollars(shortfall)), lambda: self.read_usdc_balance(self, clerk, "S7", "Harness Holdings")[:2], cure=cure, more_gas=more_gas)
+        trail = self.read_trail(t, founder, "S7", "the Treasury's trail: the %s row for its payment — userOpHash, the handleOps txHash, gasDebitUsdCents and gasDebit (Spec 104 §2, §5)" % T.INSTRUCTION_CONFIRMED)
+        return self.judge_landing(record, trail)
+
     def station_s7(self) -> Outcome:
+        said: List[str] = []
+        try:
+            return self.walk_s7(said)
+        except StationStop as err:
+            # a stop carries what S7 had said before it — the Treasury brought in, the money before — so the line tells the whole road
+            raise StationStop("; ".join(said + [str(err)]))
+
+    def walk_s7(self, said: List[str]) -> Outcome:
         clerk = self.clerk()
-        ada = self.people[A.PAYMENT_APPROVER]
         holder_alone, two_signatures, tiers_read_from = self.tiers()
+        failures = 0
+        money: Dict[str, Any] = {"treasury": {}, "holdings": {}, "payments": []}
+        self.facts["money"] = money
         workspace = self.request(clerk, "GET", "/v1/workspace", None, "S7")
-        self.step("S7", workspace, "the workspace, its funding wallet (fundingWallet; sourceAccount is the account the runs leave from, Spec 98) and the offered currencies",
+        self.step("S7", workspace, "the workspace: its funding wallet (fundingWallet, with the fund sentence and the chains this deployment pays on, Spec 104 §1) and the platform account it stands on (workspace.aapAccountId)",
                   "answered" if workspace.ok else workspace.sentence(), None, clerk.name)
         view = workspace.json if isinstance(workspace.json, dict) else {}
-        source_account = view.get("sourceAccount")
         funding = view.get("fundingWallet") if isinstance(view.get("fundingWallet"), dict) and view["fundingWallet"].get("address") else None
         if funding and not self.facts.get("funding_wallet"):
             self.facts["funding_wallet"] = funding  # a run resumed past S5 still names the wallet in S8 and the summary
-        if not source_account:
-            absence = view.get("fundingWalletAbsence")
-            self.note("S7", "the workspace names no funding account (sourceAccount null)%s; routes/sets.ts refuses a run without one — the payments below record the estate's own sentence" % (
-                (" and no funding wallet — %s S5's press did not give the estate one; see S5" % absence) if absence else ""))
-        said: List[str] = []
-        failures = 0
+        if isinstance(view.get("workspace"), dict):
+            self.facts["workspace"] = view  # the workspace's whole answer, as S5 keeps it; the platform account rides in workspace.aapAccountId
+        if funding is None:
+            self.note("S7", "Harness Holdings has no funding wallet (%s): the Treasury has no address to fund, and the estate refuses a run without one (routes/sets.ts, requireSourceAccount); see S5" % (
+                view.get("fundingWalletAbsence") or workspace.sentence()))
+        admin = self.read_admin_env("S7")
+        # 1. Harness Holdings' money before: its USDC through the estate's own balances road, its gas account from the platform through the estate (§3, §5)
+        if funding is not None:
+            h_usdc, h_words, token = self.read_usdc_balance(self, clerk, "S7", "Harness Holdings")
+            h_gas, h_gas_words = self.read_gas_account(self, clerk, "S7", "Harness Holdings")
+        else:
+            h_usdc, h_words, token = None, "Harness Holdings has no funding wallet, so its %s was not read" % T.PAYMENT_ASSET, None
+            h_gas, h_gas_words = None, "Harness Holdings' gas account was not read: no funding wallet, so nothing of this run can leave"
+        self.facts["usdc_token"] = token
+        money["holdings"].update({"usdc_before": h_usdc, "gas_before": (h_gas or {}).get("balanceUsdCents"), "gas_available_before": (h_gas or {}).get("availableUsdCents"), "credited": 0, "received_minor": 0})
+        need = sum(int(p.amount_minor) for p in A.PAYMENTS)
+        shortfall = max(0, need - h_usdc) if (funding is not None and h_usdc is not None) else 0
+        # 2. the Treasury (§2): brought in where Holdings is short of the three payments, or where it stands already (a passkey stored by an
+        # earlier run, or --treasury-invite for the birth run, which prints the address and stops S7); an estate with no funding wallet has no
+        # address to fund, so the Treasury is not asked, and the three payments below record the estate's own refusal
+        treasury: Optional[Dict[str, Any]] = None
+        t: Optional["Runner"] = None
+        t_founder: Optional[Person] = None
+        t_usdc: Optional[int] = None
+        t_gas: Optional[Dict[str, Any]] = None
+        if funding is not None and (shortfall > 0 or self.treasury_invite or self.treasury_passkey_stored()):
+            treasury = self.bring_in_the_treasury("S7")
+            t = self.treasury
+            t_founder = t.founder()
+            said.append(treasury["said"])
+            t_usdc, t_words, _ = self.read_usdc_balance(t, t_founder, "S7", T.TREASURY["short"])
+            t_gas, t_gas_words = self.read_gas_account(t, t_founder, "S7", T.TREASURY["short"])
+        elif funding is None:
+            t_words = "%s was not brought in: Harness Holdings has no funding wallet, so there is no address to fund" % T.TREASURY["short"]
+            t_gas_words = "%s's gas account was not read" % T.TREASURY["short"]
+            self.note("S7", t_words)
+        else:
+            t_words = "%s was not brought in: Harness Holdings holds %s, at or above the three payments' %s, and no Treasury passkey is stored" % (
+                T.TREASURY["short"], T.usdc_dollars(h_usdc), T.usdc_dollars(need))
+            t_gas_words = "%s's gas account was not read" % T.TREASURY["short"]
+        money["treasury"].update({"usdc_before": t_usdc, "gas_before": (t_gas or {}).get("balanceUsdCents"), "address": (treasury or {}).get("address"), "credited": 0, "paid_minor": 0, "payment": None})
+        said.append("before: %s; %s; %s; %s" % (h_words, t_words, h_gas_words, t_gas_words))
+        # 3. the shortfall, paid by the Treasury through the estate's own road (§2), its gas credited first (§3; see the order above)
+        if funding is not None and h_usdc is not None:
+            if shortfall == 0:
+                said.append("Harness Holdings holds %s, at or above the three payments' %s, so the Treasury was not asked to pay" % (T.usdc_dollars(h_usdc), T.usdc_dollars(need)))
+            else:
+                assert t is not None and t_founder is not None and treasury is not None
+                if t_usdc is None or t_usdc < shortfall:
+                    if treasury.get("born_this_run"):
+                        # the birth run: the address is printed, and the run stops with the ship note's sentence — Bear funds it once, then reruns
+                        sentence = T.FUND_TREASURY_SENTENCE % (treasury.get("address"), T.PAYEE_CHAIN)
+                        self.note("S7", "%s (the three payments need %s and Harness Holdings holds %s; the Treasury holds %s); nothing was sent" % (
+                            sentence, T.usdc_dollars(need), T.usdc_dollars(h_usdc), T.usdc_dollars(t_usdc) if t_usdc is not None else "a balance the estate could not say"))
+                        raise StationStop(sentence)
+                    sentence = T.TREASURY_SHORT_SENTENCE % (T.usdc_dollars(t_usdc) if t_usdc is not None else "a balance the estate could not say", T.usdc_dollars(shortfall),
+                                                            treasury.get("address"), T.PAYEE_CHAIN)
+                    self.note("S7", "%s (the three payments need %s and Harness Holdings holds %s); nothing was sent" % (sentence, T.usdc_dollars(need), T.usdc_dollars(h_usdc)))
+                    raise StationStop("%s; nothing was sent" % sentence)
+                credit = self.credit_gas(t, "S7", admin, T.TREASURY["short"], T.GAS_CREDIT_USD_CENTS)
+                money["treasury"]["credited"] += credit["amount_usd_cents"]
+                said.append(credit["said"])
+                record = self.treasury_pays_the_shortfall(t, t_founder, clerk, shortfall, funding["address"], admin)
+                money["treasury"]["payment"] = record
+                said.append("Harness Treasury pays Harness Holdings (%s) the shortfall of %s: %s" % (funding["address"], T.usdc_dollars(shortfall), record["said"]))
+                if record["landed"]:
+                    money["treasury"]["paid_minor"] = shortfall
+                    money["holdings"]["received_minor"] = shortfall
+                    h_usdc = record["balance_after"] if record["balance_after"] is not None else h_usdc
+                else:
+                    failures += 1
+        else:
+            said.append("the Treasury was not asked to pay: %s" % ("Harness Holdings has no funding wallet" if funding is None else "Harness Holdings' %s could not be read" % T.PAYMENT_ASSET))
+        # 4. S7a: the gas refusal proved on Holdings, whose gas account nobody has credited yet (§3)
+        rows: List[Dict[str, Any]] = []
         for payment in A.PAYMENTS:
             row = self.pay_row(payment)
-            if row is None:
-                said.append("%s: no address id for %s, so nothing was sent" % (payment.key, payment.payee_name))
-                failures += 1
-                continue
+            if row is not None:
+                rows.append(row)
+        if funding is None:
+            s7a = {"verdict": "not made", "said": "S7a not made: Harness Holdings has no funding wallet, so the estate refuses the set before its gas gate is reached", "ceiling": None}
+            self.facts["s7a"] = s7a
+            self.note("S7", s7a["said"])
+        elif len(rows) == len(A.PAYMENTS):
+            s7a = self.prove_the_gas_refusal(clerk, rows, h_gas, h_usdc)
+        else:
+            s7a = {"verdict": "failed", "said": "S7a not made: no address id for %s, so the set of three could not be reviewed" % ", ".join(
+                p.payee_name for p in A.PAYMENTS if self.pay_row(p) is None), "ceiling": None}
+            self.facts["s7a"] = s7a
+        said.append(s7a["said"])
+        if s7a["verdict"] == "failed":
+            failures += 1
+        # 5. the gas credits (§3): Holdings now, sized by S7a's ceiling as the sandbox may; the Treasury's where it stands and was not credited above
+        if funding is not None:
+            credit = self.credit_gas(self, "S7", admin, "Harness Holdings", self.gas_credit_for(s7a.get("ceiling")))
+            money["holdings"]["credited"] += credit["amount_usd_cents"]
+            said.append(credit["said"])
+            if t is not None and not money["treasury"]["credited"]:
+                credit = self.credit_gas(t, "S7", admin, T.TREASURY["short"], T.GAS_CREDIT_USD_CENTS)
+                money["treasury"]["credited"] += credit["amount_usd_cents"]
+                said.append(credit["said"])
+        else:
+            self.note("S7", "no gas was credited: Harness Holdings has no funding wallet, so no payment of this run could leave whatever its gas account holds")
+        # 6. the three payments (§4), the signers pressing in the spec's order while a run waits
+        signers = [self.people[k] for k in SIGNERS_IN_ORDER]
+
+        def more_gas_for_holdings(ceiling: Optional[int]) -> bool:
+            extra = self.credit_gas(self, "S7", admin, "Harness Holdings", self.gas_credit_for(ceiling))
+            money["holdings"]["credited"] += extra["amount_usd_cents"]
+            return True
+
+        records: List[Dict[str, Any]] = []
+        for payment in A.PAYMENTS:
+            row = self.pay_row(payment)
             tier_words = under_the_tiers(payment.amount, holder_alone, two_signatures)
-            review_body = {"pays": [row], "duplicatesAcknowledged": False}
-            review = self.request(clerk, "POST", "/v1/sets/review", review_body, "S7")
-            self.step("S7", review, "the gates' review of the run before anything is created; %s (figures from %s)" % (tier_words, tiers_read_from),
-                      "answered" if review.ok else review.sentence(), review_body, clerk.name)
-            create_body = dict(review_body)
-            create_body.update({"idempotencyKey": "aer360-harness-%s-%s" % (self.run_stamp, payment.key), "reference": "Harness payment %s" % payment.key})
-            created = self.request(clerk, "POST", "/v1/sets", create_body, "S7")
-            self.step("S7", created, "201 with the run in draft and its review", "created" if created.ok else created.sentence(), create_body, clerk.name)
-            record: Dict[str, Any] = {"key": payment.key, "expect": payment.expect, "review": review.json if review.ok else review.sentence(),
-                                      "created": created.json if created.ok else None, "refusal": None if created.ok else created.sentence(),
-                                      "submitted": None, "view": None, "approval": None}
-            self.facts["sets"][payment.key] = record
-            if not created.ok or not isinstance(created.json, dict):
-                said.append("%s (%s, expected to %s): refused at creation — %s; %s" % (payment.key, payment.amount, payment.expect, created.sentence(), tier_words))
+            if row is None:
+                said.append("%s (%s %s, expected to %s): no address id for %s, so nothing was sent; %s" % (payment.key, payment.amount, T.PAYMENT_ASSET, payment.expect, payment.payee_name, tier_words))
                 failures += 1
                 continue
-            set_id = str((created.json.get("set") or {}).get("id"))
-            record["set_id"] = set_id
-            submitted = self.request(clerk, "POST", "/v1/sets/%s/submit" % set_id, {}, "S7")
-            self.step("S7", submitted, "status pending_approval (or approved where the policy asks no second hand), the digest, approvalsRequired; %s" % tier_words,
-                      "answered" if submitted.ok else submitted.sentence(), {}, clerk.name)
-            record["submitted"] = submitted.json if submitted.ok else submitted.sentence()
-            view = self.request(clerk, "GET", "/v1/sets/%s" % set_id, None, "S7")
-            self.step("S7", view, "the run as the register shows it", "answered" if view.ok else view.sentence(), None, clerk.name)
-            record["view"] = view.json if view.ok else view.sentence()
-            set_view = (view.json or {}).get("set") if isinstance(view.json, dict) else None
-            status = str((set_view or {}).get("status") or (submitted.json or {}).get("status") if submitted.ok else submitted.sentence())
-            required = ((set_view or {}).get("approval") or {}).get("approvalsRequired")
-            verdict, sentence = self.judge_payment(payment, status, required, submitted.ok)
-            if verdict == FAIL:
+            address = row["oneOff"]["address"] if "oneOff" in row else T.address(payment.payee_key)
+            expect_words = "%s; %s; expected to %s (figures from %s)" % (tier_words, self.TIER_ROAD_WORDS.get(payment.key, ""), payment.expect, tiers_read_from)
+            record = self.pay(self, clerk, payment.key, row, int(payment.amount_minor), address, signers, expect_words,
+                              lambda address=address: self.read_token_balance("S7", clerk.name, T.PAYEE_CHAIN, token, address), more_gas=more_gas_for_holdings)
+            record.update(expect=payment.expect, tier_words=tier_words, amount=payment.amount)
+            self.facts["sets"][payment.key] = record
+            records.append(record)
+        trail = self.read_trail(self, self.founder() if self.people[A.FOUNDER].signed_in else clerk, "S7",
+                                "the trail: one %s row per payment that landed — userOpHash, the handleOps txHash, gasDebitUsdCents and gasDebit in the platform's own figures (Spec 104 §2, §5)" % T.INSTRUCTION_CONFIRMED) if records else None
+        for record in records:
+            self.judge_landing(record, trail)
+            asked = record.get("approvals_required")
+            said.append("%s (%s %s, expected to %s): %s; the estate asked %s signature(s) and %s; %s" % (
+                record["key"], record["amount"], T.PAYMENT_ASSET, record["expect"], record["said"], asked if asked is not None else "?",
+                self.TIER_ROAD_WORDS.get(record["key"], ""), record["tier_words"]))
+            money["payments"].append({"key": record["key"], "amount_minor": record["amount_minor"], "landed": record["landed"], "gas_debit_cents": record.get("gas_debit_cents"),
+                                      "user_op_hash": record.get("user_op_hash"), "tx_hash": record.get("tx_hash")})
+            if not record["landed"]:
                 failures += 1
-            said.append("%s (%s USDC, expected to %s): %s; %s" % (payment.key, payment.amount, payment.expect, sentence, tier_words))
-            if payment.key == "P1":
-                said.append(self.approve_first(record, set_id, status, ada))
-        # Spec T13 §4: with a funding wallet present and a payment refused at creation, the refusal stands verbatim above and one
-        # line says what the three payments need together, so the wallet can be funded by hand
-        if funding and any(record.get("refusal") for record in self.facts["sets"].values()):
-            need = self.payments_need_line(funding)
-            self.note("S7", need)
-            said.append(need)
-        detail = "payments as %s: %s" % (clerk.name, "; ".join(said))
-        return Outcome("S7", FAIL if failures else PASS, detail)
-
-    @staticmethod
-    def judge_payment(payment: A.Payment, status: str, required: Any, submitted_ok: bool) -> Tuple[str, str]:
-        """The spec's expectation against the estate's own words for the run's state."""
-        waits = status == "pending_approval" and isinstance(required, int) and required >= 1
-        if payment.expect == "proceeds to approval":
-            if status in ("pending_approval", "approved"):
-                return PASS, "created and submitted; status %s, approvalsRequired %s" % (status, required)
-            return FAIL, "status %s, approvalsRequired %s" % (status, required)
-        if payment.expect in ("waits", "held"):
-            if waits:
-                return PASS, "the run waits for approval: status %s, approvalsRequired %s" % (status, required)
-            if status == "approved":
-                return FAIL, "the sandbox approved it at submission: status approved, approvalsRequired %s" % required
-            return FAIL, "status %s, approvalsRequired %s" % (status, required)
-        return FAIL, "status %s" % status
-
-    def approve_first(self, record: Dict[str, Any], set_id: str, status: str, ada: Person) -> str:
-        if status != "pending_approval":
-            return "Ada's approval of P1 was not asked: the run stands %s" % status
-        if not ada.signed_in:
-            return "Ada's approval of P1: Ada has no session"
-        challenge = self.request(ada, "POST", "/v1/approvals/%s/challenge" % set_id, {}, "S7")
-        self.step("S7", challenge, "the digest-bound challenge Ada's passkey signs", "answered" if challenge.ok else challenge.sentence(), {}, ada.name)
-        if not challenge.ok or not isinstance(challenge.json, dict):
-            record["approval"] = challenge.sentence()
-            return "Ada's approval of P1: the challenge answered %s" % challenge.sentence()
-        body = {"response": self.assertion_for(ada, str(challenge.json.get("challenge")), "S7")}
-        approved = self.request(ada, "POST", "/v1/approvals/%s/approve" % set_id, body, "S7")
-        self.step("S7", approved, "status approved, approvalsGiven 1 of 1", "answered" if approved.ok else approved.sentence(), body, ada.name)
-        record["approval"] = approved.json if approved.ok else approved.sentence()
-        if approved.ok and isinstance(approved.json, dict):
-            return "Ada approved P1: status %s, approvals %s of %s" % (approved.json.get("status"), approved.json.get("approvalsGiven"), approved.json.get("approvalsRequired"))
-        return "Ada's approval of P1 answered %s" % approved.sentence()
+        # 7. the money after (§5)
+        h_usdc_after, h_words_after, _ = self.read_usdc_balance(self, clerk, "S7", "Harness Holdings") if funding is not None else (None, h_words, None)
+        h_gas_after, h_gas_words_after = self.read_gas_account(self, clerk, "S7", "Harness Holdings") if funding is not None else (None, h_gas_words)
+        if t is not None and t_founder is not None:
+            t_usdc_after, t_words_after, _ = self.read_usdc_balance(t, t_founder, "S7", T.TREASURY["short"])
+            t_gas_after, t_gas_words_after = self.read_gas_account(t, t_founder, "S7", T.TREASURY["short"])
+        else:
+            t_usdc_after, t_words_after, t_gas_after, t_gas_words_after = None, t_words, None, t_gas_words
+        money["holdings"].update({"usdc_after": h_usdc_after, "gas_after": (h_gas_after or {}).get("balanceUsdCents"), "gas_available_after": (h_gas_after or {}).get("availableUsdCents")})
+        money["treasury"].update({"usdc_after": t_usdc_after, "gas_after": (t_gas_after or {}).get("balanceUsdCents")})
+        said.append("after: %s; %s; %s; %s" % (h_words_after, t_words_after, h_gas_words_after, t_gas_words_after))
+        return Outcome("S7", FAIL if failures else PASS, "payments as %s: %s" % (clerk.name, "; ".join(said)))
 
     # -- S8 Journey and readiness --------------------------------------------------------
     def station_s8(self) -> Outcome:
@@ -2529,6 +3297,7 @@ class Runner:
             self.audit_the_trail_for_moved_seats("S10", founder)  # Spec T15 §3
         else:
             self.note("S10", "the founder has no session; the registers were not read again")
+        self.audit_the_money_moved("S10")  # Spec T14 §5: the auditor counts the money
         for f in audit_money(self.calls):
             self.finding("S10", f["probe"], f["sent"], None, f["expected"], f["said"])
         for f in audit_refusals(self.calls):
@@ -2580,6 +3349,71 @@ class Runner:
             self.note(station, "the trail carries %s for %s's seat: ceremony %s, signed by %s, moved from %s to %s on %s (via %s), at %s" % (
                 T.ROSTER_SEAT_REBOUND, m.get("name"), m["pendingTxId"], detail.get("signerNames"), last4(detail.get("oldCredentialId")), last4(detail.get("newCredentialId")),
                 detail.get("rosterName"), detail.get("via"), hits[-1].get("at")))
+
+    def audit_the_money_moved(self, station: str) -> None:
+        """
+        Spec T14 §5: one note counting the money — Harness Treasury's USDC before and after, Harness Holdings' USDC before and after, the
+        sum of the three payments, Holdings' gas account before and after against the sum of the three gas debits — and a finding where
+        any pair does not reconcile to the cent. USDC is reckoned in its own minor units (six decimals, exact); the gas account in the
+        platform's cents on `balanceUsdCents`, credits less debits: a reservation the platform has not yet released is not money moved.
+        """
+        money = self.facts.get("money") or {}
+        treasury, holdings, payments = money.get("treasury") or {}, money.get("holdings") or {}, money.get("payments") or []
+        if not money or "usdc_before" not in holdings or "usdc_after" not in holdings:
+            outcome = self.outcome_of("S7")
+            self.note(station, "the money was not counted: S7 did not read the balances before and after in this run (%s)" % ((outcome.line if outcome else "S7 did not run")[:240]))
+            return
+
+        def dollars(minor: Any) -> str:
+            return T.usdc_dollars(minor) if isinstance(minor, int) else "unread"
+
+        def cents(value: Any) -> str:
+            return T.format_usd_cents(value) if isinstance(value, int) else "unread"
+
+        landed = [p for p in payments if p.get("landed")]
+        landed_sum = sum(int(p["amount_minor"]) for p in landed)
+        payments_sum = sum(int(p.amount_minor) for p in A.PAYMENTS)
+        debits = [p.get("gas_debit_cents") for p in landed]
+        known_debits = [d for d in debits if isinstance(d, int)]
+        paid = int(treasury.get("paid_minor") or 0)
+        received = int(holdings.get("received_minor") or 0)
+        pairs: List[Tuple[str, str, str, bool]] = []
+        unread: List[str] = []
+        tb, ta = treasury.get("usdc_before"), treasury.get("usdc_after")
+        if isinstance(tb, int) and isinstance(ta, int):
+            pairs.append(("Harness Treasury's %s" % T.PAYMENT_ASSET, "%s before, less %s paid to Harness Holdings: %s" % (dollars(tb), dollars(paid), dollars(tb - paid)), dollars(ta), tb - paid == ta))
+        else:
+            unread.append("Harness Treasury's %s (%s before, %s after)" % (T.PAYMENT_ASSET, dollars(tb), dollars(ta)))
+        hb, ha = holdings.get("usdc_before"), holdings.get("usdc_after")
+        if isinstance(hb, int) and isinstance(ha, int):
+            pairs.append(("Harness Holdings' %s" % T.PAYMENT_ASSET, "%s before, plus %s received from the Treasury, less %s of payments that landed: %s" % (
+                dollars(hb), dollars(received), dollars(landed_sum), dollars(hb + received - landed_sum)), dollars(ha), hb + received - landed_sum == ha))
+        else:
+            unread.append("Harness Holdings' %s (%s before, %s after)" % (T.PAYMENT_ASSET, dollars(hb), dollars(ha)))
+        gb, ga = holdings.get("gas_before"), holdings.get("gas_after")
+        credited = int(holdings.get("credited") or 0)
+        if isinstance(gb, int) and isinstance(ga, int) and len(known_debits) == len(debits):
+            pairs.append(("Harness Holdings' gas account", "%s before, plus %s credited, less %s of gas debits: %s" % (
+                cents(gb), cents(credited), cents(sum(known_debits)), cents(gb + credited - sum(known_debits))), cents(ga), gb + credited - sum(known_debits) == ga))
+        elif isinstance(gb, int) and isinstance(ga, int):
+            self.finding(station, "money moved: a gas debit is not on the trail", None, None, "a gasDebitUsdCents on the %s row of each payment that landed" % T.INSTRUCTION_CONFIRMED,
+                         "%d of %d landed payment(s) carry a gas debit; the gas account moved %s → %s" % (len(known_debits), len(debits), cents(gb), cents(ga)))
+        else:
+            unread.append("Harness Holdings' gas account (%s before, %s after)" % (cents(gb), cents(ga)))
+        for probe, expected, got, ok in pairs:
+            if not ok:
+                self.finding(station, "money moved: %s does not reconcile to the cent" % probe, None, None, expected, "the estate reads %s after" % got)
+        if pairs:
+            gaps = sum(1 for _, _, _, ok in pairs if not ok)
+            verdict = "every pair reconciles to the cent" if gaps == 0 else "%d pair(s) do not reconcile to the cent — findings above" % gaps
+        else:
+            verdict = "no pair could be counted"
+        if unread:
+            verdict += "; not counted: %s" % ", ".join(unread)
+        self.note(station, "money moved (Spec T14 §5): Harness Treasury's %s %s → %s (paid %s); Harness Holdings' %s %s → %s (received %s; the three payments %s, of which %s landed); "
+                  "Harness Holdings' gas account %s → %s (credited %s; gas debits %s over %d of %d payments that landed): %s" % (
+                      T.PAYMENT_ASSET, dollars(tb), dollars(ta), dollars(paid), T.PAYMENT_ASSET, dollars(hb), dollars(ha), dollars(received), dollars(payments_sum), dollars(landed_sum),
+                      cents(gb), cents(ga), cents(credited), cents(sum(known_debits)), len(known_debits), len(landed), verdict))
 
     def seat_binding_notes(self) -> List[str]:
         """
@@ -3377,7 +4211,11 @@ INTEGER_TEXT = re.compile(r"^-?\d+$")
 
 
 def audit_money(calls: Sequence[Call]) -> List[Dict[str, Any]]:
-    """Every money figure the server returned, checked against the minor-unit law (money.ts): an integer string of minor units, never a float."""
+    """
+    Every money figure the server returned, checked against the minor-unit law (money.ts): an integer of minor units, never a float. A string
+    of digits, as every road of the estate spoke it until Spec 104; or a JSON integer, as Spec 104's gas roads speak cents (routes/gas.ts,
+    availableUsdCents) — exact either way, so neither is a finding (Spec T14). A float, or a string that is not an integer, is.
+    """
     findings: List[Dict[str, Any]] = []
     seen: set = set()
 
@@ -3387,12 +4225,12 @@ def audit_money(calls: Sequence[Call]) -> List[Dict[str, Any]]:
                 here = "%s.%s" % (path, key) if path else str(key)
                 scalar = not isinstance(inner, (dict, list))
                 if scalar and MONEY_KEY.search(str(key)) and str(key) not in ("baseDecimals", "assetDecimals", "currencyDecimals"):
-                    if inner is not None and not (isinstance(inner, str) and INTEGER_TEXT.match(inner)):
+                    if inner is not None and not ((isinstance(inner, str) and INTEGER_TEXT.match(inner)) or (isinstance(inner, int) and not isinstance(inner, bool))):
                         mark = ("law", call.route, here)
                         if mark not in seen:
                             seen.add(mark)
                             findings.append({"probe": "minor-unit law at %s (%s)" % (here, call.route), "sent": None,
-                                             "expected": "an integer string of minor units", "said": "the server returned %r (%s)" % (inner, type(inner).__name__)})
+                                             "expected": "an integer of minor units, as a string or a JSON integer", "said": "the server returned %r (%s)" % (inner, type(inner).__name__)})
                 if isinstance(inner, float):
                     mark = ("float", call.route, here)
                     if mark not in seen:
@@ -3842,28 +4680,84 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
             line("S6", "POST /v1/payees/addresses/<address of %s>/approve {} (as %s, the roster in order, the founder last) → expect the estate to count it toward the quorum of %s (approvals, may_still_approve, sentence; Spec 89) — with every seat on its holder's current credential, %s counted (1 of 2) and %s counted (2 of 2), the count met, so %s is not asked (Spec T15 §2); a SIGNATURE_NOT_COUNTED for a person whose seat S4 just moved is a finding, one for a seat S4 could not move is recorded and the next person presses, until whitelisted or nobody is left" % (
                 payee["name"], A.PEOPLE[key].name, Runner.COUNT_WORDS.get(quorum, str(quorum)), A.PEOPLE[roster_pressers[0]].name, A.PEOPLE[roster_pressers[1]].name, A.PEOPLE[roster_pressers[2]].name))
     line("S6", "GET /v1/payees → expect both addresses whitelisted, read by this run's payee ids; the judgement is the register's, not the press's — a register reading proposed after the platform counted %s of %s fails with the mirror sentence (Spec T13 §3)" % (quorum, quorum))
-    # S7
+    # S7 — Spec T14: the Treasury, the money before, the shortfall paid, S7a, the gas credits, the three payments judged on money that moved, the money after
     clerk = A.PEOPLE[A.PAYMENT_CLERK]
-    line("S7", "GET /v1/workspace (as %s) → expect the funding wallet S5 gave the estate (fundingWallet; sourceAccount is the account the runs leave from, Spec 98)" % clerk.name)
+    treasurer = "%s at %s" % (founder.name, T.TREASURY["short"])
     holder_named = (A.ACCOUNT_ANSWERS.get("WO1") or {}).get("choice") == A.HOLDER_PERSON
     tier_alone = (A.ACCOUNT_ANSWERS.get("WO3") or {}).get("cents") if holder_named else None
     tier_two = (A.ACCOUNT_ANSWERS.get("WO4") or {}).get("cents")
+    need_dollars = Runner.payments_need()[1]
+    line("S7", "GET /v1/workspace (as %s) → expect the funding wallet S5 gave the estate (fundingWallet, with the fund sentence and the chains this deployment pays on, Spec 104 §1) and the platform account it stands on (workspace.aapAccountId)" % clerk.name)
+    line("S7", "[file] ~/.aer360-harness/%s → %s and %s, the platform's admin credential Bear files, read once and never printed; absent, S7 fails at the credit step with \"%s\"" % (
+        T.ADMIN_ENV_FILE, T.ADMIN_ENV_URL_KEY, T.ADMIN_ENV_KEY_KEY, T.NO_GAS_CREDIT_ROAD_SENTENCE))
+    line("S7", "POST /v1/auth/login/options {} and POST /v1/auth/login/verify %s (as %s, with the passkey stored at ~/.aer360-harness/%s/%s.json) → expect a session in %s; with no stored passkey, --treasury-invite: POST /v1/auth/invite/options {\"token\": \"<token from --treasury-invite>\", …} and /verify with a new passkey stored there — the birth run" % (
+        _j({"nonce": "<nonce>", "issuedAtMs": "<issuedAtMs>", "response": "<assertion>"}), treasurer, T.TREASURY["client_id"], founder.key, T.TREASURY["company"]))
+    line("S7", "GET /v1/onboarding/charter (as %s) → expect standsWritten true on a rerun; on the birth run the policy interview (%d questions, A1 %r and C11 %s the Treasury's own) and the wallet account interview (%d questions, WA1 with %s first) are walked from the book, confirmed under the founder's passkey and compiled" % (
+        treasurer, len(A.expected_walk("policy")), T.TREASURY["company"], _j([T.TREASURY["email"]]), len(A.expected_walk("wallet_account")), T.TREASURY["email"]))
+    line("S7", "GET /v1/workspace (as %s) → expect the Treasury's funding wallet, or fundingWalletAbsence; absent: POST %s {} and POST %s (a key allocated on the platform and held in the enclave), then S7 stops: \"%s\"" % (
+        treasurer, FUNDING_WALLET_OPTIONS_ROUTE, FUNDING_WALLET_ROUTE, T.FUND_TREASURY_SENTENCE % ("<address>", T.PAYEE_CHAIN)))
+    line("S7", "GET %s (as %s) → expect Harness Holdings' %s on %s in dollars (balanceMinor, exact) and the %s contract the estate names (token), Spec 104 §1" % (
+        T.FUNDING_BALANCES_ROUTE, clerk.name, T.PAYMENT_ASSET, T.PAYEE_CHAIN, T.PAYMENT_ASSET))
+    line("S7", "GET %s (as %s) → expect Harness Treasury's %s on %s in dollars" % (T.FUNDING_BALANCES_ROUTE, treasurer, T.PAYMENT_ASSET, T.PAYEE_CHAIN))
+    line("S7", "GET %s (as %s) → expect Harness Holdings' gas account, \"%s: US$…\" with availableUsdCents, balanceUsdCents, reservedUsdCents and low, read live from the platform (Spec 104 §3)" % (
+        T.GAS_ACCOUNT_ROUTE, clerk.name, T.GAS_ACCOUNT_LABEL))
+    line("S7", "GET %s (as %s) → expect Harness Treasury's gas account" % (T.GAS_ACCOUNT_ROUTE, treasurer))
+    credit_body = _j({"amount_usd_cents": T.GAS_CREDIT_USD_CENTS, "reason": T.ADMIN_CREDIT_REASON % "<run>", "idempotency_key": "aer360-harness-<run>-%s-gas-<n>" % T.TREASURY["client_id"]})
+    line("S7", "POST <%s>%s %s (Authorization: Bearer <%s>, at the platform's admin road) — only where Harness Holdings' %s is below the three payments' %s → expect 201: the line and the balance (Spec 154 §1, audited gas.credited_by_admin); where the Treasury holds less than the shortfall S7 stops instead: \"%s\" and nothing is sent; a refusal in the platform's words fails S7" % (
+        T.ADMIN_ENV_URL_KEY, T.ADMIN_CREDIT_ROUTE % "<the Treasury's aapAccountId>", credit_body, T.ADMIN_ENV_KEY_KEY, T.PAYMENT_ASSET, need_dollars,
+        T.TREASURY_SHORT_SENTENCE % ("US$<x>", "US$<y>", "<address>", T.PAYEE_CHAIN)))
+    treasury_row = {"oneOff": {"chain": T.PAYEE_CHAIN, "address": "<Harness Holdings' funding wallet>", "declared": True, "payeeName": A.ESTATE["company"]},
+                    "asset": T.PAYMENT_ASSET, "chain": T.PAYEE_CHAIN, "amountMinor": "<the shortfall in minor units>", "invoiceRef": "HT-<run>"}
+    line("S7", "POST /v1/sets/review %s (as %s) — only where Holdings is short → expect the gates' review; a %s refusal credits the Treasury more gas once and asks again" % (
+        _j({"pays": [treasury_row], "duplicatesAcknowledged": False}), treasurer, T.GAS_SHORTFALL))
+    line("S7", "POST /v1/sets %s (as %s) → expect 201: the run in draft" % (
+        _j({"pays": [treasury_row], "duplicatesAcknowledged": False, "idempotencyKey": "aer360-harness-<run>-HT", "reference": "Harness payment HT"}), treasurer))
+    line("S7", "POST /v1/sets/<run HT>/submit {} → expect status pending_approval, approvalsRequired 1: the shortfall is above the Treasury's %s hold and Holdings' address is new to it" % usd(A.MONEY["per_payment_cents"]))
+    line("S7", "POST /v1/approvals/<run HT>/challenge {} then /approve %s (as %s, the charter's one payment approver, with her passkey) → expect status approved, approvalsGiven 1 of 1; refused at the guard once, POST /v1/approver-seats/grant %s and the press again; a second refusal in the estate's words fails S7" % (
+        _j({"response": "<assertion over the challenge>"}), treasurer, _j({"email": T.TREASURY["email"]})))
+    line("S7", "POST %s {} (as %s) → expect setStatus settled and the instruction confirmed with its txHash: the estate quoted, signed, sponsored and sent through the platform's gas roads and waited for the platform to report the operation %s (Spec 104 §2); a refusal in the estate's words, never retried" % (
+        T.SET_EXECUTE_ROUTE % "<run HT>", treasurer, T.PLATFORM_LANDED))
+    line("S7", "GET /v1/sets/<run HT> → expect the run as the register shows it, read until its instruction is terminal (up to %d reads over a bounded wait)" % LANDING_READS)
+    line("S7", "GET %s?limit=%d (as %s; every page by its nextCursor) → expect the %s row for the run: userOpHash, the handleOps txHash, gasDebitUsdCents and gasDebit" % (
+        T.AUDIT_EXPORT_ROUTE, T.AUDIT_EXPORT_LIMIT, treasurer, T.INSTRUCTION_CONFIRMED))
+    line("S7", "GET %s (as %s) → expect Harness Holdings' %s risen by the shortfall: the Treasury's payment landed" % (T.FUNDING_BALANCES_ROUTE, clerk.name, T.PAYMENT_ASSET))
+    three = []
     for payment in A.PAYMENTS:
-        tier_words = under_the_tiers(payment.amount, tier_alone, tier_two)
         if payment.payee_key is None:
-            row: Dict[str, Any] = {"oneOff": {"chain": T.PAYEE_CHAIN, "address": T.address("UNLISTED_ETHEREUM"), "declared": True, "payeeName": payment.payee_name},
-                                   "asset": T.PAYMENT_ASSET, "chain": T.PAYEE_CHAIN, "amountMinor": payment.amount_minor, "invoiceRef": payment.invoice}
+            three.append({"oneOff": {"chain": T.PAYEE_CHAIN, "address": T.address("UNLISTED_ETHEREUM"), "declared": True, "payeeName": payment.payee_name},
+                          "asset": T.PAYMENT_ASSET, "chain": T.PAYEE_CHAIN, "amountMinor": payment.amount_minor, "invoiceRef": payment.invoice})
         else:
-            row = {"payeeAddressId": "<address of %s>" % payment.payee_name, "asset": T.PAYMENT_ASSET, "chain": T.PAYEE_CHAIN, "amountMinor": payment.amount_minor, "invoiceRef": payment.invoice}
-        line("S7", "POST /v1/sets/review %s (as %s) → expect the five gates' review" % (_j({"pays": [row], "duplicatesAcknowledged": False}), clerk.name))
+            three.append({"payeeAddressId": "<address of %s>" % payment.payee_name, "asset": T.PAYMENT_ASSET, "chain": T.PAYEE_CHAIN, "amountMinor": payment.amount_minor, "invoiceRef": payment.invoice})
+    line("S7", "GET /v1/sets (as %s) → the runs register before S7a's review, so a run the review created would be seen" % clerk.name)
+    line("S7", "POST /v1/sets/review %s (as %s) — S7a, with Harness Holdings' gas account below the set's ceiling → expect the gas gate (%s) refusing %s in U3's sentence with the figures the harness read: \"Your gas account holds US$<available>. This set needs at most US$<ceiling> of gas. Nothing was sent. Buy gas below.\" (Spec 104 §4); a gate that admits the set because the balance covers the ceiling is reported, not failed; a refusal naming other figures, or a payment that left, fails S7" % (
+        _j({"pays": three, "duplicatesAcknowledged": False}), clerk.name, T.GAS_GATE, T.GAS_SHORTFALL))
+    line("S7", "GET /v1/sets (as %s) → expect no new run since S7a's review; then GET %s → expect Harness Holdings' %s unchanged: nothing left" % (clerk.name, T.FUNDING_BALANCES_ROUTE, T.PAYMENT_ASSET))
+    holdings_credit = _j({"amount_usd_cents": "<%d, or the next ten dollars above twice S7a's ceiling>" % T.GAS_CREDIT_USD_CENTS, "reason": T.ADMIN_CREDIT_REASON % "<run>", "idempotency_key": "aer360-harness-<run>-%s-gas-<n>" % A.ESTATE["client_id"]})
+    line("S7", "POST <%s>%s %s (Authorization: Bearer <%s>) → expect 201: Harness Holdings' gas account credited, the balance in the platform's own figures; a refusal in the platform's words fails S7" % (
+        T.ADMIN_ENV_URL_KEY, T.ADMIN_CREDIT_ROUTE % "<Harness Holdings' aapAccountId>", holdings_credit, T.ADMIN_ENV_KEY_KEY))
+    line("S7", "POST <%s>%s %s — only where the Treasury was not credited above → expect 201" % (T.ADMIN_ENV_URL_KEY, T.ADMIN_CREDIT_ROUTE % "<the Treasury's aapAccountId>", credit_body))
+    signers = names_in_words([A.PEOPLE[k].name for k in SIGNERS_IN_ORDER])
+    for payment, row in zip(A.PAYMENTS, three):
+        tier_words = under_the_tiers(payment.amount, tier_alone, tier_two)
+        payee = row["oneOff"]["address"] if "oneOff" in row else "<address of %s>" % payment.payee_name
+        call = _j({"jsonrpc": "2.0", "id": 1, "method": "eth_call", "params": [{"to": "<the %s contract the estate names>" % T.PAYMENT_ASSET, "data": "<balanceOf(%s)>" % payee}, "latest"]})
+        line("S7", "POST %s %s → expect a 32-byte hex word: %s's %s balance in minor units before the payment (the chain's public RPC, read from the corridor harness's own skeleton at run time; a fault is the RPC's, and a proof it could not read is not a pass)" % (
+            T.public_rpc_url(T.PAYEE_CHAIN), call, payment.payee_name, T.PAYMENT_ASSET))
+        line("S7", "POST /v1/sets/review %s (as %s) → expect the gates' review; %s; a %s refusal credits Holdings more gas once and asks again" % (_j({"pays": [row], "duplicatesAcknowledged": False}), clerk.name, tier_words, T.GAS_SHORTFALL))
         line("S7", "POST /v1/sets %s (as %s) → expect 201: the run in draft" % (_j({"pays": [row], "duplicatesAcknowledged": False, "idempotencyKey": "aer360-harness-<run>-%s" % payment.key, "reference": "Harness payment %s" % payment.key}), clerk.name))
-        line("S7", "POST /v1/sets/<run %s>/submit {} → expect status, setDigest, approvalsRequired; %s (%s): expected to %s; %s" % (
-            payment.key, payment.amount, T.PAYMENT_ASSET, payment.expect, tier_words))
-        line("S7", "GET /v1/sets/<run %s> → expect the run's state as the register shows it" % payment.key)
-    line("S7", "POST /v1/approvals/<run P1>/challenge {} (as %s) → expect the digest-bound challenge" % A.PEOPLE[A.PAYMENT_APPROVER].name)
-    line("S7", "POST /v1/approvals/<run P1>/approve %s (as %s) → expect status approved, approvalsGiven 1 of 1" % (_j({"response": "<assertion over the challenge>"}), A.PEOPLE[A.PAYMENT_APPROVER].name))
-    line("S7", "[report] where a payment is refused with the funding wallet present, the refusal verbatim and one line: the funding wallet's address and what the three payments need together — %s of %s — so it can be funded by hand; the harness never mints or moves the asset" % (
-        Runner.payments_need()[1], T.PAYMENT_ASSET))
+        line("S7", "POST /v1/sets/<run %s>/submit {} → expect status and approvalsRequired as the estate's band and destination rule decide; %s (%s): expected to %s; %s; %s" % (
+            payment.key, payment.amount, T.PAYMENT_ASSET, payment.expect, Runner.TIER_ROAD_WORDS[payment.key], tier_words))
+        line("S7", "POST /v1/approvals/<run %s>/challenge {} then /approve %s (as %s in turn while the run waits: the holder, the clerk, then the approver and the third party) → expect the estate's answer to each in its words — ROLE_NOT_GRANTED where it admits the approver standing alone — until status approved; a refusal is never retried" % (
+            payment.key, _j({"response": "<assertion over the challenge>"}), signers))
+        line("S7", "POST %s {} (as %s) → expect setStatus settled and the instruction confirmed with its txHash: the platform reported the operation %s (Spec 104 §2)" % (
+            T.SET_EXECUTE_ROUTE % ("<run %s>" % payment.key), clerk.name, T.PLATFORM_LANDED))
+        line("S7", "GET /v1/sets/<run %s> → expect the run as the register shows it, read until its instruction is terminal" % payment.key)
+        line("S7", "POST %s %s → expect %s's %s balance after, risen by exactly %s; otherwise the payment fails naming the two figures" % (
+            T.public_rpc_url(T.PAYEE_CHAIN), call, payment.payee_name, T.PAYMENT_ASSET, payment.amount))
+    line("S7", "GET %s?limit=%d (as %s; every page by its nextCursor) → expect one %s row per payment that landed: userOpHash, the handleOps txHash, gasDebitUsdCents and gasDebit in the platform's own figures; each payment is judged on the run's status, the userOpHash, the txHash and the payee's balance risen by its amount, the gas debited reported beside it (Spec T14 §4)" % (
+        T.AUDIT_EXPORT_ROUTE, T.AUDIT_EXPORT_LIMIT, founder.name, T.INSTRUCTION_CONFIRMED))
+    line("S7", "GET %s (as %s), GET %s (as %s), GET %s (as %s), GET %s (as %s) → the money after: both workspaces' %s and gas accounts, for S10's count" % (
+        T.FUNDING_BALANCES_ROUTE, clerk.name, T.FUNDING_BALANCES_ROUTE, treasurer, T.GAS_ACCOUNT_ROUTE, clerk.name, T.GAS_ACCOUNT_ROUTE, treasurer, T.PAYMENT_ASSET))
     # S8
     line("S8", "GET /v1/journey → printed: the stage, the stages done")
     line("S8", "GET /v1/workspace/readiness → printed: transactable True once the wallet exists (False, reason \"%s\", before it), and the funding wallet's address" % NO_FUNDING_WALLET_REASON)
@@ -3882,6 +4776,8 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     line("S10", "[compare] the payees register with the whitelist the charter enforces and with what Ada approved")
     line("S10", "GET %s?limit=%d → [compare] the trail's %s row for each seat S4 moved: the ceremony's id, seatEmail, via %s, and signerNames naming every signer (Spec T15 §3); the note about a seat still bound to a retired passkey is dropped where S4 moved it" % (
         T.AUDIT_EXPORT_ROUTE, T.AUDIT_EXPORT_LIMIT, T.ROSTER_SEAT_REBOUND, T.VIA_ROSTER_CHANGE))
+    line("S10", "[compare] the money moved (Spec T14 §5): Harness Treasury's %s before and after, Harness Holdings' %s before and after, the sum of the three payments (%s), and Holdings' gas account before and after against the sum of the three gas debits — one note, and a finding where any pair does not reconcile to the cent" % (
+        T.PAYMENT_ASSET, T.PAYMENT_ASSET, Runner.payments_need()[1]))
     # S11
     line("S11", "POST /v1/workspace/display-currency %s without x-csrf-token → expect 401 NOT_AUTHENTICATED" % _j({"displayCurrency": A.ESTATE["display_currency"]}))
     line("S11", "POST /v1/onboarding/interviews/<policy interview>/confirm/options {} then /confirm as Ben with the founder's passkey → expect a refusal by name")
@@ -3928,6 +4824,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="The Estate Harness: walks AER 360 end to end as a founder (Spec T7).")
     parser.add_argument("--base", default=DEFAULT_BASE, help="the estate's base URL (default %s; %s for the demo estate)" % (DEFAULT_BASE, DEMO_BASE))
     parser.add_argument("--invite", help="the founder's one-time invitation link, first run only; never paste it into a chat")
+    parser.add_argument("--treasury-invite", dest="treasury_invite", help="Harness Treasury's founder invitation link, the birth run only (Spec T14); never paste it into a chat")
     parser.add_argument("--from", dest="start_at", help="resume at a station, for example S5, signing in with the stored passkeys")
     parser.add_argument("--dry", action="store_true", help="print every call the harness would make, without connecting")
     parser.add_argument("--fresh", action="store_true", help="set the stored passkeys aside and enrol a new estate; refuses without --invite")
@@ -3943,7 +4840,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.fresh and not args.invite:
         print("--fresh refuses to run without a new --invite <link>: a second estate is a deliberate act.")
         return 2
-    runner = Runner(args.base, args.store, args.invite, args.fresh, args.start_at, args.out)
+    runner = Runner(args.base, args.store, args.invite, args.fresh, args.start_at, args.out, treasury_invite=args.treasury_invite)
     try:
         runner.run()
     except KeyboardInterrupt:

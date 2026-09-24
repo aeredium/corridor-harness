@@ -63,16 +63,22 @@ WHAT THE SPEC DECIDED, AND WHAT THE BOOK DECIDED WHERE THE SPEC LEFT IT TO THE H
   wallets held by people or companies: Harness Holdings pays people and companies, the stipulation
   is the tighter law, and it is the one that proves the chain. WO1 names Ben Signatory as the one
   person who holds the wallet — he is its Officer — and WO2 names Harriet Founder, CEO, as the third
-  party to its activation and its largest payments. WO3 is 2,000.00 (the holder alone) and WO4
-  10,000.00 (two signatures enough). WA1 gains Ben beside Ada, so the tiers name three people (Ada,
-  Ben, Harriet) and the read-back is not refused; WQ stays at one.
+  party to its activation and its largest payments. WO3 is 2.00 (the holder alone) and WO4
+  10.00 (two signatures enough) — Spec T14 scaled both by a thousand, as every money answer. WA1
+  gains Ben beside Ada, so the tiers name three people (Ada, Ben, Harriet) and the read-back is not
+  refused; WQ stays at one.
 
   The money is entered in the base the interview records — "Recorded in US dollars, the base;
-  your display currency is shown beside it as you type" (MONEY_NOTE) — as whole figures: per
-  payment 10,000 (O2), per day 50,000 (O1), treasury ceiling 250,000 (T1, in the book for the
-  treasury dialect the operating account does not walk). The payments are made in USDC, so
-  12,000 is above 10,000 whatever the day's AUD rate; the display lens the page returns is
-  printed in the report. The wallet account is an OPERATIONS account, because the operations
+  your display currency is shown beside it as you type" (MONEY_NOTE). SPEC T14 (22 September 2026,
+  amended 22:35): THE BOOK PAYS IN CENTS. The sandbox estate pays on real chains with real USDC, by
+  design, and the book's three payments totalled US$18,249.99 — a sandbox that costs eighteen thousand
+  dollars a run is not a sandbox, and one that never pays proves nothing — so every money answer and
+  expectation of Harness Holdings is scaled by one thousand: per payment 10.00 (O2, and P3 of the
+  payroll dialect), per day 50.00 (O1, and X2), the treasury ceiling 250.00 (T1, in the book for the
+  treasury dialect the operating account does not walk), the tiers 2.00 (WO3) and 10.00 (WO4); the
+  payments P1 1.25 (within the holder's figure), P2 4.99 (two signatures) and P3 12.00 (three). The
+  payments are made in USDC, so 12.00 is above 10.00 whatever the day's AUD rate; the display lens
+  the page returns is printed in the report. Nothing else in the book changed. The wallet account is an OPERATIONS account, because the operations
   dialect is the one that asks a per-payment hold (O2), a daily figure (O1) and the pause on a
   new destination (O3, Spec 69) that the three payments exercise.
 """
@@ -168,13 +174,13 @@ WHITELIST_QUORUM = 2
 # ---------------------------------------------------------------------------
 MONEY = {
     # Whole figures of the base, as cents, the shape a money answer travels in ({cents: "..."}).
-    "per_payment_cents": "1000000",       # 10,000.00 — O2: above it a payment is held for approval
-    "per_day_cents": "5000000",           # 50,000.00 — O1: the account's normal day
-    "treasury_ceiling_cents": "25000000",  # 250,000.00 — T1, for the treasury dialect (not walked)
+    "per_payment_cents": "1000",          # 10.00 — O2: above it a payment is held for approval (Spec T14: the book pays in cents)
+    "per_day_cents": "5000",              # 50.00 — O1: the account's normal day
+    "treasury_ceiling_cents": "25000",     # 250.00 — T1, for the treasury dialect (not walked)
     # The signing tiers (Spec 92, WO3 and WO4; Spec T11). The two fields arrive written at one dollar ({cents: "100"}) and the
-    # book writes the real figure: the holder alone up to 2,000.00, two signatures enough up to 10,000.00, three above it.
-    "holder_alone_cents": "200000",       # 2,000.00 — WO3: up to it the holder pays alone, with their own passkey
-    "two_signatures_cents": "1000000",    # 10,000.00 — WO4: up to it two signatures are enough; above it all three
+    # book writes the real figure: the holder alone up to 2.00, two signatures enough up to 10.00, three above it (Spec T14).
+    "holder_alone_cents": "200",          # 2.00 — WO3: up to it the holder pays alone, with their own passkey
+    "two_signatures_cents": "1000",       # 10.00 — WO4: up to it two signatures are enough; above it all three
 }
 
 WALLET_ACCOUNT_NAME = "Operating account"
@@ -203,12 +209,12 @@ class Payment(NamedTuple):
 
 
 PAYMENTS: List[Payment] = [
-    Payment("P1", "NORTHWIND_ETHEREUM", "Northwind Supplies", "1250.00", "HH-0001", "proceeds to approval",
-            "listed, within limits"),
-    Payment("P2", None, "Unlisted destination", "4999.99", "HH-0002", "waits",
+    Payment("P1", "NORTHWIND_ETHEREUM", "Northwind Supplies", "1.25", "HH-0001", "proceeds to approval",
+            "listed, within limits; within the holder's own figure (WO3)"),
+    Payment("P2", None, "Unlisted destination", "4.99", "HH-0002", "waits",
             "to an address not on the list, under an account that pauses the first payment somewhere new (Spec 69)"),
-    Payment("P3", "CONTOSO_ETHEREUM", "Contoso Legal", "12000.00", "HH-0003", "held",
-            "above the per-payment limit of 10,000"),
+    Payment("P3", "CONTOSO_ETHEREUM", "Contoso Legal", "12.00", "HH-0003", "held",
+            "above the per-payment limit of 10.00; above the two-signature figure (WO4)"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -457,8 +463,8 @@ ACCOUNT_ANSWERS: Dict[str, Dict[str, Any]] = {
     # Spec 92's wallet people and tiers (Spec T11). WO1 in the person_or_none shape: the choice, and the person behind the first option.
     "WO1": {"choice": HOLDER_PERSON, "person": {"name": PEOPLE[WALLET_HOLDER].name, "email": PEOPLE[WALLET_HOLDER].email}},
     "WO2": {"entries": [{"name": "Harriet", "surname": "Founder", "email": PEOPLE[THIRD_PARTY].email, "title": THIRD_PARTY_TITLE}]},
-    "WO3": {"cents": MONEY["holder_alone_cents"]},    # 2,000.00 — arrives written at one dollar; the book writes the real figure
-    "WO4": {"cents": MONEY["two_signatures_cents"]},  # 10,000.00 — arrives written at one dollar; the book writes the real figure
+    "WO3": {"cents": MONEY["holder_alone_cents"]},    # 2.00 — arrives written at one dollar; the book writes the real figure
+    "WO4": {"cents": MONEY["two_signatures_cents"]},  # 10.00 — arrives written at one dollar; the book writes the real figure
     "WCW": ACK,
     "WCA": ACK,
     "WG1": ACK,

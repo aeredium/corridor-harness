@@ -69,8 +69,8 @@ S5 — POST /v1/onboarding/interviews {"interviewType": "wallet_account"}
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "W0", "value": {"acknowledged": true}}
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WN", "value": {"text": "Operating account"}}
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "W1", "value": {"choice": "Operations — day-to-day business payments"}}
-S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "O1", "value": {"cents": "5000000"}}
-S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "O2", "value": {"cents": "1000000"}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "O1", "value": {"cents": "5000"}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "O2", "value": {"cents": "1000"}}
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "O3", "value": {"choice": "Yes"}}
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "O4", "value": {"people": ["harness+cora@aeredium.io"]}}
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "PN0", "value": {"acknowledged": true}}
@@ -80,8 +80,8 @@ S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId":
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WA2", "value": {"choice": "Yes — one person can both submit and release, where the quorum allows it"}}
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WO1", "value": {"choice": "One person, named here", "person": {"name": "Ben Signatory", "email": "harness+ben@aeredium.io"}}}
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WO2", "value": {"entries": [{"name": "Harriet", "surname": "Founder", "email": "harness+harriet@aeredium.io", "title": "CEO"}]}}
-S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WO3", "value": {"cents": "200000"}}
-S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WO4", "value": {"cents": "1000000"}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WO3", "value": {"cents": "200"}}
+S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WO4", "value": {"cents": "1000"}}
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WCW", "value": {"acknowledged": true}}
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WG1", "value": {"acknowledged": true}}
 S5 — GET /v1/onboarding/interviews/<account interview>/readback
@@ -108,33 +108,67 @@ S6 — POST /v1/payees/addresses/<address of Contoso Legal>/approve {} (as Ben S
 S6 — POST /v1/payees/addresses/<address of Contoso Legal>/approve {} (as Cora Clerk, the roster in order, the founder last)
 S6 — GET /v1/payees
 S7 — GET /v1/workspace (as Cora Clerk)
-S7 — POST /v1/sets/review {"pays": [{"payeeAddressId": "<address of Northwind Supplies>", "asset": "USDC", "chain": "ethereum", "amountMinor": "1250000000", "invoiceRef": "HH-0001"}], "duplicatesAcknowledged": false} (as Cora Clerk)
-S7 — POST /v1/sets {"pays": [{"payeeAddressId": "<address of Northwind Supplies>", "asset": "USDC", "chain": "ethereum", "amountMinor": "1250000000", "invoiceRef": "HH-0001"}], "duplicatesAcknowledged": false, "idempotencyKey": "aer360-harness-<run>-P1", "reference": "Harness payment P1"} (as Cora Clerk)
+S7 — [file] ~/.aer360-harness/admin.env
+S7 — POST /v1/auth/login/options {} and POST /v1/auth/login/verify {"nonce": "<nonce>", "issuedAtMs": "<issuedAtMs>", "response": "<assertion>"} (as Harriet Founder at Harness Treasury, with the passkey stored at ~/.aer360-harness/harness-treasury/harriet.json)
+S7 — GET /v1/onboarding/charter (as Harriet Founder at Harness Treasury)
+S7 — GET /v1/workspace (as Harriet Founder at Harness Treasury)
+S7 — GET /v1/workspace/funding-account/balances (as Cora Clerk)
+S7 — GET /v1/workspace/funding-account/balances (as Harriet Founder at Harness Treasury)
+S7 — GET /v1/gas/account (as Cora Clerk)
+S7 — GET /v1/gas/account (as Harriet Founder at Harness Treasury)
+S7 — POST <AAP_ADMIN_BASE_URL>/v1/admin/accounts/<the Treasury's aapAccountId>/gas-account/credits {"amount_usd_cents": 1000, "reason": "sandbox run <run>", "idempotency_key": "aer360-harness-<run>-harness-treasury-gas-<n>"} (Authorization: Bearer <AAP_ADMIN_KEY>, at the platform's admin road) — only where Harness Holdings' USDC is below the three payments' US$18.24
+S7 — POST /v1/sets/review {"pays": [{"oneOff": {"chain": "ethereum", "address": "<Harness Holdings' funding wallet>", "declared": true, "payeeName": "Harness Holdings Pty Ltd"}, "asset": "USDC", "chain": "ethereum", "amountMinor": "<the shortfall in minor units>", "invoiceRef": "HT-<run>"}], "duplicatesAcknowledged": false} (as Harriet Founder at Harness Treasury) — only where Holdings is short
+S7 — POST /v1/sets {"pays": [{"oneOff": {"chain": "ethereum", "address": "<Harness Holdings' funding wallet>", "declared": true, "payeeName": "Harness Holdings Pty Ltd"}, "asset": "USDC", "chain": "ethereum", "amountMinor": "<the shortfall in minor units>", "invoiceRef": "HT-<run>"}], "duplicatesAcknowledged": false, "idempotencyKey": "aer360-harness-<run>-HT", "reference": "Harness payment HT"} (as Harriet Founder at Harness Treasury)
+S7 — POST /v1/sets/<run HT>/submit {}
+S7 — POST /v1/approvals/<run HT>/challenge {} then /approve {"response": "<assertion over the challenge>"} (as Harriet Founder at Harness Treasury, the charter's one payment approver, with her passkey)
+S7 — POST /v1/sets/<run HT>/execute {} (as Harriet Founder at Harness Treasury)
+S7 — GET /v1/sets/<run HT>
+S7 — GET /v1/export/audit?limit=5000 (as Harriet Founder at Harness Treasury; every page by its nextCursor)
+S7 — GET /v1/workspace/funding-account/balances (as Cora Clerk)
+S7 — GET /v1/sets (as Cora Clerk)
+S7 — POST /v1/sets/review {"pays": [{"payeeAddressId": "<address of Northwind Supplies>", "asset": "USDC", "chain": "ethereum", "amountMinor": "1250000", "invoiceRef": "HH-0001"}, {"oneOff": {"chain": "ethereum", "address": "0xe339BC5946CAc81EB598C743Fd129ac6254b9493", "declared": true, "payeeName": "Unlisted destination"}, "asset": "USDC", "chain": "ethereum", "amountMinor": "4990000", "invoiceRef": "HH-0002"}, {"payeeAddressId": "<address of Contoso Legal>", "asset": "USDC", "chain": "ethereum", "amountMinor": "12000000", "invoiceRef": "HH-0003"}], "duplicatesAcknowledged": false} (as Cora Clerk) — S7a, with Harness Holdings' gas account below the set's ceiling
+S7 — GET /v1/sets (as Cora Clerk)
+S7 — POST <AAP_ADMIN_BASE_URL>/v1/admin/accounts/<Harness Holdings' aapAccountId>/gas-account/credits {"amount_usd_cents": "<1000, or the next ten dollars above twice S7a's ceiling>", "reason": "sandbox run <run>", "idempotency_key": "aer360-harness-<run>-harness-holdings-gas-<n>"} (Authorization: Bearer <AAP_ADMIN_KEY>)
+S7 — POST <AAP_ADMIN_BASE_URL>/v1/admin/accounts/<the Treasury's aapAccountId>/gas-account/credits {"amount_usd_cents": 1000, "reason": "sandbox run <run>", "idempotency_key": "aer360-harness-<run>-harness-treasury-gas-<n>"} — only where the Treasury was not credited above
+S7 — POST https://ethereum-rpc.publicnode.com {"jsonrpc": "2.0", "id": 1, "method": "eth_call", "params": [{"to": "<the USDC contract the estate names>", "data": "<balanceOf(<address of Northwind Supplies>)>"}, "latest"]}
+S7 — POST /v1/sets/review {"pays": [{"payeeAddressId": "<address of Northwind Supplies>", "asset": "USDC", "chain": "ethereum", "amountMinor": "1250000", "invoiceRef": "HH-0001"}], "duplicatesAcknowledged": false} (as Cora Clerk)
+S7 — POST /v1/sets {"pays": [{"payeeAddressId": "<address of Northwind Supplies>", "asset": "USDC", "chain": "ethereum", "amountMinor": "1250000", "invoiceRef": "HH-0001"}], "duplicatesAcknowledged": false, "idempotencyKey": "aer360-harness-<run>-P1", "reference": "Harness payment P1"} (as Cora Clerk)
 S7 — POST /v1/sets/<run P1>/submit {}
+S7 — POST /v1/approvals/<run P1>/challenge {} then /approve {"response": "<assertion over the challenge>"} (as Ben Signatory, Cora Clerk, Ada Approver and Harriet Founder in turn while the run waits: the holder, the clerk, then the approver and the third party)
+S7 — POST /v1/sets/<run P1>/execute {} (as Cora Clerk)
 S7 — GET /v1/sets/<run P1>
-S7 — POST /v1/sets/review {"pays": [{"oneOff": {"chain": "ethereum", "address": "0xe339BC5946CAc81EB598C743Fd129ac6254b9493", "declared": true, "payeeName": "Unlisted destination"}, "asset": "USDC", "chain": "ethereum", "amountMinor": "4999990000", "invoiceRef": "HH-0002"}], "duplicatesAcknowledged": false} (as Cora Clerk)
-S7 — POST /v1/sets {"pays": [{"oneOff": {"chain": "ethereum", "address": "0xe339BC5946CAc81EB598C743Fd129ac6254b9493", "declared": true, "payeeName": "Unlisted destination"}, "asset": "USDC", "chain": "ethereum", "amountMinor": "4999990000", "invoiceRef": "HH-0002"}], "duplicatesAcknowledged": false, "idempotencyKey": "aer360-harness-<run>-P2", "reference": "Harness payment P2"} (as Cora Clerk)
+S7 — POST https://ethereum-rpc.publicnode.com {"jsonrpc": "2.0", "id": 1, "method": "eth_call", "params": [{"to": "<the USDC contract the estate names>", "data": "<balanceOf(<address of Northwind Supplies>)>"}, "latest"]}
+S7 — POST https://ethereum-rpc.publicnode.com {"jsonrpc": "2.0", "id": 1, "method": "eth_call", "params": [{"to": "<the USDC contract the estate names>", "data": "<balanceOf(0xe339BC5946CAc81EB598C743Fd129ac6254b9493)>"}, "latest"]}
+S7 — POST /v1/sets/review {"pays": [{"oneOff": {"chain": "ethereum", "address": "0xe339BC5946CAc81EB598C743Fd129ac6254b9493", "declared": true, "payeeName": "Unlisted destination"}, "asset": "USDC", "chain": "ethereum", "amountMinor": "4990000", "invoiceRef": "HH-0002"}], "duplicatesAcknowledged": false} (as Cora Clerk)
+S7 — POST /v1/sets {"pays": [{"oneOff": {"chain": "ethereum", "address": "0xe339BC5946CAc81EB598C743Fd129ac6254b9493", "declared": true, "payeeName": "Unlisted destination"}, "asset": "USDC", "chain": "ethereum", "amountMinor": "4990000", "invoiceRef": "HH-0002"}], "duplicatesAcknowledged": false, "idempotencyKey": "aer360-harness-<run>-P2", "reference": "Harness payment P2"} (as Cora Clerk)
 S7 — POST /v1/sets/<run P2>/submit {}
+S7 — POST /v1/approvals/<run P2>/challenge {} then /approve {"response": "<assertion over the challenge>"} (as Ben Signatory, Cora Clerk, Ada Approver and Harriet Founder in turn while the run waits: the holder, the clerk, then the approver and the third party)
+S7 — POST /v1/sets/<run P2>/execute {} (as Cora Clerk)
 S7 — GET /v1/sets/<run P2>
-S7 — POST /v1/sets/review {"pays": [{"payeeAddressId": "<address of Contoso Legal>", "asset": "USDC", "chain": "ethereum", "amountMinor": "12000000000", "invoiceRef": "HH-0003"}], "duplicatesAcknowledged": false} (as Cora Clerk)
-S7 — POST /v1/sets {"pays": [{"payeeAddressId": "<address of Contoso Legal>", "asset": "USDC", "chain": "ethereum", "amountMinor": "12000000000", "invoiceRef": "HH-0003"}], "duplicatesAcknowledged": false, "idempotencyKey": "aer360-harness-<run>-P3", "reference": "Harness payment P3"} (as Cora Clerk)
+S7 — POST https://ethereum-rpc.publicnode.com {"jsonrpc": "2.0", "id": 1, "method": "eth_call", "params": [{"to": "<the USDC contract the estate names>", "data": "<balanceOf(0xe339BC5946CAc81EB598C743Fd129ac6254b9493)>"}, "latest"]}
+S7 — POST https://ethereum-rpc.publicnode.com {"jsonrpc": "2.0", "id": 1, "method": "eth_call", "params": [{"to": "<the USDC contract the estate names>", "data": "<balanceOf(<address of Contoso Legal>)>"}, "latest"]}
+S7 — POST /v1/sets/review {"pays": [{"payeeAddressId": "<address of Contoso Legal>", "asset": "USDC", "chain": "ethereum", "amountMinor": "12000000", "invoiceRef": "HH-0003"}], "duplicatesAcknowledged": false} (as Cora Clerk)
+S7 — POST /v1/sets {"pays": [{"payeeAddressId": "<address of Contoso Legal>", "asset": "USDC", "chain": "ethereum", "amountMinor": "12000000", "invoiceRef": "HH-0003"}], "duplicatesAcknowledged": false, "idempotencyKey": "aer360-harness-<run>-P3", "reference": "Harness payment P3"} (as Cora Clerk)
 S7 — POST /v1/sets/<run P3>/submit {}
+S7 — POST /v1/approvals/<run P3>/challenge {} then /approve {"response": "<assertion over the challenge>"} (as Ben Signatory, Cora Clerk, Ada Approver and Harriet Founder in turn while the run waits: the holder, the clerk, then the approver and the third party)
+S7 — POST /v1/sets/<run P3>/execute {} (as Cora Clerk)
 S7 — GET /v1/sets/<run P3>
-S7 — POST /v1/approvals/<run P1>/challenge {} (as Ada Approver)
-S7 — POST /v1/approvals/<run P1>/approve {"response": "<assertion over the challenge>"} (as Ada Approver)
-S7 — [report] where a payment is refused with the funding wallet present, the refusal verbatim and one line: the funding wallet's address and what the three payments need together — US$18,249.99 of USDC — so it can be funded by hand; the harness never mints or moves the asset
+S7 — POST https://ethereum-rpc.publicnode.com {"jsonrpc": "2.0", "id": 1, "method": "eth_call", "params": [{"to": "<the USDC contract the estate names>", "data": "<balanceOf(<address of Contoso Legal>)>"}, "latest"]}
+S7 — GET /v1/export/audit?limit=5000 (as Harriet Founder; every page by its nextCursor)
+S7 — GET /v1/workspace/funding-account/balances (as Cora Clerk), GET /v1/workspace/funding-account/balances (as Harriet Founder at Harness Treasury), GET /v1/gas/account (as Cora Clerk), GET /v1/gas/account (as Harriet Founder at Harness Treasury)
 S8 — GET /v1/journey
 S8 — GET /v1/workspace/readiness
 S9 — [out of scope] the tour's answers as Claude would see them: the harness is the founder, not Claude
 S10 — [compare] the read-back of each interview word for word with the answers given, as readback() spells them
 S10 — [compare] the compiled charter (the compile answer) with the read-back: the figures, the rosters, the networks; GET /v1/onboarding/charter for its standing
-S10 — [compare] the compiled charter's Spec 92 fields with the answers given: payeeApproval (C11A — the change approvers, the census of 4 at a quorum of 2), payeeVenueContracts (C19 — refused), holder (WO1 — Ben Signatory, by_person, Officer), signingTiers.holderAloneUpToCents (WO3 — 200000) and twoSignaturesUpToCents (WO4 — 1000000), and WO2's third party among the signers; the read-back's WO3 and WO4 as the book wrote them and never as the written US$1.00, and C19's door line
+S10 — [compare] the compiled charter's Spec 92 fields with the answers given: payeeApproval (C11A — the change approvers, the census of 4 at a quorum of 2), payeeVenueContracts (C19 — refused), holder (WO1 — Ben Signatory, by_person, Officer), signingTiers.holderAloneUpToCents (WO3 — 200) and twoSignaturesUpToCents (WO4 — 1000), and WO2's third party among the signers; the read-back's WO3 and WO4 as the book wrote them and never as the written US$1.00, and C19's door line
 S10 — GET /v1/journey, GET /v1/onboarding/charter, GET /v1/payees, GET /v1/sets, GET /v1/invites
 S10 — [check] every money figure the server returned against the minor-unit law (money.ts): an integer string of minor units, never a float
 S10 — [check] every refusal met in S1 to S9 for Rule 13: it names what happened and who refused; a bare status or a generic sentence is a finding
 S10 — [compare] the People register with the invitations sent, and the credential id each session carries
 S10 — [compare] the payees register with the whitelist the charter enforces and with what Ada approved
 S10 — GET /v1/export/audit?limit=5000
+S10 — [compare] the money moved (Spec T14 §5): Harness Treasury's USDC before and after, Harness Holdings' USDC before and after, the sum of the three payments (US$18.24), and Holdings' gas account before and after against the sum of the three gas debits — one note, and a finding where any pair does not reconcile to the cent
 S11 — POST /v1/workspace/display-currency {"displayCurrency": "AUD"} without x-csrf-token
 S11 — POST /v1/onboarding/interviews/<policy interview>/confirm/options {} then /confirm as Ben with the founder's passkey
 S11 — POST /v1/invites {"displayName": "Olive Overseer", "email": "harness+olive@aeredium.io", "role": "viewer"} (as Harriet Founder)
@@ -150,7 +184,7 @@ S11 — POST /v1/auth/login/options then /verify twice with the same nonce, issu
 S11 — POST /v1/auth/login/verify with an assertion whose rpIdHash is SHA-256('not-the-estate.invalid')
 S11 — POST /v1/payees {"displayName": "Checksum probe", "addresses": [{"chain": "ethereum", "address": "0x557831919Da17cf9F838c4868476Ab9Da00D3A52"}]}
 S11 — POST /v1/payees {"displayName": "Venue probe", "addresses": [{"chain": "ethereum", "address": "<the corridor's tables.py UNISWAP_V3_ETHEREUM, read at run time>"}]}
-S11 — [check] S7's P3 (12000.00 USDC, above the per-payment limit) was not released without approval
+S11 — [check] S7's P3 (12.00 USDC, above the per-payment limit) was not released without approval
 S11 — POST /v1/approvals/<run P3>/challenge {} then /approve (as Cora Clerk, who entered it)
 S11 — POST /v1/onboarding/interviews/<policy interview>/confirm/options {} then /confirm (as Harriet Founder)
 S11 — DELETE /v1/onboarding/interviews/<policy draft>, DELETE /v1/onboarding/interviews/<account draft>

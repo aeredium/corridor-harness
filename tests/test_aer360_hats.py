@@ -148,8 +148,8 @@ class TheAuditorOnAFixture(unittest.TestCase):
                                                              "charter (wallet_account): the two-signature figure (WO4)"])
         self.assertEqual(old_account[1]["expected"], json.dumps({"held": "by_person", "name": "Ben Signatory", "email": A.PEOPLE["ben"].email, "title": "Officer"}, ensure_ascii=False))
         self.assertEqual(old_account[1]["said"], "the charter carries null")
-        self.assertEqual((old_account[2]["expected"], old_account[2]["said"]), ('"200000"', "the charter carries null"))
-        self.assertEqual((old_account[3]["expected"], old_account[3]["said"]), ('"1000000"', "the charter carries null"))
+        self.assertEqual((old_account[2]["expected"], old_account[2]["said"]), ('"200"', "the charter carries null"))
+        self.assertEqual((old_account[3]["expected"], old_account[3]["said"]), ('"1000"', "the charter carries null"))
         # a figure that differs is the one finding for that figure: the written dollar left in place by an estate that did not take the answer
         drifted = fixture_charter("wallet_account")
         drifted["signingTiers"]["twoSignaturesUpToCents"] = "100"
@@ -198,16 +198,16 @@ class TheAuditorOnAFixture(unittest.TestCase):
         """Spec T11 §2: the two figures read as the book wrote them and not as US$1.00, and the venue sentence reads No, with the door's line after it."""
         answers = fixture_answers("wallet_account")
         lines = fixture_readback("wallet_account")
-        self.assertEqual(next(l["spoken"] for l in lines if l["questionId"] == "WO3"), "US$2,000 and 00 cents.")
-        self.assertEqual(next(l["spoken"] for l in lines if l["questionId"] == "WO4"), "US$10,000 and 00 cents.")
+        self.assertEqual(next(l["spoken"] for l in lines if l["questionId"] == "WO3"), "US$2 and 00 cents.")
+        self.assertEqual(next(l["spoken"] for l in lines if l["questionId"] == "WO4"), "US$10 and 00 cents.")
         self.assertEqual(H.audit_readback("wallet_account", answers, lines), [])
         for l in lines:
             if l["questionId"] in ("WO3", "WO4"):
                 l["spoken"] = H.WRITTEN_DOLLAR_SPOKEN
         found = H.audit_readback("wallet_account", answers, lines)
         self.assertEqual([(f["probe"], f["expected"], f["said"]) for f in found], [
-            ("read-back (wallet_account) of WO3", "US$2,000 and 00 cents.", "the read-back says 'US$1 and 00 cents.' — the figure the field arrived written with, not the 'US$2,000 and 00 cents.' the book wrote"),
-            ("read-back (wallet_account) of WO4", "US$10,000 and 00 cents.", "the read-back says 'US$1 and 00 cents.' — the figure the field arrived written with, not the 'US$10,000 and 00 cents.' the book wrote"),
+            ("read-back (wallet_account) of WO3", "US$2 and 00 cents.", "the read-back says 'US$1 and 00 cents.' — the figure the field arrived written with, not the 'US$2 and 00 cents.' the book wrote"),
+            ("read-back (wallet_account) of WO4", "US$10 and 00 cents.", "the read-back says 'US$1 and 00 cents.' — the figure the field arrived written with, not the 'US$10 and 00 cents.' the book wrote"),
         ])
         policy = fixture_answers("policy")
         lines = fixture_readback("policy")
@@ -304,7 +304,7 @@ class TheAuditorOnAFixture(unittest.TestCase):
         self.assertEqual(H.spoken_for("person_or_none", "WO1", {}), "No one chosen.")
         self.assertEqual(H.spoken_for("money", "WO3", {"cents": "100"}), "US$1 and 00 cents.", "the written dollar, as the estate speaks it")
         self.assertEqual(H.spoken_for("money", "WO3", {"cents": "0"}), "US$0 and 00 cents — nothing is paid under this rule until you write a figure.")
-        self.assertEqual(H.spoken_for("money", "WO3", A.ACCOUNT_ANSWERS["WO3"]), "US$2,000 and 00 cents.")
+        self.assertEqual(H.spoken_for("money", "WO3", A.ACCOUNT_ANSWERS["WO3"]), "US$2 and 00 cents.")
         self.assertEqual(H.spoken_for("list", "WO2", A.ACCOUNT_ANSWERS["WO2"]), "Harriet — harness+harriet@aeredium.io — CEO — Founder", "jsonb's order: name, email, title, surname")
 
     def test_the_census_in_the_estates_spoken_form_against_the_books_json_answers_is_no_finding(self):
@@ -376,10 +376,13 @@ class TheAuditorOnAFixture(unittest.TestCase):
     def test_the_minor_unit_law(self):
         good = H.Call("S7", "Cora", "GET", "/v1/sets/1", None, H.Answer("GET", "/v1/sets/1", 200, {}, json.dumps({"set": {"aggregate": {"amountBaseMinor": "125000", "baseDecimals": 2}, "approval": {"bandThresholdBaseMinor": "0"}}}), 5), "now")
         self.assertEqual(H.audit_money([good]), [])
-        bad = H.Call("S7", "Cora", "GET", "/v1/sets/2", None, H.Answer("GET", "/v1/sets/2", 200, {}, json.dumps({"set": {"aggregate": {"amountBaseMinor": 1250.5}, "rows": [{"amountMinor": 12}]}}), 5), "now")
+        bad = H.Call("S7", "Cora", "GET", "/v1/sets/2", None, H.Answer("GET", "/v1/sets/2", 200, {}, json.dumps({"set": {"aggregate": {"amountBaseMinor": 1250.5}, "rows": [{"amountMinor": 12}, {"amountMinor": "12.5"}]}}), 5), "now")
         findings = H.audit_money([bad])
+        # Spec T14: a JSON integer of minor units is exact and no finding — Spec 104's gas roads speak cents so (routes/gas.ts, availableUsdCents); a float, or a string that is not an integer, is
         self.assertEqual(sorted(f["probe"] for f in findings),
-                         sorted(["minor-unit law at set.aggregate.amountBaseMinor (GET /v1/sets/2)", "a float at set.aggregate.amountBaseMinor (GET /v1/sets/2)", "minor-unit law at set.rows[0].amountMinor (GET /v1/sets/2)"]))
+                         sorted(["minor-unit law at set.aggregate.amountBaseMinor (GET /v1/sets/2)", "a float at set.aggregate.amountBaseMinor (GET /v1/sets/2)", "minor-unit law at set.rows[1].amountMinor (GET /v1/sets/2)"]))
+        gas = H.Call("S7", "Cora", "GET", "/v1/gas/account", None, H.Answer("GET", "/v1/gas/account", 200, {}, json.dumps({"account": {"availableUsdCents": 1000, "balanceUsdCents": 1000, "reservedUsdCents": 0, "low": False}}), 5), "now")
+        self.assertEqual(H.audit_money([gas]), [], "the gas account's cents are JSON integers, as Spec 104 speaks them")
 
     def test_rule_13_on_the_refusals_met(self):
         named = H.Call("S6", "Ada", "POST", "/v1/payees/x/approve", {}, H.Answer("POST", "/v1/payees/x/approve", 403, {}, json.dumps({"error": {"code": "ROLE_NOT_GRANTED", "message": "You are signed into X as a viewer. …"}}), 5), "now")
@@ -561,12 +564,21 @@ class TheAttackerAgainstTheDouble(unittest.TestCase):
         self.assertIn("ROLE_NOT_GRANTED", step["came_back"])
         self.assertIn("This action needs an approver", step["came_back"])
         self.assertFalse(any(f.probe == "the clerk approving her own payment (S7's P3)" for f in self.runner.findings))
+        # Spec T14: on the shared credential the charter's Yes still lets the clerk's credential release her own run — but S7 now has the
+        # signers press while the run waits, so Ben's press, wearing the one credential four people wear, approves P3 and it is executed
+        # before S11 asks; the acceptance shows in S7's record (the approving credential is Cora's own), and S11's probe meets the run settled
         pre_91 = EstateDouble(before_spec_91=True)
         runner = runner_on(pre_91, tempfile.mkdtemp(), invite=pre_91.mint_founder_link())
         runner.run()
-        finding = next(f for f in runner.findings if f.probe == "the clerk approving her own payment (S7's P3)")
-        self.assertIn("ACCEPTED", finding.said, "one credential worn by four people: the charter's Yes lets the clerk release her own run")
-        self.assertTrue(finding.route.startswith("POST /v1/approvals/"))
+        self.assertFalse(any(f.probe == "the clerk approving her own payment (S7's P3)" for f in runner.findings))
+        p3 = runner.facts["sets"]["P3"]
+        first = p3["approvals"][0]
+        self.assertEqual(first["who"], "Ben Signatory")
+        self.assertEqual(first["credential"], runner.people["cora"].credential_id, "the press that approved P3 wore the clerk's own credential: one credential, four people")
+        self.assertEqual(first["status_after"], "approved")
+        probe = next(s for s in runner.evidence["S11"] if "the clerk approving her own payment" in str(s.get("probe", "")))
+        self.assertEqual(probe["status"], 409, "P3 was approved and executed in S7, so the clerk's own press meets SET_NOT_APPROVABLE")
+        self.assertIn("SET_NOT_APPROVABLE", probe["came_back"])
 
     def test_findings_are_printed_in_the_failure_form_with_the_probe(self):
         lines = [l for l in self.said if l.startswith("S11 — fail — ") and ": ACCEPTED: " in l]

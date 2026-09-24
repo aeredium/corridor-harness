@@ -9,7 +9,10 @@ venue probe's expectation follows the book's C19, and S7's submit lines say what
 funding wallet and the faucet — the workspace read, the options road, the press, the read-back, the one balance read and the one
 faucet call — and added S7's asset-line report (143 → 150 lines). Spec T15 added, under S4, the roster changes read, the signature's two
 roads for each person the list names, the seat granted again for a change listed expired, and the read-back after the count, and under
-S10 the trail's roster.seat_rebound row (150 → 156 lines).
+S10 the trail's roster.seat_rebound row (150 → 156 lines). Spec T17 added S4's grant step (156 → 159). Spec T14 rewrote S7: the admin credential's
+file, the Treasury's sign-in or birth, its charter and funding wallet, the four money reads before, the Treasury's gas credit and its payment of the
+shortfall, S7a's review of the set of three, Holdings' gas credit, each payment's balance reads on the chain, its review, creation, submission,
+approvals in the spec's order, execution and register reads, the trail, and the four money reads after; and under S10 the money moved (159 → 193 lines).
 """
 import contextlib
 import io
@@ -106,8 +109,8 @@ class DryRunTest(unittest.TestCase):
         # Spec T11: the wallet's people and tiers, after WA2 and before WCW, as the book sends them
         self.assertTrue(any('"questionId": "WO1", "value": {"choice": "One person, named here", "person": {"name": "Ben Signatory", "email": "harness+ben@aeredium.io"}}' in l for l in s5))
         self.assertTrue(any('"questionId": "WO2", "value": {"entries": [{"name": "Harriet", "surname": "Founder", "email": "harness+harriet@aeredium.io", "title": "CEO"}]}' in l for l in s5))
-        self.assertTrue(any('"questionId": "WO3", "value": {"cents": "200000"}' in l for l in s5))
-        self.assertTrue(any('"questionId": "WO4", "value": {"cents": "1000000"}' in l for l in s5))
+        self.assertTrue(any('"questionId": "WO3", "value": {"cents": "200"}' in l for l in s5), "Spec T14: US$2.00")
+        self.assertTrue(any('"questionId": "WO4", "value": {"cents": "1000"}' in l for l in s5), "Spec T14: US$10.00")
         self.assertTrue(any('"questionId": "WA1", "value": {"entries": [{"name": "Ada Approver", "email": "harness+ada@aeredium.io"}, {"name": "Ben Signatory", "email": "harness+ben@aeredium.io"}]}' in l for l in s5))
         account_ids = [l.split('"questionId": "', 1)[1].split('"', 1)[0] for l in s5]
         self.assertEqual(account_ids[account_ids.index("WA2") + 1:account_ids.index("WCW")], ["WO1", "WO2", "WO3", "WO4"])
@@ -119,18 +122,27 @@ class DryRunTest(unittest.TestCase):
         self.assertEqual(len([l for l in s6 if "/promote" in l]), 2)
         self.assertEqual(len([l for l in s6 if "/approve" in l]), 6, "three roster pressers per payee: Ada, Ben, Cora (Spec T12)")
         s7 = [l for l in lines if l.startswith("S7 — ")]
-        self.assertEqual(len([l for l in s7 if "POST /v1/sets/review" in l]), 3)
-        self.assertEqual(len([l for l in s7 if "POST /v1/sets {" in l]), 3)
+        # Spec T14: the Treasury's review and creation, S7a's review of the set of three, and the three payments' reviews and creations
+        self.assertEqual(len([l for l in s7 if "POST /v1/sets/review" in l]), 5)
+        self.assertEqual(len([l for l in s7 if "POST /v1/sets {" in l]), 4)
         self.assertTrue(any(T.address("UNLISTED_ETHEREUM") in l and '"declared": true' in l for l in s7))
         for payment in A.PAYMENTS:
             self.assertTrue(any(payment.amount_minor in l for l in s7), payment.key)
-        self.assertTrue(any("POST /v1/approvals/<run P1>/approve" in l for l in s7))
-        # Spec T11 §4: the submit lines say what the tiers would do, and the amounts are unchanged
+        self.assertTrue(any("POST /v1/approvals/<run P1>/challenge {} then /approve" in l for l in s7))
+        self.assertTrue(any("POST /v1/approvals/<run HT>/challenge {} then /approve" in l and "the Treasury founder" not in l and "Harriet Founder at Harness Treasury" in l for l in s7))
+        # Spec T14 §4: the submit lines say what the spec asks and what the tiers would do, in cents
         submits = [l for l in s7 if "/submit {}" in l]
-        self.assertEqual(len(submits), 3)
-        self.assertIn("1250.00 (USDC): expected to proceeds to approval; under the tiers: within the holder's own figure (US$2,000.00), one signature — the holder's", submits[0])
-        self.assertIn("4999.99 (USDC): expected to waits; under the tiers: two signatures (above US$2,000.00, up to US$10,000.00)", submits[1])
-        self.assertIn("12000.00 (USDC): expected to held; under the tiers: three signatures (above US$10,000.00)", submits[2])
+        self.assertEqual(len(submits), 4, "the Treasury's payment and the three")
+        self.assertIn("1.25 (USDC): expected to proceeds to approval; the spec: lands with one signature, the holder's (Ben Signatory); under the tiers: within the holder's own figure (US$2.00), one signature — the holder's", submits[1])
+        self.assertIn("4.99 (USDC): expected to waits; the spec: waits for two and lands when Ben Signatory and Cora Clerk sign; under the tiers: two signatures (above US$2.00, up to US$10.00)", submits[2])
+        self.assertIn("12.00 (USDC): expected to held; the spec: waits for three and lands when the third signs; under the tiers: three signatures (above US$10.00)", submits[3])
+        self.assertEqual(len([l for l in s7 if "/execute {}" in l]), 4, "every approved run is executed by its author")
+        self.assertEqual(len([l for l in s7 if "gas-account/credits" in l]), 3, "the Treasury's credit, Holdings' credit, and the Treasury's where it was not credited before")
+        self.assertEqual(len([l for l in s7 if T.public_rpc_url(T.PAYEE_CHAIN) in l]), 6, "each payee's balance before and after, on the chain")
+        self.assertEqual(len([l for l in s7 if T.GAS_ACCOUNT_ROUTE in l]), 3, "both gas accounts before, and the money-after line")
+        self.assertTrue(any(T.NO_GAS_CREDIT_ROAD_SENTENCE in l for l in s7))
+        self.assertTrue(any(T.FUND_TREASURY_SENTENCE % ("<address>", T.PAYEE_CHAIN) in l for l in s7))
+        self.assertTrue(any("Your gas account holds US$<available>. This set needs at most US$<ceiling> of gas. Nothing was sent. Buy gas below." in l for l in s7))
         s8 = [l for l in lines if l.startswith("S8 — ")]
         self.assertTrue(any("GET /v1/workspace/readiness" in l for l in s8))
 
@@ -143,9 +155,13 @@ class DryRunTest(unittest.TestCase):
         spec92 = [l for l in s10 if "Spec 92 fields" in l]
         self.assertEqual(len(spec92), 1)
         for words in ("payeeApproval (C11A — the change approvers, the census of 4 at a quorum of 2)", "payeeVenueContracts (C19 — refused)",
-                      "holder (WO1 — Ben Signatory, by_person, Officer)", "signingTiers.holderAloneUpToCents (WO3 — 200000) and twoSignaturesUpToCents (WO4 — 1000000)",
+                      "holder (WO1 — Ben Signatory, by_person, Officer)", "signingTiers.holderAloneUpToCents (WO3 — 200) and twoSignaturesUpToCents (WO4 — 1000)",
                       "WO2's third party among the signers", "never as the written US$1.00", "C19's door line"):
             self.assertIn(words, spec92[0], words)
+        money = [l for l in s10 if "the money moved (Spec T14 §5)" in l]
+        self.assertEqual(len(money), 1)
+        self.assertIn("the sum of the three payments (US$18.24)", money[0])
+        self.assertIn("a finding where any pair does not reconcile to the cent", money[0])
         s11 = [l for l in lines if l.startswith("S11 — ")]
         for probe in ("without x-csrf-token", "Ben with the founder's passkey", "a viewer", '"role": "principal"', "not asked given the answers so far",
                       "the compiler reads only confirmed interviews", "an amount is a whole number of cents", "challenge already used", "rpIdHash",
@@ -162,7 +178,7 @@ class DryRunTest(unittest.TestCase):
         """Spec T8: --dry unchanged in its calls. The fixture is the dry run at main after PR #5, its expectations cut off at the arrow."""
         with open(FROZEN_CALLS, "r", encoding="utf-8") as handle:
             frozen = handle.read().splitlines()
-        self.assertEqual(len(frozen), 159, "Spec T17 adds S4's grant-step read of the seats with onRoster, the grant of a stale seat, and the seat read back after the count (156 → 159)")
+        self.assertEqual(len(frozen), 193, "Spec T14 rewrites S7 for the Treasury, the money, S7a, the gas credits and the payments judged on money that moved, and adds S10's money line (159 → 193)")
         self.assertEqual(calls_of(H.dry_lines()), frozen)
         self.assertEqual(len([l for l in frozen if l.startswith("S4 — ") and "/v1/roster/changes" in l]), 4, "the list, the options, the press, the read-back after the count")
         self.assertEqual(len([l for l in frozen if l.startswith("S4 — ") and "/v1/approver-seats/grant" in l]), 3, "Spec T10's grant, Spec T17's grant of a stale seat, and Spec T15's seat granted again for an expired change")
@@ -174,6 +190,12 @@ class DryRunTest(unittest.TestCase):
         self.assertEqual(len(added), 6)
         self.assertEqual(len([l for l in frozen if l.startswith("S10 — ") and "Spec 92 fields" in l]), 1)
         self.assertEqual(len([l for l in frozen if l.startswith("S6 — ") and "/approve" in l]), 6, "three roster pressers per payee")
+        # Spec T14: S7's new calls, cut at the arrow
+        self.assertEqual(len([l for l in frozen if l.startswith("S7 — ") and "gas-account/credits" in l]), 3)
+        self.assertEqual(len([l for l in frozen if l.startswith("S7 — ") and "/execute {}" in l]), 4)
+        self.assertEqual(len([l for l in frozen if l.startswith("S7 — ") and "/v1/export/audit" in l]), 2, "the Treasury's trail and Holdings'")
+        self.assertEqual(len([l for l in frozen if l.startswith("S7 — ") and T.public_rpc_url(T.PAYEE_CHAIN) in l]), 6)
+        self.assertEqual(len([l for l in frozen if l.startswith("S10 — ") and "the money moved" in l]), 1)
 
     def test_s4_carries_the_conditional_re_invitation_for_each_author_and_the_seat_re_grant(self):
         """Spec T10 §5: for each author the comparison and the conditional fresh invitation, options and verify with a NEW passkey stored beside the old; for Ada the seat re-grant."""
@@ -278,8 +300,9 @@ class DryRunTest(unittest.TestCase):
         s6 = [l for l in lines if l.startswith("S6 — GET /v1/payees")]
         self.assertIn("the judgement is the register's, not the press's — a register reading proposed after the platform counted 2 of 2 fails with the mirror sentence (Spec T13 §3)", s6[0])
         s7 = [l for l in lines if l.startswith("S7 — ")]
-        self.assertIn("expect the funding wallet S5 gave the estate (fundingWallet; sourceAccount is the account the runs leave from, Spec 98)", s7[0])
-        self.assertTrue(s7[-1].startswith("S7 — [report] where a payment is refused with the funding wallet present, the refusal verbatim and one line: the funding wallet's address and what the three payments need together — US$18,249.99 of USDC — so it can be funded by hand; the harness never mints or moves the asset"), s7[-1])
+        self.assertIn("expect the funding wallet S5 gave the estate (fundingWallet, with the fund sentence and the chains this deployment pays on, Spec 104 §1)", s7[0])
+        self.assertTrue(s7[-1].startswith("S7 — GET /v1/workspace/funding-account/balances (as Cora Clerk), GET /v1/workspace/funding-account/balances (as Harriet Founder at Harness Treasury)"), s7[-1])
+        self.assertIn("the money after: both workspaces' USDC and gas accounts, for S10's count", s7[-1])
         s8 = [l for l in lines if l.startswith("S8 — GET /v1/workspace/readiness")]
         self.assertIn('printed: transactable True once the wallet exists (False, reason "no funding wallet", before it), and the funding wallet\'s address', s8[0])
 

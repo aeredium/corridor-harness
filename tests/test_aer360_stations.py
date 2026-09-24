@@ -134,7 +134,7 @@ class TheFoundersRoad(unittest.TestCase):
         o = self.outcomes["S5"]
         self.assertEqual(o.outcome, H.PASS, o.line)
         self.assertIn("wallet account: 18 questions answered", o.line, "Spec T11: WO1 to WO4 among them, WO3 behind the named holder")
-        self.assertIn("charter compiled (Operating account, purpose Operations — day-to-day business payments, per payment hold 1000000 cents, daily 5000000 cents, destinations hold_non_listed)", o.line)
+        self.assertIn("charter compiled (Operating account, purpose Operations — day-to-day business payments, per payment hold 1000 cents, daily 5000 cents, destinations hold_non_listed)", o.line)
         self.assertIn("journey stage 3 of 7 (working_the_sandbox)", o.line)
         self.assertIn("No daily close has completed yet", o.line)
         given = [q for q, _, _, _ in self.runner.facts["answers"]["wallet_account"]]
@@ -143,8 +143,8 @@ class TheFoundersRoad(unittest.TestCase):
         # the compiled account charter carries Spec 92's fields as the compiler records them
         charter = self.runner.facts["charter"]["wallet_account"]
         self.assertEqual(charter["holder"], {"held": "by_person", "name": "Ben Signatory", "email": A.PEOPLE["ben"].email, "title": "Officer"})
-        self.assertEqual(charter["signingTiers"]["holderAloneUpToCents"], "200000")
-        self.assertEqual(charter["signingTiers"]["twoSignaturesUpToCents"], "1000000")
+        self.assertEqual(charter["signingTiers"]["holderAloneUpToCents"], "200", "Spec T14: US$2.00")
+        self.assertEqual(charter["signingTiers"]["twoSignaturesUpToCents"], "1000", "Spec T14: US$10.00")
         self.assertEqual(charter["signingTiers"]["thirdParty"], {"name": "Harriet", "surname": "Founder", "email": A.PEOPLE["harriet"].email, "title": "CEO"})
         self.assertEqual(charter["signers"], ["Ada Approver <%s>" % A.PEOPLE["ada"].email, "Ben Signatory <%s>" % A.PEOPLE["ben"].email, "Harriet Founder <%s>" % A.PEOPLE["harriet"].email],
                          "WA1's people, and WO2's third party once")
@@ -152,8 +152,8 @@ class TheFoundersRoad(unittest.TestCase):
         self.assertIsNone(charter["payeeVenueContracts"])
         # the read-back spoke the figures the book wrote, never the written dollar, and the person by name and email
         lines = {l["questionId"]: l["spoken"] for l in self.runner.facts["readback"]["wallet_account"]["lines"]}
-        self.assertEqual(lines["WO3"], "US$2,000 and 00 cents.")
-        self.assertEqual(lines["WO4"], "US$10,000 and 00 cents.")
+        self.assertEqual(lines["WO3"], "US$2 and 00 cents.")
+        self.assertEqual(lines["WO4"], "US$10 and 00 cents.")
         self.assertEqual(lines["WO1"], "Ben Signatory — %s." % A.PEOPLE["ben"].email)
         self.assertEqual(lines["WO2"], "Harriet — %s — CEO — Founder" % A.PEOPLE["harriet"].email, "a list entry's values in the order jsonb stores them")
         self.assertIn("WO1_TITLE", lines)
@@ -179,29 +179,44 @@ class TheFoundersRoad(unittest.TestCase):
         self.assertEqual([f for f in self.runner.findings if f.station == "S6"], [], "the estate said why at each pending press, at a quorum its roster can meet")
 
     def test_s7_makes_the_three_payments_as_the_clerk_and_reads_each_state_against_its_expectation(self):
+        """Spec T14 §4: S7 is judged on money that moved — each payment on the run's status, the userOpHash, the handleOps txHash and the payee's USDC before and after."""
         o = self.outcomes["S7"]
         self.assertEqual(o.outcome, H.PASS, o.line)
         self.assertTrue(o.line.startswith("payments as Cora Clerk:"))
-        # Spec T12: S6 whitelisted Northwind, so the first payment to it is within limits and clears at submission (no approval asked)
-        self.assertIn("P1 (1250.00 USDC, expected to proceeds to approval): created and submitted; status approved, approvalsRequired 0", o.line)
-        self.assertIn("Ada's approval of P1 was not asked: the run stands approved", o.line)
-        self.assertIn("P2 (4999.99 USDC, expected to waits): the run waits for approval: status pending_approval, approvalsRequired 1", o.line)
-        self.assertIn("P3 (12000.00 USDC, expected to held): the run waits for approval: status pending_approval, approvalsRequired 1", o.line)
-        # Spec T11 §4: the amounts are unchanged, and the line and the expectation column say what the tiers would do with each
-        self.assertIn("approvalsRequired 0; under the tiers: within the holder's own figure (US$2,000.00), one signature — the holder's", o.line)
-        self.assertIn("approvalsRequired 1; under the tiers: two signatures (above US$2,000.00, up to US$10,000.00)", o.line)
-        self.assertIn("approvalsRequired 1; under the tiers: three signatures (above US$10,000.00)", o.line)
+        # Spec T12: S6 whitelisted Northwind, so the first payment to it is within the hold and clears at submission (the estate asks no signature)
+        self.assertIn("P1 (1.25 USDC, expected to proceeds to approval): submitted: status approved, approvalsRequired 0; landed (+US$1.25): instruction confirmed, run settled, userOpHash 0x", o.line)
+        self.assertIn("payee US$0.00 → US$1.25, gas US$0.31; the estate asked 0 signature(s) and the spec: lands with one signature, the holder's (Ben Signatory); under the tiers: within the holder's own figure (US$2.00), one signature — the holder's", o.line)
+        # the signers press in the spec's order while a run waits; the estate admits the approver standing alone, and says so in its own words
+        self.assertIn("P2 (4.99 USDC, expected to waits): submitted: status pending_approval, approvalsRequired 1; Ben Signatory refused (ROLE_NOT_GRANTED: You are signed into Harness Holdings Pty Ltd as an author and a viewer. This action needs an approver", o.line)
+        self.assertIn("Cora Clerk refused (ROLE_NOT_GRANTED:", o.line)
+        self.assertIn("Ada Approver signed (1 of 1): approved; landed (+US$4.99): instruction confirmed, run settled, userOpHash 0x", o.line)
+        self.assertIn("payee US$0.00 → US$4.99, gas US$0.31; the estate asked 1 signature(s) and the spec: waits for two and lands when Ben Signatory and Cora Clerk sign; under the tiers: two signatures (above US$2.00, up to US$10.00)", o.line)
+        self.assertIn("P3 (12.00 USDC, expected to held): submitted: status pending_approval, approvalsRequired 1;", o.line)
+        self.assertIn("payee US$0.00 → US$12.00, gas US$0.31; the estate asked 1 signature(s) and the spec: waits for three and lands when the third signs; under the tiers: three signatures (above US$10.00)", o.line)
         submits = [s for s in self.runner.evidence["S7"] if s["route"].endswith("/submit")]
-        self.assertEqual([s["expected"].split("; ", 1)[1] for s in submits],
-                         ["under the tiers: within the holder's own figure (US$2,000.00), one signature — the holder's",
-                          "under the tiers: two signatures (above US$2,000.00, up to US$10,000.00)",
-                          "under the tiers: three signatures (above US$10,000.00)"])
-        reviews = [s for s in self.runner.evidence["S7"] if s["route"].endswith("/sets/review")]
+        self.assertEqual(len(submits), 4, "the Treasury's payment and the three")
+        self.assertEqual([s["expected"].split("; ")[1] for s in submits[1:]],
+                         ["under the tiers: within the holder's own figure (US$2.00), one signature — the holder's",
+                          "under the tiers: two signatures (above US$2.00, up to US$10.00)",
+                          "under the tiers: three signatures (above US$10.00)"])
+        reviews = [s for s in self.runner.evidence["S7"] if s["route"].endswith("/sets/review") and "(figures from" in s["expected"]]
+        self.assertEqual(len(reviews), 3)
         self.assertTrue(all("(figures from this run's compiled account charter)" in s["expected"] for s in reviews), [s["expected"] for s in reviews])
-        self.assertEqual([p.amount for p in A.PAYMENTS], ["1250.00", "4999.99", "12000.00"])
+        self.assertEqual([p.amount for p in A.PAYMENTS], ["1.25", "4.99", "12.00"])
         sets = self.runner.facts["sets"]
         self.assertEqual(sets["P2"]["view"]["set"]["instructions"][0]["isOneOff"], True)
         self.assertEqual(sets["P3"]["view"]["set"]["approval"]["bandThresholdBaseMinor"], A.MONEY["per_payment_cents"])
+        for key in ("P1", "P2", "P3"):
+            record = sets[key]
+            self.assertTrue(record["landed"], record["said"])
+            self.assertEqual((record["status"], record["set_status"]), ("confirmed", "settled"))
+            self.assertTrue(str(record["tx_hash"]).startswith("0x") and str(record["user_op_hash"]).startswith("0x"), key)
+            self.assertEqual(record["gas_debit_cents"], 31)
+            self.assertEqual(record["balance_after"] - record["balance_before"], int(record["amount_minor"]), key)
+        # every payment was executed by its author and the register shows it settled
+        executes = [c for c in self.runner.calls if c.station == "S7" and c.route.endswith("/execute")]
+        self.assertEqual(len(executes), 4)
+        self.assertTrue(all(c.who in ("Cora Clerk", "Harriet Founder (Harness Treasury)") for c in executes), [c.who for c in executes])
 
     def test_s8_prints_the_journey_and_the_readiness(self):
         o = self.outcomes["S8"]
@@ -359,10 +374,16 @@ class TheEstateBeforeSpec91(unittest.TestCase):
         self.assertTrue(findings[1].said.endswith("; %s is the founder's credential" % H.last4(self.runner.people["harriet"].credential_id)), findings[1].said)
         self.assertIn("the register's rows carry no sharesCredentialWith (Spec 91's marker), so it was not read: an estate before Spec 91", self.runner.notes["S10"])
 
-    def test_s11_finds_the_clerks_own_approval_accepted_on_the_shared_credential(self):
+    def test_s7s_first_signer_on_the_shared_credential_releases_the_clerks_own_run_and_s11_meets_it_settled(self):
+        """Spec T14: the signers press while a run waits; on the one credential four people wear, Ben's press is the clerk's own credential approving her own run."""
+        p3 = self.runner.facts["sets"]["P3"]
+        self.assertEqual(p3["approvals"][0]["who"], "Ben Signatory")
+        self.assertEqual(p3["approvals"][0]["credential"], self.runner.people["cora"].credential_id)
+        self.assertEqual(p3["approvals"][0]["status_after"], "approved")
+        self.assertTrue(p3["landed"], p3["said"])
         probes = [f.probe for f in self.runner.findings if f.station == "S11"]
-        self.assertEqual(probes, ["a payee address with a wrong checksum", "the clerk approving her own payment (S7's P3)"])
-        self.assertIn("17 probe(s), 2 finding(s)", self.outcomes["S11"].line)
+        self.assertEqual(probes, ["a payee address with a wrong checksum"], "P3 was executed in S7, so the clerk's own press meets the run settled")
+        self.assertIn("17 probe(s), 1 finding(s)", self.outcomes["S11"].line)
 
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
@@ -445,7 +466,9 @@ class ResumedAndSecondRuns(unittest.TestCase):
         self.assertIn("Ada Approver counted (1 of 2); Ben Signatory counted (2 of 2): whitelisted", outcomes["S6"].line)
         self.assertEqual(outcomes["S7"].outcome, H.PASS, outcomes["S7"].line)
         self.assertEqual(runner.facts["unlisted_key"], "UNLISTED_ETHEREUM_2", "the first run paid the first unlisted destination, so the estate no longer finds it new")
-        self.assertIn("P2 (4999.99 USDC, expected to waits): the run waits for approval", outcomes["S7"].line)
+        self.assertIn("P2 (4.99 USDC, expected to waits): submitted: status pending_approval, approvalsRequired 1", outcomes["S7"].line)
+        self.assertIn("the Treasury founder signed in with the stored passkey", outcomes["S7"].line, "Spec T14: the Treasury born by the first run is signed in on the rerun")
+        self.assertEqual([c.route for c in runner.calls if c.station == "S7" and "/onboarding/interviews" in c.route], [], "the Treasury's charter stands; its interviews are not walked again")
         self.assertTrue(any("no read-back recorded for the policy interview" in n for n in runner.notes["S10"]))
         # Spec T11: a run that compiled no policy charter reads the book's C19 for the venue probe and says so; the door still refuses by name
         self.assertTrue(any(n.startswith("this run compiled no policy charter (S3 did not run), so the venue probe's expectation is read off the answer book's C19") for n in runner.notes["S11"]), runner.notes["S11"])
@@ -454,8 +477,9 @@ class ResumedAndSecondRuns(unittest.TestCase):
         venue = [s for s in runner.evidence["S11"] if "a real venue contract" in str(s.get("probe", ""))][-1]
         self.assertEqual(venue["status"], 422)
         self.assertIn("(the answer book's C19 is \"No — only wallets held by people or companies\")", venue["expected"])
-        # and S7's tiers are read from the book, no account charter having been compiled in this run
-        reviews = [s for s in runner.evidence["S7"] if s["route"].endswith("/sets/review")]
+        # and S7's tiers are read from the book, no account charter having been compiled in this run (the Treasury's review and S7a's carry no tiers)
+        reviews = [s for s in runner.evidence["S7"] if s["route"].endswith("/sets/review") and "(figures from" in s["expected"]]
+        self.assertEqual(len(reviews), 3)
         self.assertTrue(all("(figures from the answer book)" in s["expected"] for s in reviews), [s["expected"] for s in reviews])
 
     def test_a_second_full_run_signs_in_rather_than_enrolling_and_amends_the_charter(self):
@@ -535,9 +559,15 @@ class TheRunContinuesPastAFailedStation(unittest.TestCase):
         self.assertEqual(outcomes["S6"].outcome, H.PASS, "Spec 95: the roster whitelists the payees; the funding wallet gates S7, not S6")
         o = outcomes["S7"]
         self.assertEqual(o.outcome, H.FAIL)
-        self.assertIn("refused at creation — GAS_PREFLIGHT_UNAVAILABLE: No funding account has been set for this workspace, so network fees cannot be checked.", o.line)
-        self.assertTrue(any("names no funding account" in n and NO_FUNDING_WALLET_SENTENCE in n for n in runner.notes["S7"]), runner.notes["S7"])
-        self.assertNotIn("US$18,249.99", o.line, "no wallet, so no asset line: nothing can be funded by hand yet")
+        # Spec 104 (routes/sets.ts requireSourceAccount): a run asked of an estate with no funding wallet is refused in the wallet's own sentence
+        self.assertIn("refused at creation — WORKSPACE_NOT_PROVISIONED: %s (no funding wallet)" % NO_FUNDING_WALLET_SENTENCE, o.line)
+        self.assertTrue(any(n.startswith("Harness Holdings has no funding wallet (%s)" % NO_FUNDING_WALLET_SENTENCE) for n in runner.notes["S7"]), runner.notes["S7"])
+        self.assertIn("the Treasury was not asked to pay: Harness Holdings has no funding wallet", o.line, "Spec T14: no address to fund")
+        self.assertIn("Harness Treasury was not brought in: Harness Holdings has no funding wallet, so there is no address to fund", o.line)
+        self.assertNotIn("Harness Treasury pays Harness Holdings", o.line)
+        self.assertIn("S7a not made: Harness Holdings has no funding wallet, so the estate refuses the set before its gas gate is reached", o.line)
+        self.assertEqual([c for c in runner.calls if c.station == "S7" and "gas-account/credits" in c.path], [], "nothing of this run could leave, so no gas was credited")
+        self.assertTrue(any(n.startswith("no gas was credited: Harness Holdings has no funding wallet") for n in runner.notes["S7"]), runner.notes["S7"])
         self.assertEqual(outcomes["S8"].outcome, H.PASS)
         self.assertIn("journey stage 3 of 7", outcomes["S8"].line)
         self.assertIn("readiness: transactable False, reason no funding wallet; funding wallet: none — %s" % NO_FUNDING_WALLET_SENTENCE, outcomes["S8"].line)

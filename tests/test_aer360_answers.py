@@ -118,9 +118,12 @@ class TheBookCoversTheCatalog(unittest.TestCase):
                     self.assertRegex(value["cents"], r"^\d+$", qid)
                 if "percent" in value and value["percent"] is not None:
                     self.assertTrue(0 < value["percent"] <= 100, qid)
-        self.assertEqual(A.MONEY["per_payment_cents"], "1000000")
-        self.assertEqual(A.MONEY["per_day_cents"], "5000000")
-        self.assertEqual(A.MONEY["treasury_ceiling_cents"], "25000000")
+        # Spec T14 §1: every money answer scaled by one thousand — the hold US$10.00, the daily US$50.00, the treasury ceiling US$250.00
+        self.assertEqual(A.MONEY["per_payment_cents"], "1000")
+        self.assertEqual(A.MONEY["per_day_cents"], "5000")
+        self.assertEqual(A.MONEY["treasury_ceiling_cents"], "25000")
+        self.assertEqual(A.ACCOUNT_ANSWERS["P3"]["cents"], A.MONEY["per_payment_cents"], "the payroll dialect's hold, likewise")
+        self.assertEqual(A.ACCOUNT_ANSWERS["X2"]["cents"], A.MONEY["per_day_cents"], "the trading dialect's daily figure, likewise")
         self.assertEqual(A.ACCOUNT_ANSWERS["O2"]["cents"], A.MONEY["per_payment_cents"])
         self.assertEqual(A.ACCOUNT_ANSWERS["O1"]["cents"], A.MONEY["per_day_cents"])
         self.assertEqual(A.ACCOUNT_ANSWERS["T1"]["cents"], A.MONEY["treasury_ceiling_cents"])
@@ -196,11 +199,16 @@ class TheBookIsTheSpecsEstate(unittest.TestCase):
         self.assertEqual(A.POLICY_ANSWERS["C12A"]["choice"], "No")
 
     def test_the_payments_the_spec_decided(self):
+        # Spec T14 §1: P1 US$1.25 (within the holder's figure), P2 US$4.99 (two signatures), P3 US$12.00 (three)
         self.assertEqual([(p.key, p.amount, p.expect) for p in A.PAYMENTS],
-                         [("P1", "1250.00", "proceeds to approval"), ("P2", "4999.99", "waits"), ("P3", "12000.00", "held")])
-        self.assertEqual(A.PAYMENTS[0].amount_minor, "1250000000")
-        self.assertEqual(A.PAYMENTS[1].amount_minor, "4999990000")
-        self.assertEqual(A.PAYMENTS[2].amount_minor, "12000000000")
+                         [("P1", "1.25", "proceeds to approval"), ("P2", "4.99", "waits"), ("P3", "12.00", "held")])
+        self.assertEqual(A.PAYMENTS[0].amount_minor, "1250000")
+        self.assertEqual(A.PAYMENTS[1].amount_minor, "4990000")
+        self.assertEqual(A.PAYMENTS[2].amount_minor, "12000000")
+        self.assertEqual(T.payments_total([p.amount for p in A.PAYMENTS]), "18.24", "the three payments together: what the Treasury pays a fresh Holdings")
+        self.assertLess(int(A.PAYMENTS[0].amount_minor) // 10000, int(A.MONEY["holder_alone_cents"]), "P1 is within the holder's own figure")
+        self.assertLess(int(A.PAYMENTS[1].amount_minor) // 10000, int(A.MONEY["two_signatures_cents"]), "P2 is within the two-signature figure")
+        self.assertGreater(int(A.PAYMENTS[2].amount_minor) // 10000, int(A.MONEY["two_signatures_cents"]), "P3 is above the two-signature figure, and above the hold")
         self.assertEqual(A.PAYMENTS[0].payee_key, "NORTHWIND_ETHEREUM")
         self.assertIsNone(A.PAYMENTS[1].payee_key, "the second payment goes to an address not on the list")
         self.assertEqual(A.PAYMENTS[2].payee_key, "CONTOSO_ETHEREUM")
@@ -303,8 +311,8 @@ class TheBookAnswersCatalogVersion14(unittest.TestCase):
 
     def test_wo4_is_above_wo3_and_neither_is_the_written_dollar(self):
         wo3, wo4 = A.ACCOUNT_ANSWERS["WO3"], A.ACCOUNT_ANSWERS["WO4"]
-        self.assertEqual(wo3, {"cents": "200000"}, "2,000.00 — the holder alone")
-        self.assertEqual(wo4, {"cents": "1000000"}, "10,000.00 — two signatures enough")
+        self.assertEqual(wo3, {"cents": "200"}, "US$2.00 — the holder alone (Spec T14: the book pays in cents)")
+        self.assertEqual(wo4, {"cents": "1000"}, "US$10.00 — two signatures enough (Spec T14)")
         self.assertGreater(int(wo4["cents"]), int(wo3["cents"]), "the compiler refuses at the read-back where WO4 is not above WO3")
         self.assertNotEqual(wo3, A.WRITTEN_ONE_DOLLAR)
         self.assertNotEqual(wo4, A.WRITTEN_ONE_DOLLAR)
