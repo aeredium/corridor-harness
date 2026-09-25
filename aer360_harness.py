@@ -152,6 +152,25 @@ and never pay a record whose chain differs; S7's funding note and T14's Treasury
 once against Uniswap's published deployments) and expects PAYEE_IS_VENUE_CONTRACT for a payee registered on PAYEE_CHAIN. The pinned keys
 keep the names they were first minted under, so no address moved; the tiers, the holds, the three payments and their outcomes stand.
 
+Spec T19 (25 September 2026): the harness reaches the wait with a quorum of two, signs as two people, and a scenario that stops at
+its first line says so in red. AER 360 Spec 109 (aeredium/AERAccounts, commit e2dcc6e) made a write whose approved-destinations list
+the platform holds for the client's own approvers a WAIT rather than a failure: the compile answers 202 `awaiting_approvals`, one read
+(GET /v1/onboarding/ceremonies) says who has not signed, and each approver signs where they stand under their own passkey; the
+signature that meets the count finishes the write as the presser. S14 finds-or-starts a second wallet-account interview named
+`Harness Holdings — approvals` (an awaiting one of that name is resumed at the ceremonies read, never started twice), answered as
+the book answers the first except WQ = 2 and WA1 naming Ada and Ben, asserts the 202 and the read (0 of 2, both in maySign), then
+`finish_awaiting`: Ada signs (1 of 2, callerHasSigned; her second press meets APPROVER_ALREADY_SIGNED), Ben signs and the write
+finishes — the trail's interview_written pressed by Ben, two ceremony_signed, one write_awaiting_approvals, and no second funding
+wallet. Every refusal is judged for Rule 13 as S10 judges them. The harness never strands its estate: before S5 the runner finishes
+any wallet-account interview the estate hands back awaiting (a lapsed ceremony has the founder press Finish the write first), or
+S5 reports "FAILED — prerequisite: <name> stands awaiting approvals and could not be finished"; `confirm_and_compile` accepts the
+202 for S14 alone and stops S5 with "the write is waiting for approvals; S5 expects a write that finishes". A rerun opens another
+account. And a StationStop that names a missing prerequisite — a station that could not start, or could not run to its judgment,
+for want of something it names — is now its own outcome kind, FAILED — prerequisite, beside PASS and FAIL: red in the closing table
+and on a terminal, counted as failure for the exit code, the line naming the scenario and what was missing (S7 with no Treasury:
+"Harness Treasury not born"); a stop on the estate's refusal stays fail, the estate failing. A scenario that did not start has
+proven nothing.
+
 Runs on the Mac's own Python 3.9.6 with the standard library only: urllib.request, http.cookiejar,
 json, hashlib, secrets, base64, struct, subprocess. The one binary it calls is /usr/bin/openssl,
 through aer360_passkey.py. Nothing to install; nothing is shipped to any box.
@@ -273,19 +292,39 @@ LANDING_READS = 30  # after POST /v1/sets/{id}/execute answers, GET /v1/sets/{id
 LANDING_WAIT_SECONDS = 3.0  # the bounded wait between those reads (no-op under the test clock)
 TRAIL_PAGES_AT_MOST = 40  # GET /v1/export/audit is followed by its nextCursor up to this many pages of AUDIT_EXPORT_LIMIT rows
 SIGNERS_IN_ORDER = ("ben", "cora", "ada", "harriet")  # SPEC.md §4's order for a run that waits: the holder, the clerk, then the approver and the third party
+# Spec T19 §3: what S7 names as missing when it stops at its first line — the summary line reads "S7 — FAILED — prerequisite — payments: <this> — <the sentence>"
+TREASURY_NOT_BORN = "Harness Treasury not born"            # no passkey stored for its founder and no --treasury-invite: the first run births it
+TREASURY_NOT_FUNDED = "Harness Treasury not funded"        # the birth run: born this run, its address printed, and Bear funds it once before the rerun
+TREASURY_SHORT = "Harness Treasury short of the run"       # it stood before and holds less than the shortfall
+TREASURY_NOT_SIGNED_IN = "Harness Treasury not signed in"  # its founder's session could not be opened
+TREASURY_NO_WALLET = "Harness Treasury has no funding wallet"
+NO_ADMIN_CREDENTIAL = "no admin credential filed"          # ~/.aer360-harness/admin.env is absent, so no gas can be credited
+FOUNDER_NOT_ENROLLED = "the founder not enrolled here"     # S1: no passkey stored for the founder and no --invite <link>; the first run needs the link
+NO_FOUNDER_SESSION = "no founder session"                  # every station after S1 that needs the founder signed in
+SPEC_106_NOT_LIVE_PREREQUISITE = "AER 360 Spec 106 not live"  # S3's precondition (Spec T18 §4), checked before anything is amended
+SPEC_109_NOT_LIVE_PREREQUISITE = "AER 360 Spec 109 not live"  # S14's first line: the estate has no door onto the writes that wait
 
 STATIONS: List[Tuple[str, str]] = [
     ("S1", "Enrol"), ("S2", "Journey"), ("S3", "Policy Interview"), ("S4", "People"),
     ("S5", "Wallet account"), ("S6", "Payees"), ("S7", "Payments"), ("S8", "Journey and readiness"),
     ("S9", "The tour"), ("S10", "The auditor"), ("S11", "The attacker"), ("S12", "The optimizer"),
+    # Spec T19: the write that waits for approvals, walked after the three hats — a second wallet account at a quorum of two, signed by two people
+    ("S14", "The write that waits"),
 ]
 STATION_IDS = [s for s, _ in STATIONS]
 
 PASS = "pass"
 FAIL = "fail"
+# Spec T19 §3: a station that stopped at a missing prerequisite — what it needed was not there, and the stop names it — is neither a
+# pass nor the estate's failure; it is a failure with its own name, counted as failure for the exit code, red in the closing table
+# and on a terminal. A stop on the estate's refusal (a confirm or a compile answered a refusal code) stays `fail`: the estate failing.
+FAILED_PREREQUISITE = "FAILED — prerequisite"
 SKIPPED = "skipped"
 NOT_RUN = "not run"
 OUT_OF_SCOPE = "out of scope"
+RED = "\033[31m"  # the terminal's red, for the one outcome kind said in red (Spec T19 §3); never written to the report's text
+RESET = "\033[0m"
+FAILURES = (FAIL, FAILED_PREREQUISITE)  # the outcome kinds that make the exit code 1
 
 # The sentences a refusal must never be (Rule 13: a refusal is never told as an outage, and a
 # bare status code or a generic sentence names nothing). Compared case-insensitively.
@@ -309,7 +348,21 @@ class Unreachable(HarnessError):
 
 
 class StationStop(Exception):
-    """A station stops here, with its own sentence; the run continues where the next does not depend on it."""
+    """
+    A station stops here, with its own sentence; the run continues where the next does not depend on it. Since Spec T19 §3 a stop that
+    NAMES a missing prerequisite is the outcome kind FAILED — prerequisite: the station could not run to its judgment, so it proved nothing
+    about the estate — which is not the estate's failure and not a pass (S7 with no Treasury: "Harness Treasury not born"; the sentence says
+    the rest, and the line carries both). A stop that names none — a confirm or a compile answered a refusal code, a road refused — stays
+    `fail`: the estate failing, in its own words.
+    """
+
+    def __init__(self, sentence: str, prerequisite: Optional[str] = None):
+        super().__init__(sentence)
+        self.sentence = sentence
+        self.prerequisite = prerequisite
+
+    def __str__(self) -> str:
+        return ("%s — %s" % (self.prerequisite, self.sentence)) if self.prerequisite else self.sentence
 
 
 # ---------------------------------------------------------------------------
@@ -620,7 +673,7 @@ class Runner:
                  transport: Optional[Transport] = None, say: Callable[[str], None] = print,
                  sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic,
                  openssl: str = PK.OPENSSL, treasury_invite: Optional[str] = None, estate: Optional[Dict[str, str]] = None,
-                 admin_env: Optional[str] = None):
+                 admin_env: Optional[str] = None, in_colour: Optional[bool] = None):
         self.base = base.rstrip("/")
         parsed = urllib.parse.urlparse(self.base)
         self.origin = "%s://%s" % (parsed.scheme, parsed.netloc)
@@ -640,6 +693,8 @@ class Runner:
         self.dry = dry
         self.transport = transport or urllib_transport
         self.say = say
+        # Spec T19 §3: the one outcome kind said in red is coloured on a terminal only — never in a test's captured lines, never in the report's text
+        self.in_colour = in_colour if in_colour is not None else (say is print and hasattr(sys.stdout, "isatty") and sys.stdout.isatty())
         self.sleep = sleep
         self.clock = clock
         self.openssl = openssl
@@ -674,6 +729,9 @@ class Runner:
             "treasury": None, "money": {}, "s7a": None, "gas_credits": [], "usdc_token": None,
             # Spec T18: how each listed payee was resolved by (name, chain) before its payment, in words
             "payee_resolution": {},
+            # Spec T19: the writes that wait — the ceremonies as GET /v1/onboarding/ceremonies last answered them, what the pre-S5 finish
+            # did, and S14's own record (the interview, the 202, the reads, the signatures, the finish, the trail rows)
+            "ceremonies": None, "finished_before_s5": [], "awaiting": None,
         }
         self.started_at = now_iso()
         self.last_run_report: Optional[Dict[str, Any]] = None
@@ -935,7 +993,10 @@ class Runner:
         return self.outcomes
 
     def line(self, outcome: Outcome) -> str:
-        return "%s — %s — %s" % (outcome.station, outcome.outcome, outcome.line)
+        kind = outcome.outcome
+        if kind == FAILED_PREREQUISITE and self.in_colour:
+            kind = RED + kind + RESET  # Spec T19 §3: said in red, on a terminal
+        return "%s — %s — %s" % (outcome.station, kind, outcome.line)
 
     def resume(self) -> None:
         """--from: sign in everybody who has a stored passkey, so the later stations have their sessions."""
@@ -957,7 +1018,8 @@ class Runner:
         try:
             return method()
         except StationStop as err:
-            return Outcome(station, FAIL, "%s: %s" % (title.lower(), err))
+            # Spec T19 §3: a stop that names a missing prerequisite is its own kind, red; a stop on the estate's refusal is the estate failing
+            return Outcome(station, FAILED_PREREQUISITE if err.prerequisite else FAIL, "%s: %s" % (title.lower(), err))
         except Unreachable as err:
             return Outcome(station, FAIL, "%s: the estate could not be reached, so nothing was judged: %s" % (title.lower(), err))
         except HarnessError as err:
@@ -968,7 +1030,7 @@ class Runner:
     def founder(self) -> Person:
         person = self.people[A.FOUNDER]
         if not person.signed_in:
-            raise StationStop("the founder has no session (S1 did not end in one)")
+            raise StationStop("the founder has no session (S1 did not end in one)", prerequisite=NO_FOUNDER_SESSION)
         return person
 
     def outcome_of(self, station: str) -> Optional[Outcome]:
@@ -999,7 +1061,7 @@ class Runner:
             how = "enrolled by invitation"
         else:
             raise StationStop("no passkey is stored for %s at %s and no --invite <link> was given; the first run needs the invitation link" % (
-                person.name, self.key_path(person)))
+                person.name, self.key_path(person)), prerequisite=FOUNDER_NOT_ENROLLED)
         if not verified.ok or person.session is None:
             raise StationStop("POST /v1/auth/invite/verify answered %s" % verified.sentence())
         workspace = person.session.get("workspace") or {}
@@ -1095,7 +1157,7 @@ class Runner:
         sentence = SPEC_106_NOT_LIVE % (offered,)
         self.note(station, "%s — the book answers %s with %r (aer360_tables.py, C9_NETWORK_CHOICE); the %s draft %s stands at %s, unconfirmed and "
                   "uncompiled, and the standing charter is untouched" % (sentence, NETWORKS_QUESTION_ID, T.C9_NETWORK_CHOICE, interview_type, interview_id, NETWORKS_QUESTION_ID))
-        raise StationStop(sentence)
+        raise StationStop(sentence, prerequisite=SPEC_106_NOT_LIVE_PREREQUISITE)
 
     @staticmethod
     def book_version_words() -> str:
@@ -1106,7 +1168,16 @@ class Runner:
         own = (self.answer_overrides.get(interview_type) or {}).get(qid)
         return own if own is not None else value
 
-    def confirm_and_compile(self, station: str, interview_type: str, interview_id: str, who: Person, page: Dict[str, Any]) -> Dict[str, Any]:
+    def confirm_and_compile(self, station: str, interview_type: str, interview_id: str, who: Person, page: Dict[str, Any],
+                            accept_wait: bool = False) -> Dict[str, Any]:
+        """
+        The read-back, the confirm under the person's passkey, the compile — following a walk-back once (Spec T12 §1). Spec T19 §2: the
+        compile must answer HTTP 200 with the charter, the receipt and the seat, and a state that is not `awaiting_approvals`. A 202 — the
+        write that waits for the client's own approvers (AER 360 Spec 109) — is accepted where `accept_wait` is set, S14 alone, and returned
+        as the estate answered it (`{state, interviewId, ceremonies}`, no charter, no receipt); anywhere else it stops the station with
+        "the write is waiting for approvals; <station> expects a write that finishes". An interview handed back standing
+        `awaiting_approvals` is pressed again under the same rule: Finish the write asks the platform again; it does not sign.
+        """
         walked_back: Dict[str, str] = {}  # Spec T12 §1: a question walked back to once, so a second is a failure and never a loop
         state = page.get("state")
         while True:
@@ -1137,20 +1208,64 @@ class Runner:
                 if not confirmed.ok:
                     raise StationStop("POST confirm answered %s" % confirmed.sentence())
                 state = "confirmed"
-            if state in ("confirmed", "compiled"):
+            if state in ("confirmed", "compiled", T.INTERVIEW_AWAITING_APPROVALS):
                 compiled = self.request(who, "POST", "/v1/onboarding/interviews/%s/compile" % interview_id, {}, station)
                 walk = self.walk_back_of(compiled)
                 if walk is not None:
                     state = self.follow_walk_back(station, interview_type, interview_id, who, compiled, walk, walked_back).get("state")
                     continue
-                self.step(station, compiled, "200 with the compiled charter, the write receipt and the seat",
-                          "compiled and written" if compiled.ok else compiled.sentence(), {}, who.name)
-                if not compiled.ok or not isinstance(compiled.json, dict):
+                waiting = self.write_that_waits(compiled)
+                if accept_wait:
+                    expected = ("HTTP 202 with state %s, interviewId and ceremonies — the write that waits for the client's approvers (Spec 109), no charter and no "
+                                "receipt — or HTTP 200 with the compiled charter, the write receipt and the seat where the platform applied the list" % T.INTERVIEW_AWAITING_APPROVALS)
+                else:
+                    expected = ("HTTP 200 with the compiled charter, the write receipt and the seat; a 202 (state %s — the write that waits for the client's approvers, "
+                                "Spec 109) is not a write that finishes and stops %s (Spec T19 §2)" % (T.INTERVIEW_AWAITING_APPROVALS, station))
+                if waiting is not None:
+                    result = "HTTP 202, the write waits: %s" % self.ceremony_words(self.first_ceremony_of(waiting))
+                else:
+                    result = ("HTTP %d, compiled and written" % compiled.status) if compiled.ok else compiled.sentence()
+                self.step(station, compiled, expected, result, {}, who.name)
+                # THE STATUS IS ASSERTED, NOT ONLY THE BODY (Spec T19 §2, as T19 words it): 200 for a write that finishes, 202 for the write that waits
+                if compiled.status == 202 and waiting is None:
+                    raise StationStop("POST compile answered HTTP 202 without the write that waits' body (state %s, interviewId, ceremonies)" % T.INTERVIEW_AWAITING_APPROVALS)
+                if waiting is not None:
+                    self.facts["interview_state"][interview_type] = T.INTERVIEW_AWAITING_APPROVALS
+                    if not accept_wait:
+                        raise StationStop("the write is waiting for approvals; %s expects a write that finishes" % station)
+                    return waiting
+                if not compiled.ok:
                     raise StationStop("POST compile answered %s" % compiled.sentence())
+                if compiled.status != 200 or not isinstance(compiled.json, dict):
+                    raise StationStop("POST compile answered %s, not HTTP 200 with the compiled charter, the write receipt and the seat" % compiled.sentence())
                 self.facts["compile"][interview_type] = compiled.json
                 self.facts["charter"][interview_type] = compiled.json.get("charter") or {}
                 return compiled.json
             raise StationStop("the interview stands in state %r after its questions; the read-back was not reached" % state)
+
+    @staticmethod
+    def write_that_waits(answer: Answer) -> Optional[Dict[str, Any]]:
+        """The 202 body of a write that waits for approvals (Spec 109: `{state: 'awaiting_approvals', interviewId, ceremonies}`), or None — HTTP 202 and the body, both."""
+        if answer.status == 202 and isinstance(answer.json, dict) and answer.json.get("state") == T.INTERVIEW_AWAITING_APPROVALS \
+                and isinstance(answer.json.get("ceremonies"), list) and answer.json.get("interviewId"):
+            return answer.json
+        return None
+
+    @staticmethod
+    def first_ceremony_of(body: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """The one ceremony a compile's 202 or a signature's answer carries, or an empty view where it carries none."""
+        listed = (body or {}).get("ceremonies")
+        return listed[0] if isinstance(listed, list) and listed and isinstance(listed[0], dict) else {}
+
+    @staticmethod
+    def ceremony_words(view: Dict[str, Any]) -> str:
+        """One waiting ceremony as the line speaks it: the list, the ceremony in short form, its state, the count, who signed, who may."""
+        signed = [str(s.get("name")) for s in view.get("signedBy") or [] if isinstance(s, dict)]
+        may_sign = [str(n) for n in view.get("maySign") or []]
+        return "%s: ceremony %s… %s, %s of %s signed%s%s" % (
+            view.get("listName") or "the approved-destinations list", T.credential_short_form(view.get("pendingTxId")), view.get("state"),
+            view.get("signaturesCollected"), view.get("requiredSignatures"),
+            (" by %s" % names_in_words(signed)) if signed else "", ("; may sign: %s" % names_in_words(may_sign)) if may_sign else "")
 
     @staticmethod
     def walk_back_of(answer: Answer) -> Optional[str]:
@@ -1956,6 +2071,7 @@ class Runner:
     # -- S5 Wallet account ---------------------------------------------------------------
     def station_s5(self) -> Outcome:
         founder = self.founder()
+        finished_first = self.finish_the_writes_that_wait("S5", founder)  # Spec T19 §2: the harness never strands its estate
         interview_id, page, answered = self.walk_interview("S5", "wallet_account", founder)
         compiled = self.confirm_and_compile("S5", "wallet_account", interview_id, founder, page)
         wallets = self.request(founder, "GET", "/v1/aer360/wallets", None, "S5")
@@ -1980,6 +2096,11 @@ class Runner:
         # Spec T13 §1 and §2: S5 ends by giving the estate its funding wallet, and funding it from the faucet as the founder would
         funding_said, wallet_failed = self.give_the_estate_its_funding_wallet("S5", founder)
         detail += "; %s; %s" % (funding_said, self.fund_the_wallet_from_the_faucet("S5", founder))
+        if finished_first != "no write waits for approvals":
+            detail = "before it, %s; %s" % (finished_first, detail)
+        finished_wanting = [p["said"] for r in self.facts["finished_before_s5"] for p in r.get("problems") or []]
+        if finished_wanting:
+            return Outcome("S5", FAIL, detail + "; the finish answered wrongly: " + "; ".join(finished_wanting))
         if not isinstance(current, int) or current < 3:
             return Outcome("S5", FAIL, detail + "; expected stage 3 of %d, working_the_sandbox" % JOURNEY_STAGE_COUNT)
         if current > 3:
@@ -2174,6 +2295,219 @@ class Runner:
         """What the three payments need together: the plain total of the asset, and the same figure as US dollars (USDC is the dollar-pegged asset, Spec T11 §4)."""
         total = T.payments_total([p.amount for p in A.PAYMENTS], T.ASSET_DECIMALS[T.PAYMENT_ASSET])
         return total, usd(int(T.minor_units(total, 2)))
+
+    # -- the write that waits for approvals (Spec T19; AER 360 Spec 109): S5's head, and S14 -------------------------------
+    def read_ceremonies(self, station: str, who: Person, expected: str) -> Tuple[Answer, Optional[List[Dict[str, Any]]]]:
+        """GET /v1/onboarding/ceremonies as this person (Spec 109, item 3): every write of the estate that waits, as the caller may read and sign it; recorded as read."""
+        answer = self.request(who, "GET", T.ONBOARDING_CEREMONIES_ROUTE, None, station)
+        body = answer.json if answer.ok and isinstance(answer.json, dict) else None
+        listed = body.get("ceremonies") if body is not None else None
+        views = [v for v in listed if isinstance(v, dict)] if isinstance(listed, list) else None
+        if views is not None:
+            result = "%d write(s) waiting%s" % (len(views), (": " + "; ".join(self.ceremony_words(v) for v in views)) if views else "")
+        else:
+            result = answer.sentence()
+        self.step(station, answer, expected, result, None, who.name)
+        if views is not None:
+            self.facts["ceremonies"] = {"station": station, "who": who.name, "ceremonies": views}
+        return answer, views
+
+    def finish_the_writes_that_wait(self, station: str, founder: Person) -> str:
+        """
+        Spec T19 §2: the harness never strands its estate. Before S5 walks its own wallet-account interview, every wallet-account interview
+        the estate hands back `awaiting_approvals` — listed by GET /v1/onboarding/ceremonies (Spec 109) — is finished here: the people the
+        ceremony names as able sign it, a lapsed ceremony has the founder press Finish the write first; or the station stops with
+        "FAILED — prerequisite: <name> stands awaiting approvals and could not be finished". The estate's start road hands back the
+        interview in flight, so a waiting one an earlier run left is the one S5 would otherwise be handed, and no wallet account is
+        started twice. An estate before Spec 109 has no such door; that is noted and S5 walks on. Returns the line.
+        """
+        answer, views = self.read_ceremonies(station, founder, "every write of the estate that waits for approvals (Spec 109): a wallet-account interview standing %s is "
+                                             "finished here before %s walks its own; a fresh estate lists none" % (T.INTERVIEW_AWAITING_APPROVALS, station))
+        if views is None:
+            if self.route_not_found(answer):
+                said = ("the estate has no door onto the writes that wait (%s answered %s): an estate before AER 360 Spec 109, so nothing was finished" % (
+                    T.ONBOARDING_CEREMONIES_ROUTE, answer.sentence()))
+                self.note(station, said)
+                return said
+            raise StationStop("GET %s answered %s" % (T.ONBOARDING_CEREMONIES_ROUTE, answer.sentence()))
+        waiting = [v for v in views if v.get("interviewType") == "wallet_account"]
+        if not waiting:
+            return "no write waits for approvals"
+        said: List[str] = []
+        for view in waiting:
+            name = T.account_name_of_list(view.get("listName"))
+            record = self.finish_awaiting(station, view, founder)
+            self.facts["finished_before_s5"].append(record)
+            said.append("%s stood awaiting approvals from an earlier run and was finished first: %s" % (name, record["said"]))
+            if not record["written"]:
+                raise StationStop(record["said"], prerequisite="%s stands awaiting approvals and could not be finished" % name)
+        return "; ".join(said)
+
+    def press_finish_the_write(self, station: str, founder: Person, interview_id: str, expected: str) -> Answer:
+        """Finish the write (POST …/compile) as the author, on an interview that waits: it asks the platform again and signs nothing (Spec 109, item 3)."""
+        pressed = self.request(founder, "POST", "/v1/onboarding/interviews/%s/compile" % interview_id, {}, station)
+        waiting = self.write_that_waits(pressed)
+        if waiting is not None:
+            result = "the write waits: %s" % self.ceremony_words(self.first_ceremony_of(waiting))
+        else:
+            result = "compiled and written" if pressed.ok else pressed.sentence()
+        self.step(station, pressed, expected, result, {}, founder.name)
+        return pressed
+
+    def finish_awaiting(self, station: str, view: Dict[str, Any], founder: Person, second_press: bool = False) -> Dict[str, Any]:
+        """
+        Spec T19 §1 and §2: one write that waits, finished. The people the ceremony names as able (`maySign`) sign it in the list's order,
+        each under their own passkey (`sign_interview_ceremony_as`), until the estate answers `written` — the signature that meets the count
+        finishes the write as the presser (Spec 109, item 4). A ceremony listed expired or closed has the founder press Finish the write
+        first, which opens a new one (or finishes the write where the platform applied the list); one listed approved is finished by that
+        press too: Finish the write asks the platform again and signs nothing. Where `second_press` is set (S14), the first person to count
+        presses once more and the estate's APPROVER_ALREADY_SIGNED is recorded — a second signature counted is a finding. Every refusal is
+        judged for Rule 13 as S10 judges them and reported in the estate's words, never retried; a person the list names for whom the
+        harness holds no session is named and passed over. Returns the record: the presses, who counted, whether the write finished, the line.
+        """
+        interview_id = str(view.get("interviewId"))
+        name = T.account_name_of_list(view.get("listName"))
+        record: Dict[str, Any] = {"interviewId": interview_id, "name": name, "pendingTxId": view.get("pendingTxId"), "state_found": view.get("state"),
+                                  "pressed_first": None, "presses": [], "signed": [], "second_press": None, "written": False, "finished_by": None, "problems": [], "said": ""}
+        spoken: List[str] = []
+        if view.get("state") in ("expired", "closed", "approved"):
+            view, done = self.press_finish_the_write_first(station, view, founder, record, spoken)
+            if done:
+                return record
+        state = view.get("state")
+        if state != "awaiting":
+            record["said"] = "; ".join(spoken + ["the ceremony reads %s, so there is nothing to sign" % state])
+            return record
+        pending_tx_id = str(view.get("pendingTxId"))
+        for named in list(view.get("maySign") or []):
+            person = self.person_named(named)
+            if person is None:
+                spoken.append("%s is named as able and is not a person of the harness" % named)
+                continue
+            if not person.signed_in:
+                spoken.append("%s is named as able and has no session to sign with" % person.name)
+                continue
+            answer, body = self.sign_interview_ceremony_as(station, person, interview_id, pending_tx_id, view)
+            record["presses"].append(self.press_record(person, answer, body))
+            if body is None:
+                spoken.append("%s: %s" % (person.name, self.refusal_judged(answer) if answer.status >= 400 else answer.sentence()))
+                continue
+            record["signed"].append(person.name)
+            if body.get("state") == "written":
+                record.update(written=True, finished_by=person.name)
+                spoken.append("%s counted and the write finished on their signature" % person.name)
+                break
+            # THE ANSWER IS JUDGED AGAINST WHAT WAS EXPECTED (Spec T19 §1): one more signature than before the press, and the presser's own read saying so
+            before_count = view.get("signaturesCollected") or 0
+            answered = self.first_ceremony_of(body)
+            if answered.get("signaturesCollected") != before_count + 1:
+                self.wait_problem(station, record, "%s's signature: the count" % person.name, answer, "signaturesCollected %d, one more than the %d before the press" % (before_count + 1, before_count),
+                                  "signaturesCollected %s" % json.dumps(answered.get("signaturesCollected")))
+            if answered.get("callerHasSigned") is not True:
+                self.wait_problem(station, record, "%s's signature: callerHasSigned" % person.name, answer, "callerHasSigned true: the platform's record now carries %s's signature (Spec 109, item 4)" % person.name,
+                                  "callerHasSigned %s" % json.dumps(answered.get("callerHasSigned")))
+            view = answered
+            spoken.append("%s counted (%s of %s)" % (person.name, view.get("signaturesCollected"), view.get("requiredSignatures")))
+            if second_press and record["second_press"] is None:
+                again, again_body = self.sign_interview_ceremony_as(station, person, interview_id, pending_tx_id, view, second=True)
+                code = (again.refusal or {}).get("code") if again.refusal else None
+                record["presses"].append(dict(self.press_record(person, again, again_body), second=True))
+                record["second_press"] = {"who": person.name, "status": again.status, "counted": again_body is not None, "refusal_code": code}
+                probe = "a second press by %s on the ceremony %s…" % (person.name, T.credential_short_form(pending_tx_id))
+                expected = "409 %s: the platform's record carries the signature and counts each signatory once (Spec 109, item 4)" % APPROVER_ALREADY_SIGNED
+                if again_body is not None:
+                    self.wait_problem(station, record, probe, again, expected, "the second press was counted: %s" % json.dumps({k: again_body.get(k) for k in ("state", "interviewId")}, ensure_ascii=False))
+                    spoken.append("%s's second press counted again — a second press must count nothing (finding)" % person.name)
+                elif code != APPROVER_ALREADY_SIGNED:
+                    self.wait_problem(station, record, probe, again, expected, "refused as %s, not %s: %s" % (code, APPROVER_ALREADY_SIGNED, again.sentence()))
+                    spoken.append("%s's second press: %s — refused, but not as %s (finding)" % (person.name, self.refusal_judged(again), APPROVER_ALREADY_SIGNED))
+                else:
+                    spoken.append("%s's second press: %s" % (person.name, self.refusal_judged(again)))
+            if view.get("state") == "approved":
+                break
+        if not record["written"] and view.get("state") == "approved":
+            pressed = self.press_finish_the_write(station, founder, interview_id, "200: the count is met and the write finishes on the author's press, the platform applying the approved list (Spec 109, item 5)")
+            if pressed.ok and self.write_that_waits(pressed) is None and isinstance(pressed.json, dict):
+                record.update(written=True, finished_by=founder.name)
+                spoken.append("the count met, the founder pressed Finish the write and the write finished")
+            else:
+                spoken.append("the count met, the founder's Finish the write answered %s" % (self.refusal_judged(pressed) if pressed.status >= 400 else pressed.sentence()))
+        if not record["written"] and view.get("state") == "awaiting":
+            spoken.append("the count stands at %s of %s and nobody else the list names can sign here" % (view.get("signaturesCollected"), view.get("requiredSignatures")))
+        record["said"] = "; ".join(spoken)
+        return record
+
+    def press_finish_the_write_first(self, station: str, view: Dict[str, Any], founder: Person, record: Dict[str, Any], spoken: List[str]) -> Tuple[Dict[str, Any], bool]:
+        """
+        A ceremony listed expired, closed or approved is not signed: the founder presses Finish the write first (Spec T19 §2: lapsed → the founder
+        presses compile first). A lapsed one is replaced by a fresh ceremony at nought (202) and the signing goes on; an approved one is applied
+        and the write finishes (200); a refusal is judged and reported. Returns the ceremony to sign, and whether the road ended here.
+        """
+        state = str(view.get("state"))
+        interview_id = str(view.get("interviewId"))
+        expected = ("200: the write finishes, the platform applying the approved list on its re-presentation (Spec 109, item 5)" if state == "approved" else
+                    "202 with a fresh ceremony at 0 of %s, the one listed %s replaced (Spec 109, item 1), or 200 where the platform applied the list" % (view.get("requiredSignatures"), state))
+        pressed = self.press_finish_the_write(station, founder, interview_id, expected)
+        waiting = self.write_that_waits(pressed)
+        record["pressed_first"] = {"state": state, "status": pressed.status, "answer": pressed.json if isinstance(pressed.json, dict) and (waiting is not None or pressed.ok) else pressed.sentence()}
+        if waiting is None:
+            if pressed.ok and isinstance(pressed.json, dict):
+                record.update(written=True, finished_by=founder.name)
+                spoken.append("the ceremony read %s; the founder pressed Finish the write and the write finished (200)" % state)
+            else:
+                spoken.append("the ceremony read %s; the founder's Finish the write answered %s" % (state, self.refusal_judged(pressed) if pressed.status >= 400 else pressed.sentence()))
+            record["said"] = "; ".join(spoken)
+            return view, True
+        fresh = self.first_ceremony_of(waiting)
+        spoken.append("the ceremony read %s; the founder pressed Finish the write and the estate opened %s" % (state, self.ceremony_words(fresh)))
+        record["pendingTxId"] = fresh.get("pendingTxId")
+        return fresh, False
+
+    def wait_problem(self, station: str, record: Dict[str, Any], probe: str, answer: Answer, expected: str, said: str) -> None:
+        """One answer of the write that waits judged wanting (Spec T19 §1): a finding in the estate's words, and a problem on the finish's record."""
+        record["problems"].append({"probe": probe, "expected": expected, "said": said})
+        self.finding(station, probe, None, answer, expected, said)
+
+    @staticmethod
+    def press_record(person: Person, answer: Answer, body: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        return {"who": person.name, "key": person.key, "credential": person.credential_id, "status": answer.status,
+                "answer": body if body is not None else answer.sentence(), "refusal_code": (answer.refusal or {}).get("code") if answer.refusal else None}
+
+    def sign_interview_ceremony_as(self, station: str, signer: Person, interview_id: str, pending_tx_id: str, view: Dict[str, Any],
+                                   second: bool = False) -> Tuple[Answer, Optional[Dict[str, Any]]]:
+        """
+        One signature on the list's ceremony, as the signer (Spec 109, item 4): the options road first, whose challenge the estate derives from the
+        binding `onboarding-ceremony:<workspace id>:<interview id>:<pendingTxId>:<issuedAtMs>` | the signer's credential | `onboarding.ceremony`,
+        then the press with issuedAtMs and the passkey's assertion, once and never retried (an assertion cannot be sent twice). Returns the
+        answer and its body where it counted — `{state, interviewId, ceremonies}`, `written` where this signature finished the write.
+        """
+        opened = self.request(signer, "POST", T.INTERVIEW_CEREMONY_SIGN_OPTIONS_ROUTE % (interview_id, pending_tx_id), {}, station)
+        self.step(station, opened, "200 with options (the challenge the estate derives from %s under the purpose %s) and issuedAtMs" % (
+            T.INTERVIEW_CEREMONY_BINDING % ("<workspace id>", interview_id, pending_tx_id, "<issuedAtMs>"), T.INTERVIEW_CEREMONY_PURPOSE),
+            "answered" if opened.ok else opened.sentence(), {}, signer.name)
+        if not opened.ok or not isinstance(opened.json, dict) or not isinstance(opened.json.get("options"), dict):
+            return opened, None
+        assertion = self.assertion_for(signer, str(opened.json["options"].get("challenge")), station)
+        body = {"issuedAtMs": opened.json.get("issuedAtMs"), "response": assertion}
+        required, collected = view.get("requiredSignatures"), view.get("signaturesCollected") or 0
+        if second:
+            expected = ("409 %s: the platform's record already carries %s's signature, %s of %s stand and nothing is signed again (Spec 109, item 4); "
+                        "a second signature counted is a finding" % (APPROVER_ALREADY_SIGNED, signer.name, collected, required))
+        else:
+            expected = ("200: %s's signature counted — state %s with signaturesCollected %s of %s and callerHasSigned, or state written where the count is met and "
+                        "the same request finished the write as %s (Spec 109, item 4); a refusal (%s, %s, %s, %s, %s) is judged for Rule 13 and reported in the "
+                        "estate's words, never retried" % (signer.name, T.INTERVIEW_AWAITING_APPROVALS, (collected or 0) + 1, required, signer.name,
+                                                            T.CEREMONY_NOT_LISTED, T.CEREMONY_CLOSED, APPROVER_ALREADY_SIGNED, SIGNATURE_NOT_COUNTED, PLATFORM_REFUSED))
+        signed = self.request(signer, "POST", T.INTERVIEW_CEREMONY_SIGN_ROUTE % (interview_id, pending_tx_id), body, station, retry=False)
+        counted = signed.ok and isinstance(signed.json, dict)
+        if counted:
+            answered = self.first_ceremony_of(signed.json)
+            result = "written: the count met and the write finished on this signature" if signed.json.get("state") == "written" else (
+                "counted: %s of %s, %s, callerHasSigned %s" % (answered.get("signaturesCollected"), answered.get("requiredSignatures"), answered.get("state"), answered.get("callerHasSigned")))
+        else:
+            result = self.refusal_judged(signed)
+        self.step(station, signed, expected, result, body, signer.name)
+        return signed, (signed.json if counted else None)
 
     # -- S6 Payees ----------------------------------------------------------------------
     # Spec T9 (20 September 2026): who presses after Ada, and how a count is spoken. Ben Signatory, who signs
@@ -2623,22 +2957,23 @@ class Runner:
                 how = "the Treasury founder enrolled by invitation after the stored passkey was refused"
                 record["born_now"] = True
             else:
-                raise StationStop("no Harness Treasury session: POST /v1/auth/login/verify answered %s" % verified.sentence())
+                raise StationStop("no Harness Treasury session: POST /v1/auth/login/verify answered %s" % verified.sentence(), prerequisite=TREASURY_NOT_SIGNED_IN)
         elif self.treasury_invite:
             verified = t.enrol_by_invite(founder, self.treasury_invite, station)
             how = "the Treasury founder enrolled by invitation"
             record["born_now"] = True
         else:
-            raise StationStop("no Harness Treasury: no passkey is stored for its founder at %s and no --treasury-invite <link> was given; the first run births the "
-                              "Treasury from the birth script's invitation, exactly as Harness Holdings was born" % t.key_path(founder))
+            # Spec T19 §3: S7 stops at its first line — the Treasury is not born — and says so as a missing prerequisite, in red
+            raise StationStop("no passkey is stored for its founder at %s and no --treasury-invite <link> was given; the first run births the "
+                              "Treasury from the birth script's invitation, exactly as Harness Holdings was born" % t.key_path(founder), prerequisite=TREASURY_NOT_BORN)
         if not verified.ok or founder.session is None:
-            raise StationStop("no Harness Treasury session: the invitation road answered %s" % verified.sentence())
+            raise StationStop("no Harness Treasury session: the invitation road answered %s" % verified.sentence(), prerequisite=TREASURY_NOT_SIGNED_IN)
         workspace = founder.session.get("workspace") or {}
         name = str(workspace.get("name") or "")
         t.facts["workspace"] = workspace
         record["workspace"] = workspace
         if not name.strip().lower().startswith(T.TREASURY["short"].lower()):
-            raise StationStop("%s; the session names the workspace %r, not %s" % (how, name, T.TREASURY["short"]))
+            raise StationStop("%s; the session names the workspace %r, not %s" % (how, name, T.TREASURY["short"]), prerequisite=TREASURY_NOT_SIGNED_IN)
         before = t.request(founder, "GET", "/v1/workspace", None, station)
         t.step(station, before, "the Treasury's workspace before anything is walked: fundingWallet where the Treasury stood before this run, fundingWalletAbsence on the birth run",
                "answered" if before.ok else before.sentence(), None, founder.name)
@@ -2659,7 +2994,7 @@ class Runner:
         wallet_said, wallet_failed = t.give_the_estate_its_funding_wallet(station, founder)
         wallet = t.facts.get("funding_wallet")
         if wallet_failed or not isinstance(wallet, dict) or not wallet.get("address"):
-            raise StationStop("Harness Treasury has no funding wallet: %s" % wallet_said)
+            raise StationStop(wallet_said, prerequisite=TREASURY_NO_WALLET)
         press = t.facts.get("funding_press")
         record.update(address=wallet["address"], wallet=wallet, wallet_born_now=bool(isinstance(press, dict) and press.get("status") == 200))
         record["said"] = "%s: %s; %s%s" % (T.TREASURY["short"], how, wallet_said, walked)
@@ -2768,7 +3103,7 @@ class Runner:
         credential fails S7 with the spec's sentence.
         """
         if admin is None:
-            raise StationStop(T.NO_GAS_CREDIT_ROAD_SENTENCE)
+            raise StationStop(T.NO_GAS_CREDIT_ROAD_SENTENCE, prerequisite=NO_ADMIN_CREDENTIAL)
         workspace = runner.facts.get("workspace")
         account_id = None
         if isinstance(workspace, dict):  # the session's workspace (S1), or GET /v1/workspace's whole answer (S5, S7): either names the platform account
@@ -3172,8 +3507,9 @@ class Runner:
         try:
             return self.walk_s7(said)
         except StationStop as err:
-            # a stop carries what S7 had said before it — the Treasury brought in, the money before — so the line tells the whole road
-            raise StationStop("; ".join(said + [str(err)]))
+            # a stop carries what S7 had said before it — the Treasury brought in, the money before — so the line tells the whole road;
+            # the missing prerequisite it named travels with it (Spec T19 §3)
+            raise StationStop("; ".join(said + [err.sentence]), prerequisite=err.prerequisite)
 
     def walk_s7(self, said: List[str]) -> Outcome:
         clerk = self.clerk()
@@ -3237,16 +3573,18 @@ class Runner:
             else:
                 assert t is not None and t_founder is not None and treasury is not None
                 if t_usdc is None or t_usdc < shortfall:
+                    # Spec T19 §3: the stop is the outcome kind FAILED — prerequisite, its line naming what is missing; the note that stood
+                    # beside it is gone, and what it said — the figures — travels in the stop's own sentence
                     if treasury.get("born_this_run"):
                         # the birth run: the address is printed, and the run stops with the ship note's sentence — Bear funds it once, then reruns
                         sentence = T.FUND_TREASURY_SENTENCE % (treasury.get("address"), T.PAYEE_CHAIN)
-                        self.note("S7", "%s (the three payments need %s and Harness Holdings holds %s; the Treasury holds %s); nothing was sent" % (
-                            sentence, T.usdc_dollars(need), T.usdc_dollars(h_usdc), T.usdc_dollars(t_usdc) if t_usdc is not None else "a balance the estate could not say"))
-                        raise StationStop(sentence)
+                        raise StationStop("%s (the three payments need %s and Harness Holdings holds %s; the Treasury holds %s); nothing was sent" % (
+                            sentence, T.usdc_dollars(need), T.usdc_dollars(h_usdc), T.usdc_dollars(t_usdc) if t_usdc is not None else "a balance the estate could not say"),
+                            prerequisite=TREASURY_NOT_FUNDED)
                     sentence = T.TREASURY_SHORT_SENTENCE % (T.usdc_dollars(t_usdc) if t_usdc is not None else "a balance the estate could not say", T.usdc_dollars(shortfall),
                                                             treasury.get("address"), T.PAYEE_CHAIN)
-                    self.note("S7", "%s (the three payments need %s and Harness Holdings holds %s); nothing was sent" % (sentence, T.usdc_dollars(need), T.usdc_dollars(h_usdc)))
-                    raise StationStop("%s; nothing was sent" % sentence)
+                    raise StationStop("%s (the three payments need %s and Harness Holdings holds %s); nothing was sent" % (sentence, T.usdc_dollars(need), T.usdc_dollars(h_usdc)),
+                                      prerequisite=TREASURY_SHORT)
                 credit = self.credit_gas(t, "S7", admin, T.TREASURY["short"], T.GAS_CREDIT_USD_CENTS)
                 money["treasury"]["credited"] += credit["amount_usd_cents"]
                 said.append(credit["said"])
@@ -3882,6 +4220,208 @@ class Runner:
             measure["calls"], len(measure["slow"]), SLOW_CALL_SECONDS, measure["largest"]["size"] if measure["largest"] else 0,
             len(measure["retried"]), measure["interview_calls"], measure["wasted_reads"]))
 
+    # -- S14 The write that waits (Spec T19; AER 360 Spec 109) ------------------------------------------------------
+    def station_s14(self) -> Outcome:
+        """
+        Spec T19 §1: the write waits and two people sign. S14 finds-or-starts a second wallet-account interview named
+        `Harness Holdings — approvals` — an `awaiting_approvals` one of that name is resumed at the ceremonies read, never started
+        twice — answered as the book answers the first except WQ = 2 and WA1 naming Ada and Ben (the two seated approvers of Spec
+        105's seats); asserts the compile's 202 and `awaiting_approvals`; reads GET /v1/onboarding/ceremonies as the founder (0 of 2,
+        Ada and Ben among those who may sign), as Ada and as Ben (each may sign), and as the viewer where one is signed in (may not);
+        then `finish_awaiting`: Ada signs (1 of 2, callerHasSigned; her second press meets APPROVER_ALREADY_SIGNED), Ben signs and the
+        write finishes on his signature; and asserts the estate's record — one interview_written for the interview, pressed by the
+        finisher, one ceremony_signed per signature, a write_awaiting_approvals naming the ceremony, no interview_write_failed — the
+        interview absent from the ceremonies read, its page `written`, and the estate's funding wallet unchanged (no second one). Where
+        the plan's capacity (Spec 97) refuses the second account, the refusal is reported in the estate's words and S14 stops. Every
+        refusal is judged for Rule 13 as S10 judges them. A rerun opens another account.
+
+        WHAT A BROWSER CANNOT SEE, SAID PLAINLY: the estate offers a founder's browser no road onto the platform's approved-destinations
+        list — no route lists an account's whitelist, and the page carries no receipt — so "the list present once on the platform with
+        its entries" is judged by the estate's own record of the write (one interview_written row for the interview, and the interview
+        no longer waiting), and the line says so.
+        """
+        founder = self.founder()
+        name = A.APPROVALS_ACCOUNT_NAME
+        approvers = [self.people[k] for k in A.APPROVALS_APPROVERS]
+        required = int(A.APPROVALS_QUORUM)
+        findings_before = len(self.findings)
+        record: Dict[str, Any] = {"name": name, "interviewId": None, "resumed": False, "answered": 0, "answers": [], "readback": None, "wait": None,
+                                  "reads": {}, "finish": None, "trail": None, "after": None, "page_state": None, "funding_wallet": None}
+        self.facts["awaiting"] = record
+        said: List[str] = []
+        problems: List[str] = []
+        # 1. the read: an awaiting one of that name is resumed here, never started twice
+        answer, views = self.read_ceremonies("S14", founder, "every write that waits (Spec 109): a wallet-account interview named %s standing %s is resumed here, never started twice" % (
+            name, T.INTERVIEW_AWAITING_APPROVALS))
+        if views is None:
+            if self.route_not_found(answer):
+                raise StationStop("the estate has no door onto the writes that wait (%s answered %s): an estate before AER 360 Spec 109" % (
+                    T.ONBOARDING_CEREMONIES_ROUTE, answer.sentence()), prerequisite=SPEC_109_NOT_LIVE_PREREQUISITE)
+            raise StationStop("GET %s answered %s" % (T.ONBOARDING_CEREMONIES_ROUTE, answer.sentence()))
+        standing = next((v for v in views if v.get("interviewType") == "wallet_account" and T.account_name_of_list(v.get("listName")) == name), None)
+        if standing is not None:
+            interview_id = str(standing.get("interviewId"))
+            record.update(interviewId=interview_id, resumed=True, wait=standing)
+            view = standing
+            said.append("%s stood awaiting approvals from an earlier run and is resumed at the read, not started again: %s" % (name, self.ceremony_words(view)))
+            if view.get("state") in ("expired", "closed", "approved"):
+                # Spec T19 §2: lapsed → the founder presses Finish the write first; a fresh ceremony is what the reads and the signatures meet
+                pressed: Dict[str, Any] = {"pendingTxId": view.get("pendingTxId")}
+                spoken: List[str] = []
+                view, done = self.press_finish_the_write_first("S14", view, founder, pressed, spoken)
+                record["pressed_first"] = pressed.get("pressed_first")
+                said.extend(spoken)
+                if done:
+                    if pressed.get("written"):
+                        return Outcome("S14", PASS, "the write that waits: %s; two people had signed in an earlier run, so nothing was signed here" % "; ".join(said))
+                    return Outcome("S14", FAIL, "the write that waits: %s" % "; ".join(said))
+        else:
+            interview_id, view, walked = self.walk_the_approvals_account("S14", founder, record)
+            said.append(walked)
+            if not view.get("pendingTxId"):
+                return Outcome("S14", FAIL, "the write that waits: %s" % "; ".join(said))
+        # 2. the wait, judged: awaiting, the count WQ's own, the account's unsigned approvers among those who may sign
+        for p in audit_the_wait(view, required, [a.name for a in approvers], None if record["resumed"] else 0):
+            problems.append(p["said"])
+            self.finding("S14", p["probe"], None, None, p["expected"], p["said"])
+        # 3. the reads: the founder's own, then Ada's and Ben's (each may sign), then the viewer's where one is signed in (may not)
+        viewer = self.people[A.VIEWER_INVITED]
+        readers: List[Tuple[Person, Optional[bool]]] = [(founder, None)] + [(a, True) for a in approvers if a.signed_in] + ([(viewer, False)] if viewer.signed_in else [])
+        for reader, may_sign in readers:
+            answer, listed = self.read_ceremonies("S14", reader, self.read_expectation(reader, may_sign, view))
+            mine = next((v for v in (listed or []) if str(v.get("interviewId")) == interview_id), None)
+            record["reads"][reader.key] = mine
+            if mine is None:
+                problems.append("%s's read does not list the interview" % reader.name)
+                self.finding("S14", "%s's read of the writes that wait" % reader.name, None, answer, "the interview %s listed, waiting" % interview_id,
+                             "not listed: %s" % (answer.sentence() if not answer.ok else json.dumps({"ceremonies": [self.ceremony_words(v) for v in (listed or [])]}, ensure_ascii=False)))
+                continue
+            if may_sign is None:
+                continue
+            has_signed = reader.name in [str(s.get("name")) for s in mine.get("signedBy") or [] if isinstance(s, dict)]
+            for p in audit_the_reader(mine, reader.name, may_sign and not has_signed, has_signed):
+                problems.append(p["said"])
+                self.finding("S14", p["probe"], None, answer, p["expected"], p["said"])
+        said.append("read as %s" % names_in_words([r.name for r, _ in readers]))
+        # 4. finish_awaiting: the people the list names sign in its order — Ada (and her second press), then Ben — and the write finishes
+        finish = self.finish_awaiting("S14", view, founder, second_press=True)
+        record["finish"] = finish
+        said.append("finish: %s" % finish["said"])
+        problems.extend(p["said"] for p in finish["problems"])
+        if not finish["written"]:
+            problems.append("the write did not finish")
+        # 5. the estate's record: the trail, the read after, the page, the funding wallet
+        trail = self.read_trail(self, founder, "S14", "the trail: one %s row for the interview (credentialId and pressedBy the finisher), one %s per signature, %s naming the ceremony, no %s, and no second %s (Spec 109)" % (
+            T.INTERVIEW_WRITTEN, T.CEREMONY_SIGNED, T.WRITE_AWAITING_APPROVALS, T.INTERVIEW_WRITE_FAILED, T.WALLET_BORN))
+        record["trail"] = None if trail is None else [r for r in trail if str(r.get("action", "")).startswith("onboarding.") or r.get("action") == T.WALLET_BORN]
+        finisher = self.person_named(finish.get("finished_by"))
+        if trail is None:
+            problems.append("the trail could not be read")
+        elif finish["written"]:
+            signers = [self.person_named(n) for n in finish["signed"]]
+            for p in audit_the_finish(trail, interview_id, str(finish.get("pendingTxId")), [s.credential_id for s in signers if s is not None],
+                                      finisher.credential_id if finisher is not None else None):
+                problems.append(p["said"])
+                self.finding("S14", p["probe"], None, None, p["expected"], p["said"])
+            said.append("the trail: %d %s row(s) for the interview, %d %s, %d %s, %d %s; %d %s in all" % (
+                len(rows_of(trail, T.INTERVIEW_WRITTEN, interview_id)), T.INTERVIEW_WRITTEN, len(rows_of(trail, T.CEREMONY_SIGNED, interview_id)), T.CEREMONY_SIGNED,
+                len(rows_of(trail, T.WRITE_AWAITING_APPROVALS, interview_id)), T.WRITE_AWAITING_APPROVALS, len(rows_of(trail, T.INTERVIEW_WRITE_FAILED, interview_id)), T.INTERVIEW_WRITE_FAILED,
+                len([r for r in trail if r.get("action") == T.WALLET_BORN]), T.WALLET_BORN))
+        answer, after = self.read_ceremonies("S14", founder, "the interview absent: no write waits once the count is met and the write finished")
+        record["after"] = after
+        if finish["written"] and after is not None and any(str(v.get("interviewId")) == interview_id for v in after):
+            problems.append("the interview still waits after the write finished")
+            self.finding("S14", "the writes that wait, read after the finish", None, answer, "the interview absent", "still listed: %s" % self.ceremony_words(next(v for v in after if str(v.get("interviewId")) == interview_id)))
+        page = self.request(founder, "GET", "/v1/onboarding/interviews/%s" % interview_id, None, "S14")
+        page_state = (page.json or {}).get("state") if page.ok and isinstance(page.json, dict) else None
+        self.step("S14", page, "the interview's page: state written (the standing page of an interview whose write finished)", ("state %s" % page_state) if page.ok else page.sentence(), None, founder.name)
+        record["page_state"] = page_state
+        if finish["written"] and page_state != "written":
+            problems.append("the page reads %s, not written" % page_state)
+        workspace = self.request(founder, "GET", "/v1/workspace", None, "S14")
+        wallet = workspace.json.get("fundingWallet") if workspace.ok and isinstance(workspace.json, dict) and isinstance(workspace.json.get("fundingWallet"), dict) else None
+        known = self.facts.get("funding_wallet") if isinstance(self.facts.get("funding_wallet"), dict) else None
+        self.step("S14", workspace, "the workspace's funding wallet unchanged%s: the write answered alreadyHeld and birthed no second one (Spec 109, item 5)" % (
+            (" (%s)" % known.get("address")) if known and known.get("address") else ""), ("funding wallet %s" % wallet.get("address")) if wallet else (workspace.sentence() if not workspace.ok else "no funding wallet"), None, founder.name)
+        record["funding_wallet"] = wallet
+        if known and known.get("address") and wallet and str(wallet.get("address")).lower() != str(known["address"]).lower():
+            problems.append("the funding wallet changed")
+            self.finding("S14", "the funding wallet after the write", None, workspace, "the wallet S5 recorded, %s" % known["address"], "the workspace names %s" % wallet.get("address"))
+        wallet_words = ("funding wallet unchanged: %s" % wallet.get("address")) if wallet and not (known and known.get("address") and str(wallet.get("address")).lower() != str(known["address"]).lower()) else (
+            "funding wallet: %s" % (wallet.get("address") if wallet else "none"))
+        said.append(wallet_words)
+        said.append("the list: the estate offers a browser no road onto the platform's list, so it is judged by the estate's own record of the write, above")
+        detail = "the write that waits: %s" % "; ".join(said)
+        if problems or len(self.findings) > findings_before:
+            return Outcome("S14", FAIL, detail + "; " + "; ".join(problems) if problems else detail)
+        return Outcome("S14", PASS, detail)
+
+    def walk_the_approvals_account(self, station: str, founder: Person, record: Dict[str, Any]) -> Tuple[str, Dict[str, Any], str]:
+        """
+        S14's own interview: the book's wallet-account answers with `approvals_account_overrides` laid over (WN, WQ 2, WA1 Ada and Ben),
+        walked and confirmed as S5 walks the first, then compiled with the 202 accepted. S5's own facts of the wallet account are set aside
+        for the walk and restored after it, so the auditor's record of the Operating account is untouched. Returns the interview's id, the
+        ceremony the 202 carried (empty where the write finished at once, which S14 fails), and the line.
+        """
+        before = self.answer_overrides
+        merged: Dict[str, Dict[str, Dict[str, Any]]] = {k: dict(v) for k, v in before.items()}
+        for interview_type, answers in A.approvals_account_overrides().items():
+            merged.setdefault(interview_type, {}).update(answers)
+        self.answer_overrides = merged
+        kept = self.set_aside_the_account_facts()
+        try:
+            interview_id, page, answered = self.walk_interview(station, "wallet_account", founder)
+            record.update(interviewId=interview_id, answered=answered, answers=list(self.facts["answers"]["wallet_account"]))
+            if page.get("state") == T.INTERVIEW_AWAITING_APPROVALS and answered == 0:
+                # the estate's start road hands back the interview in flight; one standing awaiting is a write S5's head finishes, and this one was not
+                raise StationStop("the estate handed back the wallet-account interview %s standing %s, which is not %s; it is finished before S5, and this one was not" % (
+                    interview_id, T.INTERVIEW_AWAITING_APPROVALS, A.APPROVALS_ACCOUNT_NAME), prerequisite="a wallet-account interview of another name stands awaiting approvals")
+            compiled = self.confirm_and_compile(station, "wallet_account", interview_id, founder, page, accept_wait=True)
+            record["readback"] = self.facts["readback"].get("wallet_account")
+        finally:
+            self.answer_overrides = before
+            self.restore_the_account_facts(kept)
+        walked = "%s: %d questions answered (WN, WQ %s and WA1 this account's own, the rest the Operating account's)" % (A.APPROVALS_ACCOUNT_NAME, answered, A.APPROVALS_QUORUM)
+        if compiled.get("state") != T.INTERVIEW_AWAITING_APPROVALS:
+            record["wait"] = compiled
+            self.finding(station, "the compile of %s at WQ %s" % (A.APPROVALS_ACCOUNT_NAME, A.APPROVALS_QUORUM), {}, None,
+                         "202 with state %s: the platform holds the list's creation for %s at WQ %s (Spec 109)" % (
+                             T.INTERVIEW_AWAITING_APPROVALS, names_in_words([A.PEOPLE[k].name for k in A.APPROVALS_APPROVERS]), A.APPROVALS_QUORUM),
+                         "200: the write finished at once and nothing waited (charter %s, receipt %s)" % (
+                             json.dumps((compiled.get("charter") or {}).get("quorum")), json.dumps({k: (compiled.get("receipt") or {}).get(k) for k in ("whitelistId", "completedAt")})))
+            return interview_id, {}, walked + "; compiled and the write finished at once (200), where WQ %s asks the platform to hold the list's creation for the approvers — nothing waited" % A.APPROVALS_QUORUM
+        record["wait"] = compiled
+        view = self.first_ceremony_of(compiled)
+        return interview_id, view, walked + "; compiled and the write waits (202): %s" % self.ceremony_words(view)
+
+    ACCOUNT_FACT_KEYS = ("readback", "charter", "compile", "interview", "interview_state")
+
+    def set_aside_the_account_facts(self) -> Dict[str, Any]:
+        """The auditor's record of the Operating account (S5), set aside while S14 walks its own wallet-account interview."""
+        kept: Dict[str, Any] = {"answers": self.facts["answers"]["wallet_account"]}
+        kept.update({k: self.facts[k].get("wallet_account") for k in self.ACCOUNT_FACT_KEYS})
+        self.facts["answers"]["wallet_account"] = []
+        return kept
+
+    def restore_the_account_facts(self, kept: Dict[str, Any]) -> None:
+        self.facts["answers"]["wallet_account"] = kept["answers"]
+        for k in self.ACCOUNT_FACT_KEYS:
+            if kept.get(k) is None:
+                self.facts[k].pop("wallet_account", None)
+            else:
+                self.facts[k]["wallet_account"] = kept[k]
+
+    @staticmethod
+    def read_expectation(reader: Person, may_sign: Optional[bool], view: Dict[str, Any]) -> str:
+        """What one person's read of the writes that wait should say (Spec 109, item 3), in the estate's own fields."""
+        count = "%s of %s" % (view.get("signaturesCollected"), view.get("requiredSignatures"))
+        if may_sign is None:
+            return "the ceremony listed at %s, state awaiting, with %s among maySign, and the card's sentence (Spec 109's sentence table)" % (
+                count, names_in_words([A.PEOPLE[k].name for k in A.APPROVALS_APPROVERS]))
+        if may_sign:
+            return "the ceremony listed for %s with callerMaySign true and callerName %s — a person WA1 names who has not signed — or callerHasSigned where an earlier run counted them" % (reader.name, reader.name)
+        return "the ceremony listed for %s with callerMaySign false and callerName null: a viewer WA1 does not name, whose sentence says who may" % reader.name
+
     # -- the report ------------------------------------------------------------------------
     def report(self) -> str:
         lines: List[str] = []
@@ -3902,7 +4442,7 @@ class Runner:
             lines.append("| Station | Outcome | Line |")
             lines.append("|---|---|---|")
         for o in self.outcomes:
-            cells = ["%s %s" % (o.station, dict(STATIONS).get(o.station, "")), o.outcome]
+            cells = ["%s %s" % (o.station, dict(STATIONS).get(o.station, "")), outcome_cell(o.outcome)]
             if last and fates is not None:
                 cells.append(self.last_run_cell(last, fates, o.station))
             cells.append(o.line)
@@ -4573,6 +5113,107 @@ def audit_payees(register: Optional[Dict[str, Any]], created: Sequence[Dict[str,
     return findings
 
 
+
+# ---------------------------------------------------------------------------
+# The write that waits, judged (Spec T19): pure functions over the estate's answers, so a recorded fixture can prove them.
+# ---------------------------------------------------------------------------
+def _problem(problems: List[Dict[str, Any]], probe: str, expected: str, said: str) -> None:
+    problems.append({"probe": probe, "expected": expected, "said": said})
+
+
+def audit_the_wait(view: Dict[str, Any], required: int, approvers: Sequence[str], collected: Optional[int] = 0) -> List[Dict[str, Any]]:
+    """
+    Spec T19 §1: the ceremony as the compile's 202 or the ceremonies read answered it — state awaiting, the count WQ's own, the platform's
+    count of signatures (None where an earlier run's count is accepted as found), the account's unsigned approvers among those who may
+    sign, and the card's sentence beginning with the count as Spec 109's sentence table composes it.
+    """
+    problems: List[Dict[str, Any]] = []
+    got = view.get("signaturesCollected")
+    if view.get("state") != "awaiting":
+        _problem(problems, "the ceremony's state", "awaiting: the platform holds the list's creation for the approvers (Spec 109)",
+                 "state %r (platformStatus %r)" % (view.get("state"), view.get("platformStatus")))
+    if view.get("requiredSignatures") != required:
+        _problem(problems, "the ceremony's count", "requiredSignatures %d, WQ's own figure" % required, "requiredSignatures %r" % (view.get("requiredSignatures"),))
+    if collected is not None and got != collected:
+        _problem(problems, "the signatures collected", "signaturesCollected %d" % collected, "signaturesCollected %r" % (got,))
+    signed = [str(s.get("name")) for s in view.get("signedBy") or [] if isinstance(s, dict)]
+    may_sign = [str(n) for n in view.get("maySign") or []]
+    for name in approvers:
+        if name in signed or name in may_sign:
+            continue
+        _problem(problems, "who may sign", "%s among maySign: WA1 names them and they have not signed" % name, "maySign %s, signedBy %s" % (json.dumps(may_sign), json.dumps(signed)))
+    sentence = str(view.get("sentence") or "")
+    head = "The approved-destinations list — %s of %s approvals." % (got, view.get("requiredSignatures"))
+    if not sentence.startswith(head):
+        _problem(problems, "the card's sentence", "begins with %r (Spec 109's sentence table)" % head, json.dumps(sentence, ensure_ascii=False))
+    return problems
+
+
+def audit_the_reader(view: Dict[str, Any], reader: str, may_sign: bool, has_signed: bool) -> List[Dict[str, Any]]:
+    """Spec 109, item 3: what the read says of the CALLER — whether they may sign, whether they have, and by what name the roster shows them."""
+    problems: List[Dict[str, Any]] = []
+    if bool(view.get("callerMaySign")) != may_sign:
+        _problem(problems, "%s's read: callerMaySign" % reader, "callerMaySign %s" % json.dumps(may_sign), "callerMaySign %s" % json.dumps(view.get("callerMaySign")))
+    if bool(view.get("callerHasSigned")) != has_signed:
+        _problem(problems, "%s's read: callerHasSigned" % reader, "callerHasSigned %s" % json.dumps(has_signed), "callerHasSigned %s" % json.dumps(view.get("callerHasSigned")))
+    if (may_sign or has_signed) and view.get("callerName") != reader:
+        _problem(problems, "%s's read: callerName" % reader, "callerName %r, the name the roster shows them by" % reader, "callerName %r" % (view.get("callerName"),))
+    if not may_sign and not has_signed and view.get("callerName") is not None:
+        _problem(problems, "%s's read: callerName" % reader, "callerName null: the roster does not name this viewer", "callerName %r" % (view.get("callerName"),))
+    return problems
+
+
+def rows_of(trail: Sequence[Dict[str, Any]], action: str, interview_id: str) -> List[Dict[str, Any]]:
+    """The trail's rows of one verb about one interview: by detail.interviewId, or by subjectId where the row's subject is the interview (ceremony_signed)."""
+    out: List[Dict[str, Any]] = []
+    for row in trail:
+        if row.get("action") != action:
+            continue
+        detail = row.get("detail") if isinstance(row.get("detail"), dict) else {}
+        if detail.get("interviewId") == interview_id or row.get("subject_id") == interview_id or row.get("subjectId") == interview_id:
+            out.append(row)
+    return out
+
+
+def audit_the_finish(trail: Sequence[Dict[str, Any]], interview_id: str, pending_tx_id: str, signer_credentials: Sequence[Optional[str]],
+                     finisher_credential: Optional[str]) -> List[Dict[str, Any]]:
+    """
+    Spec T19 §1, the finish as the estate records it (Spec 109, items 2 and 4): exactly one interview_written for the interview, its
+    credentialId and detail.pressedBy the finisher's, naming the ceremony; one ceremony_signed per signature, in order, each the signer's
+    own credential; a write_awaiting_approvals whose newest row names the ceremony that finished; no interview_write_failed; and no second
+    wallet.born on the trail — the funding wallet is born once.
+    """
+    problems: List[Dict[str, Any]] = []
+    credential = lambda row: row.get("credential_id") if "credential_id" in row else row.get("credentialId")  # noqa: E731
+    detail_of = lambda row: row.get("detail") if isinstance(row.get("detail"), dict) else {}  # noqa: E731
+    written = rows_of(trail, T.INTERVIEW_WRITTEN, interview_id)
+    if len(written) != 1:
+        _problem(problems, "the trail's %s rows for the interview" % T.INTERVIEW_WRITTEN, "exactly one: the write finished once", "%d row(s)" % len(written))
+    else:
+        row = written[0]
+        if finisher_credential and credential(row) != finisher_credential:
+            _problem(problems, "the %s row's credentialId" % T.INTERVIEW_WRITTEN, "the finisher's, %s" % last4(finisher_credential), "credentialId %s" % last4(credential(row)))
+        if finisher_credential and detail_of(row).get("pressedBy") != finisher_credential:
+            _problem(problems, "the %s row's pressedBy" % T.INTERVIEW_WRITTEN, "the finisher's, %s (the sign road, Spec 109 item 4)" % last4(finisher_credential), "pressedBy %s" % last4(detail_of(row).get("pressedBy")))
+        if detail_of(row).get("pendingTxId") not in (None, pending_tx_id) or (detail_of(row).get("pressedBy") and detail_of(row).get("pendingTxId") != pending_tx_id):
+            _problem(problems, "the %s row's pendingTxId" % T.INTERVIEW_WRITTEN, "the ceremony that finished, %s…" % T.credential_short_form(pending_tx_id), "pendingTxId %s" % detail_of(row).get("pendingTxId"))
+    signed = [r for r in trail if r.get("action") == T.CEREMONY_SIGNED and detail_of(r).get("pendingTxId") == pending_tx_id]
+    if [credential(r) for r in signed] != list(signer_credentials):
+        _problem(problems, "the trail's %s rows for the ceremony" % T.CEREMONY_SIGNED, "one per signature counted, in order: %s" % ", ".join(last4(c) for c in signer_credentials),
+                 "%d row(s): %s" % (len(signed), ", ".join(last4(credential(r)) for r in signed) or "none"))
+    awaiting = rows_of(trail, T.WRITE_AWAITING_APPROVALS, interview_id)
+    if not awaiting:
+        _problem(problems, "the trail's %s rows for the interview" % T.WRITE_AWAITING_APPROVALS, "at least one: the wait was recorded when the ceremony opened", "none")
+    elif detail_of(awaiting[-1]).get("pendingTxId") != pending_tx_id:
+        _problem(problems, "the newest %s row" % T.WRITE_AWAITING_APPROVALS, "naming the ceremony that finished, %s…" % T.credential_short_form(pending_tx_id), "pendingTxId %s" % detail_of(awaiting[-1]).get("pendingTxId"))
+    failed = rows_of(trail, T.INTERVIEW_WRITE_FAILED, interview_id)
+    if failed:
+        _problem(problems, "the trail's %s rows for the interview" % T.INTERVIEW_WRITE_FAILED, "none: a wait is not a failure (Spec 109, item 1)", "%d row(s): %s" % (len(failed), "; ".join(str(detail_of(r).get("cause")) for r in failed)))
+    born = [r for r in trail if r.get("action") == T.WALLET_BORN]
+    if len(born) > 1:
+        _problem(problems, "the trail's %s rows" % T.WALLET_BORN, "at most one: the funding wallet is born once, and a write that finds one answers alreadyHeld", "%d row(s)" % len(born))
+    return problems
+
 def optimizer_measures(calls: Sequence[Call], served_twice: Dict[str, List[str]]) -> Dict[str, Any]:
     """S12: wall times, the slow, the ten slowest, the interviews' call counts, the largest answer, the 5xx retried."""
     slow = [c for c in calls if c.elapsed_ms > SLOW_CALL_SECONDS * 1000]
@@ -4624,6 +5265,16 @@ def finding_key(probe: str) -> str:
     return PATH_ID_TEXT.sub("/<id>", UUID_TEXT.sub("<id>", probe))
 
 
+HTML_TAG = re.compile(r"<[^>]+>")
+
+
+def outcome_cell(outcome: str) -> str:
+    """The closing table's outcome cell: the word as it is, but FAILED — prerequisite in red (Spec T19 §3), the one markup the report carries."""
+    if outcome == FAILED_PREREQUISITE:
+        return '<span style="color:red">%s</span>' % outcome
+    return outcome
+
+
 def _table_cells(line: str) -> List[str]:
     inner = line.strip()
     if inner.startswith("|"):
@@ -4631,6 +5282,16 @@ def _table_cells(line: str) -> List[str]:
     if inner.endswith("|"):
         inner = inner[:-1]
     return [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", inner)]
+
+
+def outcome_of_cell(cell: str) -> str:
+    """The outcome kind read back from the closing table's Outcome cell: the one cell that carries markup (`outcome_cell`), stripped here and nowhere else."""
+    return HTML_TAG.sub("", cell).strip()
+
+
+def exit_code_of(outcomes: Sequence[Outcome]) -> int:
+    """1 where any station failed or stopped at a missing prerequisite (Spec T19 §3), else 0."""
+    return 1 if any(o.outcome in FAILURES for o in outcomes) else 0
 
 
 def read_report(path: str) -> Dict[str, Any]:
@@ -4661,7 +5322,7 @@ def read_report(path: str) -> Dict[str, Any]:
                 cells = _table_cells(line)
                 outcome_at = header.index("Outcome") if header and "Outcome" in header else 1
                 if len(cells) > outcome_at:
-                    outcomes[cells[0].split(" ", 1)[0]] = cells[outcome_at]
+                    outcomes[cells[0].split(" ", 1)[0]] = outcome_of_cell(cells[outcome_at])
             continue
         heading = STATION_HEADING.match(line)
         if heading:
@@ -4720,7 +5381,7 @@ def compare_findings(previous: Sequence[Dict[str, Any]], current: Sequence[Any])
 
 
 # ---------------------------------------------------------------------------
-# The dry run (Spec T7, Options): every call of the twelve stations, in order, with no network.
+# The dry run (Spec T7, Options): every call of the stations, in order, with no network — S1 to S12, then S14 (Spec T19).
 # ---------------------------------------------------------------------------
 def _j(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False)
@@ -4801,6 +5462,13 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     line("S4", "GET /v1/approver-seats (as %s) — after the count is met, up to three times over a bounded wait → expect %s's seat reading %s true (moved); otherwise S4 fails naming the seat and \"<k> of <n> signatures\"" % (
         founder.name, approver.name, T.SEAT_ON_ROSTER))
     line("S4", "GET /v1/invites (as %s) → expect the register: three authors, redeemed; each row's sharesCredentialWith (Spec 91's marker) read for S10, expected absent after the re-invitation" % founder.name)
+    # S5's head — Spec T19 §2: the harness never strands its estate. A wallet-account interview the estate hands back awaiting_approvals (Spec 109) is
+    # finished here before S5 walks its own, or S5 stops at the missing prerequisite.
+    line("S5", "GET %s (as %s) → expect every write of the estate that waits for approvals (Spec 109): interviewId, interviewType, listName, pendingTxId, requiredSignatures, signaturesCollected, state, signedBy, maySign, callerMaySign, callerHasSigned, sentence; a wallet-account interview standing %s is finished here (below) before S5 walks its own, or S5 stops: \"FAILED — prerequisite: <name> stands awaiting approvals and could not be finished\"; a fresh estate lists none; an estate before Spec 109 answers the route unknown, which is noted (Spec T19 §2)" % (
+        T.ONBOARDING_CEREMONIES_ROUTE, founder.name, T.INTERVIEW_AWAITING_APPROVALS))
+    line("S5", "POST /v1/onboarding/interviews/<waiting interview>/compile {} (as %s) — only for a ceremony listed expired, closed or approved → expect 202: a fresh ceremony at 0 of <n>, the lapsed one replaced (Spec 109, item 1), or 200: the write finished, the platform applying the approved list (item 5)" % founder.name)
+    line("S5", "POST /v1/onboarding/interviews/<waiting interview>/ceremonies/<pendingTxId>/sign/options {} then …/sign %s (as each person the ceremony names as able, in its order, with a stored passkey) — only for a write that waits → expect 200: signaturesCollected risen by one until the count is met, then state written and no ceremony; a refusal (%s, %s, %s, %s, %s) is judged for Rule 13 and reported in the estate's words, never retried" % (
+        _j({"issuedAtMs": "<issuedAtMs>", "response": "<assertion by the signer's passkey over the challenge>"}), T.CEREMONY_NOT_LISTED, T.CEREMONY_CLOSED, APPROVER_ALREADY_SIGNED, SIGNATURE_NOT_COUNTED, PLATFORM_REFUSED))
     # S5
     line("S5", "POST /v1/onboarding/interviews %s → expect 200: the interview id and its first page" % _j({"interviewType": "wallet_account"}))
     for q in A.expected_walk("wallet_account"):
@@ -4808,8 +5476,8 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     line("S5", "GET /v1/onboarding/interviews/<account interview>/readback → expect the account's charter in plain sentences")
     line("S5", "POST /v1/onboarding/interviews/<account interview>/confirm/options {} → expect the digest-bound challenge")
     line("S5", "POST /v1/onboarding/interviews/<account interview>/confirm %s → expect 200: state confirmed" % _j({"issuedAtMs": "<issuedAtMs>", "response": "<assertion>"}))
-    line("S5", "POST /v1/onboarding/interviews/<account interview>/compile {} → expect 200: charter (%s, holdOverPerTx %s, dailyTotal %s, whitelistMode hold_non_listed), receipt: the account opened on the platform" % (
-        A.WALLET_ACCOUNT_NAME, A.MONEY["per_payment_cents"], A.MONEY["per_day_cents"]))
+    line("S5", "POST /v1/onboarding/interviews/<account interview>/compile {} → expect 200: charter (%s, holdOverPerTx %s, dailyTotal %s, whitelistMode hold_non_listed), receipt: the account opened on the platform; a 202 (state %s — the write that waits for the client's approvers, Spec 109) is not a write that finishes: S5 stops with \"the write is waiting for approvals; S5 expects a write that finishes\" (Spec T19 §2)" % (
+        A.WALLET_ACCOUNT_NAME, A.MONEY["per_payment_cents"], A.MONEY["per_day_cents"], T.INTERVIEW_AWAITING_APPROVALS))
     line("S5", "GET /v1/aer360/wallets → expect the Wallets register with %s, or its absence sentence before the first close" % A.WALLET_ACCOUNT_NAME)
     line("S5", "GET /v1/journey → expect currentStage 3 of %d, working_the_sandbox" % JOURNEY_STAGE_COUNT)
     # S5's tail — Spec T13: the funding wallet (AER 360 Spec 98) and the faucet, as the founder at the Wallets screen and the faucet page
@@ -4965,6 +5633,39 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     line("S12", "[measure] every call's wall time; every call over %.0f seconds; the ten slowest with their routes" % SLOW_CALL_SECONDS)
     line("S12", "[measure] the calls the interviews needed, and how many were reads a browser would not make (a question served twice, a read-back fetched twice)")
     line("S12", "[measure] the size of the largest answer; any 5xx retried once after %.0f seconds, both answers kept" % RETRY_AFTER_5XX_SECONDS)
+    # S14 — Spec T19 §1: the write that waits for approvals (AER 360 Spec 109) — a second wallet account at a quorum of two, signed by two people
+    approvals = A.approvals_account_answers()
+    approver_names = [A.PEOPLE[k].name for k in A.APPROVALS_APPROVERS]
+    first_approver, second_approver = approver_names[0], approver_names[1]
+    viewer_name = A.PEOPLE[A.VIEWER_INVITED].name
+    line("S14", "GET %s (as %s) → expect every write of the estate that waits for approvals (Spec 109); a wallet-account interview named %s standing %s is resumed here and never started twice; an estate before Spec 109 answers the route unknown and S14 stops (FAILED — prerequisite: AER 360 Spec 109 not live)" % (
+        T.ONBOARDING_CEREMONIES_ROUTE, founder.name, A.APPROVALS_ACCOUNT_NAME, T.INTERVIEW_AWAITING_APPROVALS))
+    line("S14", "POST /v1/onboarding/interviews %s — only where no such write waits → expect 200: the interview id and its first page; where the plan's capacity (Spec 97) refuses a second account the refusal is reported in the estate's words and S14 stops" % _j({"interviewType": "wallet_account"}))
+    for q in A.expected_walk("wallet_account"):
+        line("S14", "POST /v1/onboarding/interviews/<approvals interview>/answers %s → expect 200: the next page (%s)%s" % (
+            _j({"questionId": q.id, "value": approvals[q.id]}), q.kind, " — this account's own answer, the rest the book's for the first (Spec T19 §1)" if q.id in ("WN", "WQ", "WA1") else ""))
+    line("S14", "GET /v1/onboarding/interviews/<approvals interview>/readback → expect the account's charter in plain sentences")
+    line("S14", "POST /v1/onboarding/interviews/<approvals interview>/confirm/options {} → expect the digest-bound challenge")
+    line("S14", "POST /v1/onboarding/interviews/<approvals interview>/confirm %s → expect 200: state confirmed" % _j({"issuedAtMs": "<issuedAtMs>", "response": "<assertion>"}))
+    line("S14", "POST /v1/onboarding/interviews/<approvals interview>/compile {} → expect 202: state %s, interviewId and ceremonies — the list's creation held by the platform for %s at WQ %s (Spec 109), no charter and no receipt; a 200 (the write finished at once) fails S14, and a refusal is reported in the estate's words and stops it" % (
+        T.INTERVIEW_AWAITING_APPROVALS, names_in_words(approver_names), A.APPROVALS_QUORUM))
+    line("S14", "GET %s (as %s, then as %s, then as %s, and as %s where signed in) → expect the ceremony at 0 of %s with %s among maySign, callerMaySign true and callerName their own for each of the two and false with callerName null for the viewer, and the card's sentence as Spec 109's table composes it" % (
+        T.ONBOARDING_CEREMONIES_ROUTE, founder.name, first_approver, second_approver, viewer_name, A.APPROVALS_QUORUM, names_in_words(approver_names)))
+    line("S14", "POST /v1/onboarding/interviews/<approvals interview>/ceremonies/<pendingTxId>/sign/options {} (as %s) → expect 200: options with the challenge the estate derives from %s under the purpose %s, and issuedAtMs" % (
+        first_approver, T.INTERVIEW_CEREMONY_BINDING % ("<workspace id>", "<approvals interview>", "<pendingTxId>", "<issuedAtMs>"), T.INTERVIEW_CEREMONY_PURPOSE))
+    line("S14", "POST /v1/onboarding/interviews/<approvals interview>/ceremonies/<pendingTxId>/sign %s (as %s) → expect 200: state %s, signaturesCollected 1 of %s, callerHasSigned (Spec 109, item 4); a refusal (%s, %s, %s, %s, %s) is judged for Rule 13 and reported in the estate's words, never retried" % (
+        _j({"issuedAtMs": "<issuedAtMs>", "response": "<assertion by %s's passkey over the challenge>" % first_approver}), first_approver, T.INTERVIEW_AWAITING_APPROVALS, A.APPROVALS_QUORUM,
+        T.CEREMONY_NOT_LISTED, T.CEREMONY_CLOSED, APPROVER_ALREADY_SIGNED, SIGNATURE_NOT_COUNTED, PLATFORM_REFUSED))
+    line("S14", "POST /v1/onboarding/interviews/<approvals interview>/ceremonies/<pendingTxId>/sign/options {} then …/sign %s (as %s, a second press) → expect 409 %s: the platform's record carries the signature and counts each signatory once, 1 of %s stand and nothing is signed again; a second signature counted is a finding" % (
+        _j({"issuedAtMs": "<issuedAtMs>", "response": "<a second assertion by %s's passkey>" % first_approver}), first_approver, APPROVER_ALREADY_SIGNED, A.APPROVALS_QUORUM))
+    line("S14", "POST /v1/onboarding/interviews/<approvals interview>/ceremonies/<pendingTxId>/sign/options {} (as %s) → expect 200: options with the challenge under the purpose %s, and issuedAtMs" % (second_approver, T.INTERVIEW_CEREMONY_PURPOSE))
+    line("S14", "POST /v1/onboarding/interviews/<approvals interview>/ceremonies/<pendingTxId>/sign %s (as %s) → expect 200: state written and no ceremony — the count met, the same request finished the write as %s (Spec 109, item 4)" % (
+        _j({"issuedAtMs": "<issuedAtMs>", "response": "<assertion by %s's passkey over the challenge>" % second_approver}), second_approver, second_approver))
+    line("S14", "GET %s?limit=%d (as %s; every page by its nextCursor) → [compare] the trail: one %s row for the interview with credentialId and pressedBy %s's; two %s rows (%s, then %s), each the signer's own credential; %s naming the ceremony; no %s; at most one %s on the trail (Spec 109)" % (
+        T.AUDIT_EXPORT_ROUTE, T.AUDIT_EXPORT_LIMIT, founder.name, T.INTERVIEW_WRITTEN, second_approver, T.CEREMONY_SIGNED, first_approver, second_approver, T.WRITE_AWAITING_APPROVALS, T.INTERVIEW_WRITE_FAILED, T.WALLET_BORN))
+    line("S14", "GET %s (as %s) → expect the interview absent: no write waits once the count is met and the write finished" % (T.ONBOARDING_CEREMONIES_ROUTE, founder.name))
+    line("S14", "GET /v1/onboarding/interviews/<approvals interview> → expect state written")
+    line("S14", "GET /v1/workspace (as %s) → expect the funding wallet S5 gave the estate, unchanged: the write answered alreadyHeld and birthed no second one (Spec 109, item 5); the estate offers a browser no road onto the platform's approved-destinations list, so the list is judged by the estate's own record of the write, above" % founder.name)
     if start_at:
         if start_at not in STATION_IDS:
             raise HarnessError("no station called %s; the stations are %s" % (start_at, ", ".join(STATION_IDS)))
@@ -5009,7 +5710,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if runner.outcomes:
             path = runner.write_report()
             print("Report: %s" % path)
-    return 1 if any(o.outcome == FAIL for o in runner.outcomes) else 0
+    return exit_code_of(runner.outcomes)
 
 
 if __name__ == "__main__":

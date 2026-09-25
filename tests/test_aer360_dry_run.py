@@ -15,6 +15,9 @@ shortfall, S7a's review of the set of three, Holdings' gas credit, each payment'
 approvals in the spec's order, execution and register reads, the trail, and the four money reads after; and under S10 the money moved (159 → 193 lines).
 Spec T18 moved the chain word: every S6, S7 and S11 call that names a chain names `arbitrum`, C9 is answered `Arbitrum One`, the venue body names the
 corridor's UNISWAP_V3_ARBITRUM row, and S7 gains one conditional call — the payees register read where S6 left no record (193 → 194 lines).
+Spec T19 added S5's head — the ceremonies read, the conditional Finish the write and the conditional signatures that finish a write an earlier run
+left waiting — and S14, the write that waits: the read, the second wallet account's walk, the compile answered 202, the four reads, the two
+signatures and the second press, the trail, the read after, the page and the workspace (194 → 231 lines).
 """
 import contextlib
 import io
@@ -180,7 +183,7 @@ class DryRunTest(unittest.TestCase):
         """Spec T8: --dry unchanged in its calls. The fixture is the dry run at main after PR #5, its expectations cut off at the arrow."""
         with open(FROZEN_CALLS, "r", encoding="utf-8") as handle:
             frozen = handle.read().splitlines()
-        self.assertEqual(len(frozen), 194, "Spec T14 rewrote S7 (159 → 193); Spec T18 adds S7's conditional register read for a run resumed at S7 (193 → 194)")
+        self.assertEqual(len(frozen), 231, "Spec T14 rewrote S7 (159 → 193); Spec T18 adds S7's conditional register read for a run resumed at S7 (193 → 194); Spec T19 adds S5's head — the ceremonies read and the conditional finish — and S14 (194 → 231)")
         self.assertEqual(calls_of(H.dry_lines()), frozen)
         self.assertEqual(len([l for l in frozen if l.startswith("S4 — ") and "/v1/roster/changes" in l]), 4, "the list, the options, the press, the read-back after the count")
         self.assertEqual(len([l for l in frozen if l.startswith("S4 — ") and "/v1/approver-seats/grant" in l]), 3, "Spec T10's grant, Spec T17's grant of a stale seat, and Spec T15's seat granted again for an expired change")
@@ -188,8 +191,8 @@ class DryRunTest(unittest.TestCase):
         self.assertEqual(len([l for l in frozen if l.startswith("S5 — ") and "/v1/workspace/funding-wallet" in l]), 2, "the options road and the press")
         self.assertEqual(len([l for l in frozen if "https://aeredium.io/faucet-api/request" in l]), 1, "the faucet is asked once")
         self.assertEqual(len([l for l in frozen if "https://testnet.rpc.aeredium.io" in l]), 1, "the balance is read once")
-        added = [l for l in frozen if any('"questionId": "%s"' % qid in l for qid in ("C11A", "C19", "WO1", "WO2", "WO3", "WO4"))]
-        self.assertEqual(len(added), 6)
+        added = [l for l in frozen if not l.startswith("S14 — ") and any('"questionId": "%s"' % qid in l for qid in ("C11A", "C19", "WO1", "WO2", "WO3", "WO4"))]
+        self.assertEqual(len(added), 6, "S3's two and S5's four; S14 answers WO1 to WO4 again for its own account (Spec T19)")
         self.assertEqual(len([l for l in frozen if l.startswith("S10 — ") and "Spec 92 fields" in l]), 1)
         self.assertEqual(len([l for l in frozen if l.startswith("S6 — ") and "/approve" in l]), 6, "three roster pressers per payee")
         # Spec T14: S7's new calls, cut at the arrow
@@ -327,7 +330,7 @@ class DryRunTest(unittest.TestCase):
     def test_from_resumes_at_a_station_with_a_sign_in_for_the_stored_passkeys(self):
         lines = H.dry_lines(start_at="S5")
         self.assertTrue(lines[0].startswith("resume — POST /v1/auth/login/options"))
-        self.assertEqual(self.stations_in(lines[1:]), ["S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12"])
+        self.assertEqual(self.stations_in(lines[1:]), ["S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12", "S14"])
         with self.assertRaises(H.HarnessError):
             H.dry_lines(start_at="S13")
 

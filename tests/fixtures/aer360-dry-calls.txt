@@ -65,6 +65,9 @@ S4 — POST /v1/approver-seats/grant {"email": "harness+ada@aeredium.io"} (as Ha
 S4 — GET /v1/roster/changes (as Harriet Founder) — after the count is met
 S4 — GET /v1/approver-seats (as Harriet Founder) — after the count is met, up to three times over a bounded wait
 S4 — GET /v1/invites (as Harriet Founder)
+S5 — GET /v1/onboarding/ceremonies (as Harriet Founder)
+S5 — POST /v1/onboarding/interviews/<waiting interview>/compile {} (as Harriet Founder) — only for a ceremony listed expired, closed or approved
+S5 — POST /v1/onboarding/interviews/<waiting interview>/ceremonies/<pendingTxId>/sign/options {} then …/sign {"issuedAtMs": "<issuedAtMs>", "response": "<assertion by the signer's passkey over the challenge>"} (as each person the ceremony names as able, in its order, with a stored passkey) — only for a write that waits
 S5 — POST /v1/onboarding/interviews {"interviewType": "wallet_account"}
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "W0", "value": {"acknowledged": true}}
 S5 — POST /v1/onboarding/interviews/<account interview>/answers {"questionId": "WN", "value": {"text": "Operating account"}}
@@ -192,3 +195,37 @@ S11 — DELETE /v1/onboarding/interviews/<policy draft>, DELETE /v1/onboarding/i
 S12 — [measure] every call's wall time; every call over 2 seconds; the ten slowest with their routes
 S12 — [measure] the calls the interviews needed, and how many were reads a browser would not make (a question served twice, a read-back fetched twice)
 S12 — [measure] the size of the largest answer; any 5xx retried once after 2 seconds, both answers kept
+S14 — GET /v1/onboarding/ceremonies (as Harriet Founder)
+S14 — POST /v1/onboarding/interviews {"interviewType": "wallet_account"} — only where no such write waits
+S14 — POST /v1/onboarding/interviews/<approvals interview>/answers {"questionId": "W0", "value": {"acknowledged": true}}
+S14 — POST /v1/onboarding/interviews/<approvals interview>/answers {"questionId": "WN", "value": {"text": "Harness Holdings — approvals"}}
+S14 — POST /v1/onboarding/interviews/<approvals interview>/answers {"questionId": "W1", "value": {"choice": "Operations — day-to-day business payments"}}
+S14 — POST /v1/onboarding/interviews/<approvals interview>/answers {"questionId": "O1", "value": {"cents": "5000"}}
+S14 — POST /v1/onboarding/interviews/<approvals interview>/answers {"questionId": "O2", "value": {"cents": "1000"}}
+S14 — POST /v1/onboarding/interviews/<approvals interview>/answers {"questionId": "O3", "value": {"choice": "Yes"}}
+S14 — POST /v1/onboarding/interviews/<approvals interview>/answers {"questionId": "O4", "value": {"people": ["harness+cora@aeredium.io"]}}
+S14 — POST /v1/onboarding/interviews/<approvals interview>/answers {"questionId": "PN0", "value": {"acknowledged": true}}
+S14 — POST /v1/onboarding/interviews/<approvals interview>/answers {"questionId": "PN1", "value": {"choice": "No"}}
+S14 — POST /v1/onboarding/interviews/<approvals interview>/answers {"questionId": "WQ", "value": {"choice": "2"}}
+S14 — POST /v1/onboarding/interviews/<approvals interview>/answers {"questionId": "WA1", "value": {"entries": [{"name": "Ada Approver", "email": "harness+ada@aeredium.io"}, {"name": "Ben Signatory", "email": "harness+ben@aeredium.io"}]}}
+S14 — POST /v1/onboarding/interviews/<approvals interview>/answers {"questionId": "WA2", "value": {"choice": "Yes — one person can both submit and release, where the quorum allows it"}}
+S14 — POST /v1/onboarding/interviews/<approvals interview>/answers {"questionId": "WO1", "value": {"choice": "One person, named here", "person": {"name": "Ben Signatory", "email": "harness+ben@aeredium.io"}}}
+S14 — POST /v1/onboarding/interviews/<approvals interview>/answers {"questionId": "WO2", "value": {"entries": [{"name": "Harriet", "surname": "Founder", "email": "harness+harriet@aeredium.io", "title": "CEO"}]}}
+S14 — POST /v1/onboarding/interviews/<approvals interview>/answers {"questionId": "WO3", "value": {"cents": "200"}}
+S14 — POST /v1/onboarding/interviews/<approvals interview>/answers {"questionId": "WO4", "value": {"cents": "1000"}}
+S14 — POST /v1/onboarding/interviews/<approvals interview>/answers {"questionId": "WCW", "value": {"acknowledged": true}}
+S14 — POST /v1/onboarding/interviews/<approvals interview>/answers {"questionId": "WG1", "value": {"acknowledged": true}}
+S14 — GET /v1/onboarding/interviews/<approvals interview>/readback
+S14 — POST /v1/onboarding/interviews/<approvals interview>/confirm/options {}
+S14 — POST /v1/onboarding/interviews/<approvals interview>/confirm {"issuedAtMs": "<issuedAtMs>", "response": "<assertion>"}
+S14 — POST /v1/onboarding/interviews/<approvals interview>/compile {}
+S14 — GET /v1/onboarding/ceremonies (as Harriet Founder, then as Ada Approver, then as Ben Signatory, and as Olive Overseer where signed in)
+S14 — POST /v1/onboarding/interviews/<approvals interview>/ceremonies/<pendingTxId>/sign/options {} (as Ada Approver)
+S14 — POST /v1/onboarding/interviews/<approvals interview>/ceremonies/<pendingTxId>/sign {"issuedAtMs": "<issuedAtMs>", "response": "<assertion by Ada Approver's passkey over the challenge>"} (as Ada Approver)
+S14 — POST /v1/onboarding/interviews/<approvals interview>/ceremonies/<pendingTxId>/sign/options {} then …/sign {"issuedAtMs": "<issuedAtMs>", "response": "<a second assertion by Ada Approver's passkey>"} (as Ada Approver, a second press)
+S14 — POST /v1/onboarding/interviews/<approvals interview>/ceremonies/<pendingTxId>/sign/options {} (as Ben Signatory)
+S14 — POST /v1/onboarding/interviews/<approvals interview>/ceremonies/<pendingTxId>/sign {"issuedAtMs": "<issuedAtMs>", "response": "<assertion by Ben Signatory's passkey over the challenge>"} (as Ben Signatory)
+S14 — GET /v1/export/audit?limit=5000 (as Harriet Founder; every page by its nextCursor)
+S14 — GET /v1/onboarding/ceremonies (as Harriet Founder)
+S14 — GET /v1/onboarding/interviews/<approvals interview>
+S14 — GET /v1/workspace (as Harriet Founder)

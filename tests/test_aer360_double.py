@@ -316,6 +316,8 @@ STATUS = {
     "WALLET_BIRTH_REFUSED": 502, "GATEWAY_UNAVAILABLE": 503, "FUNDING_WALLET_ALREADY_BORN": 409, "GAS_SHORTFALL": 422,
     "CHANGE_SIGNER_NOT_ON_ROSTER": 403, "ROSTER_CHANGE_UNKNOWN": 404, "PLATFORM_REFUSED": 502, "CHANGE_GOVERNANCE_UNREADABLE": 503,
     "ROSTER_SEAT_NOT_REBOUND": 502,
+    # Spec 109 (http.ts): one write at a time, a ceremony the interview does not hold, a ceremony that no longer collects, a write that did not finish
+    "WRITE_IN_PROGRESS": 409, "CEREMONY_NOT_LISTED": 404, "CEREMONY_CLOSED": 409, "CHARTER_WRITE_UNFINISHED": 409,
     # Spec 104 (accountabstraction.ts paymentUnpricedRefusal): the platform answered and refused a quote, 502; did not answer, or answered a fault, 503
     "PAYMENT_UNPRICED": 502, "PAYMENT_PRICING_UNAVAILABLE": 503,
 }
@@ -368,6 +370,11 @@ MESSAGES = {
     # Spec 97 (refusals.ts): the default sentence; every raise composes its own through platform_refused_sentence
     "PLATFORM_REFUSED": "The access platform did not carry out this request, so nothing was changed. Its own status and words are below.",
     "ROSTER_SEAT_NOT_REBOUND": "The access platform would not move this person’s roster seat to their new credential, so the seat stays bound to the credential it held. Nothing was marked rebound. The platform’s own words are below.",
+    # Spec 109 (refusals.ts): the whole sentence, then the two default sentences — every raise of the second names its cause, of the third the platform's standing
+    "WRITE_IN_PROGRESS": "Another press is finishing this write; read the page again in a moment.",
+    "CEREMONY_NOT_LISTED": "This interview holds no ceremony under that id waiting for signatures, so there is nothing here to sign. Nothing was signed.",
+    "CEREMONY_CLOSED": "This ceremony no longer collects signatures; nothing was signed. Finish the write opens a new one.",
+    "CHARTER_WRITE_UNFINISHED": "Your charter is compiled, and writing it to the platform did not finish. Nothing you answered is lost: reopen the interview and confirm again.",
     # Spec 104: every raise composes its own — "This payment could not be priced: <the platform's sentence>." — these stand where none was composed
     "PAYMENT_UNPRICED": "This payment could not be priced: the access platform refused the quote. The answer will be the same until what it named is resolved.",
     "PAYMENT_PRICING_UNAVAILABLE": "This payment could not be priced: the access platform could not be asked. Nothing was sent.",
@@ -635,6 +642,69 @@ def not_on_change_roster_sentence(names: Sequence[str]) -> str:
     """`notOnChangeRosterSentence` (refusals.ts, Spec 99), word for word."""
     who = people_in_words(names) if names else "nobody the roster currently names"
     return "A change of who the approvers are is signed by %s; you are not among them. Nothing was signed." % who
+
+
+# --- the write that waits for approvals (AER 360 Spec 109; Spec T19): the sentences of packages/shared/src/refusals.ts, word for word ---
+FINISH_THE_WRITE = "Finish the write"
+WHITELIST_MODIFY = "whitelist_modify"        # the platform's operation for a list's creation
+WHITELIST_MUTATION = "whitelist_mutation"    # the purpose it is collected under, on the account's own roster
+MUTATION_CEREMONY_REQUIRED = "mutation requires multisig approval: whitelist_modify requires %d/%d approvals (pending_tx_id=%s)"  # the platform's 409, as read eleven times on 24 September 2026
+LIST_ROSTER_CAUSE = ("the approved-destinations list is created by the active signers of the roster the access platform collects its ceremony on — the approvers WA1 named, "
+                     "at WQ’s count — and this credential is not one of them, by credential or by any address this estate attributes to it. Nothing was signed.")
+REOPENED_CAUSE = "the author is changing this interview; signing waits until it is confirmed and compiled again"
+
+
+def not_on_list_roster_sentence(names: Sequence[str]) -> str:
+    """`notOnListRosterSentence` (refusals.ts, Spec 109), word for word: the same law at the list's ceremony."""
+    who = people_in_words(names) if names else "nobody the roster currently names"
+    return "This list is created by %s; you are not among them. Nothing was signed." % who
+
+
+def ceremony_closed_sentence(standing: str) -> str:
+    """`ceremonyClosedSentence` (refusals.ts, Spec 109): the platform's standing in the parenthesis, and the road on."""
+    return "This ceremony no longer collects signatures (%s); nothing was signed. %s opens a new one." % (standing, FINISH_THE_WRITE)
+
+
+def ordinal_person(n: int) -> str:
+    words = ["first", "second", "third", "fourth", "fifth"]
+    return words[n - 1] if 1 <= n <= len(words) else "%dth" % n
+
+
+def finish_the_write_by(caller_is_author: bool, author_name: str) -> str:
+    return ("press %s" % FINISH_THE_WRITE) if caller_is_author else ("the author (%s) presses %s" % (author_name, FINISH_THE_WRITE))
+
+
+def interview_ceremony_sentence(facts: Dict[str, Any]) -> str:
+    """`interviewCeremonySentence` (refusals.ts, Spec 109): the waiting card's sentence, one row per (state, may sign, has signed, author or not)."""
+    collected = facts.get("signaturesCollected") or 0
+    required = facts.get("requiredSignatures") or 0
+    signed = [str(s.get("name")) for s in facts.get("signedBy") or []]
+    may_sign = [str(n) for n in facts.get("maySign") or []]
+    count = "The approved-destinations list — %d of %d approvals." % (collected, required)
+    if signed:
+        count += " Signed by %s." % people_in_words(signed)
+    if may_sign:
+        count += " Waiting for %s." % people_in_words(may_sign)
+    state = facts.get("state")
+    if state == "awaiting":
+        if facts.get("callerHasSigned"):
+            remaining = max(required - collected, 0)
+            nxt = ("A %s person must sign" % ordinal_person(collected + 1)) if remaining == 1 else ("%d more people must sign" % remaining)
+            return "%s You have signed. %s; a second press by you counts nothing." % (count, nxt)
+        if facts.get("callerMaySign"):
+            return count
+        return "%s Only %s may sign this." % (count, people_in_words(may_sign) if may_sign else "the people the roster names")
+    if state == "approved":
+        return "All approvals are in; %s." % finish_the_write_by(bool(facts.get("callerIsAuthor")), str(facts.get("authorName")))
+    if state == "applied":
+        return "All approvals are in and the platform applied the list; %s to record it." % finish_the_write_by(bool(facts.get("callerIsAuthor")), str(facts.get("authorName")))
+    if state == "expired":
+        standing = "expired%s; the platform holds it %s" % ((" at %s" % facts["expiresAt"]) if facts.get("expiresAt") else "", facts.get("platformStatus"))
+    else:
+        standing = str(facts.get("platformStatus"))
+    if facts.get("callerIsAuthor"):
+        return "This ceremony no longer collects signatures (%s). %s opens a new one." % (standing, FINISH_THE_WRITE)
+    return "This ceremony no longer collects signatures (%s). The author (%s) presses %s, which opens a new one." % (standing, facts.get("authorName"), FINISH_THE_WRITE)
 
 
 def platform_outcome(status: int) -> str:
@@ -1080,8 +1150,20 @@ class EstateDouble:
                  aap_account_id: Optional[str] = None, secret: Optional[bytes] = None, initial_usdc_cents: Optional[int] = None, holdings_usdc_cents: int = 0,
                  treasury_usdc_cents: int = 10000, treasury_funding_wallet: str = "born", quote_ceiling_usd_cents: int = QUOTE_CEILING_USD_CENTS,
                  actual_gas_usd_cents: int = ACTUAL_GAS_USD_CENTS, gas_refusal_names_other_figures: bool = False, review_refuses_but_pays: bool = False,
-                 before_spec_106: bool = False, recorded_chains: Optional[Sequence[str]] = None):
+                 before_spec_106: bool = False, recorded_chains: Optional[Sequence[str]] = None,
+                 before_spec_109: Optional[bool] = None, list_ceremony_lapses: int = 0, second_account_refused: Optional[str] = None):
         self.currency_spoken_as_code = currency_spoken_as_code  # False: main's default arm (JSON); True: Spec 88's code
+        # Spec T19's dials (AER 360 Spec 109). `before_spec_109`: the estate before it — the platform's 409 on the list's creation leaves the compile as a
+        # failed write (CHARTER_WRITE_UNFINISHED, the platform's sentence in the cause), and the ceremonies door and the sign roads are not there.
+        # `list_ceremony_lapses`: the next list ceremonies born lapse at birth (the platform's clock is past their expires_at). `second_account_refused`:
+        # the sentence the platform refuses a SECOND wallet account's birth with (the plan's capacity, Spec 97); the write carries it as its cause.
+        # None: an estate before Spec 91 or Spec 99 is before Spec 109 too (the specs are ordered in time), so the door is absent there unless the test says otherwise
+        self.before_spec_109 = before_spec_109 if before_spec_109 is not None else bool(before_spec_91 or before_spec_99)
+        self.list_ceremony_lapses = list_ceremony_lapses
+        self.second_account_refused = second_account_refused
+        # THE PLATFORM ACCOUNTS the wallet-account writes open (Spec 109): each with its own whitelist_mutation roster — WA1's people and WO2's third
+        # party at WQ's count, as the compiler governs the new account — and the lists created on it. The workspace's own account is AAP_ACCOUNT_ID.
+        self.accounts: Dict[str, Dict[str, Any]] = {}
         # Spec T18's dials. `before_spec_106`: the estate before AER 360 Spec 106 — or a box whose seeded catalog rows still carry the
         # three-network offer (106's ship note) — serves C9 and X1 as on 21 September (Ethereum, Solana, Bitcoin), refuses a choice not
         # offered in validateValue's words, and its compiler lower-cases a chosen name. `recorded_chains`: a compiler that records these
@@ -1238,6 +1320,7 @@ class EstateDouble:
         if self.initial_usdc_cents:
             self.chain.credit(self.source_account, T.usdc_minor_of_cents(self.initial_usdc_cents))  # what Bear funded the wallet with (Spec T14: the Treasury's float)
         self.audit.append("wallet.born %s key %s on %s via %s by %s" % (self.source_account, self.custody_key_id, self.home_stack, via, credential_id))
+        self.append_trail(T.WALLET_BORN, credential_id, {"address": self.source_account, "keyId": self.custody_key_id, "homeStack": self.home_stack, "via": via})
         return {"address": self.source_account, "keyId": self.custody_key_id, "homeStack": self.home_stack, "bornAt": self.wallet_born_at}
 
     def funding_wallet_binding(self, issued_at: Any, credential_id: str) -> Dict[str, str]:
@@ -1436,6 +1519,9 @@ class EstateDouble:
             return self.journey(headers)
         if route == "POST /v1/onboarding/interviews":
             return self.start_interview(headers, body)
+        # Spec 109's door (routes/onboarding.ts): absent before it, so an earlier estate answers the route unknown
+        if route == "GET /v1/onboarding/ceremonies" and not self.before_spec_109:
+            return self.list_interview_ceremonies(headers)
         if route == "GET /v1/onboarding/charter":
             return self.charter_standing(headers)
         if route == "POST /v1/invites":
@@ -1663,7 +1749,7 @@ class EstateDouble:
         else:
             iv = {"id": "iv-" + secrets.token_hex(6), "interviewType": interview_type, "state": "in_progress", "catalogVersion": self.catalog_version,
                   "createdAt": time.time(), "updatedAt": time.time(), "confirmedByCredentialId": None, "writeError": None, "compiledCharter": None, "writeReceipt": None,
-                  "startedBy": caller["credentialId"]}
+                  "startedBy": caller["credentialId"], "startedByDisplayName": caller["displayName"]}
             self.interviews[iv["id"]] = iv
             self.answers[iv["id"]] = []
         page = self.page(iv, serve_truth=True)
@@ -1894,6 +1980,12 @@ class EstateDouble:
         if rest == "/compile" and method == "POST":
             caller = self.require_caller(headers, "author")
             return self.compile(caller, interview_id)
+        m = re.match(r"^/ceremonies/([^/]+)/sign(/options)?$", rest)
+        if m and method == "POST" and not self.before_spec_109:
+            press = self.admit_ceremony_press(headers, interview_id, m.group(1))
+            if m.group(2):
+                return self.ceremony_sign_options(press)
+            return self.sign_interview_ceremony(press, body)
         raise Refusal("REQUEST_MALFORMED", detail={"validation": "Route %s /v1/onboarding/interviews/:id%s not found" % (method, rest)})
 
     def load_interview(self, interview_id: str) -> Dict[str, Any]:
@@ -2089,7 +2181,7 @@ class EstateDouble:
             if iv["state"] == "in_progress":
                 raise Refusal("INTERVIEW_NOT_OPEN", "This interview is no longer at its read-back, so there is nothing on this page left to confirm — it has returned to its questions since this page was read. Continue the interview to reach a fresh read-back.",
                               {"state": iv["state"], "cause": "confirm happens at the read-back"}, road={"kind": "continue_interview", "label": "Continue the interview", "interviewId": interview_id})
-            if iv["state"] in ("confirmed", "compiled"):
+            if iv["state"] in ("confirmed", "compiled", "awaiting_approvals"):  # awaiting_approvals too (Spec 109): the authoring act stands, and what remains is the write
                 raise Refusal("INTERVIEW_NOT_OPEN", "This interview is already confirmed under your passkey, so there is nothing on this page left to confirm — what remains is writing its charter to the platform. Finish the write, or reopen the interview to change an answer and confirm again.",
                               {"state": iv["state"], "cause": "this interview is already confirmed; writing its charter is what remains"})
             raise Refusal("INTERVIEW_NOT_OPEN", detail={"state": iv["state"], "cause": "confirm happens at the read-back"})
@@ -2099,6 +2191,9 @@ class EstateDouble:
 
     def compile(self, caller: Dict[str, Any], interview_id: str) -> Tuple[int, Any]:
         iv = self.load_interview(interview_id)
+        if iv["state"] == "awaiting_approvals" and iv.get("compiledCharter"):
+            # THE WAIT IS RESUMED, NOT RECOMPILED (Spec 109, item 2): Finish the write presents the list to the platform again and authors nothing anew
+            return self.write_interview(caller, iv, "compile")
         if iv["state"] not in ("confirmed", "compiled"):
             raise Refusal("INTERVIEW_NOT_OPEN", detail={"state": iv["state"], "cause": "the compiler reads only confirmed interviews"})
         tiers_refusal = self.tiers_violation(iv, self.latest(interview_id))
@@ -2106,24 +2201,317 @@ class EstateDouble:
             raise tiers_refusal
         latest = {qid: row["value"] for qid, row in self.latest(interview_id).items()}
         charter = self.compile_charter(iv["interviewType"], latest, iv.get("catalogVersion"))
-        already_stood = False
+        iv["compiledCharter"] = charter
+        iv["state"] = "compiled"
+        return self.write_interview(caller, iv, "compile")
+
+    def write_interview(self, caller: Dict[str, Any], iv: Dict[str, Any], road: str, pending_tx_id: Optional[str] = None) -> Tuple[int, Any]:
+        """
+        The write-and-tail (routes/onboarding.ts, Spec 109, item 2), one function the compile route and the sign route call. A policy charter
+        establishes the change governance once; a wallet account is opened on the platform (its own whitelist_mutation roster at WQ's count on WA1's
+        people and WO2's third party), its approved-destinations list found-or-presented (step 5: an active list of the charter's name and mode is
+        adopted; else the creation is presented, and the platform's ceremony is a WAIT — the receipt records it, the interview stands awaiting_approvals,
+        the trail says so once per ceremony opened, and the answer is 202 with no charter and no receipt), its entries added, and the funding wallet
+        `alreadyHeld` where the estate has one. The write's row names the presser, with `pressedBy` on the sign road; the charter seats the hand that
+        wrote it. A failure with no ceremony open stands the interview `compiled` again with its cause, and is CHARTER_WRITE_UNFINISHED.
+        """
+        charter = iv["compiledCharter"]
+        receipt: Dict[str, Any] = dict(iv.get("writeReceipt") or {})
+        pressed = {"pressedBy": caller["credentialId"], "pendingTxId": pending_tx_id} if road == "sign" else {}
         if iv["interviewType"] == "policy":
             # THE CHANGE GOVERNANCE IS ESTABLISHED ONCE (services/onboardingcompiler.ts, establishGovernance; the platform's
             # /v1/mutation-governance/establish refuses an account that already holds a whitelist_mutation roster). A later
             # compile leaves the rosters as they stand — and a seat bound at the platform by a press stays bound.
-            if self.governance_established:
-                already_stood = True
-            else:
+            already_stood = self.governance_established
+            if not self.governance_established:
+                latest = {qid: row["value"] for qid, row in self.latest(iv["id"]).items()}
                 self.seat_whitelist_roster(charter, latest)
                 self.seat_change_roster(charter, latest)
                 self.governance_established = True
-        iv["compiledCharter"] = charter
-        iv["state"] = "written"
-        iv["writeReceipt"] = {"aapAccountId": AAP_ACCOUNT_ID, "policyEntryId": "pe-" + secrets.token_hex(4), "completedAt": self._now_iso(),
-                              "governanceAlreadyStood": already_stood}
-        iv["updatedAt"] = time.time()
+            receipt.update({"aapAccountId": AAP_ACCOUNT_ID, "policyEntryId": "pe-" + secrets.token_hex(4), "completedAt": self._now_iso(), "governanceAlreadyStood": already_stood})
+        else:
+            if not receipt.get("aapAccountId"):
+                # step 1: the account is born on the platform — or the plan's capacity refuses a second one, in the platform's words (Spec 97)
+                if self.second_account_refused is not None and any(o["interviewType"] == "wallet_account" and o["state"] == "written" and o is not iv for o in self.interviews.values()):
+                    return self.write_failed(caller, iv, receipt, self.second_account_refused, pressed)
+                account = self.open_account(charter)
+                receipt.update({"aapAccountId": account["id"], "policyEntryId": "pe-" + secrets.token_hex(4), "governanceAlreadyStood": False, "_accountKeySealed": True})
+            account = self.accounts[receipt["aapAccountId"]]
+            # step 5 — the list: a charter that authors no list closes the ceremony that waited for one; the resume finds before it presents
+            mode = charter.get("whitelistMode")
+            if mode in (None, "none") and "whitelistCeremony" in receipt:
+                del receipt["whitelistCeremony"]
+            if mode not in (None, "none") and not receipt.get("whitelistId"):
+                list_name = charter["name"] + T.APPROVED_DESTINATIONS_SUFFIX
+                standing = next((w for w in account["whitelists"] if w["active"] and w["name"] == list_name and w["mode"] == mode), None)
+                if standing is not None:
+                    receipt["whitelistId"] = standing["id"]
+                    receipt.pop("whitelistCeremony", None)
+                else:
+                    answered = self.create_whitelist(account, list_name, mode)
+                    ceremony = answered["ceremony"]
+                    if ceremony is not None:
+                        said = "AAP POST /v1/whitelists-v2 failed (HTTP 409): " + MUTATION_CEREMONY_REQUIRED % (len(ceremony["collected"]), ceremony["requiredSignatures"], ceremony["id"])
+                        if self.before_spec_109:
+                            # the estate before Spec 109: the 409 propagated as a failed write, and Finish the write met it again
+                            return self.write_failed(caller, iv, receipt, said, pressed)
+                        before = (receipt.get("whitelistCeremony") or {}).get("pendingTxId")
+                        opened = before != ceremony["id"]
+                        if opened:
+                            receipt["whitelistCeremony"] = {"pendingTxId": ceremony["id"], "requiredMultisigId": ceremony["requiredMultisigId"], "openedAt": self._now_iso()}
+                        iv.update(writeReceipt=receipt, writeError=None, state="awaiting_approvals", updatedAt=time.time())
+                        if opened:
+                            detail = {"interviewId": iv["id"], "pendingTxId": ceremony["id"], "requiredMultisigId": ceremony["requiredMultisigId"],
+                                      "requiredSignatures": str(ceremony["requiredSignatures"]), "signaturesCollected": str(len(ceremony["collected"]))}
+                            if before:
+                                detail["replaces"] = before
+                            detail["road"] = road
+                            self.append_trail(T.WRITE_AWAITING_APPROVALS, caller["credentialId"], detail)
+                        return 202, {"state": "awaiting_approvals", "interviewId": iv["id"], "ceremonies": [self.interview_ceremony_view(iv, caller)]}
+                    receipt["whitelistId"] = answered["whitelist"]["id"]
+                    receipt.pop("whitelistCeremony", None)
+            if receipt.get("whitelistId"):
+                wl = next(w for w in account["whitelists"] if w["id"] == receipt["whitelistId"])
+                done = list(receipt.get("whitelistEntryIds") or [])
+                for entry in charter.get("whitelistEntries") or []:
+                    entry_id = "wle-" + secrets.token_hex(4)
+                    wl["entries"].append(dict(entry, id=entry_id))
+                    done.append(entry_id)
+                receipt["whitelistEntryIds"] = done
+            receipt.pop("_accountKeySealed", None)
+            # the funding wallet (Spec 98): where the estate holds one the write answers alreadyHeld and births nothing; the birth road is the press (Spec T13)
+            if self.has_funding_wallet():
+                receipt["fundingWallet"] = {"born": False, "alreadyHeld": {"address": self.source_account}}
+            receipt["completedAt"] = self._now_iso()
+        iv.update(writeReceipt=receipt, writeError=None, state="written", updatedAt=time.time())
+        detail = {"interviewId": iv["id"], "aapAccountId": receipt.get("aapAccountId"), "policyEntryId": receipt.get("policyEntryId"),
+                  "walletAccountAssignedGroups": ["group-3"] if iv["interviewType"] == "wallet_account" else None}
+        detail.update(pressed)
+        self.append_trail(T.INTERVIEW_WRITTEN, caller["credentialId"], detail)
         seat = self.complete_seat_on_charter_write(caller["credentialId"])
-        return 200, {"charter": charter, "receipt": iv["writeReceipt"], "seat": seat}
+        return 200, {"charter": charter, "receipt": receipt, "seat": seat}
+
+    def write_failed(self, caller: Dict[str, Any], iv: Dict[str, Any], receipt: Dict[str, Any], cause: str, pressed: Dict[str, Any]) -> Tuple[int, Any]:
+        """The catch (Spec 109, item 2): with no ceremony open the interview stands compiled again, the cause is stored, the trail says the write failed, and the answer is CHARTER_WRITE_UNFINISHED."""
+        iv["writeReceipt"] = receipt
+        iv["writeError"] = cause
+        if not self.ceremony_is_open(receipt):
+            iv["state"] = "compiled"
+        iv["updatedAt"] = time.time()
+        self.append_trail(T.INTERVIEW_WRITE_FAILED, caller["credentialId"], dict({"interviewId": iv["id"], "cause": cause}, **pressed))
+        raise Refusal("CHARTER_WRITE_UNFINISHED", detail={"cause": cause, "interviewId": iv["id"], "state": iv["state"]})
+
+    @staticmethod
+    def ceremony_is_open(receipt: Dict[str, Any]) -> bool:
+        """`ceremonyIsOpen` (Spec 109, item 1): the receipt carries a ceremony and records no list."""
+        return "whitelistCeremony" in receipt and not receipt.get("whitelistId")
+
+    def open_account(self, charter: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        The wallet account opened on the platform (step 1) with its change governance (step 4): the whitelist family alone, at THIS account's own
+        quorum (WQ) by THIS account's own approvers — the charter's signers, WA1's people and WO2's third party, one seat each, the credential slot
+        empty until a signature binds it (onboardingcompiler.ts, governanceRecordsFor: "no member and no count is invented").
+        """
+        people = self.parse_roster(charter.get("signers") or [])
+        quorum = charter.get("quorum")
+        roster = {"id": "ms-whitelist-mutation-" + secrets.token_hex(3), "name": "%s — %s approvers" % (charter["name"], WHITELIST_MUTATION), "purposes": [WHITELIST_MUTATION],
+                  "minSignatures": int(quorum) if isinstance(quorum, int) and quorum >= 1 else 1,
+                  "signers": [{"user_id": p["email"], "display_name": p["name"], "credential_id": "", "status": "active"} for p in people], "active": True}
+        account = {"id": "aap-account-" + secrets.token_hex(4), "name": charter["name"], "roster": roster, "whitelists": []}
+        self.accounts[account["id"]] = account
+        return account
+
+    def born_list_ceremony(self, account: Dict[str, Any], payload_hash: str) -> Dict[str, Any]:
+        """A list's ceremony at birth (test/aapDouble.ts, bornCeremony on the whitelists road): pending, unconsumed, expiring a day out — or lapsed at birth by the dial."""
+        now = time.time()
+        lapsed = self.list_ceremony_lapses > 0
+        if lapsed:
+            self.list_ceremony_lapses -= 1
+        expires = now - 60 if lapsed else now + PENDING_TX_TTL_SECONDS
+        roster = account["roster"]
+        return {"id": str(uuid.uuid4()), "accountId": account["id"], "purpose": WHITELIST_MUTATION, "entryId": "", "payloadHash": payload_hash,
+                "operation": WHITELIST_MODIFY, "requiredMultisigId": roster["id"], "requiredSignatures": roster["minSignatures"],
+                "status": "pending", "createdAt": self._iso(now), "expiresAt": self._iso(expires), "expiresAtEpoch": expires, "consumedAt": None, "collected": []}
+
+    def create_whitelist(self, account: Dict[str, Any], name: str, mode: str) -> Dict[str, Any]:
+        """
+        The platform's POST /v1/whitelists-v2 (test/aapDouble.ts, Spec 109): where the account's change governance names whitelist_modify at a
+        count above one, the creation is a governed mutation — a ceremony bound to the digest of (account, name, mode), found again only while
+        LIVE, answered 409 mutation_ceremony_required while the count is short, and APPLIED AND CONSUMED in one act on the identical re-presentation
+        once approved. At a count of one the creation applies at once.
+        """
+        roster = account["roster"]
+        if roster["minSignatures"] > 1:
+            payload_hash = hashlib.sha256(json.dumps({"operation": WHITELIST_MODIFY, "account_id": account["id"], "name": name, "mode": mode}, sort_keys=True).encode("utf-8")).hexdigest()
+            now = time.time()
+            ceremony = next((c for c in self.ceremonies if c["accountId"] == account["id"] and c["purpose"] == WHITELIST_MUTATION and c["operation"] == WHITELIST_MODIFY
+                             and c["payloadHash"] == payload_hash and self.ceremony_is_live(c, now)), None)
+            if ceremony is None:
+                ceremony = self.born_list_ceremony(account, payload_hash)
+                self.ceremonies.append(ceremony)
+            if ceremony["status"] != "approved":
+                return {"ceremony": ceremony, "whitelist": None}
+            ceremony["status"] = "consumed"
+            ceremony["consumedAt"] = self._now_iso()
+        wl = {"id": "wl-" + secrets.token_hex(4), "name": name, "mode": mode, "active": True, "entries": []}
+        account["whitelists"].append(wl)
+        return {"ceremony": None, "whitelist": wl}
+
+    # -- the door onto the list's ceremony (Spec 109, items 3 and 4; routes/onboarding.ts, routes/passkeysign.ts) --------------------------
+    def interview_ceremony_view(self, iv: Dict[str, Any], caller: Dict[str, Any]) -> Dict[str, Any]:
+        """`composeCeremonyView`: the platform's record read under the account's own key, the estate adding which interview, whose author, and the names it holds."""
+        receipt = iv.get("writeReceipt") or {}
+        charter = iv.get("compiledCharter") or {}
+        held = receipt.get("whitelistCeremony") or {}
+        facts = {"interviewId": iv["id"], "interviewType": iv["interviewType"],
+                 "listName": (charter["name"] + T.APPROVED_DESTINATIONS_SUFFIX) if charter.get("name") else "the approved-destinations list",
+                 "pendingTxId": held.get("pendingTxId", ""), "callerIsAuthor": "author" in caller["roles"], "authorName": iv.get("startedByDisplayName") or ""}
+        record = next((c for c in self.ceremonies if c["id"] == held.get("pendingTxId")), None)
+        if record is None:
+            bare = dict(facts, requiredSignatures=None, signaturesCollected=None, state="closed", platformStatus="not listed", expiresAt=None,
+                        signedBy=[], maySign=[], callerMaySign=False, callerHasSigned=False, callerName=None)
+            return dict(bare, sentence=interview_ceremony_sentence(bare))
+        roster = (self.accounts.get(record["accountId"]) or {}).get("roster")
+        active = [s for s in roster["signers"] if s["status"] == "active"] if roster and roster["id"] == record["requiredMultisigId"] else []
+        names = self.register_names()
+        mine = self.caller_seat(active, caller["credentialId"], self.addresses_of_caller(caller["credentialId"])) if active else None
+        collected = record["collected"]
+        caller_has_signed = any(c["credential_id"] == caller["credentialId"] for c in collected) or (mine is not None and self.seat_has_signed(mine, collected))
+        state = self.roster_change_state(record, time.time())
+        view = dict(facts, pendingTxId=record["id"], requiredSignatures=record["requiredSignatures"], signaturesCollected=len(collected), state=state,
+                    platformStatus=record["status"], expiresAt=record["expiresAt"], signedBy=[self.signer_view(c, active, names) for c in collected],
+                    maySign=[self.seat_name(s, names) for s in active if not self.seat_has_signed(s, collected)],
+                    callerMaySign=state == "awaiting" and mine is not None and not caller_has_signed, callerHasSigned=caller_has_signed,
+                    callerName=self.seat_name(mine, names) if mine else None)
+        return dict(view, sentence=interview_ceremony_sentence(view))
+
+    def list_interview_ceremonies(self, headers: Dict[str, str]) -> Tuple[int, Any]:
+        """GET /v1/onboarding/ceremonies (viewer): every write of this estate that waits for approvals, as the caller may read and sign it; another workspace's is absent by construction."""
+        caller = self.require_caller(headers, "viewer")
+        rows = sorted([iv for iv in self.interviews.values() if iv["state"] == "awaiting_approvals"], key=lambda i: i["updatedAt"], reverse=True)
+        return 200, {"ceremonies": [self.interview_ceremony_view(iv, caller) for iv in rows if self.ceremony_is_open(iv.get("writeReceipt") or {})]}
+
+    def admit_ceremony_press(self, headers: Dict[str, str], interview_id: str, pending_tx_id: str) -> Dict[str, Any]:
+        """ONE GATE, STATED ONCE, on both routes: the caller's workspace's interview, standing awaiting_approvals, and the ceremony the one on its receipt — else CEREMONY_NOT_LISTED, the cause saying which."""
+        caller = self.require_caller(headers, "viewer", mutating=True)
+        iv = self.interviews.get(interview_id)
+        if iv is None:
+            raise Refusal("CEREMONY_NOT_LISTED", detail={"pendingTxId": pending_tx_id, "interviewId": interview_id, "cause": "not on this interview"})
+        receipt = iv.get("writeReceipt") or {}
+        if iv["state"] != "awaiting_approvals":
+            reopened = iv["state"] in ("in_progress", "at_read_back", "confirmed") and "whitelistCeremony" in receipt
+            raise Refusal("CEREMONY_NOT_LISTED", detail={"pendingTxId": pending_tx_id, "interviewId": interview_id,
+                                                         "cause": REOPENED_CAUSE if reopened else "interview is %s" % iv["state"], "state": iv["state"]})
+        if not self.ceremony_is_open(receipt) or receipt["whitelistCeremony"].get("pendingTxId") != pending_tx_id:
+            raise Refusal("CEREMONY_NOT_LISTED", detail={"pendingTxId": pending_tx_id, "interviewId": interview_id, "cause": "not on this interview"})
+        return {"caller": caller, "interview": iv, "pendingTxId": pending_tx_id}
+
+    def ceremony_binding(self, interview_id: str, pending_tx_id: str, issued_at: Any, credential_id: str) -> Dict[str, str]:
+        """deriveChallenge's binding for the signature: setDigest `onboarding-ceremony:<workspace id>:<interview id>:<pendingTxId>:<issuedAtMs>`, the signer's credential, the purpose."""
+        return {"setDigest": T.INTERVIEW_CEREMONY_BINDING % (WORKSPACE_ID, interview_id, pending_tx_id, issued_at), "credentialId": credential_id, "purpose": T.INTERVIEW_CEREMONY_PURPOSE}
+
+    def ceremony_challenge(self, binding: Dict[str, str]) -> str:
+        return self.challenge(binding["purpose"], "%s|%s" % (binding["setDigest"], binding["credentialId"]), 0)
+
+    def ceremony_sign_options(self, press: Dict[str, Any]) -> Tuple[int, Any]:
+        """Step one (passkeysign.ts): the digest-bound challenge, for the signer's own passkeys — a person who may not sign at all still receives one; the roster judges at the press."""
+        caller = press["caller"]
+        issued_at = int(time.time() * 1000)
+        challenge = self.ceremony_challenge(self.ceremony_binding(press["interview"]["id"], press["pendingTxId"], issued_at, caller["credentialId"]))
+        own = [w for w, row in self.passkeys.items() if row["credentialId"] == caller["credentialId"]]
+        return 200, {"options": {"challenge": challenge, "rpId": self.rp_id, "timeout": 60000, "userVerification": "required",
+                                 "allowCredentials": [{"id": w, "type": "public-key", "transports": ["internal"]} for w in own]}, "issuedAtMs": issued_at}
+
+    def sign_interview_ceremony(self, press: Dict[str, Any], body: Any) -> Tuple[int, Any]:
+        """
+        Step two (passkeysign.ts, then signCeremony — Spec 109, item 4, modelled on signRosterChange): the assertion verified against the same binding;
+        the platform's record read first; a ceremony that no longer collects refused CEREMONY_CLOSED; a signer the record already counts refused from
+        that record; a caller with no seat on the collecting roster refused in the roster's words before the platform is asked; then one signature as
+        this person and ceremony_signed on the trail. Where the record reads approved — this press or already — the same request finishes the write
+        as the presser.
+        """
+        caller, iv, pending_tx_id = press["caller"], press["interview"], press["pendingTxId"]
+        body = body or {}
+        for field in ("issuedAtMs", "response"):
+            if field not in body:
+                raise Malformed("%s: Required" % field)
+        self.assert_fresh(body["issuedAtMs"])
+        expected = self.ceremony_challenge(self.ceremony_binding(iv["id"], pending_tx_id, body["issuedAtMs"], caller["credentialId"]))
+        response = body["response"] or {}
+        if not isinstance(response.get("id"), str) or not response["id"]:
+            raise Refusal("STEP_UP_INVALID", detail={"cause": "assertion carried no credential id"})
+        stored = self.passkeys.get(response["id"])
+        if not stored or stored["credentialId"] != caller["credentialId"]:
+            raise Refusal("STEP_UP_INVALID", detail={"cause": "the asserting passkey is not the signing credential"})
+        try:
+            stored["signCount"] = PK.verify_assertion(response, expected, self.origin, self.rp_id, stored["publicKey"], stored["signCount"])
+        except PK.PasskeyRefused as err:
+            raise Refusal("STEP_UP_INVALID", detail={"cause": str(err)[:200]})
+        stored["lastAuthAtMs"] = body["issuedAtMs"]
+        record = next((c for c in self.ceremonies if c["id"] == pending_tx_id), None)
+        if record is None:
+            raise Refusal("CEREMONY_NOT_LISTED", detail={"pendingTxId": pending_tx_id, "interviewId": iv["id"], "cause": "platform no longer lists it", "platformSaid": "not found"})
+        now = time.time()
+        state = self.roster_change_state(record, now)
+        if state in ("expired", "closed"):
+            standing = ("expired%s; the platform holds it %s" % ((" at %s" % record["expiresAt"]) if record.get("expiresAt") else "", record["status"])) if state == "expired" else record["status"]
+            detail = {"pendingTxId": pending_tx_id, "interviewId": iv["id"], "platformStatus": record["status"], "state": state}
+            if record.get("expiresAt"):
+                detail["expiresAt"] = record["expiresAt"]
+            raise Refusal("CEREMONY_CLOSED", ceremony_closed_sentence(standing), detail, provenance={"source": "aap_policy", "reference": pending_tx_id})
+        roster = (self.accounts.get(record["accountId"]) or {}).get("roster")
+        if roster is None or roster["id"] != record["requiredMultisigId"]:
+            raise Refusal("CHANGE_GOVERNANCE_UNREADABLE", detail={"pendingTxId": pending_tx_id, "interviewId": iv["id"], "requiredMultisigId": record["requiredMultisigId"],
+                                                                  "purpose": WHITELIST_MUTATION, "question": "WQ"}, provenance={"source": "aap_policy", "reference": record["requiredMultisigId"]})
+        active = [s for s in roster["signers"] if s["status"] == "active"]
+        names = self.register_names()
+        addresses = self.addresses_of_caller(caller["credentialId"])
+        seat = self.caller_seat(active, caller["credentialId"], addresses)
+        collected = record["collected"]
+        counted = any(c["credential_id"] == caller["credentialId"] for c in collected) or (seat is not None and self.seat_has_signed(seat, collected))
+        if counted:
+            # ALREADY ON THE PLATFORM'S RECORD: refused from that record, and the platform is not asked to count what it has counted
+            raise self.already_signed_refusal(record, caller["credentialId"], seat)
+        if seat is None:
+            # THE ROSTER DECIDES WHO MAY SIGN — before the platform is asked
+            members = [self.seat_name(s, names) for s in active]
+            detail = {"cause": LIST_ROSTER_CAUSE, "pendingTxId": pending_tx_id, "interviewId": iv["id"], "roster": roster["name"], "rosterId": roster["id"],
+                      "purpose": WHITELIST_MUTATION, "question": "WQ", "members": ", ".join(members), "credentialId": caller["credentialId"]}
+            if addresses:
+                detail["addresses"] = ", ".join(sorted(addresses))
+            raise Refusal("SIGNATURE_NOT_COUNTED", not_on_list_roster_sentence(members), detail, provenance={"source": "aap_policy", "reference": roster["id"]})
+        if state != "approved":
+            if not seat["credential_id"]:
+                seat["credential_id"] = caller["credentialId"]  # the enrolment bind (spec 76)
+            collected.append({"credential_id": caller["credentialId"], "user_id": seat["user_id"], "collected_at": self._now_iso()})
+            if len(collected) >= record["requiredSignatures"]:
+                record["status"] = "approved"
+            self.append_trail(T.CEREMONY_SIGNED, caller["credentialId"], {"interviewId": iv["id"], "pendingTxId": pending_tx_id, "requiredMultisigId": record["requiredMultisigId"],
+                                                                         "requiredSignatures": str(record["requiredSignatures"]), "signaturesCollected": str(len(collected)),
+                                                                         "status": record["status"]}, subject_id=iv["id"])
+        if record["status"] != "approved":
+            return 200, {"state": "awaiting_approvals", "interviewId": iv["id"], "ceremonies": [self.interview_ceremony_view(iv, caller)]}
+        # THE COUNT IS MET: the same request finishes the write, as the presser
+        status, answered = self.write_interview(caller, iv, "sign", pending_tx_id)
+        if status == 202:
+            return 200, answered
+        return 200, {"state": "written", "interviewId": iv["id"], "ceremonies": []}
+
+    def already_signed_refusal(self, record: Dict[str, Any], credential_id: str, seat: Optional[Dict[str, Any]]) -> Refusal:
+        """`alreadySigned` (services/approverseats.ts, exported by Spec 109): refused from the platform's record, which counts each signatory once."""
+        collected = record["collected"]
+        mine = next((c for c in collected if c["credential_id"] == credential_id), None)
+        if mine is None and seat is not None:
+            mine = next((c for c in collected if (seat["credential_id"] and c["credential_id"] == seat["credential_id"]) or (c.get("user_id") and c["user_id"].lower() == seat["user_id"].lower())), None)
+        at = (" (collected %s)" % mine["collected_at"]) if mine and mine.get("collected_at") else ""
+        detail = {"pendingTxId": record["id"], "credentialId": credential_id, "signaturesCollected": str(len(collected)), "requiredSignatures": str(record["requiredSignatures"]),
+                  "platformStatus": record["status"]}
+        if mine and mine.get("collected_at"):
+            detail["signedAt"] = mine["collected_at"]
+        return Refusal("APPROVER_ALREADY_SIGNED",
+                       "You have already signed this change: the access platform’s record of ceremony %s… carries your signature%s, and it counts each signatory once. %d of %d stand; nothing was signed again." % (
+                           T.credential_short_form(record["id"]), at, len(collected), record["requiredSignatures"]),
+                       detail, provenance={"source": "aap_policy", "reference": record["id"]})
 
     @staticmethod
     def roster_of(value: Optional[Dict[str, Any]]) -> List[str]:
@@ -3173,15 +3561,7 @@ class EstateDouble:
             mine = next((c for c in collected if (seat["credential_id"] and c["credential_id"] == seat["credential_id"]) or (c.get("user_id") and c["user_id"].lower() == seat["user_id"].lower())), None)
         if mine is not None:
             # ALREADY ON THE PLATFORM'S RECORD: refused from that record, and the platform is not asked to count what it has counted
-            at = (" (collected %s)" % mine["collected_at"]) if mine.get("collected_at") else ""
-            detail = {"pendingTxId": pending_tx_id, "credentialId": caller["credentialId"], "signaturesCollected": str(len(collected)), "requiredSignatures": str(record["requiredSignatures"]),
-                      "platformStatus": record["status"]}
-            if mine.get("collected_at"):
-                detail["signedAt"] = mine["collected_at"]
-            raise Refusal("APPROVER_ALREADY_SIGNED",
-                          "You have already signed this change: the access platform’s record of ceremony %s… carries your signature%s, and it counts each signatory once. %d of %d stand; nothing was signed again." % (
-                              T.credential_short_form(pending_tx_id), at, len(collected), record["requiredSignatures"]),
-                          detail, provenance={"source": "aap_policy", "reference": pending_tx_id})
+            raise self.already_signed_refusal(record, caller["credentialId"], seat)
         # THE PLATFORM'S SIGNATURES ROAD (test/aapDouble.ts): the lapse read off expires_at; the status; the signer matched by credential, or bound by user_id
         now = time.time()
         if record["expiresAtEpoch"] <= now:
