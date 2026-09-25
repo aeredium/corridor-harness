@@ -1,0 +1,385 @@
+{
+  "source": "AER 360 Spec 109 as built (aeredium/AERAccounts, commit e2dcc6e, pull request #126): the payloads its own suite recorded and printed in the pull request — the 202, the ceremonies read for A, B and a viewer, the sign bodies, the finish, the audit rows of a two-person finish, the card's sentences and the refusals — with the harness's own people (Harriet Founder the author and WO2's third party, Ada Approver and Ben Signatory the two WA1 names, Olive Overseer the viewer) in place of the suite's, and the harness's account name in place of the suite's. Every field, status word and sentence is the estate's; the ids are the suite's run. No name from a customer estate travels here.",
+  "the_202": {
+    "status": 202,
+    "body": {
+      "state": "awaiting_approvals",
+      "interviewId": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
+      "ceremonies": [
+        {
+          "interviewId": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
+          "interviewType": "wallet_account",
+          "listName": "Harness Holdings — approvals — approved destinations",
+          "pendingTxId": "3c767515-8364-4eab-a9b5-e7660f4a7b5a",
+          "callerIsAuthor": true,
+          "authorName": "Harriet Founder",
+          "requiredSignatures": 2,
+          "signaturesCollected": 0,
+          "state": "awaiting",
+          "platformStatus": "pending",
+          "expiresAt": "2026-09-25T16:39:46.299Z",
+          "signedBy": [],
+          "maySign": [
+            "Ada Approver",
+            "Ben Signatory",
+            "Harriet Founder"
+          ],
+          "callerMaySign": false,
+          "callerHasSigned": false,
+          "callerName": null,
+          "sentence": "The approved-destinations list — 0 of 2 approvals. Waiting for Ada Approver, Ben Signatory and Harriet Founder. Only Ada Approver, Ben Signatory and Harriet Founder may sign this."
+        }
+      ]
+    }
+  },
+  "the_reads": {
+    "the_author": {
+      "interviewId": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
+      "interviewType": "wallet_account",
+      "listName": "Harness Holdings — approvals — approved destinations",
+      "pendingTxId": "3c767515-8364-4eab-a9b5-e7660f4a7b5a",
+      "callerIsAuthor": true,
+      "authorName": "Harriet Founder",
+      "requiredSignatures": 2,
+      "signaturesCollected": 0,
+      "state": "awaiting",
+      "platformStatus": "pending",
+      "expiresAt": "2026-09-25T16:39:46.299Z",
+      "signedBy": [],
+      "maySign": [
+        "Ada Approver",
+        "Ben Signatory",
+        "Harriet Founder"
+      ],
+      "callerMaySign": false,
+      "callerHasSigned": false,
+      "callerName": null,
+      "sentence": "The approved-destinations list — 0 of 2 approvals. Waiting for Ada Approver, Ben Signatory and Harriet Founder. Only Ada Approver, Ben Signatory and Harriet Founder may sign this."
+    },
+    "ada": {
+      "interviewId": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
+      "interviewType": "wallet_account",
+      "listName": "Harness Holdings — approvals — approved destinations",
+      "pendingTxId": "3c767515-8364-4eab-a9b5-e7660f4a7b5a",
+      "callerIsAuthor": true,
+      "authorName": "Harriet Founder",
+      "requiredSignatures": 2,
+      "signaturesCollected": 0,
+      "state": "awaiting",
+      "platformStatus": "pending",
+      "expiresAt": "2026-09-25T16:39:46.299Z",
+      "signedBy": [],
+      "maySign": [
+        "Ada Approver",
+        "Ben Signatory",
+        "Harriet Founder"
+      ],
+      "callerMaySign": true,
+      "callerHasSigned": false,
+      "callerName": "Ada Approver",
+      "sentence": "The approved-destinations list — 0 of 2 approvals. Waiting for Ada Approver, Ben Signatory and Harriet Founder."
+    },
+    "ben": {
+      "interviewId": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
+      "interviewType": "wallet_account",
+      "listName": "Harness Holdings — approvals — approved destinations",
+      "pendingTxId": "3c767515-8364-4eab-a9b5-e7660f4a7b5a",
+      "callerIsAuthor": true,
+      "authorName": "Harriet Founder",
+      "requiredSignatures": 2,
+      "signaturesCollected": 0,
+      "state": "awaiting",
+      "platformStatus": "pending",
+      "expiresAt": "2026-09-25T16:39:46.299Z",
+      "signedBy": [],
+      "maySign": [
+        "Ada Approver",
+        "Ben Signatory",
+        "Harriet Founder"
+      ],
+      "callerMaySign": true,
+      "callerHasSigned": false,
+      "callerName": "Ben Signatory",
+      "sentence": "The approved-destinations list — 0 of 2 approvals. Waiting for Ada Approver, Ben Signatory and Harriet Founder."
+    },
+    "olive": {
+      "interviewId": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
+      "interviewType": "wallet_account",
+      "listName": "Harness Holdings — approvals — approved destinations",
+      "pendingTxId": "3c767515-8364-4eab-a9b5-e7660f4a7b5a",
+      "callerIsAuthor": false,
+      "authorName": "Harriet Founder",
+      "requiredSignatures": 2,
+      "signaturesCollected": 0,
+      "state": "awaiting",
+      "platformStatus": "pending",
+      "expiresAt": "2026-09-25T16:39:46.299Z",
+      "signedBy": [],
+      "maySign": [
+        "Ada Approver",
+        "Ben Signatory",
+        "Harriet Founder"
+      ],
+      "callerMaySign": false,
+      "callerHasSigned": false,
+      "callerName": null,
+      "sentence": "The approved-destinations list — 0 of 2 approvals. Waiting for Ada Approver, Ben Signatory and Harriet Founder. Only Ada Approver, Ben Signatory and Harriet Founder may sign this."
+    },
+    "another_workspace": {
+      "ceremonies": []
+    }
+  },
+  "ada_signed": {
+    "status": 200,
+    "body": {
+      "state": "awaiting_approvals",
+      "interviewId": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
+      "ceremonies": [
+        {
+          "interviewId": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
+          "interviewType": "wallet_account",
+          "listName": "Harness Holdings — approvals — approved destinations",
+          "pendingTxId": "3c767515-8364-4eab-a9b5-e7660f4a7b5a",
+          "callerIsAuthor": true,
+          "authorName": "Harriet Founder",
+          "requiredSignatures": 2,
+          "signaturesCollected": 1,
+          "state": "awaiting",
+          "platformStatus": "pending",
+          "expiresAt": "2026-09-25T16:39:46.299Z",
+          "signedBy": [
+            {
+              "name": "Ada Approver",
+              "email": "harness+ada@aeredium.io",
+              "credentialId": "1115d2ee",
+              "signedAt": "2026-09-24T16:39:52.101Z"
+            }
+          ],
+          "maySign": [
+            "Ben Signatory",
+            "Harriet Founder"
+          ],
+          "callerMaySign": false,
+          "callerHasSigned": true,
+          "callerName": "Ada Approver",
+          "sentence": "The approved-destinations list — 1 of 2 approvals. Signed by Ada Approver. Waiting for Ben Signatory and Harriet Founder. You have signed. A second person must sign; a second press by you counts nothing."
+        }
+      ]
+    }
+  },
+  "ada_again": {
+    "status": 409,
+    "body": {
+      "error": {
+        "code": "APPROVER_ALREADY_SIGNED",
+        "message": "You have already signed this change: the access platform’s record of ceremony 3c767515… carries your signature (collected 2026-09-24T16:39:52.101Z), and it counts each signatory once. 1 of 2 stand; nothing was signed again.",
+        "detail": {
+          "pendingTxId": "3c767515-8364-4eab-a9b5-e7660f4a7b5a",
+          "credentialId": "1115d2ee-4b8c-4a0a-9c2f-6d1a8f3e2b7a",
+          "signaturesCollected": "1",
+          "requiredSignatures": "2",
+          "signedAt": "2026-09-24T16:39:52.101Z",
+          "platformStatus": "pending"
+        }
+      }
+    }
+  },
+  "olive_signs": {
+    "status": 403,
+    "body": {
+      "error": {
+        "code": "SIGNATURE_NOT_COUNTED",
+        "message": "This list is created by Ada Approver, Ben Signatory and Harriet Founder; you are not among them. Nothing was signed.",
+        "detail": {
+          "purpose": "whitelist_mutation",
+          "question": "WQ",
+          "pendingTxId": "3c767515-8364-4eab-a9b5-e7660f4a7b5a",
+          "interviewId": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
+          "members": "Ada Approver, Ben Signatory, Harriet Founder"
+        }
+      }
+    }
+  },
+  "a_wrong_id": {
+    "status": 404,
+    "body": {
+      "error": {
+        "code": "CEREMONY_NOT_LISTED",
+        "message": "This interview holds no ceremony under that id waiting for signatures, so there is nothing here to sign. Nothing was signed.",
+        "detail": {
+          "pendingTxId": "5f2a9c11-0d3e-4b7a-9e8c-2a1b3c4d5e6f",
+          "interviewId": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
+          "cause": "not on this interview"
+        }
+      }
+    }
+  },
+  "a_reopened_interview": {
+    "status": 404,
+    "body": {
+      "error": {
+        "code": "CEREMONY_NOT_LISTED",
+        "message": "This interview holds no ceremony under that id waiting for signatures, so there is nothing here to sign. Nothing was signed.",
+        "detail": {
+          "pendingTxId": "3c767515-8364-4eab-a9b5-e7660f4a7b5a",
+          "interviewId": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
+          "cause": "the author is changing this interview; signing waits until it is confirmed and compiled again",
+          "state": "in_progress"
+        }
+      }
+    }
+  },
+  "ben_signed": {
+    "status": 200,
+    "body": {
+      "state": "written",
+      "interviewId": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
+      "ceremonies": []
+    }
+  },
+  "the_audit_rows": {
+    "awaiting": [
+      {
+        "credential_id": "d0a1b2c3-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+        "action": "onboarding.write_awaiting_approvals",
+        "subject_id": "0aadeca0-workspace",
+        "detail": {
+          "road": "compile",
+          "interviewId": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
+          "pendingTxId": "3c767515-8364-4eab-a9b5-e7660f4a7b5a",
+          "requiredMultisigId": "99aad690-1c2d-4e3f-8a9b-0c1d2e3f4a5b",
+          "requiredSignatures": "2",
+          "signaturesCollected": "0"
+        }
+      }
+    ],
+    "signed": [
+      {
+        "credential_id": "1115d2ee-4b8c-4a0a-9c2f-6d1a8f3e2b7a",
+        "action": "onboarding.ceremony_signed",
+        "subject_id": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
+        "detail": {
+          "interviewId": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
+          "status": "pending",
+          "pendingTxId": "3c767515-8364-4eab-a9b5-e7660f4a7b5a",
+          "requiredMultisigId": "99aad690-1c2d-4e3f-8a9b-0c1d2e3f4a5b",
+          "requiredSignatures": "2",
+          "signaturesCollected": "1"
+        }
+      },
+      {
+        "credential_id": "7f0c3a91-2d6e-4b58-a3c4-0e9d5b1f8c22",
+        "action": "onboarding.ceremony_signed",
+        "subject_id": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
+        "detail": {
+          "interviewId": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
+          "status": "approved",
+          "pendingTxId": "3c767515-8364-4eab-a9b5-e7660f4a7b5a",
+          "requiredMultisigId": "99aad690-1c2d-4e3f-8a9b-0c1d2e3f4a5b",
+          "requiredSignatures": "2",
+          "signaturesCollected": "2"
+        }
+      }
+    ],
+    "written": [
+      {
+        "credential_id": "7f0c3a91-2d6e-4b58-a3c4-0e9d5b1f8c22",
+        "action": "onboarding.interview_written",
+        "subject_id": "0aadeca0-workspace",
+        "detail": {
+          "pressedBy": "7f0c3a91-2d6e-4b58-a3c4-0e9d5b1f8c22",
+          "pendingTxId": "3c767515-8364-4eab-a9b5-e7660f4a7b5a",
+          "interviewId": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
+          "aapAccountId": "634a1104-7b2c-4d8e-9f0a-1b2c3d4e5f6a",
+          "policyEntryId": "58a571a5-9c8d-4e7f-a6b5-c4d3e2f1a0b9",
+          "walletAccountAssignedGroups": [
+            "group-3"
+          ]
+        }
+      }
+    ],
+    "wallet_born": [
+      {
+        "credential_id": "d0a1b2c3-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+        "action": "wallet.born",
+        "subject_id": "0aadeca0-workspace",
+        "detail": {
+          "via": "press"
+        }
+      }
+    ],
+    "failed": []
+  },
+  "the_credentials": {
+    "author": "d0a1b2c3-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+    "ada": "1115d2ee-4b8c-4a0a-9c2f-6d1a8f3e2b7a",
+    "ben": "7f0c3a91-2d6e-4b58-a3c4-0e9d5b1f8c22"
+  },
+  "the_sentences_as_rendered": {
+    "awaiting_may_sign": "The approved-destinations list — 0 of 2 approvals. Waiting for Ada Approver, Ben Signatory and Harriet Founder.",
+    "awaiting_has_signed": "The approved-destinations list — 1 of 2 approvals. Signed by Ada Approver. Waiting for Ben Signatory and Harriet Founder. You have signed. A second person must sign; a second press by you counts nothing.",
+    "awaiting_not_on_roster": "The approved-destinations list — 0 of 2 approvals. Waiting for Ada Approver, Ben Signatory and Harriet Founder. Only Ada Approver, Ben Signatory and Harriet Founder may sign this.",
+    "approved_author": "All approvals are in; press Finish the write.",
+    "approved_other": "All approvals are in; the author (Harriet Founder) presses Finish the write.",
+    "expired_other": "This ceremony no longer collects signatures (expired at 2026-09-24T16:38:46.760Z; the platform holds it pending). The author (Harriet Founder) presses Finish the write, which opens a new one.",
+    "expired_author": "This ceremony no longer collects signatures (expired at 2026-09-24T16:38:46.760Z; the platform holds it pending). Finish the write opens a new one.",
+    "closed_not_listed": "This ceremony no longer collects signatures (not listed). The author (Harriet Founder) presses Finish the write, which opens a new one.",
+    "ceremony_closed_refusal": "This ceremony no longer collects signatures (expired at 2026-09-24T16:38:46.760Z; the platform holds it pending); nothing was signed. Finish the write opens a new one.",
+    "finish_the_write_does_not_sign": "Finish the write asks the platform again; it does not sign.",
+    "write_in_progress": "Another press is finishing this write; read the page again in a moment."
+  },
+  "the_lapse": {
+    "expired": {
+      "interviewId": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
+      "interviewType": "wallet_account",
+      "listName": "Harness Holdings — approvals — approved destinations",
+      "pendingTxId": "3c767515-8364-4eab-a9b5-e7660f4a7b5a",
+      "callerIsAuthor": false,
+      "authorName": "Harriet Founder",
+      "requiredSignatures": 2,
+      "signaturesCollected": 1,
+      "state": "expired",
+      "platformStatus": "pending",
+      "expiresAt": "2026-09-24T16:38:46.760Z",
+      "signedBy": [
+        {
+          "name": "Ada Approver",
+          "email": "harness+ada@aeredium.io",
+          "credentialId": "1115d2ee",
+          "signedAt": "2026-09-24T16:39:52.101Z"
+        }
+      ],
+      "maySign": [
+        "Ben Signatory",
+        "Harriet Founder"
+      ],
+      "callerMaySign": false,
+      "callerHasSigned": false,
+      "callerName": "Ben Signatory",
+      "sentence": "This ceremony no longer collects signatures (expired at 2026-09-24T16:38:46.760Z; the platform holds it pending). The author (Harriet Founder) presses Finish the write, which opens a new one."
+    },
+    "closed": {
+      "interviewId": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
+      "interviewType": "wallet_account",
+      "listName": "Harness Holdings — approvals — approved destinations",
+      "pendingTxId": "0fe2ca46-1a2b-4c3d-8e9f-0a1b2c3d4e5f",
+      "callerIsAuthor": false,
+      "authorName": "Harriet Founder",
+      "requiredSignatures": null,
+      "signaturesCollected": null,
+      "state": "closed",
+      "platformStatus": "not listed",
+      "expiresAt": null,
+      "signedBy": [],
+      "maySign": [
+        "Ada Approver",
+        "Ben Signatory",
+        "Harriet Founder"
+      ],
+      "callerMaySign": false,
+      "callerHasSigned": false,
+      "callerName": null,
+      "sentence": "This ceremony no longer collects signatures (not listed). The author (Harriet Founder) presses Finish the write, which opens a new one."
+    }
+  }
+}

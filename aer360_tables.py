@@ -284,6 +284,42 @@ def credential_short_form(credential_id: Any) -> str:
 
 
 # ---------------------------------------------------------------------------
+# THE WRITE THAT WAITS FOR APPROVALS (Spec T19, 25 September 2026), as AER 360 Spec 109 built it (aeredium/AERAccounts, commit e2dcc6e:
+# routes/onboarding.ts, routes/passkeysign.ts, services/onboardingcompiler.ts step 5, packages/shared/src/wire.ts and refusals.ts, read in
+# its run folder rather than from memory). The creation of a wallet account's approved-destinations list is `whitelist_modify` on the NEW
+# account, which the account's own charter governs at WQ's count on WA1's roster (WO2's third party seated beside them); where WQ is two
+# or more the platform holds the creation as a ceremony until that many sign, and the estate answers the compile 202 — the write waits.
+# The approvers sign it where they stand, each under their own passkey, through the same two-step road as the roster ceremony's, and
+# the signature that meets the count finishes the write as the presser. Every road, state, verb and code here is the estate's own word.
+# ---------------------------------------------------------------------------
+INTERVIEW_AWAITING_APPROVALS = "awaiting_approvals"                        # wire.ts INTERVIEW_AWAITING_APPROVALS: the state beside compiled and written
+ONBOARDING_CEREMONIES_ROUTE = "/v1/onboarding/ceremonies"                  # GET (viewer): every write of the estate that waits, as the caller may read and sign it
+INTERVIEW_CEREMONY_SIGN_OPTIONS_ROUTE = "/v1/onboarding/interviews/%s/ceremonies/%s/sign/options"  # POST: the step-up's first half — the interview, the ceremony
+INTERVIEW_CEREMONY_SIGN_ROUTE = "/v1/onboarding/interviews/%s/ceremonies/%s/sign"                  # POST: one signature, as the signer
+INTERVIEW_CEREMONY_PURPOSE = "onboarding.ceremony"                         # routes/onboarding.ts: the step-up purpose the challenge is bound to
+INTERVIEW_CEREMONY_BINDING = "onboarding-ceremony:%s:%s:%s:%s"             # the setDigest half of the binding: the workspace id, the interview id, the ceremony's id, then issuedAtMs
+INTERVIEW_CEREMONY_STATES = ("awaiting", "approved", "applied", "expired", "closed")  # read off the platform's record exactly as a roster change's is (rosterChangeState)
+APPROVED_DESTINATIONS_SUFFIX = " — approved destinations"                  # onboardingcompiler.ts approvedDestinationsListName: "<account name> — approved destinations"
+WRITE_AWAITING_APPROVALS = "onboarding.write_awaiting_approvals"          # services/audit.ts: the trail's row for a wait, once per ceremony opened (pendingTxId, requiredMultisigId, replaces?)
+CEREMONY_SIGNED = "onboarding.ceremony_signed"                             # services/audit.ts: one row per signature counted — credentialId the presser, subjectId the interview
+INTERVIEW_WRITTEN = "onboarding.interview_written"                         # services/audit.ts: the write's row; on the sign road credentialId and detail.pressedBy are the presser's
+INTERVIEW_WRITE_FAILED = "onboarding.interview_write_failed"              # services/audit.ts: a write that did not finish, with its cause
+WALLET_BORN = "wallet.born"                                                # services/audit.ts: the funding wallet's birth — once per estate, never a second
+WRITE_IN_PROGRESS = "WRITE_IN_PROGRESS"                                    # 409: another press holds this interview's write; nothing was signed or written
+CEREMONY_NOT_LISTED = "CEREMONY_NOT_LISTED"                                # 404: not on this interview, the platform no longer lists it, or the interview is <state> — detail.cause says which
+CEREMONY_CLOSED = "CEREMONY_CLOSED"                                        # 409: the ceremony no longer collects signatures (detail.platformStatus); Finish the write opens a new one
+CHARTER_WRITE_UNFINISHED = "CHARTER_WRITE_UNFINISHED"                      # 409: the write did not finish, the cause in detail.cause — the estate's words for a refusal met at the write
+
+
+def account_name_of_list(list_name: Any) -> str:
+    """The account a list was created for, read off the list's name as the estate composes it (the suffix removed); an unnamed list is spoken as such."""
+    text = str(list_name or "").strip()
+    if text.endswith(APPROVED_DESTINATIONS_SUFFIX):
+        return text[:-len(APPROVED_DESTINATIONS_SUFFIX)]
+    return text or "an unnamed list"
+
+
+# ---------------------------------------------------------------------------
 # THE TREASURY, THE GAS ACCOUNT AND THE ADMIN CREDIT ROAD (Spec T14, 22 September 2026, amended 22:35; built 24 September 2026).
 # Facts, never inventions, read from AER 360 Spec 104 (aeredium/AERAccounts, commit 8812c64 — routes/gas.ts, routes/workspace.ts,
 # routes/sets.ts, services/execution.ts, services/accountabstraction.ts, services/fundingwallet.ts, packages/shared/src/states.ts)

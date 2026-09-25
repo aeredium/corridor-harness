@@ -88,6 +88,15 @@ WHAT THE SPEC DECIDED, AND WHAT THE BOOK DECIDED WHERE THE SPEC LEFT IT TO THE H
   where the label was minted, not where the payee pays), so no address moved. The wallet account is an OPERATIONS account, because the operations
   dialect is the one that asks a per-payment hold (O2), a daily figure (O1) and the pause on a
   new destination (O3, Spec 69) that the three payments exercise.
+
+  SPEC T19 (25 September 2026): A SECOND WALLET ACCOUNT AT A RELEASE QUORUM OF TWO. S14 walks a second
+  wallet-account interview answered exactly as the first except its name (WN, "Harness Holdings —
+  approvals"), WQ = 2 and WA1 naming Ada and Ben — the two seated approvers of Spec 105's seats
+  (APPROVALS_ACCOUNT_NAME, APPROVALS_QUORUM, APPROVALS_APPROVERS; `approvals_account_overrides`). At WQ 2
+  the platform holds the creation of the account's approved-destinations list as a ceremony on that
+  roster (AER 360 Spec 109), the compile answers 202 and the write waits; Ada and Ben sign it under their
+  own passkeys and the second signature finishes the write. Nothing else in the book changes: the first
+  account keeps WQ at one, so S5's write finishes on the founder's press as it always has.
 """
 from __future__ import annotations
 
@@ -483,6 +492,39 @@ ACCOUNT_ANSWERS: Dict[str, Dict[str, Any]] = {
 }
 
 ANSWERS: Dict[str, Dict[str, Dict[str, Any]]] = {"policy": POLICY_ANSWERS, "wallet_account": ACCOUNT_ANSWERS}
+
+
+# ---------------------------------------------------------------------------
+# The write that waits (Spec T19, 25 September 2026): a second wallet account at a release quorum of two.
+# ---------------------------------------------------------------------------
+# S14 walks a second wallet-account interview answered as the book answers the first, except its name, WQ = 2 and WA1 naming
+# Ada and Ben — the two seated approvers of Spec 105's seats. At WQ 2 the platform governs the creation of the account's
+# approved-destinations list on that roster (AER 360 Spec 109: `whitelist_modify` at WQ's count on WA1's people, WO2's third
+# party seated beside them), so the compile answers 202 and the write waits until two of them sign. The name is the harness's
+# own, never a customer estate's.
+APPROVALS_ACCOUNT_NAME = "Harness Holdings — approvals"
+APPROVALS_QUORUM = "2"
+APPROVALS_APPROVERS = (PAYMENT_APPROVER, WALLET_HOLDER)  # ada, ben
+
+
+def approvals_account_overrides() -> Dict[str, Dict[str, Dict[str, Any]]]:
+    """
+    Spec T19 §1: S14's answers over the book's for the second wallet account — WN its name, WQ two, WA1 Ada and Ben — in the
+    shape `Runner.answer_overrides` takes (the Treasury's own answers travel the same way, Spec T14). Every other answer is the
+    book's, so the account is the Operating account's twin but for who releases and how many.
+    """
+    return {"wallet_account": {
+        "WN": {"text": APPROVALS_ACCOUNT_NAME},
+        "WQ": {"choice": APPROVALS_QUORUM},
+        "WA1": {"entries": [{"name": PEOPLE[k].name, "email": PEOPLE[k].email} for k in APPROVALS_APPROVERS]},
+    }}
+
+
+def approvals_account_answers() -> Dict[str, Dict[str, Any]]:
+    """The wallet-account answers S14 gives, question by question: the book's with the overrides laid over (the dry run prints them)."""
+    answers = dict(ACCOUNT_ANSWERS)
+    answers.update(approvals_account_overrides()["wallet_account"])
+    return answers
 
 
 # ---------------------------------------------------------------------------

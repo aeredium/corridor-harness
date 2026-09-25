@@ -281,9 +281,9 @@ class S3JudgesTheRecordedNetworks(unittest.TestCase):
         said = []
         double, runner, outcomes = run_against(said=said, before_spec_106=True)
         o = outcomes["S3"]
-        self.assertEqual(o.outcome, H.FAIL, o.line)
+        self.assertEqual(o.outcome, H.FAILED_PREREQUISITE, o.line)  # Spec T19 §3: a precondition not met is a missing prerequisite, in red
         self.assertEqual(o.line, "policy interview: %s" % NOT_LIVE)
-        self.assertIn("S3 — fail — policy interview: %s" % NOT_LIVE, said)
+        self.assertIn("S3 — %s — policy interview: %s" % (H.FAILED_PREREQUISITE, NOT_LIVE), said)  # Spec T19 §3: the line names the kind
         # the served page is the one the estate offered on 21 September, and the book answered nothing on it
         given = [q for q, _, _, _ in runner.facts["answers"]["policy"]]
         self.assertEqual(given[-1], "C9S", "the walk stopped at C9, before answering it")
@@ -383,7 +383,7 @@ class TheRegisterDouble(unittest.TestCase):
         self.assertIn(first_northwind, paid_ids, "the first run's whitelisted record on arbitrum")
         self.assertNotIn(on_ethereum["id"], paid_ids)
         self.assertEqual({double.addresses[i]["chain"] for i in paid_ids}, {"arbitrum"})
-        self.assertEqual(len(H.dry_lines()), 194, "the conditional register read is one dry line under S7 (193 → 194)")
+        self.assertEqual(len(H.dry_lines()), 231, "the conditional register read is one dry line under S7 (193 → 194); Spec T19 adds S5's head and S14 (194 → 231)")
 
     def test_a_register_holding_the_payee_on_ethereum_only_at_s7_sends_nothing_for_it_and_says_so(self):
         """A run resumed at S7 on an estate whose register holds Northwind on ethereum only: P1 is not sent, and the line says which record was never paid."""

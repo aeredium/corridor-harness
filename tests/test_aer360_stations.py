@@ -526,10 +526,10 @@ class ResumedAndSecondRuns(unittest.TestCase):
         double = EstateDouble()
         runner = runner_on(double, tempfile.mkdtemp())
         outcomes = {o.station: o for o in runner.run()}
-        self.assertEqual(outcomes["S1"].outcome, H.FAIL)
+        self.assertEqual(outcomes["S1"].outcome, H.FAILED_PREREQUISITE)  # Spec T19 §3: no passkey and no invitation is a missing prerequisite
         self.assertIn("no passkey is stored for Harriet Founder", outcomes["S1"].line)
         self.assertIn("the first run needs the invitation link", outcomes["S1"].line)
-        self.assertEqual(outcomes["S2"].outcome, H.FAIL)
+        self.assertEqual(outcomes["S2"].outcome, H.FAILED_PREREQUISITE)
         self.assertIn("the founder has no session", outcomes["S2"].line)
         self.assertEqual(outcomes["S9"].outcome, H.OUT_OF_SCOPE)
         self.assertEqual(outcomes["S12"].outcome, H.PASS)
@@ -957,7 +957,7 @@ class TheHarnessFollowsAWalkBack(unittest.TestCase):
 
     def test_the_same_walk_back_twice_is_a_failure_with_both_sentences(self):
         runner, o = self.s5(2)
-        self.assertEqual(o.outcome, H.FAIL, o.line)
+        self.assertEqual(o.outcome, H.FAILED_PREREQUISITE, o.line)  # Spec T19 §3: the station stopped; the book could not satisfy the belt
         self.assertIn("walked back to WA1 a second time", o.line)
         self.assertEqual(o.line.count(self.SENTENCE), 2, "the failure carries both of the estate's sentences")
         self.assertNotIn("wallet_account", runner.facts["readback"], "the read-back was never reached, so none was recorded")

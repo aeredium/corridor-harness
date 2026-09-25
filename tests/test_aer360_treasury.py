@@ -178,7 +178,7 @@ class TheTreasuryPaysAndTheThreePaymentsLand(unittest.TestCase):
         path = self.runner.write_report()
         read = H.read_report(path)
         self.assertEqual(read["outcomes"]["S7"], "pass")
-        self.assertEqual(len(read["outcomes"]), 12)
+        self.assertEqual(len(read["outcomes"]), len(H.STATIONS))
 
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
@@ -186,11 +186,12 @@ class TheTreasuryIsShort(unittest.TestCase):
     def test_s7_fails_with_the_sentence_and_nothing_is_sent(self):
         double, runner, outcomes = run_against(treasury_usdc_cents=1000)
         o = outcomes["S7"]
-        self.assertEqual(o.outcome, H.FAIL, o.line)
+        self.assertEqual(o.outcome, H.FAILED_PREREQUISITE, o.line)  # Spec T19 §3: the stop is a missing prerequisite, named in the line
         sentence = T.TREASURY_SHORT_SENTENCE % ("US$10.00", "US$18.24", double.treasury.source_account, "arbitrum")
         self.assertEqual(sentence, "Harness Treasury holds US$10.00; the run needs US$18.24; fund %s on arbitrum" % double.treasury.source_account)
-        self.assertTrue(o.line.endswith("%s; nothing was sent" % sentence), o.line)
-        self.assertIn("%s (the three payments need US$18.24 and Harness Holdings holds US$0.00); nothing was sent" % sentence, runner.notes["S7"])
+        self.assertTrue(o.line.endswith("%s (the three payments need US$18.24 and Harness Holdings holds US$0.00); nothing was sent" % sentence), o.line)
+        self.assertIn("payments: %s — " % H.TREASURY_SHORT, o.line, "the summary line names the scenario and the missing prerequisite")
+        self.assertFalse(any(sentence in n for n in runner.notes["S7"]), "Spec T19 §3: the note beside the stop is gone; its figures travel in the line")
         self.assertEqual([c.route for c in runner.calls if c.station == "S7" and c.method == "POST" and c.path.startswith("/v1/sets")], [], "nothing was submitted")
         self.assertEqual(double.platform.requests, [], "no gas was credited either")
         self.assertEqual(double.chain.transfers, [])
@@ -240,7 +241,8 @@ class TheAdminCreditRoad(unittest.TestCase):
     def test_the_file_absent_fails_s7_with_its_sentence_and_nothing_is_credited_or_sent(self):
         double, runner, outcomes = run_against(admin_env=False)
         o = outcomes["S7"]
-        self.assertEqual(o.outcome, H.FAIL, o.line)
+        self.assertEqual(o.outcome, H.FAILED_PREREQUISITE, o.line)  # Spec T19 §3: a stop is a missing prerequisite, named
+        self.assertIn("payments: %s — " % H.NO_ADMIN_CREDENTIAL, o.line)
         self.assertTrue(o.line.endswith(T.NO_GAS_CREDIT_ROAD_SENTENCE), o.line)
         self.assertEqual(T.NO_GAS_CREDIT_ROAD_SENTENCE, "no gas credit road: the sandbox credits gas through the platform's admin road; file the credential in ~/.aer360-harness/admin.env")
         self.assertTrue(any(n.endswith("is not filed: the gas credits below will fail with %r" % T.NO_GAS_CREDIT_ROAD_SENTENCE) for n in runner.notes["S7"]), runner.notes["S7"])
@@ -258,7 +260,7 @@ class TheAdminCreditRoad(unittest.TestCase):
         runner = runner_on(double, tmp, invite=double.mint_founder_link(), admin_env=False)
         outcomes = {o.station: o for o in runner.run()}
         o = outcomes["S7"]
-        self.assertEqual(o.outcome, H.FAIL, o.line)
+        self.assertEqual(o.outcome, H.FAILED_PREREQUISITE, o.line)  # Spec T19 §3: S7 stopped at the credit it needed
         self.assertTrue(o.line.endswith("the gas credit for Harness Treasury was not made: refused: the platform refused the admin credential (HTTP 401): %s — the answer will be the same until the credential in admin.env is replaced" % PLATFORM_ADMIN_INVALID), o.line)
         self.assertEqual(len(double.platform.requests), 1)
         self.assertEqual(runner.facts["gas_credits"][0]["outcome"], "refused")
@@ -268,7 +270,7 @@ class TheAdminCreditRoad(unittest.TestCase):
     def test_a_platform_that_cannot_be_reached_is_a_fault_named_as_one(self):
         double, runner, outcomes = run_against(platform=PlatformDouble(down=True))
         o = outcomes["S7"]
-        self.assertEqual(o.outcome, H.FAIL, o.line)
+        self.assertEqual(o.outcome, H.FAILED_PREREQUISITE, o.line)  # Spec T19 §3: S7 stopped at the credit it needed
         self.assertIn("the gas credit for Harness Treasury was not made: the platform could not be reached: POST %s%s could not be reached: [Errno 61] Connection refused" % (PLATFORM_BASE, T.ADMIN_CREDIT_ROUTE % TREASURY_ACCOUNT_ID), o.line)
         self.assertNotIn("the estate could not be reached", o.line, "the platform is not the estate")
 
@@ -356,11 +358,12 @@ class TheBirthRunStopsWithTheFundSentence(unittest.TestCase):
         runner = runner_on(double, tmp, invite=double.mint_founder_link())
         outcomes = {o.station: o for o in runner.run()}
         o = outcomes["S7"]
-        self.assertEqual(o.outcome, H.FAIL, o.line)
+        self.assertEqual(o.outcome, H.FAILED_PREREQUISITE, o.line)  # Spec T19 §3: the birth run stops at a missing prerequisite — the Treasury is not funded
         address = double.treasury.source_account
         sentence = T.FUND_TREASURY_SENTENCE % (address, "arbitrum")
         self.assertEqual(sentence, "fund Harness Treasury: %s on arbitrum, then rerun" % address)
-        self.assertTrue(o.line.endswith(sentence), o.line)
+        self.assertTrue(o.line.endswith("%s (the three payments need US$18.24 and Harness Holdings holds US$0.00; the Treasury holds US$0.00); nothing was sent" % sentence), o.line)
+        self.assertIn("payments: %s — " % H.TREASURY_NOT_FUNDED, o.line, "the summary line names the scenario and the missing prerequisite")
         self.assertIn("the interviews walked from the book with the Treasury's own name, approver and account approvers (23 and 18 questions)", o.line)
         self.assertIn("funding wallet: %s on double-stack-1, key %s (born by this run's press)" % (address, double.treasury.custody_key_id), o.line)
         self.assertTrue(any(n.startswith("%s — the estate's own words: Fund this account with USDC on arbitrum. Gas is bought separately, below." % sentence) for n in runner.notes["S7"]), runner.notes["S7"])

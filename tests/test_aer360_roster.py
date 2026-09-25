@@ -357,7 +357,7 @@ class TheEstateBeforeSpec99AndTheDayAfter(unittest.TestCase):
         self.assertIn("Ada Approver not counted (SIGNATURE_NOT_COUNTED", self.before_99["S6"].line)
         self.assertEqual(self.before_99["S6"].outcome, H.PASS, "Ben and Cora carried the count, as on 22 September")
         self.assertTrue(any(n.startswith("S6: Ada Approver's whitelist press was not counted (SIGNATURE_NOT_COUNTED)") for n in self.second.notes["S10"]))
-        self.assertEqual([r for r in self.trail_before_99 if not str(r).startswith(("set.", "instruction.", "export."))], [],
+        self.assertEqual([r for r in self.trail_before_99 if not str(r).startswith(("set.", "instruction.", "export.", "onboarding.", "wallet."))], [],
                          "Spec 95 alone recorded no seat row for the ceremony it opened (S7's execution rows and its reads of the trail aside, Spec T14)")
 
     def test_the_ceremony_of_spec_95_is_listed_as_one_this_estate_did_not_propose_and_the_grant_proposes_the_move_afresh(self):
@@ -405,7 +405,7 @@ class AFreshEstateIsUnchanged(unittest.TestCase):
         self.assertEqual(runner.facts["roster_signing"], [])
         self.assertEqual(runner.facts["seats_moved"], [])
         self.assertEqual([c.route for c in runner.calls if "/v1/export/audit" in c.route and c.station in ("S4", "S10")], [], "nothing moved, so S10 does not read the trail for a seat (S7 reads it for its payments, Spec T14)")
-        self.assertEqual(double.ceremonies, [])
+        self.assertEqual([c for c in double.ceremonies if c["purpose"] == "multisig_mutation"], [], "no roster change; the list ceremonies are S14's (Spec T19)")
         self.assertEqual(outcomes["S6"].outcome, H.PASS, outcomes["S6"].line)
 
 
@@ -601,7 +601,7 @@ class S4GrantsAStaleSeatAgainThenSignsIt(unittest.TestCase):
         # ONE seat in the view, Ada's — as GET /v1/approver-seats answers charterApprovers (C11) on Harness Holdings; Ben and Cora are on
         # the roster but not on the seats view, so the harness reads no onRoster for them and takes the list's word that they may sign.
         double.seats_override = [{"email": ada.email, "name": ada.name, "state": "seated", "credentialId": ada.credential_id, "onRoster": "compute"}]
-        self.assertEqual(double.ceremonies, [], "no ceremony is on record for the move")
+        self.assertEqual([c for c in double.ceremonies if c["purpose"] == "multisig_mutation"], [], "no ceremony is on record for the move")
         f_before, before = len(runner.findings), len(runner.calls)
         grant_said, changes_said, ok = runner.sign_the_roster_changes("S4", founder)
         self.assertTrue(ok, (grant_said, changes_said))

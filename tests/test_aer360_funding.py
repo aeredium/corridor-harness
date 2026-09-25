@@ -117,7 +117,7 @@ class TheHarnessPressesForTheFundingWallet(unittest.TestCase):
         path = self.runner.write_report()
         read = H.read_report(path)
         self.assertEqual(read["outcomes"]["S5"], "pass")
-        self.assertEqual(len(read["outcomes"]), 12, "the summary under the table does not disturb the table's reading")
+        self.assertEqual(len(read["outcomes"]), len(H.STATIONS), "the summary under the table does not disturb the table's reading")
         report = self.runner.report()
         self.assertIn("| POST %s |" % FAUCET, report, "the faucet call is in Every call")
         self.assertIn("| POST %s |" % RPC, report)
@@ -127,7 +127,7 @@ class TheHarnessPressesForTheFundingWallet(unittest.TestCase):
         self.assertEqual([(f.station, f.probe) for f in self.runner.findings], [("S10", "read-back (policy) of A5"), ("S11", "a payee address with a wrong checksum")],
                          "the RPC's and the faucet's answers raise nothing under the minor-unit law or Rule 13")
         measure = self.runner.facts["optimizer"]
-        self.assertEqual(measure["calls"], len(self.runner.calls), "the optimizer counts them")
+        self.assertEqual(measure["calls"], len([c for c in self.runner.calls if c.station != "S14"]), "the optimizer counts them — every call up to S12; S14 walks after the hats (Spec T19)")
         self.assertIn("checked for Rule 13", self.outcomes["S10"].line)
 
     def test_a_faucet_refusal_is_not_a_rule_13_finding_because_it_is_not_the_estates(self):

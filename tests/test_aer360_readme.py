@@ -267,7 +267,50 @@ class EstateHarnessReadmeTest(unittest.TestCase):
         self.assertIn("The payments, in USDC on Arbitrum One from Cora:", self.section)
 
 
+    def test_it_says_the_harness_signs_a_ceremony_as_two_people_since_spec_t19(self):
+        self.assertIn("Spec T19, 25 September 2026", self.section)
+        for words in ("AER 360 Spec 109", "commit e2dcc6e", "`whitelist_modify` on the NEW account", "202 `awaiting_approvals`", "`GET /v1/onboarding/ceremonies`",
+                      "`POST /v1/onboarding/interviews/{id}/ceremonies/{pendingTxId}/sign`", "`onboarding.ceremony`", "`onboarding-ceremony:<workspace id>:<interview id>:<pendingTxId>:<issuedAtMs>`",
+                      "*S14 — the write waits and two people sign.*", "A thirteenth station, walked after the three hats", "`Harness Holdings — approvals`", "resumed at that read and never started twice",
+                      "WQ = 2 and WA1 naming Ada Approver and Ben Signatory", "`approvals_account_overrides`", "no charter and no receipt", "A 200 (the write finished at once) fails S14",
+                      "the plan's capacity refuses a second account (Spec 97)", "*0 of 2*", "`callerMaySign` true, `callerName` their own", "`finish_awaiting`", "*1 of 2*", "`callerHasSigned`",
+                      "`APPROVER_ALREADY_SIGNED`", "a second signature counted would be a finding", "whose signature finishes the write", "judged for Rule 13 as S10 judges them",
+                      "`onboarding.interview_written`", "`pressedBy`", "`onboarding.ceremony_signed`", "`onboarding.write_awaiting_approvals`", "`onboarding.interview_write_failed`",
+                      "the write answered `alreadyHeld` and birthed no second one", "*What a browser cannot see, said plainly:*", "no route lists an account's whitelist, and the page carries no receipt",
+                      "*The harness never strands its estate.*", "*FAILED — prerequisite: <name> stands awaiting approvals and could not be finished*",
+                      "*the write is waiting for approvals; S5 expects a write that finishes*", "S14 alone accepts the 202", "**A rerun opens another account**",
+                      "as the newest written charter", "a run resumed past S5 (`--from S6` or later)", "*A prerequisite is a failure with its own name.*", "**FAILED — prerequisite**", "red in the closing table",
+                      "*S7 — FAILED — prerequisite — payments: Harness Treasury not born — no passkey is stored for its founder …*", "*Harness Treasury not funded*",
+                      "S7's note beside the stop is gone", "a scenario that did not start has proven nothing", "`account_name_of_list`", "194 → 231 lines",
+                      "`before_spec_109`", "`list_ceremony_lapses`", "`second_account_refused`", "`tests/fixtures/aer360-write-waits-for-approvals.json`",
+                      "every run after it opens another account", "Each of the spec's tests was red on main"):
+            self.assertIn(words, self.section, words)
+        self.assertLess(self.section.index("Spec T18, 24 September 2026"), self.section.index("Spec T19, 25 September 2026"))
+        self.assertLess(self.section.index("Spec T19, 25 September 2026"), self.section.index("**Running it.**"))
+        self.assertIn("after the three hats, S14 The write that waits (Spec T19", self.section)
+        self.assertIn("print every call of the thirteen stations", self.section)
+        self.assertIn("a closing table of the thirteen stations (S1 to S12, then S14 since Spec T19)", self.section)
+
+
 class ChangelogTest(unittest.TestCase):
+    def test_the_changelog_records_spec_t19_first_and_names_every_change(self):
+        text = read("CHANGELOG.md")
+        title = "## Spec T19 — The harness reaches the wait with a quorum of two, signs as two people, and a scenario that stops at its first line says so in red (25 September 2026)"
+        self.assertIn(title, text)
+        t18 = "## Spec T18 — The book pays on Arbitrum"
+        self.assertLess(text.index(title), text.index(t18))
+        entry = text.split(title, 1)[1].split(t18, 1)[0]
+        for words in ("commit e2dcc6e", "pull request #126", "`INTERVIEW_AWAITING_APPROVALS`", "`ONBOARDING_CEREMONIES_ROUTE`", "`INTERVIEW_CEREMONY_PURPOSE`", "`INTERVIEW_CEREMONY_BINDING`",
+                      "`account_name_of_list`", "`APPROVALS_ACCOUNT_NAME`", "`APPROVALS_QUORUM`", "`APPROVALS_APPROVERS`", "`approvals_account_overrides`", "`approvals_account_answers`",
+                      "`station_s14`", "`walk_the_approvals_account`", "`set_aside_the_account_facts`", "`audit_the_wait`", "`audit_the_reader`", "`audit_the_finish`", "`rows_of`",
+                      "`read_ceremonies`", "`finish_the_writes_that_wait`", "`press_finish_the_write`", "`finish_awaiting`", "`sign_interview_ceremony_as`", "`write_that_waits`", "`ceremony_words`",
+                      "`confirm_and_compile(accept_wait=True)`", "`FAILED_PREREQUISITE`", "`exit_code_of`", "`outcome_cell`", "`StationStop.prerequisite`", "`Runner.in_colour`",
+                      "`TREASURY_NOT_BORN`", "`NO_ADMIN_CREDENTIAL`", "194 → 231 lines", "`write_interview`", "`open_account`", "`create_whitelist`", "`born_list_ceremony`",
+                      "`list_interview_ceremonies`", "`interview_ceremony_view`", "`admit_ceremony_press`", "`sign_interview_ceremony`", "`interview_ceremony_sentence`", "`already_signed_refusal`",
+                      "`before_spec_109`", "`list_ceremony_lapses`", "`second_account_refused`", "`tests/test_aer360_awaiting.py`", "`tests/fixtures/aer360-write-waits-for-approvals.json`",
+                      "37 lines added, none removed", "Not touched, as the fence requires", "Two things said plainly"):
+            self.assertIn(words, entry, words)
+
     def test_the_changelog_records_spec_t18_first_and_names_every_change(self):
         text = read("CHANGELOG.md")
         title = "## Spec T18 — The book pays on Arbitrum: C9 answers Arbitrum One, the payees and the venue probe live there, and S7 follows the paymaster (24 September 2026)"
