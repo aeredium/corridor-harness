@@ -260,7 +260,7 @@ class TheAdminCreditRoad(unittest.TestCase):
         runner = runner_on(double, tmp, invite=double.mint_founder_link(), admin_env=False)
         outcomes = {o.station: o for o in runner.run()}
         o = outcomes["S7"]
-        self.assertEqual(o.outcome, H.FAILED_PREREQUISITE, o.line)  # Spec T19 §3: S7 stopped at the credit it needed
+        self.assertEqual(o.outcome, H.FAIL, o.line)  # Spec T19 §3: the platform's refusal is the estate's road failing, not a missing prerequisite
         self.assertTrue(o.line.endswith("the gas credit for Harness Treasury was not made: refused: the platform refused the admin credential (HTTP 401): %s — the answer will be the same until the credential in admin.env is replaced" % PLATFORM_ADMIN_INVALID), o.line)
         self.assertEqual(len(double.platform.requests), 1)
         self.assertEqual(runner.facts["gas_credits"][0]["outcome"], "refused")
@@ -270,7 +270,7 @@ class TheAdminCreditRoad(unittest.TestCase):
     def test_a_platform_that_cannot_be_reached_is_a_fault_named_as_one(self):
         double, runner, outcomes = run_against(platform=PlatformDouble(down=True))
         o = outcomes["S7"]
-        self.assertEqual(o.outcome, H.FAILED_PREREQUISITE, o.line)  # Spec T19 §3: S7 stopped at the credit it needed
+        self.assertEqual(o.outcome, H.FAIL, o.line)  # Spec T19 §3: a fault of the platform's road is not a missing prerequisite
         self.assertIn("the gas credit for Harness Treasury was not made: the platform could not be reached: POST %s%s could not be reached: [Errno 61] Connection refused" % (PLATFORM_BASE, T.ADMIN_CREDIT_ROUTE % TREASURY_ACCOUNT_ID), o.line)
         self.assertNotIn("the estate could not be reached", o.line, "the platform is not the estate")
 

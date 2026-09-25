@@ -11,10 +11,12 @@ held to its fields and its sentences. The double is the estate at Spec 109 (test
 platform account with its own whitelist_mutation roster at WQ's count, the list's creation is governed on it, the compile answers 202,
 GET /v1/onboarding/ceremonies says who has not signed, and the approvers sign it where they stand under their own passkeys.
 """
+import codecs
 import contextlib
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import time
@@ -29,6 +31,10 @@ import aer360_tables as T  # noqa: E402
 from tests.test_aer360_double import EstateDouble, MUTATION_CEREMONY_REQUIRED, interview_ceremony_sentence, runner_on  # noqa: E402
 
 FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "aer360-write-waits-for-approvals.json")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# The two identifiers of the customer estate the spec was written from — its workspace and its ceremony — rot13 so this file does not carry
+# them either (the way tests/test_the_harness_names_no_real_tester.py carries its two names). No tracked file may carry them.
+CUSTOMER_IDENTIFIERS = tuple(codecs.decode(word, "rot13") for word in ("0nnqrpn0", "ns1o4oro"))
 NAME = A.APPROVALS_ACCOUNT_NAME
 APPROVERS = [A.PEOPLE[k].name for k in A.APPROVALS_APPROVERS]
 RED_CELL = '<span style="color:red">%s</span>' % H.FAILED_PREREQUISITE
@@ -37,6 +43,19 @@ RED_CELL = '<span style="color:red">%s</span>' % H.FAILED_PREREQUISITE
 def load_fixture():
     with open(FIXTURE, "r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def tracked_files():
+    """Every file the repository carries, as git lists them; a checkout without git is walked instead."""
+    try:
+        listed = subprocess.run(["git", "-C", ROOT, "ls-files", "-z"], check=True, capture_output=True).stdout
+        return sorted(part.decode("utf-8") for part in listed.split(b"\0") if part)
+    except (OSError, subprocess.CalledProcessError):
+        paths = []
+        for folder, dirs, files in os.walk(ROOT):
+            dirs[:] = [d for d in dirs if d not in (".git", "__pycache__")]
+            paths.extend(os.path.relpath(os.path.join(folder, name), ROOT) for name in files)
+        return sorted(paths)
 
 
 def run_against(tmp=None, said=None, **double_kwargs):
@@ -87,6 +106,18 @@ class TheFixtureIsSpec109sOwnRecord(unittest.TestCase):
         for own in ("harriet founder", "ada approver", "ben signatory", "olive overseer", "harness+ada@aeredium.io", NAME.lower()):
             self.assertIn(own, text, own)
         self.assertNotIn("example", text.replace("olive", ""), "no address of the suite's travels here")
+        # the customer estate's workspace and ceremony identifiers are absent from the fixture, from this file, and from every tracked file
+        for identifier in CUSTOMER_IDENTIFIERS:
+            self.assertNotIn(identifier, text, "the fixture carries an identifier of the customer estate")
+        with open(os.path.abspath(__file__), "r", encoding="utf-8") as handle:
+            own_source = handle.read().lower()
+        for identifier in CUSTOMER_IDENTIFIERS:
+            self.assertNotIn(identifier, own_source, "this test carries the identifier it guards against")
+        for path in tracked_files():
+            with open(os.path.join(ROOT, path), "rb") as handle:
+                content = handle.read().decode("utf-8", "replace").lower()
+            for identifier in CUSTOMER_IDENTIFIERS:
+                self.assertNotIn(identifier, content, "%s carries an identifier of the customer estate" % path)
 
     def test_the_202_is_a_wait_at_0_of_2_with_both_approvers_among_those_who_may_sign(self):
         body = self.f["the_202"]["body"]
@@ -175,7 +206,7 @@ class TheFixtureIsSpec109sOwnRecord(unittest.TestCase):
         self.assertEqual(interview_ceremony_sentence(dict(approved, callerIsAuthor=True)), sentences["approved_author"])
         self.assertEqual(interview_ceremony_sentence(dict(approved, callerIsAuthor=False)), sentences["approved_other"])
         self.assertEqual(interview_ceremony_sentence(dict(self.f["the_lapse"]["expired"], callerIsAuthor=True)), sentences["expired_author"])
-        self.assertEqual(MUTATION_CEREMONY_REQUIRED % (0, 2, "af1b4beb"), "mutation requires multisig approval: whitelist_modify requires 0/2 approvals (pending_tx_id=af1b4beb)")
+        self.assertEqual(MUTATION_CEREMONY_REQUIRED % (0, 2, "4e1d9c07"), "mutation requires multisig approval: whitelist_modify requires 0/2 approvals (pending_tx_id=4e1d9c07)")
         # a live run's 202 carries exactly the fields Spec 109 recorded
         double, runner, outcomes = run_against()
         view = runner.facts["awaiting"]["wait"]["ceremonies"][0]
@@ -473,7 +504,7 @@ class TheHarnessNeverStrandsItsEstate(unittest.TestCase):
         with unittest.mock.patch.dict(A.ACCOUNT_ANSWERS, {"WQ": {"choice": "2"}}):
             double, runner, outcomes = run_against()
         s5 = outcomes["S5"]
-        self.assertEqual(s5.outcome, H.FAILED_PREREQUISITE, s5.line)
+        self.assertEqual(s5.outcome, H.FAIL, s5.line)  # the stop names no missing prerequisite: the estate answered the wait S5 does not accept
         self.assertEqual(s5.line, "wallet account: the write is waiting for approvals; S5 expects a write that finishes")
         compile_call = [c for c in runner.calls if c.station == "S5" and c.path.endswith("/compile")]
         self.assertEqual([c.status for c in compile_call], [202])
@@ -492,14 +523,14 @@ class TheHarnessNeverStrandsItsEstate(unittest.TestCase):
         self.assertEqual(runner.notes["S5"], ["the estate has no door onto the writes that wait (%s answered REQUEST_MALFORMED: That request could not be read.): an estate before AER 360 Spec 109, so nothing was finished" % T.ONBOARDING_CEREMONIES_ROUTE])
         s14 = outcomes["S14"]
         self.assertEqual(s14.outcome, H.FAILED_PREREQUISITE, s14.line)
-        self.assertEqual(s14.line, "the write that waits: AER 360 Spec 109 not live — the estate has no door onto the writes that wait (%s answered REQUEST_MALFORMED: That request could not be read.): an estate before AER 360 Spec 109" % T.ONBOARDING_CEREMONIES_ROUTE)
+        self.assertEqual(s14.line, "the write that waits: %s — the estate has no door onto the writes that wait (%s answered REQUEST_MALFORMED: That request could not be read.): an estate before AER 360 Spec 109" % (H.SPEC_109_NOT_LIVE_PREREQUISITE, T.ONBOARDING_CEREMONIES_ROUTE))
         self.assertEqual([c.route for c in runner.calls if c.station == "S14"], ["GET %s" % T.ONBOARDING_CEREMONIES_ROUTE], "nothing started, nothing stranded")
         self.assertEqual(len(approvals_accounts_of(double)), 0)
         # and the old failure itself, met where a write is pressed on such an estate: the platform's 409 as a failed write, in its words
         with unittest.mock.patch.dict(A.ACCOUNT_ANSWERS, {"WQ": {"choice": "2"}}):
             double2, runner2, outcomes2 = run_against(before_spec_109=True)
         s5 = outcomes2["S5"]
-        self.assertEqual(s5.outcome, H.FAILED_PREREQUISITE, s5.line)
+        self.assertEqual(s5.outcome, H.FAIL, s5.line)  # the estate's refusal, as it was before Spec 109: the estate failing
         self.assertIn("POST compile answered CHARTER_WRITE_UNFINISHED: Your charter is compiled, and writing it to the platform did not finish.", s5.line)
         self.assertIn("(AAP POST /v1/whitelists-v2 failed (HTTP 409): mutation requires multisig approval: whitelist_modify requires 0/2 approvals (pending_tx_id=", s5.line)
 
@@ -509,13 +540,120 @@ class TheHarnessNeverStrandsItsEstate(unittest.TestCase):
         double, runner, outcomes = run_against(second_account_refused=said)
         self.assertEqual(outcomes["S5"].outcome, H.PASS, outcomes["S5"].line)
         s14 = outcomes["S14"]
-        self.assertEqual(s14.outcome, H.FAILED_PREREQUISITE, s14.line)
+        self.assertEqual(s14.outcome, H.FAIL, s14.line)  # an estate's refusal stays fail, in the estate's words
         self.assertEqual(s14.line, "the write that waits: POST compile answered CHARTER_WRITE_UNFINISHED: Your charter is compiled, and writing it to the platform did not finish. "
                                    "Nothing you answered is lost: reopen the interview and confirm again. (%s)" % said)
         interview_id = runner.facts["awaiting"]["interviewId"]
         self.assertEqual((double.interviews[interview_id]["state"], double.interviews[interview_id]["writeError"]), ("compiled", said))
         self.assertEqual(len([r for r in double.trail if r["action"] == T.INTERVIEW_WRITE_FAILED]), 1)
         self.assertEqual([c.status for c in runner.calls if c.station == "S14" and c.path.endswith("/compile")], [409])
+
+    def test_a_signature_answered_wrongly_is_a_finding_and_fails_the_finish(self):
+        """Spec T19 §1, the answers judged: one more signature than before, the presser's read saying they signed, and a second press refused as APPROVER_ALREADY_SIGNED."""
+        class MiscountingDouble(EstateDouble):
+            def interview_ceremony_view(self, iv, caller):
+                view = super().interview_ceremony_view(iv, caller)
+                if view.get("signaturesCollected"):
+                    view = dict(view, signaturesCollected=0, callerHasSigned=False)  # a platform whose record says nothing moved
+                return view
+        double = MiscountingDouble()
+        runner = runner_on(double, tempfile.mkdtemp(), invite=double.mint_founder_link())
+        outcomes = {o.station: o for o in runner.run()}
+        s14 = outcomes["S14"]
+        self.assertEqual(s14.outcome, H.FAIL, s14.line)
+        probes = [f.probe for f in runner.findings if f.station == "S14"]
+        self.assertIn("Ada Approver's signature: the count", probes)
+        self.assertIn("Ada Approver's signature: callerHasSigned", probes)
+        finding = next(f for f in runner.findings if f.probe == "Ada Approver's signature: the count")
+        self.assertEqual((finding.expected, finding.said), ("signaturesCollected 1, one more than the 0 before the press", "signaturesCollected 0"))
+        self.assertEqual([p["probe"] for p in runner.facts["awaiting"]["finish"]["problems"]], ["Ada Approver's signature: the count", "Ada Approver's signature: callerHasSigned"])
+        self.assertTrue(runner.facts["awaiting"]["finish"]["written"], "the write still finished; the answers were judged wanting")
+
+        class CountingTwiceDouble(EstateDouble):
+            def already_signed_refusal(self, record, credential_id, seat):
+                raise AssertionError("never asked: this platform counts a signatory twice")
+
+            def sign_interview_ceremony(self, press, body):
+                record = next((c for c in self.ceremonies if c["id"] == press["pendingTxId"]), None)
+                if record is not None:
+                    record["collected"] = [c for c in record["collected"] if c["credential_id"] != press["caller"]["credentialId"]]  # forgets the signature, so it counts again
+                return super().sign_interview_ceremony(press, body)
+        double = CountingTwiceDouble()
+        runner = runner_on(double, tempfile.mkdtemp(), invite=double.mint_founder_link())
+        outcomes = {o.station: o for o in runner.run()}
+        self.assertEqual(outcomes["S14"].outcome, H.FAIL, outcomes["S14"].line)
+        second = runner.facts["awaiting"]["finish"]["second_press"]
+        self.assertTrue(second["counted"])
+        self.assertIn("Ada Approver's second press counted again — a second press must count nothing (finding)", outcomes["S14"].line)
+        self.assertTrue(any(f.probe.startswith("a second press by Ada Approver on the ceremony") and f.said.startswith("the second press was counted") for f in runner.findings))
+
+        class OtherRefusalDouble(EstateDouble):
+            def already_signed_refusal(self, record, credential_id, seat):
+                from tests.test_aer360_double import Refusal
+                return Refusal("SIGNATURE_NOT_COUNTED", detail={"pendingTxId": record["id"], "platformStatus": "403", "platformSaid": "not authorized"})
+        double = OtherRefusalDouble()
+        runner = runner_on(double, tempfile.mkdtemp(), invite=double.mint_founder_link())
+        outcomes = {o.station: o for o in runner.run()}
+        self.assertEqual(outcomes["S14"].outcome, H.FAIL, outcomes["S14"].line)
+        second = runner.facts["awaiting"]["finish"]["second_press"]
+        self.assertEqual((second["counted"], second["refusal_code"]), (False, H.SIGNATURE_NOT_COUNTED))
+        self.assertIn("refused, but not as APPROVER_ALREADY_SIGNED (finding)", outcomes["S14"].line)
+        finding = next(f for f in runner.findings if f.probe.startswith("a second press by Ada Approver"))
+        self.assertTrue(finding.said.startswith("refused as SIGNATURE_NOT_COUNTED, not APPROVER_ALREADY_SIGNED: "), finding.said)
+        # the same judgment before S5: a finish answered wrongly fails S5, though the write finished
+        double2, tmp2, _, interview2 = seed_a_write_that_waits(double=MiscountingDouble())
+        runner2 = runner_on(double2, tmp2)
+        outcomes2 = {o.station: o for o in runner2.run()}
+        self.assertEqual(outcomes2["S5"].outcome, H.FAIL, outcomes2["S5"].line)
+        self.assertIn("; the finish answered wrongly: signaturesCollected 0; callerHasSigned false", outcomes2["S5"].line)
+        self.assertEqual(double2.interviews[interview2]["state"], "written")
+
+    def test_the_compiles_status_is_asserted_not_only_its_body(self):
+        """Spec T19 §2, as T19 words it: HTTP 200 for a write that finishes, HTTP 202 with the wait's body for S14."""
+        class Odd202Double(EstateDouble):
+            def compile(self, caller, interview_id):
+                status, body = super().compile(caller, interview_id)
+                return (202, body) if status == 200 and self.interviews[interview_id]["interviewType"] == "wallet_account" else (status, body)
+        double = Odd202Double()
+        runner = runner_on(double, tempfile.mkdtemp(), invite=double.mint_founder_link())
+        outcomes = {o.station: o for o in runner.run()}
+        s5 = outcomes["S5"]
+        self.assertEqual(s5.outcome, H.FAIL, s5.line)
+        self.assertEqual(s5.line, "wallet account: POST compile answered HTTP 202 without the write that waits' body (state awaiting_approvals, interviewId, ceremonies)")
+
+        class Odd201Double(EstateDouble):
+            def compile(self, caller, interview_id):
+                status, body = super().compile(caller, interview_id)
+                return (201, body) if status == 200 and self.interviews[interview_id]["interviewType"] == "wallet_account" else (status, body)
+        double = Odd201Double()
+        runner = runner_on(double, tempfile.mkdtemp(), invite=double.mint_founder_link())
+        outcomes = {o.station: o for o in runner.run()}
+        s5 = outcomes["S5"]
+        self.assertEqual(s5.outcome, H.FAIL, s5.line)
+        self.assertEqual(s5.line, "wallet account: POST compile answered HTTP 201, not HTTP 200 with the compiled charter, the write receipt and the seat")
+        step = [s for s in runner.evidence["S5"] if s["route"].endswith("/compile")][-1]
+        self.assertTrue(step["expected"].startswith("HTTP 200 with the compiled charter, the write receipt and the seat; a 202"), step["expected"])
+        self.assertEqual(step["result"], "HTTP 201, compiled and written")
+        # and the 202 S14 accepts is asserted by status and body both
+        double, runner, outcomes = run_against()
+        step = [s for s in runner.evidence["S14"] if s["route"].endswith("/compile")][0]
+        self.assertEqual(step["status"], 202)
+        self.assertTrue(step["expected"].startswith("HTTP 202 with state awaiting_approvals, interviewId and ceremonies"), step["expected"])
+        self.assertTrue(step["result"].startswith("HTTP 202, the write waits: "), step["result"])
+
+    def test_the_report_reader_strips_the_outcome_cell_alone(self):
+        """Spec T19 §3: the red span is the Outcome cell's; a line's own angle brackets — `--treasury-invite <link>`, `<pendingTxId>` — survive the read-back."""
+        self.assertEqual(H._table_cells("| S7 Payments | %s | payments: --treasury-invite <link> and <pendingTxId> |" % RED_CELL),
+                         ["S7 Payments", RED_CELL, "payments: --treasury-invite <link> and <pendingTxId>"])
+        self.assertEqual(H.outcome_of_cell(RED_CELL), H.FAILED_PREREQUISITE)
+        self.assertEqual(H.outcome_of_cell("pass"), "pass")
+        tmp = tempfile.mkdtemp()
+        path = os.path.join(tmp, "aer360-harness-2026-09-25.md")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("# AER 360 estate harness run — Harness Holdings Pty Ltd — 2026-09-25T10:00:00+10:00\n\n## The closing table\n\n| Station | Outcome | Line |\n|---|---|---|\n"
+                         "| S7 Payments | %s | payments: Harness Treasury not born — no --treasury-invite <link> was given |\n| S14 The write that waits | pass | the write that waits: <pendingTxId> |\n" % RED_CELL)
+        read = H.read_report(path)
+        self.assertEqual(read["outcomes"], {"S7": H.FAILED_PREREQUISITE, "S14": "pass"})
 
     def test_a_write_that_finished_at_once_at_wq_2_fails_s14(self):
         class UngovernedDouble(EstateDouble):

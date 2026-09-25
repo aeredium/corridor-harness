@@ -282,8 +282,8 @@ class S3JudgesTheRecordedNetworks(unittest.TestCase):
         double, runner, outcomes = run_against(said=said, before_spec_106=True)
         o = outcomes["S3"]
         self.assertEqual(o.outcome, H.FAILED_PREREQUISITE, o.line)  # Spec T19 §3: a precondition not met is a missing prerequisite, in red
-        self.assertEqual(o.line, "policy interview: %s" % NOT_LIVE)
-        self.assertIn("S3 — %s — policy interview: %s" % (H.FAILED_PREREQUISITE, NOT_LIVE), said)  # Spec T19 §3: the line names the kind
+        self.assertEqual(o.line, "policy interview: %s — %s" % (H.SPEC_106_NOT_LIVE_PREREQUISITE, NOT_LIVE))  # Spec T19 §3: the missing prerequisite leads the line
+        self.assertIn("S3 — %s — policy interview: %s — %s" % (H.FAILED_PREREQUISITE, H.SPEC_106_NOT_LIVE_PREREQUISITE, NOT_LIVE), said)  # Spec T19 §3: the line names the kind and the missing prerequisite
         # the served page is the one the estate offered on 21 September, and the book answered nothing on it
         given = [q for q, _, _, _ in runner.facts["answers"]["policy"]]
         self.assertEqual(given[-1], "C9S", "the walk stopped at C9, before answering it")

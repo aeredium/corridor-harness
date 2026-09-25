@@ -278,7 +278,9 @@ class EstateHarnessReadmeTest(unittest.TestCase):
                       "`onboarding.interview_written`", "`pressedBy`", "`onboarding.ceremony_signed`", "`onboarding.write_awaiting_approvals`", "`onboarding.interview_write_failed`",
                       "the write answered `alreadyHeld` and birthed no second one", "*What a browser cannot see, said plainly:*", "no route lists an account's whitelist, and the page carries no receipt",
                       "*The harness never strands its estate.*", "*FAILED — prerequisite: <name> stands awaiting approvals and could not be finished*",
-                      "*the write is waiting for approvals; S5 expects a write that finishes*", "S14 alone accepts the 202", "**A rerun opens another account**",
+                      "*the write is waiting for approvals; S5 expects a write that finishes*", "HTTP 202 with the wait's body for S14, which alone accepts it", "**A rerun opens another account**",
+                      "a stop that names none — a confirm or a compile answered a refusal code, a road refused — stays fail", "from the Outcome cell alone",
+                      "each answer is judged against what the press expected", "the second press refused as `APPROVER_ALREADY_SIGNED` and nothing else",
                       "as the newest written charter", "a run resumed past S5 (`--from S6` or later)", "*A prerequisite is a failure with its own name.*", "**FAILED — prerequisite**", "red in the closing table",
                       "*S7 — FAILED — prerequisite — payments: Harness Treasury not born — no passkey is stored for its founder …*", "*Harness Treasury not funded*",
                       "S7's note beside the stop is gone", "a scenario that did not start has proven nothing", "`account_name_of_list`", "194 → 231 lines",
@@ -308,7 +310,8 @@ class ChangelogTest(unittest.TestCase):
                       "`TREASURY_NOT_BORN`", "`NO_ADMIN_CREDENTIAL`", "194 → 231 lines", "`write_interview`", "`open_account`", "`create_whitelist`", "`born_list_ceremony`",
                       "`list_interview_ceremonies`", "`interview_ceremony_view`", "`admit_ceremony_press`", "`sign_interview_ceremony`", "`interview_ceremony_sentence`", "`already_signed_refusal`",
                       "`before_spec_109`", "`list_ceremony_lapses`", "`second_account_refused`", "`tests/test_aer360_awaiting.py`", "`tests/fixtures/aer360-write-waits-for-approvals.json`",
-                      "37 lines added, none removed", "Not touched, as the fence requires", "Two things said plainly"):
+                      "37 lines added, none removed", "Not touched, as the fence requires", "Two things said plainly",
+                      "`outcome_of_cell`", "stays `fail`, the estate failing", "`wait_problem`", "rot13, absent from every tracked file", "`FOUNDER_NOT_ENROLLED`", "`SPEC_106_NOT_LIVE_PREREQUISITE`"):
             self.assertIn(words, entry, words)
 
     def test_the_changelog_records_spec_t18_first_and_names_every_change(self):

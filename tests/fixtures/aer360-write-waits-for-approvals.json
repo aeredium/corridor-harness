@@ -242,7 +242,7 @@
       {
         "credential_id": "d0a1b2c3-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
         "action": "onboarding.write_awaiting_approvals",
-        "subject_id": "0aadeca0-workspace",
+        "subject_id": "ws-7b3e51c9-harness",
         "detail": {
           "road": "compile",
           "interviewId": "86bc2bfa-bf49-40f7-8711-d24325e9bc5b",
@@ -285,7 +285,7 @@
       {
         "credential_id": "7f0c3a91-2d6e-4b58-a3c4-0e9d5b1f8c22",
         "action": "onboarding.interview_written",
-        "subject_id": "0aadeca0-workspace",
+        "subject_id": "ws-7b3e51c9-harness",
         "detail": {
           "pressedBy": "7f0c3a91-2d6e-4b58-a3c4-0e9d5b1f8c22",
           "pendingTxId": "3c767515-8364-4eab-a9b5-e7660f4a7b5a",
@@ -302,7 +302,7 @@
       {
         "credential_id": "d0a1b2c3-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
         "action": "wallet.born",
-        "subject_id": "0aadeca0-workspace",
+        "subject_id": "ws-7b3e51c9-harness",
         "detail": {
           "via": "press"
         }
