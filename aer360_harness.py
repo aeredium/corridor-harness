@@ -179,6 +179,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import http.client
 import http.cookiejar
 import json
 import os
@@ -611,7 +612,9 @@ def urllib_transport(request: urllib.request.Request) -> Tuple[int, List[Tuple[s
     except urllib.error.HTTPError as err:
         text = err.read().decode("utf-8", "replace") if err.fp else ""
         return err.code, list((err.headers or {}).items()), text
-    except (urllib.error.URLError, socket.timeout, ConnectionError, OSError) as err:
+    except (urllib.error.URLError, socket.timeout, ConnectionError, OSError, http.client.HTTPException) as err:
+        # Spec T22 §4: http.client's own refusals to send a request (InvalidURL and its kin are HTTPException, not OSError) are the
+        # transport's failure too, told in its words, so a station that builds a bad request records it and the run goes on
         raise Unreachable("%s %s could not be reached: %s" % (request.get_method(), request.full_url, getattr(err, "reason", err)))
 
 
@@ -4043,10 +4046,13 @@ class Runner:
             return
         self.say("  S11 — refused as the charter says — %s: %s" % (probe, answer.sentence()))
 
+    ANSWERS_ROAD = "/v1/onboarding/interviews/%s/answers"
+
     def station_s11(self) -> Outcome:
         before = len(self.findings)
         founder = self.founder()
         probes = 0
+        not_made = 0  # Spec T22 §3: the probes counted that this run could not make, named in the line
         # 1. A mutating call without the x-csrf-token header (guards.ts requireMutatingSession → assertCsrf).
         probes += 1
         probe = "a mutating call without the x-csrf-token header (POST /v1/workspace/display-currency)"
@@ -4071,6 +4077,7 @@ class Runner:
             else:
                 self.refused_or_finding(probe, {}, options, "refused")
         else:
+            not_made += 1
             self.note("S11", "probe not made: %s" % ("Ben has no session" if not ben.signed_in else "no policy interview id in this run"))
         # 3. A viewer's session against each author route.
         olive = self.people[A.VIEWER_INVITED]
@@ -4081,12 +4088,19 @@ class Runner:
             ("POST", "/v1/sets", {"pays": [{"oneOff": {"chain": T.PAYEE_CHAIN, "address": T.address("UNLISTED_ETHEREUM"), "declared": True}, "asset": T.PAYMENT_ASSET, "chain": T.PAYEE_CHAIN, "amountMinor": "1000000"}],
                                   "duplicatesAcknowledged": False, "idempotencyKey": "aer360-harness-%s-viewer" % self.run_stamp, "reference": "Viewer probe"}),
             ("POST", "/v1/invites", {"displayName": "Viewer probe", "email": "harness+probe@aeredium.io", "role": "author"}),
-            ("POST", "/v1/onboarding/interviews/%s/answers" % (interview_id or "<policy interview>"), {"questionId": "A1", "value": {"text": "Viewer probe"}}),
+            # Spec T22 §3: the answers road is built only from an interview id this run holds; `<policy interview>` is the --dry
+            # printer's spelling and never a path (a resumed run sent it on 26 September, and http.client refused the URL)
+            ("POST", self.ANSWERS_ROAD % interview_id if interview_id else None, {"questionId": "A1", "value": {"text": "Viewer probe"}}),
         ]
         for method, path, body in viewer_probes:
             probes += 1
-            probe = "a viewer's session at an author route: %s %s" % (method, path)
+            probe = "a viewer's session at an author route: %s %s" % (method, path or self.ANSWERS_ROAD % "<policy interview>")
+            if path is None:
+                not_made += 1
+                self.note("S11", "probe not made (%s): no policy interview id in this run" % probe)
+                continue
             if not olive.signed_in:
+                not_made += 1
                 self.note("S11", "probe not made (%s): the viewer has no session — %s" % (probe, viewer_said))
                 continue
             answer = self.request(olive, method, path, body, "S11")
@@ -4155,6 +4169,7 @@ class Runner:
                                 "403 STEP_UP_STALE: challenge already used", founder.name)
                 self.refused_or_finding(probe, {"nonce": bundle.get("nonce"), "issuedAtMs": bundle.get("issuedAtMs")}, replay, "refused: a challenge is used once")
             else:
+                not_made += 1
                 self.note("S11", "the replay probe was not made: the first sign-in answered %s" % first.sentence())
             probes += 1
             probe = "an assertion signed for the wrong rpId"
@@ -4163,6 +4178,7 @@ class Runner:
                             "403 STEP_UP_INVALID: the relying party id hash does not match", founder.name)
             self.refused_or_finding(probe, {"rpId": "not-the-estate.invalid"}, wrong, "refused: an assertion for another relying party is not this estate's")
         else:
+            not_made += 1  # the replay probe was counted above; the wrong-rpId probe is counted only where it is made
             self.note("S11", "the passkey probes were not made: the founder holds no passkey in this run")
         # 9 and 10. A payee address with a wrong checksum (a refusal expected); a payee address that is a real
         # venue contract (the charter decides: refused by name where C19 is No, else accepted — a contract is an address).
@@ -4188,6 +4204,7 @@ class Runner:
             else:
                 self.say("  S11 — as expected — %s: status %s, approvalsRequired %s" % (probe, status, required))
         else:
+            not_made += 1
             self.note("S11", "probe not made (%s): S7 created no run for P3 (%s)" % (probe, (p3 or {}).get("refusal")))
         # 12. The clerk approving her own payment.
         probes += 1
@@ -4204,6 +4221,7 @@ class Runner:
             else:
                 self.refused_or_finding(probe, {}, challenge, "refused: the person who entered a payment does not release it alone")
         else:
+            not_made += 1
             self.note("S11", "probe not made (%s): %s" % (probe, "Cora has no session" if not cora.signed_in else "S7 left no submitted run for P3"))
         # 13. A second confirm of an already confirmed interview.
         probes += 1
@@ -4219,13 +4237,14 @@ class Runner:
             else:
                 self.refused_or_finding(probe, {}, options, "refused")
         else:
+            not_made += 1
             self.note("S11", "probe not made (%s): no policy interview id in this run" % probe)
         # The probe drafts are deleted: what a founder does with a draft they started by mistake.
         for interview_type, draft_id in drafts:
             deleted = self.request(founder, "DELETE", "/v1/onboarding/interviews/%s" % draft_id, None, "S11")
             self.probe_step("the %s probe draft deleted" % interview_type, deleted, None, "{deleted: true}", founder.name)
         found = len(self.findings) - before
-        return Outcome("S11", PASS if found == 0 else FAIL, "the attacker: %d probe(s), %d finding(s)" % (probes, found))
+        return Outcome("S11", PASS if found == 0 else FAIL, "the attacker: %d probe(s), %d not made, %d finding(s)" % (probes, not_made, found))
 
     # -- S12 The optimizer --------------------------------------------------------------
     def station_s12(self) -> Outcome:

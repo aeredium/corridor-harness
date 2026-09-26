@@ -416,7 +416,7 @@ TESTS: List[Test] = [
         id="B3", series="B", who=PAUSE, agent="trader", title="The Trader's list",
         rule="Proves Rule 9 (the mirror refreshes) and Rule 4.",
         text="**B3. The Trader's list.** For the Trader, write exactly these lines and save: Uniswap SwapRouter02 on Ethereum and Arbitrum `0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45`, Uniswap on Base `0x2626664c2603336E57B271c5C0b26F421741e481`, PancakeSwap SmartRouter on Ethereum `0x13f4EA83D0bd40E75C8222255bc855a974568Dd4`, on Arbitrum `0x32226588378236Fd0c7c4053999F88aC0e5cAc77`, on Base `0x678Aa4bF4E210cf2166753e054d5b7c31cc7fa86`, Circle CCTP TokenMessengerV2 `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d`, Tether USDT0 on Ethereum `0x6C96dE32CEa08842dcc4058c14d3aaAD7Fa41dee` and on Arbitrum `0x14E4A1B13bf7F943c8ff7C51fb60FA964A298D92`. Choose \"a list for this agent only\". The save succeeds, the hash moves, and within a minute Claude's `can_sign` prints the new hash. Proves Rule 9 (the mirror refreshes) and Rule 4. Evidence: old hash, new hash, the minute.",
-        steps=[Pause("Open Set limits for the Trader, write exactly the eight lines the harness prints below into the destination list, choose 'a list for this agent only', and save with your passkey; then press Enter.",
+        steps=[Pause("The Trader's eight lines stand from consent. Open Set limits for the Trader, read the destination list against the eight lines the harness prints below, with 'a list for this agent only' chosen, change nothing, and press Save with your passkey; then press Enter.",
                      agent="trader", hash_moves=True)],
         where="Answered by the MCP Wallet's wallet_status under Rule 9 and Rule 4",
     ),

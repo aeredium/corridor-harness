@@ -103,6 +103,16 @@ RELAY_READER = "It was granted in the reading rank"
 RELAY_LAPSED = "Tell the person to pay the subscription"
 
 
+# B3 reads what stands before it waits (Spec T22 §2): where the Trader's consent record says the harness filed B3's eight
+# lines at consent, a save that changes nothing need not move the hash, and B3 says so with both hashes and the time the
+# list was filed. Where the record carries no such list, the person is told so, and the hash must move as it always had to.
+B3_STOOD_SENTENCE = ("the list stood from consent (eight lines, filed %s); the save changed nothing and the hash did not move "
+                     "(before %s, after %s).")
+B3_STOOD_EXPECTED = "the eight lines stand from consent, so a save that changes nothing leaves the hash where it was"
+B3_NOT_FROM_CONSENT_LINE = ("This Trader's consent record carries no such list, so the eight lines do not stand from consent: "
+                            "write them, save, and the hash must move.")
+
+
 # The sentence the harness refuses a money series in, when an agent's wallet is on a
 # chain the product does not offer (Spec T2 §6). Bob's Trader was on aeredium-testnet.
 def chain_guard_sentence(label: str, chain: Optional[str]) -> str:
@@ -2393,11 +2403,15 @@ class Runner:
                                 "one list for all my agents" if self.payer_list_scope == "shared" else "a list for this agent only"))
                 return Outcome(test, PASS, sentence, line=sentence)
         before = self.read_policy_hash(role, test.id) if step.hash_moves is not None else None
+        # Spec T22 §2: B3 reads what stands before it waits — the Trader's consent record says whether the harness filed the eight lines
+        stands = self.trader_list_from_consent() if test.id == "B3" and step.hash_moves else None
         self.say("")
         self.say("PAUSE for %s: %s" % (test.id, step.text))
         if test.id == "B3":
             for what, key in S.B3_LINES:
                 self.say("  %s: %s" % (what, T.address(key)))
+            if stands is None:
+                self.say("  " + B3_NOT_FROM_CONSENT_LINE)
         if test.id == "B4":
             self.say("  The owner's listed address: %s" % (self.owner_address or "(not in the run file)"))
             self.say("  List scope for this tester: %s" % ("one list for all my agents" if self.payer_list_scope == "shared" else "a list for this agent only"))
@@ -2431,9 +2445,21 @@ class Runner:
                                                "the MCP Wallet's wallet_status", previous=previous),
                            line="no policy hash to compare")
         if step.hash_moves is not None:
-            after, moved = self.wait_for_hash(role, before, test.id, want_change=step.hash_moves)
-            if moved is None:
-                return Outcome(test, SKIPPED, "the policy hash had not moved within ninety seconds and the person chose to skip; skipped, not passed.")
+            if stands is not None:
+                # Spec T22 §2: the list stood from consent, so one read after the press decides: a hash that did not move is a pass
+                # naming both hashes and when the list was filed; a hash that moved is today's pass. Without such a reading — a
+                # record carrying no list, or another list — a hash that does not move is never a pass: the wait below decides.
+                after = self.read_policy_hash(role, test.id)
+                moved = hash_moved(before, after)
+                if not moved:
+                    sentence = B3_STOOD_SENTENCE % (stands["consented_at"], before, after)
+                    evidence = self.evidence_block(test, B3_STOOD_EXPECTED, "before: %s\nafter: %s" % (before, after),
+                                                   "the MCP Wallet's wallet_status", previous=previous, policy_hash=after)
+                    return Outcome(test, PASS, sentence, evidence, line=sentence)
+            else:
+                after, moved = self.wait_for_hash(role, before, test.id, want_change=step.hash_moves)
+                if moved is None:
+                    return Outcome(test, SKIPPED, "the policy hash had not moved within ninety seconds and the person chose to skip; skipped, not passed.")
             if step.hash_moves and not moved:
                 outcome = FAIL
                 sentence = "the policy hash did not move after the save (before %s, after %s)." % (before, after)
@@ -2451,6 +2477,24 @@ class Runner:
                 note = {"expected": " ".join(step.expect_words), "got": typed or ""}
                 sentence += " The page's sentence was not the one the Series gives; both are quoted."
         return Outcome(test, outcome, sentence, evidence, note, line=sentence)
+
+    def trader_list_from_consent(self) -> Optional[Dict[str, Any]]:
+        """
+        Spec T22 §2: what the Trader's consent record says the harness filed. The eight addresses of `tables.TRADER_LIST_B3`,
+        in B3's order, under `counterparties` — the list written at consent since Spec T22 — with the time they were filed
+        (`consented_at`); None where the record carries no list (a Trader consented before Spec T22, or handed over) or
+        another list, and then B3's hash must move as it always had to.
+        """
+        label = self.label_for("trader")
+        if self.oauth is None or label is None:
+            return None
+        record = self.oauth.tokens(label)
+        if not isinstance(record, dict) or not isinstance(record.get("counterparties"), list):
+            return None
+        filed = [str(address) for address in record["counterparties"]]
+        if filed != [T.address(key) for key in T.TRADER_LIST_B3]:
+            return None
+        return {"counterparties": filed, "consented_at": str(record.get("consented_at") or "a time the record does not state")}
 
     def read_policy_hash(self, role: str, test_id: str) -> Optional[str]:
         """

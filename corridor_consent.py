@@ -41,17 +41,9 @@ import the book — series.py is fenced — so the book reads the series' figure
 series.py already carries ("set 'per trade' back to 20 dollars") and stops the run where the two disagree,
 naming both. The book is not a second copy: it is held against the series.
 
-THE TRADER'S LIST, and why it opens empty. Spec T21 §4 names the Trader's counterparties as "the role's
-questionnaire.venues as the payload lists them". The payload lists venues by NAME — uniswap_v3,
-pancakeswap_v3, curve, best_direct, cctp, usdt0 (aerkey-policy-engine pkg/policy/agentroles/templates.go,
-which services/roles.ts reads with listFor('venue')) — and the access platform records a destination only
-where it is an address on every chain the agent is scoped to (aegiskey-access-platform
-internal/access/agent_whitelist_authoring.go, requireAgentWhitelistPayableDestinations: "the refusal names
-the key, the position in the list and the offending value"). A venue word filed as a counterparty is
-refused at pact propose, and the Trader is never born. So the Trader's list is filed EMPTY, which the
-platform reads as "a set authored with nothing on it" and the connector's page calls "this agent may pay
-nobody yet"; B3 writes the eight exchange lines as the Series says, and the hash moves as B3 expects.
-The Payer's list is the run file's listed address, so B4 reads the list and passes when the address stands.
+THE TRADER'S LIST (Spec T22, 27 September 2026): the Trader's list is `T.TRADER_LIST_B3`, the eight lines B3 names,
+so a Trader may trade from its first consent. The Payer's list is the run file's listed address, so B4 reads the
+list and passes when the address stands.
 
 Nothing here prints a secret: the passkey's PEM, the ceremony's bytes and signature, the cookie, the CSRF
 token, the authorization code and the sign-up handle are redacted to their last four characters in the run
@@ -76,6 +68,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import aer360_passkey as PK  # noqa: E402
 import series as S  # noqa: E402
+import tables as T  # noqa: E402
 import corridor_harness as H  # noqa: E402  (the two modules import each other; H is used at call time only)
 
 # ---------------------------------------------------------------------------
@@ -227,7 +220,8 @@ def answer_book(role: str, role_row: Dict[str, Any], run_file_row: Dict[str, Any
     """
     The answers `POST /v1/consent/:id/agent` carries for a role (routes/consent.ts answersBody): the book's four,
     the role's own maxTxPerDay and assets, the book's chains, and the list — the Payer's the run file's listed
-    address under the run file's scope, the Trader's empty (see the module docstring for why).
+    address under the run file's scope; the Trader's list is `T.TRADER_LIST_B3`, the eight lines B3 names, so a
+    Trader may trade from its first consent.
     """
     questionnaire = role_row.get("questionnaire") if isinstance(role_row.get("questionnaire"), dict) else {}
     count = questionnaire.get("maxTxPerDay")
@@ -245,7 +239,7 @@ def answer_book(role: str, role_row: Dict[str, Any], run_file_row: Dict[str, Any
         answers["assets"] = [str(a) for a in assets]
     if role == "trader":
         answers["counterpartiesScope"] = TRADER_LIST_SCOPE
-        answers["counterparties"] = []
+        answers["counterparties"] = [T.address(key) for key in T.TRADER_LIST_B3]
     else:
         listed = str(run_file_row.get("listed_address") or "").strip()
         if not listed:
@@ -711,6 +705,7 @@ class Consent:
         standing = next((a for a in agents if a.get("name") == label), None)
         finish_route = "POST " + FINISH_ROUTE % ":id"
         agent_id: Optional[str]
+        answers: Optional[Dict[str, Any]] = None  # the book's answers where this consent creates the agent; a hand-over files none
         if standing is not None and standing.get("connectionId"):
             body: Dict[str, Any] = {"connectionId": standing["connectionId"], "rank": rank}
             agent_id = str(standing.get("id"))
@@ -770,11 +765,15 @@ class Consent:
                               outcome="refused", status=exchanged.status, said=said, route="POST /token")
         for value in (tokens.get("access_token"), tokens.get("refresh_token")):
             wire.note_secret(value)
-        stored = self.oauth.store_tokens(label, tokens, str(client["client_id"]), extra={
+        extra: Dict[str, Any] = {
             "customer_id": self.customer.customer_id, "agent_id": agent_id, "agent_name": label, "rank": body.get("rank") or rank,
             "funding_address": funding_address, "consented_at": H.now_iso(),
             "consented_by": "the harness's own passkey (Spec T21), %s" % how,
-        })
+        }
+        if answers is not None:
+            # Spec T22 §1: the addresses the harness filed, so the harness can read what it filed (B3 reads them before it waits).
+            extra["counterparties"] = list(answers["counterparties"])
+        stored = self.oauth.store_tokens(label, tokens, str(client["client_id"]), extra=extra)
         self.say(CONSENTED_LINE % (label, agent_id, rank, funding_address))
         return stored
 
