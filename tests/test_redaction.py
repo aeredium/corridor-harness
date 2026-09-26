@@ -71,6 +71,22 @@ class RedactionTest(unittest.TestCase):
     def test_empty_secret_fields_are_left_as_they_are(self):
         self.assertEqual(h.redact({"receipt": {"token": None, "issued": False}}), {"receipt": {"token": None, "issued": False}})
 
+    def test_the_consents_secrets_are_secret_keys_and_code_has_two_meanings(self):
+        """Spec T21 §6: SECRET_KEYS gains the consent's eight; an OAuth code beside its state is a secret, a reason code is evidence."""
+        for key in ("pem", "signature", "cookie", "set-cookie", "csrftoken", "code", "handle", "response"):
+            self.assertIn(key, h.SECRET_KEYS, key)
+        code = "Qm9iVGhlQnVpbGRlckNvZGVUb2tlbjEyMzQ1Njc4OTA"
+        callback = h.redact({"code": code, "state": "s-1"})
+        self.assertEqual(callback, {"code": h.REDACTED, "state": "s-1"}, "the finish's code rides beside its state, and is a secret")
+        form = {"grant_type": "authorization_code", "client_id": "mcp-1", "code": code, "code_verifier": "v" * 43, "redirect_uri": "http://127.0.0.1:8765/callback"}
+        self.assertEqual(h.redact(form)["code"], h.REDACTED)
+        self.assertIn(code, h.secret_values(form), "the code is scrubbed by value wherever else it appears")
+        refusal = {"error": {"code": "SUBSCRIPTION_REQUIRED", "message": "This needs a paid subscription and none has been paid yet.", "detail": {}}}
+        self.assertEqual(h.redact(refusal), refusal, "a refusal's code travels into the record (the Refusals law)")
+        self.assertEqual(h.redact({"code": "receipt_missing", "sentence": "no receipt"})["code"], "receipt_missing")
+        self.assertEqual(h.redact({"handle": "0123456789abcdef", "response": {"clientDataJSON": "eyJ0eXBlIjoi"}}),
+                         {"handle": h.REDACTED, "response": h.REDACTED})
+
 
 if __name__ == "__main__":
     unittest.main()

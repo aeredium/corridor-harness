@@ -24,6 +24,11 @@ Read from the connector's code rather than from memory (Spec T1 §10):
   packages/shared/src/knowledge.ts       ROADS — the tools that are not an AER Connect agent's
   packages/shared/src/words.ts           the scope `aeredium:act`, the relay's refusal sentences
 
+Since Spec T21 (26 September 2026) the harness consents its own agents: it is its own customer,
+born once with a software passkey and seated once by the operator, and every consent is walked
+by software in `corridor_consent.py` — no link, no listener, no hand. The loopback listener below
+remains the rehearsal's road (Spec P1d), whose agent is the owner's own; the series never bind a port.
+
 Runs on the Mac's own Python 3.9.6 with the standard library only (Spec T1 §2 as
 amended): urllib.request, json, hashlib, secrets, http.server. Nothing else.
 """
@@ -50,6 +55,12 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import series as S  # noqa: E402
 import tables as T  # noqa: E402
+if __name__ == "__main__":
+    # Run as a script this module is `__main__`, and `corridor_consent` would import a SECOND copy of it under the name
+    # `corridor_harness` — two HarnessError classes, and a refusal raised by one road escaping the other's catch as a
+    # traceback. So the script is the module: the consent road imports this very copy.
+    sys.modules["corridor_harness"] = sys.modules[__name__]
+import corridor_consent as C  # noqa: E402  (the two modules import each other; C is used at call time only)
 
 # ---------------------------------------------------------------------------
 # Constants read from the connector's code.
@@ -472,18 +483,52 @@ SECRET_KEYS = {
     "authorization", "access_token", "refresh_token", "police_receipt", "code_verifier", "client_secret",
     "private_key", "secret", "ticket_secret", "ticket_token", "signed_tx", "signed_transaction",
     "raw_transaction", "raw_tx", "receipt_token",
+    # Spec T21 §6: the consent's own secrets — the passkey's PEM, the ceremony's signature, the cookie both ways, the
+    # CSRF token (csrfToken as the wire spells it; keys are lowercased before this set is read), the authorization
+    # code, the sign-up handle and the ceremony's response. Three of these words have two meanings, and `secret_key`
+    # below judges them by their neighbours: `code`, `response` and `signature` are secrets only where they are the
+    # consent's, never where a door's answer uses the word.
+    "pem", "signature", "cookie", "set-cookie", "csrftoken", "code", "handle", "response",
 }
 REDACTED = "<redacted>"
+# The keys an OAuth authorization code rides beside: its `state` on the callback, the token form's own fields at /token.
+OAUTH_CODE_SIBLINGS = ("state", "code_verifier", "grant_type", "redirect_uri")
+# The key a WebAuthn ceremony's response carries (RegistrationResponseJSON, AuthenticationResponseJSON): what marks a
+# `response` as the ceremony's, and a `signature` beside it as the ceremony's.
+CEREMONY_KEY = "clientdatajson"
+
+
+def secret_key(low: str, parent_key: Optional[str] = None, siblings: Sequence[str] = (), children: Sequence[str] = ()) -> bool:
+    """
+    Whether a (lowercased) key names a secret, given its siblings and, for a dict, its children. Three words have two
+    meanings. `code`: an OAuth authorization code — beside its `state` (the finish's redirect) or in the token form
+    (`grant_type`, `code_verifier`, `redirect_uri`) — is a secret; a reason code beside a sentence (`receipt_missing`,
+    `SUBSCRIPTION_REQUIRED`) is evidence, and stays, because a refusal's code must travel into the record (the
+    Refusals law). `response`: a WebAuthn ceremony's — holding or beside `clientDataJSON` — is a secret; a door's
+    `response` is evidence. `signature`: the ceremony's, beside `clientDataJSON`, is a secret; the Wallet's or a chain's
+    is evidence.
+    """
+    if low == "code":
+        return any(s in siblings for s in OAUTH_CODE_SIBLINGS)
+    if low == "response":
+        return CEREMONY_KEY in children or CEREMONY_KEY in siblings
+    if low == "signature":
+        return CEREMONY_KEY in siblings
+    return low in SECRET_KEYS or low.endswith("_secret") or (low == "token" and parent_key in ("receipt", "ticket"))
+
+
+def _keys_of(value: Any) -> List[str]:
+    return [str(k).lower() for k in value] if isinstance(value, dict) else []
 
 
 def secret_values(value: Any, parent_key: Optional[str] = None) -> List[str]:
     """The values under secret keys, so the same bytes are scrubbed wherever else they appear (inside a text blob, say)."""
     found: List[str] = []
     if isinstance(value, dict):
+        siblings = _keys_of(value)
         for key, inner in value.items():
             low = str(key).lower()
-            secret_key = low in SECRET_KEYS or low.endswith("_secret") or (low == "token" and parent_key in ("receipt", "ticket"))
-            if secret_key and isinstance(inner, str) and len(inner) >= 8:
+            if secret_key(low, parent_key, siblings, _keys_of(inner)) and isinstance(inner, str) and len(inner) >= 8:
                 found.append(inner)
             else:
                 found.extend(secret_values(inner, low))
@@ -506,26 +551,42 @@ def answered(answer: "McpAnswer", words: Sequence[str], any_of: bool = False) ->
     return bool(hits) if any_of else len(hits) == len(list(words))
 
 
-def redact(value: Any, secrets_: Sequence[str] = (), parent_key: Optional[str] = None) -> Any:
-    """Every secret replaced by <redacted>; everything else returned byte for byte."""
+def redact(value: Any, secrets_: Sequence[str] = (), parent_key: Optional[str] = None,
+           mask: Any = REDACTED) -> Any:
+    """
+    Every secret replaced — by `<redacted>`, or by what a callable `mask` makes of it (the estate's last four
+    characters, say); everything else returned byte for byte. A dict or list under a secret key is replaced whole by a
+    constant mask, and leaf by leaf by a callable one, so a ceremony's shape stays readable while its bytes do not.
+    """
     if isinstance(value, dict):
         out: Dict[str, Any] = {}
+        siblings = _keys_of(value)
         for key, inner in value.items():
             low = str(key).lower()
-            secret_key = low in SECRET_KEYS or low.endswith("_secret") or (low == "token" and parent_key in ("receipt", "ticket"))
-            if secret_key and inner not in (None, "", False):
-                out[key] = REDACTED
+            if secret_key(low, parent_key, siblings, _keys_of(inner)) and inner not in (None, "", False):
+                out[key] = _mask_leaves(inner, mask) if callable(mask) else mask
             else:
-                out[key] = redact(inner, secrets_, low)
+                out[key] = redact(inner, secrets_, low, mask)
         return out
     if isinstance(value, list):
-        return [redact(item, secrets_, parent_key) for item in value]
+        return [redact(item, secrets_, parent_key, mask) for item in value]
     if isinstance(value, str):
         out_s = value
-        for secret in secrets_:
-            if secret and secret in out_s:
-                out_s = out_s.replace(secret, REDACTED)
+        for secret in sorted((s for s in secrets_ if s), key=len, reverse=True):
+            if secret in out_s:
+                out_s = out_s.replace(secret, mask(secret) if callable(mask) else mask)
         return out_s
+    return value
+
+
+def _mask_leaves(value: Any, mask: Callable[[Any], str]) -> Any:
+    """Every string under a secret key masked, the shape kept."""
+    if isinstance(value, dict):
+        return {k: _mask_leaves(v, mask) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_mask_leaves(v, mask) for v in value]
+    if isinstance(value, str):
+        return mask(value)
     return value
 
 
@@ -1148,14 +1209,25 @@ class HttpAnswer:
         self.elapsed_ms = elapsed_ms
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """A 3xx answered as itself, so the consent road reads `Location` instead of following it (Spec T21 §3)."""
+
+    def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> None:  # type: ignore[override]
+        return None
+
+
+_NO_REDIRECT_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
 def http_request(method: str, url: str, headers: Optional[Dict[str, str]] = None, body: Optional[bytes] = None,
-                 timeout: float = 60.0) -> HttpAnswer:
+                 timeout: float = 60.0, follow_redirects: bool = True) -> HttpAnswer:
     sent = {"User-Agent": USER_AGENT}
     sent.update(headers or {})
     request = urllib.request.Request(url, data=body, method=method, headers=sent)
     started = time.monotonic()
+    opener = urllib.request.urlopen if follow_redirects else _NO_REDIRECT_OPENER.open
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with opener(request, timeout=timeout) as response:
             text = response.read().decode("utf-8", "replace")
             return HttpAnswer(response.status, dict(response.headers), text, int((time.monotonic() - started) * 1000))
     except urllib.error.HTTPError as err:
@@ -1288,10 +1360,17 @@ class _CallbackHandler(http.server.BaseHTTPRequestHandler):
         return
 
 
+def pkce_pair() -> Tuple[str, str]:
+    """PKCE S256 (RFC 7636): a verifier and its challenge, the pair both consent roads open the authorize road with."""
+    verifier = secrets.token_urlsafe(64)
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).rstrip(b"=").decode("ascii")
+    return verifier, challenge
+
+
 class Oauth:
-    def __init__(self, issuer: str, store_dir: str = STORE_DIR, say: Callable[[str], None] = print):
+    def __init__(self, issuer: str, store_dir: Optional[str] = None, say: Callable[[str], None] = print):
         self.issuer = issuer.rstrip("/")
-        self.store_dir = store_dir
+        self.store_dir = store_dir or STORE_DIR  # read at call time, so a test can point the store elsewhere
         self.say = say
         self._metadata: Optional[Dict[str, Any]] = None
         self._resource: Optional[Dict[str, Any]] = None
@@ -1363,18 +1442,12 @@ class Oauth:
         write_private(self.token_path(label), record)
         return record
 
-    # -- the consent ---------------------------------------------------------
-    def consent(self, label: str, wait_seconds: float = CONSENT_WINDOW_SECONDS) -> Dict[str, Any]:
-        meta = self.metadata()
-        client = self.client()
-        verifier = secrets.token_urlsafe(64)
-        challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).rstrip(b"=").decode("ascii")
-        state = secrets.token_urlsafe(24)
-        server, port = self._listen()
-        redirect_uri = "http://127.0.0.1:%d/callback" % port
+    # -- the authorize link, built exactly as the consent always built it ------
+    def authorization_link(self, client_id: str, redirect_uri: str, challenge: str, state: str) -> str:
+        """PKCE S256, the state, the loopback redirect, the acting scope and the resource, at the issuer's authorization endpoint."""
         query = urllib.parse.urlencode({
             "response_type": "code",
-            "client_id": client["client_id"],
+            "client_id": client_id,
             "redirect_uri": redirect_uri,
             "code_challenge": challenge,
             "code_challenge_method": "S256",
@@ -1382,7 +1455,17 @@ class Oauth:
             "scope": ACTING_SCOPE,
             "resource": self.resource(),
         })
-        link = "%s?%s" % (meta["authorization_endpoint"], query)
+        return "%s?%s" % (self.metadata()["authorization_endpoint"], query)
+
+    # -- the consent by a person (the rehearsal's road, Spec P1d; the series consent by software, Spec T21) ------
+    def consent(self, label: str, wait_seconds: float = CONSENT_WINDOW_SECONDS) -> Dict[str, Any]:
+        meta = self.metadata()
+        client = self.client()
+        verifier, challenge = pkce_pair()
+        state = secrets.token_urlsafe(24)
+        server, port = self._listen()
+        redirect_uri = "http://127.0.0.1:%d/callback" % port
+        link = self.authorization_link(client["client_id"], redirect_uri, challenge, state)
         self.say("Consent link for %s: %s" % (label, link))
         self.say("Open the link, choose the %s on the consent page, consent with your passkey, and press Finish; the harness is listening on 127.0.0.1:%d." % (label, port))
         try:
@@ -1725,8 +1808,12 @@ class Runner:
                  say: Callable[[str], None] = print, ask: Callable[[str], str] = input,
                  sleep: Callable[[float], None] = time.sleep, dry: bool = False, stage2: bool = False,
                  crossing_wait: float = CROSSING_WAIT_SECONDS, session_factory: Optional[Callable[[str], Any]] = None,
-                 require_series_a: bool = True, clock: Callable[[], float] = time.monotonic):
+                 require_series_a: bool = True, clock: Callable[[], float] = time.monotonic,
+                 funding_wallet_path: Optional[str] = None):
         self.tester = tester
+        # Spec T21 §5: the file the estate harness writes at S5, the one place the harness's own wallet address comes from.
+        self.funding_wallet_path = funding_wallet_path
+        self.consent_secrets: List[str] = []  # every secret the consent road saw (cookie, CSRF token, code, tokens), for the report's scrub
         self.clock = clock  # the unit tests advance a fake clock; the command line reads the real one
         # Spec T1 §5: nothing that moves money runs until Series A has passed in the same run.
         # The flag exists for the unit tests, which stand up no door for Series A; the command line never clears it.
@@ -1770,6 +1857,7 @@ class Runner:
         self.balances_after: Dict[str, Any] = {}
         self.stopped: Optional[str] = None
         self.stopped_reason: str = ""
+        self.stopped_how: str = "on an unexpected allow"  # or "at the consent" (Spec T21): what the tests not run are told
         self.first_block: Dict[str, int] = {}
         self.chains: Dict[str, ChainRpc] = {}
         for name, row in (run_file.get("chains") or {}).items():
@@ -1795,13 +1883,20 @@ class Runner:
             raise HarnessError("the run file names no %s for %s" % (role, self.tester))
         if self.session_factory is not None:
             session = self.session_factory(label)
+            session.initialize(test_id)
         else:
             assert self.oauth is not None
             if self.oauth.tokens(label) is None:
                 self.say("No token is stored for %s; the consent runs now." % label)
-                self.oauth.consent(label)
+                self.consent_label(role)  # Spec T21 §3: the harness's own road — no link, no listener, no wait
             session = Mcp(self.oauth, label, self.folder.record)
-        session.initialize(test_id)
+            refused = self.first_call_refused(session, test_id)
+            if refused:
+                # Spec T21 §3: a token the first call refuses is consented again, once, on the same road.
+                self.say("The token stored for %s was refused by the connector (%s); the consent runs now." % (label, refused))
+                self.consent_label(role)
+                session = Mcp(self.oauth, label, self.folder.record)
+                session.initialize(test_id)
         session.tools_list(test_id)
         answer = session.call(MY_AGENT_TOOL, {}, test_id)
         facts = answer.data if isinstance(answer.data, dict) else {}
@@ -1825,6 +1920,58 @@ class Runner:
 
     def facts(self, role: str) -> Dict[str, Any]:
         return self.agents.get(role) or {}
+
+    # -- the consent, by software (Spec T21) ---------------------------------------
+    @staticmethod
+    def first_call_refused(session: "Mcp", test_id: str) -> Optional[str]:
+        """
+        The first call that uses a stored token: `initialize`. A 401 that a refresh did not cure, or a refresh the
+        token endpoint refused, is the connector refusing the token; the words say which. None where it was admitted.
+        """
+        try:
+            answer = session.initialize(test_id)
+        except HarnessError as err:  # the refresh was refused: "the token endpoint answered 400: invalid_grant …"
+            return str(err)
+        if answer is not None and getattr(answer, "status", None) == 401:
+            return "HTTP 401 on initialize after a refresh: %s" % answer.quoted()[:300]
+        return None
+
+    def consent_label(self, role: str) -> Dict[str, Any]:
+        """Consent one role's label as the harness's own customer (Spec T21 §3), storing the tokens where they always went."""
+        assert self.oauth is not None
+        label = self.label_for(role)
+        if label is None:
+            raise HarnessError("the run file names no %s for %s" % (role, self.tester))
+        row = (self.run_file.get("testers") or {}).get(self.tester) or {}
+        stored = C.consent(role, label, self.tester, self.oauth.issuer, self.oauth.store_dir, row, self.folder.record, self.say,
+                           oauth=self.oauth, secrets_=self.consent_secrets, funding_wallet=self.funding_wallet_path)
+        self.sessions.pop(role, None)  # a fresh connection is a fresh session
+        return stored
+
+    def consent_missing(self) -> List[str]:
+        """
+        Spec T21 §3: a run consents every label the run file names whose token is missing, before the series start.
+        Returns the labels consented. A label the run file leaves null (payer_nogas) is not a label it names.
+        """
+        assert self.oauth is not None
+        consented: List[str] = []
+        for role in C.ROLES:
+            label = self.label_for(role)
+            if label is None or self.oauth.tokens(label) is not None:
+                continue
+            self.say("No token is stored for %s; the consent runs now." % label)
+            self.consent_label(role)
+            consented.append(label)
+        return consented
+
+    def payer_list(self, role: str) -> Optional[List[str]]:
+        """
+        The agent's destination list as `aerconnect_my_agent` states the compiled document (`document`,
+        `scope.counterparties_allowed`, mcprelay.ts): what B4 reads since Spec T21. None where the answer carries no list.
+        """
+        raw = self.facts(role).get("raw")
+        found = find_key(raw, ["counterparties_allowed"], list) if isinstance(raw, (dict, list)) else None
+        return [str(a) for a in found] if isinstance(found, list) else None
 
     # -- what the Wallet says about itself (Spec T2 §1, §4, §6) ----------------
     def wallet_status(self, role: str, test_id: str) -> McpAnswer:
@@ -1941,12 +2088,22 @@ class Runner:
         tests = self.plan(series, start_at)
         for index, test in enumerate(tests):
             if self.stopped:
-                self.outcomes.append(Outcome(test, NOT_RUN, "not run: the series stopped at %s on an unexpected allow." % self.stopped))
+                self.outcomes.append(Outcome(test, NOT_RUN, "not run: the series stopped at %s %s." % (self.stopped, self.stopped_how)))
                 continue
             try:
                 outcome = self.run_test(test)
             except KeyboardInterrupt:
                 raise
+            except C.ConsentStop as err:
+                # Spec T21: a consent that stops, stops the series — the sentence is the whole of what the person needs.
+                self.stopped = test.id
+                self.stopped_reason = err.sentence
+                self.stopped_how = "at the consent"
+                self.say("STOP: %s — %s" % (test.id, err.sentence))
+                outcome = Outcome(test, FAIL, "the consent stopped the run: %s" % err.sentence,
+                                  self.evidence_block(test, expected=test.rule, came_back=err.said or err.sentence,
+                                                      who="the connector's consent road" if err.code else "the harness itself (a stop, not a judgment)",
+                                                      reason=err.code), line="stopped at the consent: %s" % err.sentence)
             except HarnessError as err:
                 outcome = Outcome(test, FAIL, "the harness could not complete this test: %s" % err,
                                   self.evidence_block(test, expected=test.rule, came_back=str(err), who="the harness itself (a fault, not a judgment)"))
@@ -2226,6 +2383,15 @@ class Runner:
     def step_pause(self, test: S.Test, step: S.Pause, previous: Optional[Outcome], extra: Optional[str] = None) -> Outcome:
         role = step.agent
         self.session(role, test.id)
+        if test.id == "B4" and self.owner_address:
+            # Spec T21 §4: the Payer's list is written at consent, so B4 reads the list and passes when the address stands.
+            listed = self.payer_list(role)
+            if listed is not None and self.owner_address.lower() in [a.lower() for a in listed]:
+                sentence = ("the owner's listed address %s stands on the Payer's list as the document states it (%d entr%s, scope %s), "
+                            "written at consent by the harness's own answer book (Spec T21); no save was asked for." % (
+                                self.owner_address, len(listed), "y" if len(listed) == 1 else "ies",
+                                "one list for all my agents" if self.payer_list_scope == "shared" else "a list for this agent only"))
+                return Outcome(test, PASS, sentence, line=sentence)
         before = self.read_policy_hash(role, test.id) if step.hash_moves is not None else None
         self.say("")
         self.say("PAUSE for %s: %s" % (test.id, step.text))
@@ -3155,7 +3321,7 @@ class Runner:
         }
 
     def secrets(self) -> List[str]:
-        out: List[str] = []
+        out: List[str] = list(self.consent_secrets)
         for session in self.sessions.values():
             out.extend(getattr(session, "secrets_seen", []) or [])
         # Every answer a check quoted, whether or not it was part of a walk: A5's one
@@ -4288,12 +4454,34 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(unknown_tester_sentence(args.run_file, args.tester))
         return 2
 
+    # Spec T21 §5: the listed address is the harness's own funding wallet, written down by the estate harness at S5.
+    # An empty listed_address is filled with it and written back — printed before the write — and a run without the
+    # file stops with the S5 sentence.
+    tester_row = testers[args.tester]
+    try:
+        address, filled = C.reconcile_listed_address(tester_row, C.funding_wallet_path())
+    except C.ConsentStop as err:
+        print(err.sentence)
+        return 2
+    if filled:
+        print("listed_address for %s is empty; filling it with the harness's own funding wallet %s and writing it back to %s"
+              % (args.tester, address, args.run_file))
+        with open(args.run_file, "w", encoding="utf-8") as handle:
+            json.dump(run_file, handle, indent=2)
+
     if args.consent:
-        label = (testers[args.tester].get("agents") or {}).get(args.consent) or "%s-%s" % (args.tester, args.consent)
+        if args.consent not in C.ROLES:
+            parser.error("--consent takes one of %s" % ", ".join(C.ROLES))
+        label = (tester_row.get("agents") or {}).get(args.consent) or "%s-%s" % (args.tester, args.consent)
         folder = RunFolder(args.out, args.tester)
         runner = Runner(args.tester, run_file, oauth, folder, stage2=args.stage2)
-        # --consent always runs the consent again: it is the road to a fresh connection for this label.
-        oauth.consent(label)
+        # --consent always runs the consent again, by software (Spec T21 §3): it is the road to a fresh connection for this label.
+        try:
+            runner.consent_label(args.consent)
+        except (C.ConsentStop, HarnessError) as err:
+            print(getattr(err, "sentence", str(err)))
+            print("Evidence: %s" % os.path.join(folder.path, "evidence.jsonl"))
+            return 2
         runner.session(args.consent, "consent")
         facts = runner.facts(args.consent)
         print("Connected as %s: %s (%s), wallet %s at %s on %s." % (label, facts.get("name"), facts.get("role_id"), facts.get("wallet_id"), facts.get("address"), facts.get("chain")))
@@ -4309,6 +4497,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     folder = RunFolder(args.out, args.tester)
     runner = Runner(args.tester, run_file, oauth, folder, stage2=args.stage2, crossing_wait=args.crossing_wait)
+    # Spec T21 §3: every label the run file names whose token is missing is consented before the series start,
+    # and a consent that stops — the seat, the counter, the wallet — stops the run with its one sentence.
+    try:
+        runner.consent_missing()
+    except (C.ConsentStop, HarnessError) as err:
+        print(getattr(err, "sentence", str(err)))
+        print("Evidence: %s" % os.path.join(folder.path, "evidence.jsonl"))
+        return 2
     try:
         runner.run(args.series, args.start_at)
     except KeyboardInterrupt:

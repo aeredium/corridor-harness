@@ -100,6 +100,26 @@ class ReadmeTest(unittest.TestCase):
         self.assertIn("A hold the Series expected (C5, D13) is a pass.", self.text)
         self.assertNotIn("H3) is a pass", self.text, "version 1.2's H3 expects a refusal and an allow, not a hold")
 
+    def test_it_says_the_harness_consents_its_own_agents(self):
+        """Spec T21: the README carries the harness's own sentences and the seat's SQL, read against the module rather than as prose."""
+        import corridor_consent as C
+        section = self.text.split("## The consent", 1)[1].split("\n## ", 1)[0]
+        self.assertIn(C.SEAT_SENTENCE % ("", "tools/harness_seat.sh", "<customer-id>"), section)
+        self.assertIn("(its seat lapsed)", section)
+        for sentence in (C.COUNTER_SENTENCE, C.NO_WALLET_SENTENCE, C.LISTED_ADDRESS_SENTENCE):
+            self.assertIn(sentence, section, sentence)
+        self.assertIn(C.CONSENTED_LINE % ("<tester>-<label>", "<id>", "<label>", "<address>"), section)
+        self.assertIn(C.SIGNED_UP_LINE % ("<id>", "tools/harness_seat.sh", "<id>"), section)
+        self.assertIn(C.LISTED_DIFFERS_SENTENCE % ("<a>", "<b>", "<path>"), section)
+        with open(os.path.join(os.path.dirname(README), "tools", "harness_seat.sh"), encoding="utf-8") as handle:
+            script = handle.read()
+        for fragment in ("ON CONFLICT (customer_id) WHERE state IN ('pending', 'trialing', 'active')", "WHERE subscriptions.state <> 'active'",
+                         "'harness:' || :'customer_id' || ':' || to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD')", "ON CONFLICT (idempotency_key) DO NOTHING"):
+            self.assertIn(fragment, section, fragment)
+            self.assertIn(fragment, script, "the README's SQL is the script's")
+        estate = self.text.split("## The estate harness", 1)[1]
+        self.assertIn("funding-wallet.json", estate)
+
     def test_the_three_lists_it_prints_are_series_pys(self):
         """The README's three lists are read against series.py's own, so they cannot drift (Spec T1 §4, Spec T6 §3)."""
         def ids_on(prefix):

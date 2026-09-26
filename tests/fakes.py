@@ -52,8 +52,10 @@ class FakeSession:
 
     def __init__(self, police="allow", wallet="ticket", chain="arbitrum", role_id="payer.v1",
                  policy_hash=POLICY_HASH, judged_hash=SAME, judged=True, native_wei=1000000000000000,
-                 rails=None, pact_in_status=True, tokens=None):
+                 rails=None, pact_in_status=True, tokens=None, document=None):
         self.police = police
+        # Spec T21: `my_agent` states the compiled document (mcprelay.ts `document`); B4 reads the Payer's list off it.
+        self.document = document
         self.wallet = wallet
         self.chain = chain
         self.role_id = role_id
@@ -137,10 +139,13 @@ class FakeSession:
             raise h.HarnessError("refusing to call %s" % tool)
         self.calls.append((test_id, tool, dict(args)))
         if tool == "aerconnect_my_agent":
-            return rpc_answer({"source": "aer-connect", "agent": {"name": "Payer One", "roleId": self.role_id},
-                               "connection": {"rank": "agent", "standing": "paid"},
-                               "wallet": {"id": "w-1", "address": WALLET, "chain": self.chain},
-                               "fundingWallet": {"address": OWNER}, "caps": {"said": "no caps"}, "said": "…"})
+            facts = {"source": "aer-connect", "agent": {"name": "Payer One", "roleId": self.role_id},
+                     "connection": {"rank": "agent", "standing": "paid"},
+                     "wallet": {"id": "w-1", "address": WALLET, "chain": self.chain},
+                     "fundingWallet": {"address": OWNER}, "caps": {"said": "no caps"}, "said": "…"}
+            if self.document is not None:
+                facts["document"] = self.document
+            return rpc_answer(facts)
         if tool == "aerconnect_guide":
             return rpc_answer({"said": GUIDE_SAID, "cites": "Owner's Guide v1.1"})
         if tool == "wallet.wallet_status":
