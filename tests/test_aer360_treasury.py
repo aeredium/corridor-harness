@@ -155,7 +155,7 @@ class TheTreasuryPaysAndTheThreePaymentsLand(unittest.TestCase):
         self.assertTrue(all(c.sent["params"][0]["to"] == self.double.chain.token for c in rpc_calls))
         self.assertEqual(self.runner.facts["usdc_token"], self.double.chain.token)
         self.assertEqual(self.double.chain.calls[0]["body"]["params"][0]["data"], T.balance_of_call_data(T.address("NORTHWIND_ETHEREUM")))
-        self.assertEqual(self.outcomes["S11"].line, "the attacker: 17 probe(s), 1 finding(s)", "the settled runs answer S11's probes as refusals")
+        self.assertEqual(self.outcomes["S11"].line, "the attacker: 17 probe(s), 0 not made, 1 finding(s)", "the settled runs answer S11's probes as refusals")
 
     def test_s10_counts_the_money_to_the_cent(self):
         notes = [n for n in self.runner.notes["S10"] if n.startswith("money moved (Spec T14 §5)")]

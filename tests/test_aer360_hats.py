@@ -593,7 +593,7 @@ class TheAttackerAgainstTheDouble(unittest.TestCase):
     def test_findings_are_printed_in_the_failure_form_with_the_probe(self):
         lines = [l for l in self.said if l.startswith("S11 — fail — ") and ": ACCEPTED: " in l]
         self.assertEqual(len(lines), 1, "the wrong checksum; the venue is refused as the charter says, and the clerk is refused at the guard")
-        self.assertIn("S11 — fail — the attacker: 17 probe(s), 1 finding(s)", self.said)
+        self.assertIn("S11 — fail — the attacker: 17 probe(s), 0 not made, 1 finding(s)", self.said)
 
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
@@ -617,7 +617,7 @@ class TheVenueProbeFollowsTheCharter(unittest.TestCase):
         self.assertEqual(finding.expected, "HTTP 422 PAYEE_IS_VENUE_CONTRACT: %s (this run's compiled policy charter says payeeVenueContracts \"refused\")" % VENUE_DOOR_SENTENCE)
         self.assertEqual(finding.route, "POST /v1/payees")
         self.assertTrue(finding.came_back.startswith("HTTP 201 — "), finding.came_back)
-        self.assertIn("17 probe(s), 2 finding(s)", outcomes["S11"].line)
+        self.assertIn("17 probe(s), 0 not made, 2 finding(s)", outcomes["S11"].line)
         step = [s for s in runner.evidence["S11"] if "a real venue contract" in str(s.get("probe", ""))][-1]
         self.assertEqual(step["status"], 201)
         self.assertEqual(step["result"], "accepted (HTTP 201) — the charter says otherwise")
@@ -634,7 +634,7 @@ class TheVenueProbeFollowsTheCharter(unittest.TestCase):
         self.assertTrue(finding.said.endswith("— expected PAYEE_IS_VENUE_CONTRACT, 422, %r" % VENUE_DOOR_SENTENCE), finding.said)
         self.assertTrue(finding.came_back.startswith("HTTP 422 — "), finding.came_back)
         self.assertIn(VENUE_STIPULATION, finding.came_back, "the estate's own words travel with the finding")
-        self.assertIn("17 probe(s), 2 finding(s)", outcomes["S11"].line)
+        self.assertIn("17 probe(s), 0 not made, 2 finding(s)", outcomes["S11"].line)
         step = [s for s in runner.evidence["S11"] if "a real venue contract" in str(s.get("probe", ""))][-1]
         self.assertEqual(step["result"], "refused, but not as the charter's door refuses: ADDRESS_PROPOSAL_REFUSED: %s (a stipulation this door applies whatever the charter says; this double stands in for an estate that does)" % VENUE_STIPULATION)
 
@@ -650,14 +650,14 @@ class TheVenueProbeFollowsTheCharter(unittest.TestCase):
             self.assertEqual(step["expected"], "HTTP 201: accepted, as the law says (%s; this run's compiled policy charter says payeeVenueContracts \"accepted\")" % H.VENUE_RULING)
             self.assertEqual(step["result"], "accepted, as the law says (%s)" % H.VENUE_RULING)
             self.assertTrue(any(l.startswith("  S11 — accepted, as the law says — %s: HTTP 201" % self.VENUE_PROBE) for l in said))
-            self.assertIn("17 probe(s), 1 finding(s)", outcomes["S11"].line)
+            self.assertIn("17 probe(s), 0 not made, 1 finding(s)", outcomes["S11"].line)
             # the same estate with a door that refuses regardless: the finding of Spec T8, with the ruling quoted
             runner, outcomes, said = self.run_against(refuses_venue_contract=True)
             finding = next(f for f in runner.findings if f.station == "S11" and "a real venue contract" in f.probe)
             self.assertTrue(finding.said.startswith("REFUSED: ADDRESS_PROPOSAL_REFUSED: %s" % VENUE_STIPULATION), finding.said)
             self.assertIn("the law says otherwise (%s; a contract is an address; this run's compiled policy charter says payeeVenueContracts \"accepted\")" % H.VENUE_RULING, finding.said)
             self.assertEqual(finding.expected, "HTTP 201: accepted, as the law says (%s; this run's compiled policy charter says payeeVenueContracts \"accepted\")" % H.VENUE_RULING)
-            self.assertIn("17 probe(s), 2 finding(s)", outcomes["S11"].line)
+            self.assertIn("17 probe(s), 0 not made, 2 finding(s)", outcomes["S11"].line)
             self.assertIn("Bear, 20 September 2026", runner.report())
         self.assertEqual(A.POLICY_ANSWERS["C19"]["choice"], A.VENUE_NO, "the book's own answer stands")
 
