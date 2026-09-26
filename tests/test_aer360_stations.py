@@ -335,7 +335,7 @@ class TheFoundersRoad(unittest.TestCase):
         self.assertEqual(stored["aap_credential_id"], self.runner.people["harriet"].credential_id)
         self.assertGreaterEqual(stored["sign_count"], 3, "the counter moved with every assertion and was saved")
         self.assertEqual(oct(os.stat(self.runner.key_path(self.runner.people["harriet"])).st_mode & 0o777), "0o600")
-        self.assertEqual(sorted(os.listdir(store_of(self.runner))), ["ada.json", "ben.json", "cora.json", "harriet.json", "olive.json"], "one passkey per person")
+        self.assertEqual(sorted(os.listdir(store_of(self.runner))), ["ada.json", "ben.json", "cora.json", "funding-wallet.json", "harriet.json", "olive.json"], "one passkey per person")
 
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
@@ -520,7 +520,7 @@ class ResumedAndSecondRuns(unittest.TestCase):
         self.assertIn("enrolled by invitation", outcomes["S1"].line)
         archived = [d for d in os.listdir(os.path.join(self.tmp, "store")) if d.startswith("harness-holdings.")]
         self.assertEqual(len(archived), 1, "the old estate folder was set aside, never deleted")
-        self.assertEqual(sorted(os.listdir(store_of(runner))), ["ada.json", "ben.json", "cora.json", "harriet.json", "olive.json"], "the fresh keys under their first names")
+        self.assertEqual(sorted(os.listdir(store_of(runner))), ["ada.json", "ben.json", "cora.json", "funding-wallet.json", "harriet.json", "olive.json"], "the fresh keys under their first names")
 
     def test_without_a_stored_key_and_without_an_invite_s1_says_what_the_first_run_needs(self):
         double = EstateDouble()
@@ -671,7 +671,9 @@ class EveryPersonOnTheirOwnCredential(unittest.TestCase):
 
     def test_three_new_passkeys_are_stored_beside_the_old_with_the_suffix_and_the_date(self):
         founder = self.runner.people["harriet"]
-        expected = ["ada-2-%s.json" % self.date, "ada.json", "ben-2-%s.json" % self.date, "ben.json", "cora-2-%s.json" % self.date, "cora.json", "harriet.json", "olive.json"]
+        expected = ["ada-2-%s.json" % self.date, "ada.json", "ben-2-%s.json" % self.date, "ben.json", "cora-2-%s.json" % self.date, "cora.json",
+                    "funding-wallet.json",  # the one file beside the passkeys: the funding wallet S5 writes down (Spec T21 §5)
+                    "harriet.json", "olive.json"]
         self.assertEqual(sorted(os.listdir(self.store)), expected)
         self.assertRegex(self.date, r"^\d{4}-\d{2}-\d{2}$")
         for key in A.AUTHORS_INVITED:
@@ -858,7 +860,7 @@ class AlreadyOnTheirOwnCredential(unittest.TestCase):
         self.assertEqual(posted, ["POST /v1/auth/login/options", "POST /v1/auth/login/verify"] * 3, "S4 only signed the three in: nothing minted, nobody enrolled, no grant")
         self.assertEqual(second.facts["brought_in_again"], [])
         self.assertEqual(second.facts["invites_minted"], [])
-        self.assertEqual(sorted(os.listdir(store_of(second))), ["ada.json", "ben.json", "cora.json", "harriet.json", "olive.json"], "one passkey per person")
+        self.assertEqual(sorted(os.listdir(store_of(second))), ["ada.json", "ben.json", "cora.json", "funding-wallet.json", "harriet.json", "olive.json"], "one passkey per person")
         self.assertIn("Ada Approver's seat: found seated, naming %s; Ada Approver's own credential, so no grant was needed" % H.last4(second.people["ada"].credential_id), o.line)
         self.assertNotIn("people register: one credential for several people", [f.probe for f in second.findings])
 

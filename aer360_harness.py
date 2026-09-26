@@ -261,6 +261,9 @@ REPORT_NAME = re.compile(r"^aer360-harness-(\d{4}-\d{2}-\d{2})(?:-(\d{6}))?\.md$
 # HMAC(secret, setDigest|credentialId|purpose) with setDigest `funding-wallet:<workspace id>:<issuedAtMs>` — and the press carries
 # issuedAtMs and the passkey's assertion over it. The harness reads the workspace before it presses, so a wallet already born is
 # reported and FUNDING_WALLET_ALREADY_BORN is never met.
+# Spec T21 §5 (26 September 2026): the file S5 writes the funding wallet down in for the corridor harness, under the
+# estate's own folder of the store — ~/.aer360-harness/harness-holdings/funding-wallet.json — {address, chain, keyId, readAt}.
+FUNDING_WALLET_FILE = "funding-wallet.json"
 FUNDING_WALLET_OPTIONS_ROUTE = "/v1/workspace/funding-wallet/options"
 FUNDING_WALLET_ROUTE = "/v1/workspace/funding-wallet"
 FUNDING_WALLET_PURPOSE = "workspace.funding_wallet"  # routes/workspace.ts FUNDING_WALLET_PURPOSE
@@ -2096,6 +2099,11 @@ class Runner:
         # Spec T13 §1 and §2: S5 ends by giving the estate its funding wallet, and funding it from the faucet as the founder would
         funding_said, wallet_failed = self.give_the_estate_its_funding_wallet("S5", founder)
         detail += "; %s; %s" % (funding_said, self.fund_the_wallet_from_the_faucet("S5", founder))
+        # Spec T21 §5: having read Harness Holdings' funding wallet, S5 writes it down for the corridor harness — the one file
+        # of this kind, {address, chain, keyId, readAt}, beside the passkeys, mode 0600. No key of any wallet is in it.
+        wallet_read = self.facts.get("funding_wallet")
+        if isinstance(wallet_read, dict) and wallet_read.get("address"):
+            detail += "; written down at %s for the corridor harness (Spec T21)" % self.write_funding_wallet_file(wallet_read)
         if finished_first != "no write waits for approvals":
             detail = "before it, %s; %s" % (finished_first, detail)
         finished_wanting = [p["said"] for r in self.facts["finished_before_s5"] for p in r.get("problems") or []]
@@ -2179,6 +2187,20 @@ class Runner:
                          "the workspace reads back %s" % read_back["address"])
         self.facts["funding_wallet"] = read_back
         return "%s (born by this run's press)" % self.funding_wallet_words(read_back), False
+
+    def funding_wallet_file(self) -> str:
+        """Where S5 writes the funding wallet down for the corridor harness (Spec T21 §5): ~/.aer360-harness/<estate>/funding-wallet.json."""
+        return os.path.join(self.estate_dir, FUNDING_WALLET_FILE)
+
+    def write_funding_wallet_file(self, wallet: Dict[str, Any]) -> str:
+        """
+        Spec T21 §5: the one change allowed in this file. The address as the workspace states it, the chain (the estate's own
+        word for it is `homeStack`), the key's id and the moment it was read; no key, no secret, mode 0600 beside the passkeys.
+        """
+        path = self.funding_wallet_file()
+        PK.write_private(path, {"address": wallet.get("address"), "chain": wallet.get("homeStack"), "keyId": wallet.get("keyId"),
+                                "readAt": now_iso()})
+        return path
 
     @staticmethod
     def funding_wallet_words(wallet: Dict[str, Any]) -> str:
