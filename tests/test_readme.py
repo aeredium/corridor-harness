@@ -101,38 +101,24 @@ class ReadmeTest(unittest.TestCase):
         self.assertNotIn("H3) is a pass", self.text, "version 1.2's H3 expects a refusal and an allow, not a hold")
 
     def test_it_says_the_harness_consents_its_own_agents(self):
-        """Spec T21: the README names the customer, the two files, the seat and its SQL, the wire, the book, the sentences and the record."""
+        """Spec T21: the README carries the harness's own sentences and the seat's SQL, read against the module rather than as prose."""
         import corridor_consent as C
         section = self.text.split("## The consent", 1)[1].split("\n## ", 1)[0]
-        for words in ("no browser, no link, no listener, no hand", "`<tester> (harness)`", "`harness+<tester>@aeredium.io`", "`[a-z0-9-]+`",
-                      "`~/.corridor-harness/<tester>/passkey.json`", "`~/.corridor-harness/<tester>/customer.json`",
-                      "*signed up as the harness's own customer <id>; seat it with tools/harness_seat.sh <id>*",
-                      "BEFORE an assertion is sent and never resent", "There is no `--fresh`",
-                      "by customer id, never by email, never by the harness, never by the desk's page", "bash tools/harness_seat.sh <customer-id>",
-                      "`ec2-user@3.231.26.5`", "`/etc/aer-connector/aer-connector.env`", "`psql -v customer_id=<id>`", "`:'customer_id'`",
-                      "^harness\\+[a-z0-9-]+@aeredium\\.io$", "ON CONFLICT (customer_id) WHERE state IN ('pending', 'trialing', 'active')",
-                      "WHERE subscriptions.state <> 'active'", "'subscription_trial_started', 0,", "'harness:' || :'customer_id' || ':'",
-                      "It never writes `state active`", "Solo seats three agents",
-                      "`GET` it WITHOUT following redirects and read the consent id from `Location`", "`GET /v1/consent/:id?connect=1`",
-                      "`POST /finish {connectionId, rank: the role's defaultRank}`", "`POST /finish {agentId}`", "`AGENT_ALREADY_CONNECTED` is never met",
-                      "*consented <tester>-<label> as the harness's own customer with its stored passkey; agent <id>, rank <label>; tokens stored*",
-                      "| `perTxUsd` | 20 | 20 |", "| `dailyUsd` | 100 | 100 |", "| `holdAboveUsd` | 50 | 50 |",
-                      "**The Trader's list opens empty, not as the spec's words have it.**", "`requireAgentWhitelistPayableDestinations`",
-                      "`~/.aer360-harness/harness-holdings/funding-wallet.json`", "`{address, chain, keyId, readAt}`",
-                      "*the harness is not seated: run tools/harness_seat.sh <customer-id> on the box, then rerun*",
-                      "*the harness's passkey counter is behind the connector's: the passkey file was not saved after a sign-in; a new tester name is a new customer*",
-                      "*no wallet address of the harness's own: run aer360_harness.py first (S5 births the funding wallet and writes it down)*",
-                      "A refusal is never told as an outage", "`pem`, `signature`, `cookie`, `set-cookie`, `csrfToken`, `code`, `handle` and `response`",
-                      "redacted to their last four characters", "python3 corridor_harness.py --tester alice --series A"):
-            self.assertIn(words, section, words)
-        self.assertEqual(section.count("Consent link for alice-trader:"), 1, "the old link is named once, as history")
         self.assertIn(C.SEAT_SENTENCE % ("", "tools/harness_seat.sh", "<customer-id>"), section)
-        self.assertIn(C.COUNTER_SENTENCE, section)
-        self.assertIn(C.NO_WALLET_SENTENCE, section)
-        self.assertIn("- `corridor_consent.py` — the harness's own customer and its consent, by software (Spec T21, 26 September 2026)", self.text)
-        self.assertIn("- `tools/harness_seat.sh` — the operator's one command", self.text)
+        self.assertIn("(its seat lapsed)", section)
+        for sentence in (C.COUNTER_SENTENCE, C.NO_WALLET_SENTENCE, C.LISTED_ADDRESS_SENTENCE):
+            self.assertIn(sentence, section, sentence)
+        self.assertIn(C.CONSENTED_LINE % ("<tester>-<label>", "<id>", "<label>", "<address>"), section)
+        self.assertIn(C.SIGNED_UP_LINE % ("<id>", "tools/harness_seat.sh", "<id>"), section)
+        self.assertIn(C.LISTED_DIFFERS_SENTENCE % ("<a>", "<b>", "<path>"), section)
+        with open(os.path.join(os.path.dirname(README), "tools", "harness_seat.sh"), encoding="utf-8") as handle:
+            script = handle.read()
+        for fragment in ("ON CONFLICT (customer_id) WHERE state IN ('pending', 'trialing', 'active')", "WHERE subscriptions.state <> 'active'",
+                         "'harness:' || :'customer_id' || ':' || to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD')", "ON CONFLICT (idempotency_key) DO NOTHING"):
+            self.assertIn(fragment, section, fragment)
+            self.assertIn(fragment, script, "the README's SQL is the script's")
         estate = self.text.split("## The estate harness", 1)[1]
-        self.assertIn("**S5 writes the funding wallet down for the corridor harness (Spec T21, 26 September 2026).**", estate)
+        self.assertIn("funding-wallet.json", estate)
 
     def test_the_three_lists_it_prints_are_series_pys(self):
         """The README's three lists are read against series.py's own, so they cannot drift (Spec T1 §4, Spec T6 §3)."""

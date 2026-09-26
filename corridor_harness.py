@@ -55,6 +55,11 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import series as S  # noqa: E402
 import tables as T  # noqa: E402
+if __name__ == "__main__":
+    # Run as a script this module is `__main__`, and `corridor_consent` would import a SECOND copy of it under the name
+    # `corridor_harness` — two HarnessError classes, and a refusal raised by one road escaping the other's catch as a
+    # traceback. So the script is the module: the consent road imports this very copy.
+    sys.modules["corridor_harness"] = sys.modules[__name__]
 import corridor_consent as C  # noqa: E402  (the two modules import each other; C is used at call time only)
 
 # ---------------------------------------------------------------------------
@@ -478,36 +483,52 @@ SECRET_KEYS = {
     "authorization", "access_token", "refresh_token", "police_receipt", "code_verifier", "client_secret",
     "private_key", "secret", "ticket_secret", "ticket_token", "signed_tx", "signed_transaction",
     "raw_transaction", "raw_tx", "receipt_token",
-    # Spec T21 §6: the consent's own secrets — the passkey's PEM, every signature, the cookie both ways, the CSRF
-    # token (csrfToken as the wire spells it; keys are lowercased before this set is read), the authorization
-    # code, the sign-up handle and the assertion. `code` is judged by `secret_key` below, because the word has two meanings.
+    # Spec T21 §6: the consent's own secrets — the passkey's PEM, the ceremony's signature, the cookie both ways, the
+    # CSRF token (csrfToken as the wire spells it; keys are lowercased before this set is read), the authorization
+    # code, the sign-up handle and the ceremony's response. Three of these words have two meanings, and `secret_key`
+    # below judges them by their neighbours: `code`, `response` and `signature` are secrets only where they are the
+    # consent's, never where a door's answer uses the word.
     "pem", "signature", "cookie", "set-cookie", "csrftoken", "code", "handle", "response",
 }
 REDACTED = "<redacted>"
 # The keys an OAuth authorization code rides beside: its `state` on the callback, the token form's own fields at /token.
 OAUTH_CODE_SIBLINGS = ("state", "code_verifier", "grant_type", "redirect_uri")
+# The key a WebAuthn ceremony's response carries (RegistrationResponseJSON, AuthenticationResponseJSON): what marks a
+# `response` as the ceremony's, and a `signature` beside it as the ceremony's.
+CEREMONY_KEY = "clientdatajson"
 
 
-def secret_key(low: str, parent_key: Optional[str] = None, siblings: Sequence[str] = ()) -> bool:
+def secret_key(low: str, parent_key: Optional[str] = None, siblings: Sequence[str] = (), children: Sequence[str] = ()) -> bool:
     """
-    Whether a (lowercased) key names a secret. `code` is the one word with two meanings: an OAuth authorization
-    code — which rides beside its `state` (the finish's redirect) or in the token form (`grant_type`, `code_verifier`,
-    `redirect_uri`) — is a secret; a reason code beside a sentence (`receipt_missing`, `SUBSCRIPTION_REQUIRED`) is
-    evidence, and stays, because a refusal's code must travel into the record (the Refusals law).
+    Whether a (lowercased) key names a secret, given its siblings and, for a dict, its children. Three words have two
+    meanings. `code`: an OAuth authorization code — beside its `state` (the finish's redirect) or in the token form
+    (`grant_type`, `code_verifier`, `redirect_uri`) — is a secret; a reason code beside a sentence (`receipt_missing`,
+    `SUBSCRIPTION_REQUIRED`) is evidence, and stays, because a refusal's code must travel into the record (the
+    Refusals law). `response`: a WebAuthn ceremony's — holding or beside `clientDataJSON` — is a secret; a door's
+    `response` is evidence. `signature`: the ceremony's, beside `clientDataJSON`, is a secret; the Wallet's or a chain's
+    is evidence.
     """
     if low == "code":
         return any(s in siblings for s in OAUTH_CODE_SIBLINGS)
+    if low == "response":
+        return CEREMONY_KEY in children or CEREMONY_KEY in siblings
+    if low == "signature":
+        return CEREMONY_KEY in siblings
     return low in SECRET_KEYS or low.endswith("_secret") or (low == "token" and parent_key in ("receipt", "ticket"))
+
+
+def _keys_of(value: Any) -> List[str]:
+    return [str(k).lower() for k in value] if isinstance(value, dict) else []
 
 
 def secret_values(value: Any, parent_key: Optional[str] = None) -> List[str]:
     """The values under secret keys, so the same bytes are scrubbed wherever else they appear (inside a text blob, say)."""
     found: List[str] = []
     if isinstance(value, dict):
-        siblings = [str(k).lower() for k in value]
+        siblings = _keys_of(value)
         for key, inner in value.items():
             low = str(key).lower()
-            if secret_key(low, parent_key, siblings) and isinstance(inner, str) and len(inner) >= 8:
+            if secret_key(low, parent_key, siblings, _keys_of(inner)) and isinstance(inner, str) and len(inner) >= 8:
                 found.append(inner)
             else:
                 found.extend(secret_values(inner, low))
@@ -530,26 +551,42 @@ def answered(answer: "McpAnswer", words: Sequence[str], any_of: bool = False) ->
     return bool(hits) if any_of else len(hits) == len(list(words))
 
 
-def redact(value: Any, secrets_: Sequence[str] = (), parent_key: Optional[str] = None) -> Any:
-    """Every secret replaced by <redacted>; everything else returned byte for byte."""
+def redact(value: Any, secrets_: Sequence[str] = (), parent_key: Optional[str] = None,
+           mask: Any = REDACTED) -> Any:
+    """
+    Every secret replaced — by `<redacted>`, or by what a callable `mask` makes of it (the estate's last four
+    characters, say); everything else returned byte for byte. A dict or list under a secret key is replaced whole by a
+    constant mask, and leaf by leaf by a callable one, so a ceremony's shape stays readable while its bytes do not.
+    """
     if isinstance(value, dict):
         out: Dict[str, Any] = {}
-        siblings = [str(k).lower() for k in value]
+        siblings = _keys_of(value)
         for key, inner in value.items():
             low = str(key).lower()
-            if secret_key(low, parent_key, siblings) and inner not in (None, "", False):
-                out[key] = REDACTED
+            if secret_key(low, parent_key, siblings, _keys_of(inner)) and inner not in (None, "", False):
+                out[key] = _mask_leaves(inner, mask) if callable(mask) else mask
             else:
-                out[key] = redact(inner, secrets_, low)
+                out[key] = redact(inner, secrets_, low, mask)
         return out
     if isinstance(value, list):
-        return [redact(item, secrets_, parent_key) for item in value]
+        return [redact(item, secrets_, parent_key, mask) for item in value]
     if isinstance(value, str):
         out_s = value
-        for secret in secrets_:
-            if secret and secret in out_s:
-                out_s = out_s.replace(secret, REDACTED)
+        for secret in sorted((s for s in secrets_ if s), key=len, reverse=True):
+            if secret in out_s:
+                out_s = out_s.replace(secret, mask(secret) if callable(mask) else mask)
         return out_s
+    return value
+
+
+def _mask_leaves(value: Any, mask: Callable[[Any], str]) -> Any:
+    """Every string under a secret key masked, the shape kept."""
+    if isinstance(value, dict):
+        return {k: _mask_leaves(v, mask) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_mask_leaves(v, mask) for v in value]
+    if isinstance(value, str):
+        return mask(value)
     return value
 
 
@@ -1323,6 +1360,13 @@ class _CallbackHandler(http.server.BaseHTTPRequestHandler):
         return
 
 
+def pkce_pair() -> Tuple[str, str]:
+    """PKCE S256 (RFC 7636): a verifier and its challenge, the pair both consent roads open the authorize road with."""
+    verifier = secrets.token_urlsafe(64)
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).rstrip(b"=").decode("ascii")
+    return verifier, challenge
+
+
 class Oauth:
     def __init__(self, issuer: str, store_dir: Optional[str] = None, say: Callable[[str], None] = print):
         self.issuer = issuer.rstrip("/")
@@ -1417,8 +1461,7 @@ class Oauth:
     def consent(self, label: str, wait_seconds: float = CONSENT_WINDOW_SECONDS) -> Dict[str, Any]:
         meta = self.metadata()
         client = self.client()
-        verifier = secrets.token_urlsafe(64)
-        challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).rstrip(b"=").decode("ascii")
+        verifier, challenge = pkce_pair()
         state = secrets.token_urlsafe(24)
         server, port = self._listen()
         redirect_uri = "http://127.0.0.1:%d/callback" % port
@@ -4415,15 +4458,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # An empty listed_address is filled with it and written back — printed before the write — and a run without the
     # file stops with the S5 sentence.
     tester_row = testers[args.tester]
-    if not str(tester_row.get("listed_address") or "").strip():
-        try:
-            address = C.funding_wallet_address(C.funding_wallet_path())
-        except C.ConsentStop as err:
-            print(err.sentence)
-            return 2
+    try:
+        address, filled = C.reconcile_listed_address(tester_row, C.funding_wallet_path())
+    except C.ConsentStop as err:
+        print(err.sentence)
+        return 2
+    if filled:
         print("listed_address for %s is empty; filling it with the harness's own funding wallet %s and writing it back to %s"
               % (args.tester, address, args.run_file))
-        tester_row["listed_address"] = address
         with open(args.run_file, "w", encoding="utf-8") as handle:
             json.dump(run_file, handle, indent=2)
 
@@ -4459,8 +4501,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # and a consent that stops — the seat, the counter, the wallet — stops the run with its one sentence.
     try:
         runner.consent_missing()
-    except C.ConsentStop as err:
-        print(err.sentence)
+    except (C.ConsentStop, HarnessError) as err:
+        print(getattr(err, "sentence", str(err)))
         print("Evidence: %s" % os.path.join(folder.path, "evidence.jsonl"))
         return 2
     try:

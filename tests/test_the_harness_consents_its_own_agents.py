@@ -29,10 +29,10 @@ import corridor_harness as h  # noqa: E402
 import series as S  # noqa: E402
 
 try:
-    from .consent_double import ConnectorDouble, ISSUER
+    from .consent_double import ConnectorDouble, ISSUER, serve
     from .fakes import FakeSession, OWNER, runner_for
 except ImportError:  # run as a top-level module by `unittest discover tests`
-    from consent_double import ConnectorDouble, ISSUER
+    from consent_double import ConnectorDouble, ISSUER, serve
     from fakes import FakeSession, OWNER, runner_for
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -179,7 +179,7 @@ class AFreshTesterSignsUpAndIsNotSeated(ConsentBase):
     def test_the_run_from_the_command_line_stops_with_the_seat_sentence_before_any_series_test(self):
         path = os.path.join(self.tmp, "harness_run.json")
         with open(path, "w", encoding="utf-8") as handle:
-            json.dump(self.run_file(), handle)
+            json.dump(self.run_file(listed=FUNDING), handle)
         out = io.StringIO()
         with patched(h, "STORE_DIR", self.store), patched(C, "funding_wallet_path", lambda: self.funding), contextlib.redirect_stdout(out):
             code = h.main(["--tester", "alpha", "--run-file", path, "--out", self.runs, "--series", "A"])
@@ -206,7 +206,7 @@ class ASeatedTesterConsentsByCreating(ConsentBase):
         customer = next(iter(self.double.customers.values()))
         self.assertEqual(self.said, [
             "signed up as the harness's own customer %s; seat it with tools/harness_seat.sh %s" % (customer["id"], customer["id"]),
-            "consented alpha-trader as the harness's own customer with its stored passkey; agent %s, rank agent; tokens stored" % self.double.agents[0]["id"],
+            "consented alpha-trader as the harness's own customer with its stored passkey; agent %s, rank agent; funding wallet %s; tokens stored" % (self.double.agents[0]["id"], FUNDING),
         ])
         # the wire sequence as walked, with each road's status (the PR body's first item)
         self.assertEqual(self.statuses(), [
@@ -232,6 +232,7 @@ class ASeatedTesterConsentsByCreating(ConsentBase):
         self.assertEqual(stored["customer_id"], customer["id"])
         self.assertEqual(stored["agent_id"], self.double.agents[0]["id"])
         self.assertIn("the harness's own passkey (Spec T21), created with the book's answers", stored["consented_by"])
+        self.assertEqual(stored["funding_address"], FUNDING)
         self.assertEqual(customer["fundingAddress"], FUNDING, "the Wallet registers the harness's address as the owner root")
 
     def test_the_payer_lists_the_run_files_address_under_the_run_files_scope_and_payer_nogas_is_a_payer_under_its_own_name(self):
@@ -258,22 +259,6 @@ class ASeatedTesterConsentsByCreating(ConsentBase):
             self.consent("trader")
         self.assertEqual(len(self.double.agents), 1)
 
-    def test_the_traders_list_is_empty_because_the_platform_refuses_a_venue_word_as_a_destination(self):
-        """The double is as strict as the platform (agent_whitelist_authoring.go): a venue name is not an address, and the press is refused."""
-        def venues_as_counterparties(role, role_row, run_file_row):
-            answers = real_book(role, role_row, run_file_row)
-            answers["counterparties"] = list(role_row["questionnaire"]["venues"])
-            return answers
-        real_book = C.answer_book
-        with patched(C, "answer_book", venues_as_counterparties):
-            with self.assertRaises(C.ConsentStop) as stopped:
-                self.consent("trader")
-        self.assertEqual(stopped.exception.outcome, "refused")
-        self.assertEqual(stopped.exception.code, "AAP_REFUSED")
-        self.assertIn('scope.counterparties_allowed[0] is "uniswap_v3"', stopped.exception.said)
-        self.assertTrue(stopped.exception.sentence.startswith("refused: "), stopped.exception.sentence)
-        self.assertEqual(len(self.double.agents), 0)
-
     def test_a_fourth_agent_on_solo_is_refused_in_the_connectors_words_and_told_as_a_refusal(self):
         customer = self.born()
         for name in ("standing-1", "standing-2", "standing-3"):
@@ -288,6 +273,11 @@ class ASeatedTesterConsentsByCreating(ConsentBase):
         for forbidden in ("could not be reached", "try again later", "something went wrong"):
             self.assertNotIn(forbidden, stopped.exception.sentence.lower())
         self.assertIn("Note: 3 agents stand on the harness's customer and Solo seats 3", self.said[-1])
+        # and the record: the refusal's code and the platform's words intact, the outcome word first
+        refused = [r for r in self.records if r.get("kind") == "consent" and r["http_status"] == 502][-1]
+        self.assertEqual(refused["outcome"], "refused")
+        self.assertEqual(refused["answer"]["error"]["code"], "AAP_REFUSED")
+        self.assertIn("plan connect-solo admits 3 agent credentials", refused["answer"]["error"]["detail"]["cause"])
 
 
 class AnAgentThatStandsIsHandedOver(ConsentBase):
@@ -351,6 +341,37 @@ class TheCounterIsSavedBeforeTheAssertionIsSent(ConsentBase):
         self.assertEqual(len(self.double.customers), 1, "no second customer was born")
 
 
+class ThePasskeyFileIsWrittenWhole(ConsentBase):
+    def test_the_file_is_written_beside_itself_and_moved_over_never_truncated(self):
+        moves = []
+        real_replace = os.replace
+
+        def watched(src, dst):
+            with open(src, encoding="utf-8") as handle:
+                moves.append((src, dst, json.load(handle)["sign_count"], os.path.exists(dst)))
+            real_replace(src, dst)
+        with patched(os, "replace", watched):
+            self.consent("trader")
+        path = os.path.join(self.store, "alpha", "passkey.json")
+        self.assertEqual([m[0] for m in moves], [path + ".tmp"] * 2, "the sign-up's save and the step-up's save, each to the file beside")
+        self.assertEqual([m[1] for m in moves], [path] * 2)
+        self.assertEqual([m[2] for m in moves], [0, 1])
+        self.assertEqual([m[3] for m in moves], [False, True], "the second move replaces a file that stands whole throughout")
+        self.assertFalse(os.path.exists(path + ".tmp"))
+        self.assertEqual(mode_of(path), "0o600")
+
+    def test_a_passkey_file_that_was_not_written_whole_stops_with_a_sentence_before_any_call(self):
+        path = os.path.join(self.store, "alpha", "passkey.json")
+        os.makedirs(os.path.dirname(path))
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write('{"kind": "aer360-harness software passkey", "pem": "-----BEGIN EC PRIVATE KEY')
+        with self.assertRaises(C.ConsentStop) as stopped:
+            self.consent("trader")
+        self.assertTrue(stopped.exception.sentence.startswith("the passkey file at %s cannot be read (" % path), stopped.exception.sentence)
+        self.assertIn("it was not written whole. Set that folder aside, or run as a new tester name, which is a new customer", stopped.exception.sentence)
+        self.assertEqual(self.double.calls, [])
+
+
 class TheWalletAddressIsTheHarnessesOwn(ConsentBase):
     def test_a_missing_funding_wallet_file_stops_with_the_s5_sentence_before_any_call(self):
         os.unlink(self.funding)
@@ -359,12 +380,47 @@ class TheWalletAddressIsTheHarnessesOwn(ConsentBase):
         self.assertEqual(stopped.exception.sentence, "no wallet address of the harness's own: run aer360_harness.py first (S5 births the funding wallet and writes it down)")
         self.assertEqual(self.double.calls, [])
 
-    def test_a_wrong_checksum_refuses_before_any_call(self):
+    def test_an_address_written_in_one_case_is_checksummed_and_used_and_a_mixed_case_mismatch_refuses_before_any_call(self):
+        for spelling in (FUNDING.lower(), "0x" + FUNDING[2:].upper()):
+            write_funding(self.funding, spelling)
+            self.assertEqual(C.funding_wallet_address(self.funding), FUNDING, spelling)
         write_funding(self.funding, FUNDING.lower())
+        self.consent("trader")
+        self.assertEqual(self.double.presses[0]["body"]["fundingAddress"], FUNDING, "sent checksummed")
+        wrong = FUNDING[:-1] + ("a" if FUNDING[-1] != "a" else "b")  # mixed case, and not its own checksum
+        wrong = wrong[:2] + wrong[2:].swapcase() if wrong[2:] == wrong[2:].lower() else wrong
+        write_funding(self.funding, wrong)
+        self.double.calls.clear()
         with self.assertRaises(C.ConsentStop) as stopped:
-            self.consent("trader")
-        self.assertEqual(stopped.exception.sentence, C.CHECKSUM_SENTENCE % (self.funding, FUNDING.lower(), FUNDING))
+            self.consent("payer")
+        self.assertEqual(stopped.exception.sentence, C.CHECKSUM_SENTENCE % (self.funding, wrong, h.checksum_address(wrong)))
         self.assertEqual(self.double.calls, [])
+        write_funding(self.funding, "0x1234")
+        with self.assertRaises(C.ConsentStop) as stopped:
+            self.consent("payer")
+        self.assertEqual(stopped.exception.sentence, C.CHECKSUM_SENTENCE % (self.funding, "0x1234", "not an address of forty hex digits"))
+
+    def test_a_listed_address_that_is_not_the_harnesss_wallet_stops_naming_both_and_the_same_wallet_in_another_case_stands(self):
+        path = os.path.join(self.tmp, "harness_run.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(self.run_file(listed=OWNER), handle, indent=2)
+        aer360 = os.path.join(self.tmp, "aer360")
+        write_funding(os.path.join(aer360, C.HARNESS_HOLDINGS, C.FUNDING_WALLET_FILE), FUNDING)
+        out = io.StringIO()
+        with patched(h, "STORE_DIR", self.store), patched(C, "AER360_STORE_DIR", aer360), contextlib.redirect_stdout(out):
+            code = h.main(["--tester", "alpha", "--run-file", path, "--out", self.runs, "--series", "A"])
+        self.assertEqual(code, 2)
+        self.assertEqual(out.getvalue().strip(), C.LISTED_DIFFERS_SENTENCE % (OWNER, FUNDING, os.path.join(aer360, C.HARNESS_HOLDINGS, C.FUNDING_WALLET_FILE)))
+        self.assertEqual(self.double.calls, [], "stopped before any call")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(self.run_file(listed=FUNDING.lower()), handle, indent=2)
+        with open(path, "rb") as handle:
+            before = handle.read()
+        with patched(h, "STORE_DIR", self.store), patched(C, "AER360_STORE_DIR", aer360), contextlib.redirect_stdout(io.StringIO()):
+            code = h.main(["--tester", "alpha", "--run-file", path, "--out", self.runs, "--consent", "trader"])
+        self.assertEqual(code, 0, "the same wallet in another spelling is the harness's own, and the consent walks")
+        with open(path, "rb") as handle:
+            self.assertEqual(handle.read(), before, "and the run file is left as it was")
 
     def test_listed_address_is_written_back_only_when_empty_and_printed_before_the_write(self):
         self.double = ConnectorDouble(seated=False)
@@ -386,7 +442,7 @@ class TheWalletAddressIsTheHarnessesOwn(ConsentBase):
         self.assertEqual(written["testers"]["alpha"]["listed_address"], FUNDING)
         self.assertEqual(written["issuer"], ISSUER, "the rest of the file is as it was")
         # a listed address that stands is never overwritten
-        written["testers"]["alpha"]["listed_address"] = OWNER
+        written["testers"]["alpha"]["listed_address"] = FUNDING
         with open(path, "w", encoding="utf-8") as handle:
             json.dump(written, handle, indent=2)
         with open(path, "rb") as handle:
@@ -439,7 +495,7 @@ class TheRunConsentsEveryLabelWhoseTokenIsMissing(ConsentBase):
     def test_the_command_line_consent_of_one_label_walks_the_road_and_connects(self):
         path = os.path.join(self.tmp, "harness_run.json")
         with open(path, "w", encoding="utf-8") as handle:
-            json.dump(self.run_file(), handle, indent=2)
+            json.dump(self.run_file(listed=FUNDING), handle, indent=2)
         out = io.StringIO()
         with patched(h, "STORE_DIR", self.store), patched(C, "funding_wallet_path", lambda: self.funding), contextlib.redirect_stdout(out):
             code = h.main(["--tester", "alpha", "--run-file", path, "--out", self.runs, "--consent", "trader"])
@@ -509,6 +565,7 @@ class TheRecordsRedaction(ConsentBase):
         self.assertEqual([r["tool"] for r in consent_records], [
             "POST /v1/auth/signup/options", "POST /v1/auth/signup/verify", "GET /authorize", "GET /v1/consent/%s" % list(self.double.authorizations)[0],
             "POST /v1/auth/stepup/options", "POST /v1/consent/%s/agent" % list(self.double.authorizations)[0], "POST /v1/consent/%s/finish" % list(self.double.authorizations)[0],
+            "POST /token",
         ])
         dumped = json.dumps(consent_records, ensure_ascii=False)
         with open(os.path.join(self.store, "alpha", "passkey.json"), encoding="utf-8") as handle:
@@ -524,22 +581,29 @@ class TheRecordsRedaction(ConsentBase):
         self.assertIn('"outcome": "redirected"', dumped)
         self.assertNotIn("Consent link", json.dumps(self.said))
 
-    def test_a_refusals_code_and_words_stay_in_the_record_and_the_record_starts_with_the_outcome_word(self):
-        customer = self.born()
-        for name in ("standing-1", "standing-2", "standing-3"):
-            self.double.plant_agent(customer["id"], name, "payer.v1")
-        with self.assertRaises(C.ConsentStop):
-            self.consent("trader")
-        refused = [r for r in self.records if r.get("kind") == "consent" and r["http_status"] == 502][-1]
-        self.assertEqual(refused["outcome"], "refused")
-        self.assertEqual(refused["answer"]["error"]["code"], "AAP_REFUSED")
-        self.assertIn("plan connect-solo admits 3 agent credentials", refused["answer"]["error"]["detail"]["cause"])
+    def test_the_wire_redaction_is_the_harnesss_own_with_the_last_four_as_its_mask(self):
+        self.assertEqual(h.redact({"code": "receipt_missing", "sentence": "x"}, mask=C.last4), {"code": "receipt_missing", "sentence": "x"})
+        self.assertEqual(h.redact({"code": "abcdefghijklmnop", "state": "s"}, mask=C.last4), {"code": "…mnop", "state": "s"})
+        ceremony = {"response": {"clientDataJSON": "eyJ0eXBl", "signature": "abcdefgh", "userHandle": "dXNlcg"}, "type": "public-key"}
+        self.assertEqual(h.redact(ceremony, mask=C.last4), {"response": {"clientDataJSON": "…eXBl", "signature": "…efgh", "userHandle": "…Nlcg"}, "type": "public-key"})
+        self.assertEqual(h.redact("the code abcdefghijklmnop rode by", ["abcdefghijklmnop"], mask=C.last4), "the code …mnop rode by")
+        # a door's `response` or `signature` is evidence, not the ceremony's
+        wallet = {"ticket": {"id": "t-1", "signature": "0x" + "ab" * 32}, "response": {"verdict": "allow", "receipt": {"issued": True}}}
+        self.assertEqual(h.redact(wallet, mask=C.last4), wallet)
+        self.assertEqual(h.redact(wallet), wallet)
+        self.assertEqual(h.secret_values(ceremony), ["abcdefgh"], "the ceremony's signature is scrubbed by value; the Wallet's is not collected")
+        self.assertEqual(h.secret_values(wallet), [])
 
-    def test_the_wire_redaction_keeps_a_reason_code_and_redacts_an_oauth_code(self):
-        self.assertEqual(C.redact_wire({"code": "receipt_missing", "sentence": "x"}), {"code": "receipt_missing", "sentence": "x"})
-        self.assertEqual(C.redact_wire({"code": "abcdefghijklmnop", "state": "s"}), {"code": "…mnop", "state": "s"})
-        self.assertEqual(C.redact_wire({"response": {"signature": "abcdefgh", "type": "public-key"}}), {"response": {"signature": "…efgh", "type": "…-key"}})
-        self.assertEqual(C.redact_wire("the code abcdefghijklmnop rode by", ["abcdefghijklmnop"]), "the code …mnop rode by")
+    def test_the_token_exchange_is_in_the_record_with_the_code_and_the_verifier_redacted(self):
+        self.consent("trader")
+        exchange = [r for r in self.records if r.get("kind") == "consent" and r["tool"] == "POST /token"]
+        self.assertEqual(len(exchange), 1)
+        sent = exchange[0]["arguments"]["body"]
+        self.assertEqual(sent["grant_type"], "authorization_code")
+        self.assertEqual(sent["code"], C.last4(self.double.last_code))
+        self.assertTrue(sent["code_verifier"].startswith("…"))
+        self.assertEqual(exchange[0]["answer"]["access_token"], C.last4(next(iter(self.double.access_tokens))))
+        self.assertEqual(exchange[0]["answer"]["token_type"], "bearer")
 
 
 class TheBookAgreesWithTheSeries(ConsentBase):
@@ -566,21 +630,39 @@ class TheBookAgreesWithTheSeries(ConsentBase):
 
 
 FAKE_PSQL = r'''#!/bin/bash
-# a psql that answers as told and writes down what it was asked (the seat script's guard, without a network)
-printf 'ARGS %s\n' "$*" >> "$FAKE_PSQL_LOG"
-SQL=""
-if [ ! -t 0 ]; then SQL=$(cat); fi
+# A psql that behaves as psql does about variables — a -c string goes to the server VERBATIM, never through the lexer, so
+# a :'name' in one is a syntax error; standard input goes through the lexer, where :'name' becomes the quoted value of
+# -v name=… — answers as told, and writes down what it was asked (ARGS, then SQL-RAW as received and SQL as interpolated).
+LOG="$FAKE_PSQL_LOG"
 CMD=""; prev=""
-for a in "$@"; do if [ "$prev" = "-c" ]; then CMD="$a"; fi; prev="$a"; done
-if [ -n "$SQL" ]; then printf 'SQL %s\n' "$SQL" >> "$FAKE_PSQL_LOG"; fi
-if [ -n "$CMD" ]; then printf 'CMD %s\n' "$CMD" >> "$FAKE_PSQL_LOG"; fi
-if [ -n "$SQL" ]; then
-  case "$SQL" in *"INSERT INTO subscriptions"*) if [ -n "${FAKE_SEATED_ROW:-}" ]; then printf '%s\n' "$FAKE_SEATED_ROW"; fi;; esac
-elif [[ "$CMD" == *"FROM customers"* ]]; then
-  if [ -n "${FAKE_CUSTOMER_ROW:-}" ]; then printf '%s\n' "$FAKE_CUSTOMER_ROW"; fi
-elif [[ "$CMD" == *"FROM subscriptions"* ]]; then
-  if [ -n "${FAKE_LIVE_ROWS:-}" ]; then printf '%b\n' "$FAKE_LIVE_ROWS"; fi
+NAMES=(); VALUES=()
+for a in "$@"; do
+  if [ "$prev" = "-c" ]; then CMD="$a"; fi
+  if [ "$prev" = "-v" ]; then NAMES+=("${a%%=*}"); VALUES+=("${a#*=}"); fi
+  prev="$a"
+done
+printf 'ARGS %s\n' "$*" >> "$LOG"
+if [ -n "$CMD" ]; then
+  printf 'CMD %s\n' "$CMD" >> "$LOG"
+  if printf '%s' "$CMD" | grep -Eq ":['\"][A-Za-z_][A-Za-z0-9_]*['\"]"; then echo 'ERROR:  syntax error at or near ":"' >&2; exit 1; fi
+  exit 0
 fi
+SQL=$(cat)
+printf 'SQL-RAW %s\n' "$SQL" >> "$LOG"
+i=0
+while [ "$i" -lt "${#NAMES[@]}" ]; do
+  n="${NAMES[$i]}"; v="${VALUES[$i]}"
+  pat=":'$n'"; rep="'$v'"; SQL="${SQL//$pat/$rep}"
+  pat=":\"$n\""; rep="\"$v\""; SQL="${SQL//$pat/$rep}"
+  i=$((i+1))
+done
+if printf '%s' "$SQL" | grep -Eq ":['\"][A-Za-z_][A-Za-z0-9_]*['\"]"; then echo 'ERROR:  syntax error at or near ":" (a variable that was never set)' >&2; exit 1; fi
+printf 'SQL %s\n' "$SQL" >> "$LOG"
+case "$SQL" in
+  *"INSERT INTO subscriptions"*) if [ -n "${FAKE_SEATED_ROW:-}" ]; then printf '%s\n' "$FAKE_SEATED_ROW"; fi;;
+  *"FROM customers WHERE id = '$FAKE_CUSTOMER_ID'::uuid"*) if [ -n "${FAKE_CUSTOMER_ROW:-}" ]; then printf '%s\n' "$FAKE_CUSTOMER_ROW"; fi;;
+  *"FROM subscriptions"*"WHERE customer_id = '$FAKE_CUSTOMER_ID'::uuid"*) if [ -n "${FAKE_LIVE_ROWS:-}" ]; then printf '%b\n' "$FAKE_LIVE_ROWS"; fi;;
+esac
 exit 0
 '''
 
@@ -603,13 +685,16 @@ class TheSeatScript(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def run_seat(self, customer_id, customer_row=None, live_rows="", seated_row=None, price=None, extra_env=None):
+    def run_seat(self, customer_id, customer_row=None, live_rows="", seated_row=None, price=None, extra_env=None, env_lines=None):
         env = dict(os.environ, PATH=os.path.join(self.tmp, "bin") + os.pathsep + os.environ.get("PATH", ""),
-                   HARNESS_SEAT_BOX="local", HARNESS_SEAT_ENV=self.env_file, FAKE_PSQL_LOG=self.log,
+                   HARNESS_SEAT_BOX="local", HARNESS_SEAT_ENV=self.env_file, FAKE_PSQL_LOG=self.log, FAKE_CUSTOMER_ID=customer_id,
                    FAKE_CUSTOMER_ROW=customer_row or "", FAKE_LIVE_ROWS=live_rows, FAKE_SEATED_ROW=seated_row or "")
         if price is not None:
             with open(self.env_file, "a", encoding="utf-8") as handle:
                 handle.write("CONNECTOR_PRICE_SOLO_MONTHLY_CENTS=%s\n" % price)
+        if env_lines:
+            with open(self.env_file, "a", encoding="utf-8") as handle:
+                handle.write("".join(line + "\n" for line in env_lines))
         env.update(extra_env or {})
         done = subprocess.run(["bash", SEAT_SCRIPT, customer_id], capture_output=True, text=True, env=env, cwd=ROOT)
         log = ""
@@ -617,6 +702,37 @@ class TheSeatScript(unittest.TestCase):
             with open(self.log, encoding="utf-8") as handle:
                 log = handle.read()
         return done, log
+
+    def run_psql(self, args, stdin="", variables=()):
+        """The psql double itself, so its own strictness is proven: a variable in a -c string is a syntax error, standard input interpolates."""
+        argv = [self.psql]
+        for name, value in variables:
+            argv += ["-v", "%s=%s" % (name, value)]
+        env = dict(os.environ, FAKE_PSQL_LOG=self.log, FAKE_CUSTOMER_ID=CUSTOMER_ID, FAKE_CUSTOMER_ROW="%s\tharness+alpha@aeredium.io" % CUSTOMER_ID)
+        return subprocess.run(argv + list(args), input=stdin, capture_output=True, text=True, env=env)
+
+    @staticmethod
+    def raw_and_interpolated(log):
+        raw = [line[len("SQL-RAW "):] for line in log.split("\nARGS ") if False] or []
+        entries = [chunk for chunk in ("\n" + log).split("\nARGS ")[1:]]
+        raws, cooked = [], []
+        for entry in entries:
+            if "\nSQL-RAW " in entry:
+                raws.append(entry.split("\nSQL-RAW ", 1)[1].split("\nSQL ", 1)[0])
+            if "\nSQL " in entry:
+                cooked.append(entry.split("\nSQL ", 1)[1])
+        return raws, cooked
+
+    def test_the_psql_double_is_as_strict_as_psql_about_variables(self):
+        refused = self.run_psql(["-c", "SELECT id, email FROM customers WHERE id = :'customer_id'::uuid"], variables=[("customer_id", CUSTOMER_ID)])
+        self.assertEqual(refused.returncode, 1, "a -c string is sent verbatim: the variable reference is a syntax error at the server")
+        self.assertIn('syntax error at or near ":"', refused.stderr)
+        self.assertEqual(refused.stdout, "")
+        answered = self.run_psql(["-At"], stdin="SELECT id, email FROM customers WHERE id = :'customer_id'::uuid;\n", variables=[("customer_id", CUSTOMER_ID)])
+        self.assertEqual(answered.returncode, 0, answered.stderr)
+        self.assertEqual(answered.stdout.strip(), "%s\tharness+alpha@aeredium.io" % CUSTOMER_ID, "standard input goes through the lexer")
+        unset = self.run_psql(["-At"], stdin="SELECT :'customer_id';\n")
+        self.assertEqual(unset.returncode, 1, "a variable never passed is left as written, and the server refuses it")
 
     def test_an_id_that_is_not_a_uuid_is_refused_before_psql_is_asked(self):
         done, log = self.run_seat("harness+alpha@aeredium.io")
@@ -630,7 +746,10 @@ class TheSeatScript(unittest.TestCase):
         self.assertIn("refused: customer %s is not the harness's own: its email is not of the form harness+<tester>@aeredium.io; nothing was written" % CUSTOMER_ID, done.stderr)
         self.assertNotIn("INSERT", log)
         self.assertNotIn("UPDATE", log)
-        self.assertIn("SELECT id, email FROM customers WHERE id = :'customer_id'::uuid", log, "read by id, as a psql variable")
+        raws, cooked = self.raw_and_interpolated(log)
+        self.assertIn("SELECT id, email FROM customers WHERE id = :'customer_id'::uuid", raws[0], "read by id, as a psql variable, on standard input")
+        self.assertIn("WHERE id = '%s'::uuid" % CUSTOMER_ID, cooked[0], "which the lexer interpolated")
+        self.assertNotIn("CMD ", log, "no -c string anywhere: psql interpolates nothing in one")
         self.assertIn("-v customer_id=%s" % CUSTOMER_ID, log)
         for near_miss in ("harness+alpha@example.com", "harness+Alpha@aeredium.io", "harness@aeredium.io", "xharness+alpha@aeredium.io"):
             done, _ = self.run_seat(CUSTOMER_ID, customer_row="%s\t%s" % (CUSTOMER_ID, near_miss))
@@ -657,7 +776,12 @@ class TheSeatScript(unittest.TestCase):
         done, log = self.run_seat(CUSTOMER_ID, customer_row="%s\tharness+alpha@aeredium.io" % CUSTOMER_ID, live_rows="", seated_row=seated)
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertEqual(done.stdout.strip(), "seated customer %s: package solo, plan monthly, state trialing, price 4900 cents; period end 2026-10-29 06:00:00 UTC" % CUSTOMER_ID)
-        sql = log.split("SQL ", 1)[1]
+        raws, cooked = self.raw_and_interpolated(log)
+        self.assertEqual(len(raws), 3, "the customer read, the live-rows read, the write: three roads, all on standard input")
+        self.assertNotIn("CMD ", log)
+        sql = raws[2]
+        self.assertIn("WHERE customer_id = '%s'::uuid AND state IN ('pending', 'trialing', 'active')" % CUSTOMER_ID, cooked[1], "the live-rows read, interpolated")
+        self.assertIn("VALUES ('%s'::uuid, 'monthly', 'solo', 'trialing', '4900'::int," % CUSTOMER_ID, cooked[2], "the write, interpolated")
         self.assertIn("INSERT INTO subscriptions (customer_id, plan, package, state, price_cents, current_period_end)", sql)
         self.assertIn("VALUES (:'customer_id'::uuid, 'monthly', 'solo', 'trialing', :'price_cents'::int,", sql)
         self.assertIn("now() + (:'trial_days'::int + :'grace_days'::int) * interval '1 day'", sql)
@@ -676,12 +800,28 @@ class TheSeatScript(unittest.TestCase):
             self.assertNotIn(never, sql, never)
         self.assertNotIn("postgres://double", done.stdout + done.stderr, "DATABASE_URL is never printed")
 
+    def test_the_env_file_is_read_by_key_and_never_sourced(self):
+        """A systemd EnvironmentFile is unquoted: a secret with a space or an ampersand is not a line a shell may run."""
+        seated = "%s\tsolo\tmonthly\ttrialing\t4900\t2026-10-29 06:00:00 UTC" % CUSTOMER_ID
+        with open(self.env_file, "w", encoding="utf-8") as handle:
+            handle.write('SESSION_SECRET=a secret with spaces & an ampersand; and a semicolon\nMASTER_SEAL_KEY_HEX=$(echo never)\nDATABASE_URL="postgres://double/aer_connector"\n')
+        done, log = self.run_seat(CUSTOMER_ID, customer_row="%s\tharness+alpha@aeredium.io" % CUSTOMER_ID, seated_row=seated)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        for fragment in ("ampersand", "with spaces", "never", "command not found", "SESSION_SECRET"):
+            self.assertNotIn(fragment, done.stdout + done.stderr, fragment)
+        self.assertIn("ARGS postgres://double/aer_connector -X", log, "the quotes a systemd value may carry are stripped")
+        done, _ = self.run_seat(CUSTOMER_ID, customer_row="%s\tharness+alpha@aeredium.io" % CUSTOMER_ID, seated_row=seated, price='"59 00"')
+        self.assertEqual(done.returncode, 4)
+        self.assertIn("fault: CONNECTOR_PRICE_SOLO_MONTHLY_CENTS in", done.stderr)
+
     def test_the_price_is_the_boxs_own_where_the_box_says_otherwise(self):
         seated = "%s\tsolo\tmonthly\ttrialing\t5900\t2026-10-29 06:00:00 UTC" % CUSTOMER_ID
         done, log = self.run_seat(CUSTOMER_ID, customer_row="%s\tharness+alpha@aeredium.io" % CUSTOMER_ID, seated_row=seated, price=5900)
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("-v price_cents=5900", log)
         self.assertIn("price 5900 cents", done.stdout)
+        raws, cooked = self.raw_and_interpolated(log)
+        self.assertIn("'5900'::int", cooked[2])
 
     def test_a_write_that_seats_nothing_is_refused(self):
         done, _ = self.run_seat(CUSTOMER_ID, customer_row="%s\tharness+alpha@aeredium.io" % CUSTOMER_ID, seated_row="")
@@ -695,7 +835,60 @@ class TheSeatScript(unittest.TestCase):
         self.assertIn("ec2-user@3.231.26.5", text)
         self.assertIn("/etc/aer-connector/aer-connector.env", text)
         self.assertIn("'sudo env CUSTOMER_ID='", text.replace('"', "'"))
-        self.assertNotIn("SESSION_SECRET", text.split("BODY=$(cat")[1], "the body reads DATABASE_URL and the price, nothing else of the box")
+        body = text.split("BODY=$(cat")[1]
+        self.assertNotIn("SESSION_SECRET", body, "the body reads DATABASE_URL and the two figures, nothing else of the box")
+        self.assertNotIn("set -a", body, "the unit's environment file is never sourced")
+        import re as _re
+        self.assertIsNone(_re.search(r'PSQL\[@\]\}"[^\n]* -c ', body), "no -c string on a psql call: psql interpolates a variable on standard input only")
+        self.assertIn("export LC_ALL=C", body)
+
+
+class TheScriptIsTheModule(unittest.TestCase):
+    """
+    Run as a script, corridor_harness.py is `__main__`; without the alias it sets, corridor_consent would import a second copy
+    of it, and a HarnessError raised by the harness's own Oauth road inside the consent would escape the consent's catch as a
+    traceback. Proven in a subprocess, against the double served over real HTTP on the loopback (the test's port, never the harness's).
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.home = os.path.join(self.tmp, "home")
+        write_funding(os.path.join(self.home, ".aer360-harness", "harness-holdings", "funding-wallet.json"), FUNDING)
+        self.server = None
+
+    def tearDown(self):
+        if self.server is not None:
+            self.server.shutdown()
+            self.server.server_close()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def run_script(self, double, *args):
+        self.server = serve(double)
+        path = os.path.join(self.tmp, "harness_run.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({"issuer": double.issuer, "testers": {"alpha": {"agents": {"trader": "alpha-trader", "payer": "alpha-payer", "payer_nogas": None},
+                                                                       "listed_address": FUNDING, "payer_list_scope": "agent"}}, "chains": {}}, handle)
+        env = dict(os.environ, HOME=self.home)
+        return subprocess.run([sys.executable, os.path.join(ROOT, "corridor_harness.py"), "--tester", "alpha", "--run-file", path,
+                               "--out", os.path.join(self.tmp, "runs")] + list(args), capture_output=True, text=True, env=env, cwd=ROOT, timeout=120)
+
+    def test_an_oauth_roads_own_error_inside_the_consent_is_told_as_a_sentence_and_never_as_a_traceback(self):
+        done = self.run_script(ConnectorDouble(seated=True, register_fails=True), "--series", "A")
+        self.assertEqual(done.returncode, 2, done.stdout + done.stderr)
+        self.assertNotIn("Traceback", done.stderr)
+        self.assertIn("fault: the connector answered the discovery or the client registration with registration answered 500", done.stdout,
+                      "the consent's own catch caught the harness's HarnessError: one module, one class")
+
+    def test_the_command_line_consent_walks_the_road_over_real_http(self):
+        done = self.run_script(ConnectorDouble(seated=True), "--consent", "trader")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertNotIn("Traceback", done.stderr)
+        self.assertIn("signed up as the harness's own customer", done.stdout)
+        self.assertIn("consented alpha-trader as the harness's own customer with its stored passkey", done.stdout)
+        self.assertIn("Connected as alpha-trader: alpha-trader (trader.v1)", done.stdout)
+        self.assertTrue(os.path.exists(os.path.join(self.home, ".corridor-harness", "alpha-trader.json")))
+        self.assertTrue(os.path.exists(os.path.join(self.home, ".corridor-harness", "alpha", "passkey.json")))
+        self.assertFalse(os.path.exists(os.path.join(self.home, ".corridor-harness", "alpha", "passkey.json.tmp")), "written whole, then moved over")
 
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")

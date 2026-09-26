@@ -5,8 +5,10 @@
 #
 # Run by Bear on his Mac, as the birth scripts are (~/Downloads/diag/alex_invite.sh): it speaks to the connector's box
 # over ssh and to the connector's Postgres through psql, with the customer id passed as a psql VARIABLE
-# (-v customer_id=…) and read back as :'customer_id' — never interpolated into SQL. DATABASE_URL is read ON THE BOX
-# from the unit's own environment file, and nothing of it is printed.
+# (-v customer_id=…) and read back as :'customer_id' — never interpolated into SQL. Every statement goes to psql on
+# STANDARD INPUT, because that is the only road psql's lexer interpolates a variable on: a -c string is sent to the
+# server verbatim. DATABASE_URL is read ON THE BOX from the unit's own environment file — that one key and the two
+# figures, by name, never the file sourced whole — and nothing of it is printed.
 #
 # What it does, and what it refuses:
 #   reads the customer row BY ID — never by email — and refuses unless the email matches
@@ -27,6 +29,7 @@
 # body runs and the file DATABASE_URL is read from there. HARNESS_SEAT_BOX=local runs the same body on this machine
 # with the psql on PATH, which is how the tests hold the guard without a network.
 set -euo pipefail
+export LC_ALL=C  # the character classes below mean ASCII, whatever the terminal's locale
 
 usage() {
   echo "usage: bash tools/harness_seat.sh <customer-id>" >&2
@@ -49,22 +52,42 @@ ENV_FILE="${HARNESS_SEAT_ENV:-/etc/aer-connector/aer-connector.env}"
 # nothing of this machine's shell is expanded into it.
 BODY=$(cat <<'BODY'
 set -euo pipefail
+export LC_ALL=C
 refuse() { echo "refused: $*" >&2; exit 3; }
+fault() { echo "fault: $*" >&2; exit 4; }
 if [ ! -r "$ENV_FILE" ]; then
-  echo "fault: $ENV_FILE cannot be read here, so DATABASE_URL is unknown; nothing was written" >&2
-  exit 4
+  fault "$ENV_FILE cannot be read here, so DATABASE_URL is unknown; nothing was written"
 fi
-set -a; . "$ENV_FILE"; set +a
-: "${DATABASE_URL:?fault: DATABASE_URL is not set in $ENV_FILE; nothing was written}"
-PRICE_CENTS="${CONNECTOR_PRICE_SOLO_MONTHLY_CENTS:-4900}"
-TRIAL_DAYS="${CONNECTOR_TRIAL_DAYS:-30}"
+# One key of the unit's environment file, its surrounding quotes stripped, empty where absent. Read by name and never
+# sourced: a systemd value is unquoted, and a secret with a space or an ampersand in it is not a line a shell may run.
+env_key() {
+  { grep -m1 "^$1=" "$ENV_FILE" || true; } | sed -e "s/^$1=//" -e "s/^\"\(.*\)\"\$/\1/" -e "s/^'\(.*\)'\$/\1/"
+}
+DATABASE_URL=$(env_key DATABASE_URL)
+if [ -z "$DATABASE_URL" ]; then
+  fault "DATABASE_URL is not set in $ENV_FILE; nothing was written"
+fi
+PRICE_CENTS=$(env_key CONNECTOR_PRICE_SOLO_MONTHLY_CENTS)
+PRICE_CENTS="${PRICE_CENTS:-4900}"
+TRIAL_DAYS=$(env_key CONNECTOR_TRIAL_DAYS)
+TRIAL_DAYS="${TRIAL_DAYS:-30}"
 GRACE_DAYS=3
+DIGITS_RE='^[0-9]+$'
+if ! [[ "$PRICE_CENTS" =~ $DIGITS_RE ]] || [ "$PRICE_CENTS" -le 0 ]; then
+  fault "CONNECTOR_PRICE_SOLO_MONTHLY_CENTS in $ENV_FILE is not a whole number of cents; nothing was written"
+fi
+if ! [[ "$TRIAL_DAYS" =~ $DIGITS_RE ]] || [ "$TRIAL_DAYS" -le 0 ]; then
+  fault "CONNECTOR_TRIAL_DAYS in $ENV_FILE is not a whole number of days above zero; nothing was written"
+fi
 EMAIL_RE='^harness\+[a-z0-9-]+@aeredium\.io$'
 TAB=$'\t'
-PSQL=(psql "$DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -v customer_id="$CUSTOMER_ID")
+PSQL=(psql "$DATABASE_URL" -X -q -At -F "$TAB" -v ON_ERROR_STOP=1 -v customer_id="$CUSTOMER_ID")
 
-# 1. The customer row, by id and never by email. (The reads take no stdin: the body itself arrives on stdin.)
-ROW=$("${PSQL[@]}" -At -F $'\t' -c "SELECT id, email FROM customers WHERE id = :'customer_id'::uuid" </dev/null)
+# 1. The customer row, by id and never by email — on standard input, where :'customer_id' is interpolated.
+ROW=$("${PSQL[@]}" <<'SQL'
+SELECT id, email FROM customers WHERE id = :'customer_id'::uuid;
+SQL
+)
 if [ -z "$ROW" ]; then
   refuse "no customer holds the id $CUSTOMER_ID; nothing was written"
 fi
@@ -74,7 +97,12 @@ if ! [[ "$EMAIL" =~ $EMAIL_RE ]]; then
 fi
 
 # 2. The live rows: subscriptions_one_live admits one, and this script writes no second and touches no paid one.
-LIVE=$("${PSQL[@]}" -At -F $'\t' -c "SELECT id, state FROM subscriptions WHERE customer_id = :'customer_id'::uuid AND state IN ('pending', 'trialing', 'active') ORDER BY created_at DESC" </dev/null)
+LIVE=$("${PSQL[@]}" <<'SQL'
+SELECT id, state FROM subscriptions
+WHERE customer_id = :'customer_id'::uuid AND state IN ('pending', 'trialing', 'active')
+ORDER BY created_at DESC;
+SQL
+)
 COUNT=0
 if [ -n "$LIVE" ]; then
   COUNT=$(printf '%s\n' "$LIVE" | grep -c .)
@@ -91,7 +119,7 @@ if [ "$LIVE_STATE" = "active" ]; then
 fi
 
 # 3. The seat, in one transaction: the one live row upserted as the webhook sets a Solo trial, and the ledger's line.
-SEATED=$("${PSQL[@]}" -At -F $'\t' -v price_cents="$PRICE_CENTS" -v trial_days="$TRIAL_DAYS" -v grace_days="$GRACE_DAYS" <<'SQL'
+SEATED=$("${PSQL[@]}" -v price_cents="$PRICE_CENTS" -v trial_days="$TRIAL_DAYS" -v grace_days="$GRACE_DAYS" <<'SQL'
 BEGIN;
 INSERT INTO subscriptions (customer_id, plan, package, state, price_cents, current_period_end)
 VALUES (:'customer_id'::uuid, 'monthly', 'solo', 'trialing', :'price_cents'::int,

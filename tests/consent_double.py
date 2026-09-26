@@ -17,11 +17,13 @@ on Solo, a destination that is not an address — in the platform's words.
 import base64
 import hashlib
 import hmac
+import http.server
 import json
 import os
 import re
 import secrets
 import sys
+import threading
 import time
 import urllib.parse
 import uuid
@@ -116,12 +118,13 @@ class Refused(Exception):
 
 class ConnectorDouble:
     def __init__(self, seated=True, standing=None, issuer=ISSUER, rp_id=RP_ID, seats=SOLO_SEATS, roles=None,
-                 refresh_refused=False, before_verify=None, mcp_refuses_unknown_bearer=True):
+                 refresh_refused=False, before_verify=None, mcp_refuses_unknown_bearer=True, register_fails=False):
         """
         `seated` True is a Solo trial standing (`paid`); False is a customer who never paid (standing `none`); `standing`
         "lapsed" is a trial whose period ended. `refresh_refused` makes /token refuse every refresh grant (invalid_grant), so a
         stored token the door refuses cannot be cured. `before_verify(counter)` is called with the assertion's counter before it
-        is judged, so a test can read the passkey file at that moment.
+        is judged, so a test can read the passkey file at that moment. `register_fails` makes /register answer 500, the way a
+        connector whose store is down would, so the Oauth road's own error is raised inside the consent.
         """
         self.issuer = issuer.rstrip("/")
         self.origin = self.issuer
@@ -130,6 +133,7 @@ class ConnectorDouble:
         self.seats = seats
         self.roles = roles if roles is not None else [dict(r) for r in ROLES]
         self.refresh_refused = refresh_refused
+        self.register_fails = register_fails
         self.before_verify = before_verify
         self.mcp_refuses_unknown_bearer = mcp_refuses_unknown_bearer
         self.default_standing = "paid" if seated else "none"
@@ -291,6 +295,8 @@ class ConnectorDouble:
         if method == "GET" and path == "/.well-known/oauth-protected-resource/mcp":
             return 200, {"resource": self.issuer + "/mcp", "authorization_servers": [self.issuer]}, {}
         if method == "POST" and path == "/register":
+            if self.register_fails:
+                return 500, {"error": "server_error", "error_description": "Something went wrong and nothing was changed."}, {}
             client_id = "mcp-" + b64url(secrets.token_bytes(12))
             self.clients[client_id] = {"redirect_uris": list((payload or {}).get("redirect_uris") or [])}
             return 201, {"client_id": client_id, "client_id_issued_at": int(time.time()), "token_endpoint_auth_method": "none",
@@ -680,3 +686,42 @@ class ConnectorDouble:
                 return 200, {"jsonrpc": "2.0", "id": rpc_id, "result": {"content": [{"type": "text", "text": json.dumps(status)}]}}, {}
             return 200, {"jsonrpc": "2.0", "id": rpc_id, "result": {"content": [{"type": "text", "text": "no such tool here"}], "isError": True}}, {}
         return 200, {"jsonrpc": "2.0", "id": rpc_id, "error": {"code": -32601, "message": "method not found"}}, {}
+
+
+# ---------------------------------------------------------------------------
+# The same double served over HTTP on the loopback, for a test that runs the harness as a SCRIPT in a subprocess: the
+# real urllib, the real cookie jar, the real 302. The port is the test's, bound by the double and never by the harness.
+# ---------------------------------------------------------------------------
+class _Handler(http.server.BaseHTTPRequestHandler):
+    double = None
+
+    def _serve(self):
+        length = int(self.headers.get("Content-Length") or 0)
+        body = self.rfile.read(length) if length else None
+        headers = {k: v for k, v in self.headers.items()}
+        answer = self.double(self.command, self.double.issuer + self.path, headers, body, follow_redirects=False)
+        data = answer.text.encode("utf-8")
+        self.send_response(answer.status)
+        for name, value in answer.headers.items():
+            self.send_header(name, value)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    do_GET = _serve
+    do_POST = _serve
+
+    def log_message(self, fmt, *args):  # nothing of the wire is printed
+        return
+
+
+def serve(double):
+    """Serve the double on 127.0.0.1 at a free port; the double's issuer, origin and rp id become that address. Returns the server."""
+    handler = type("Handler", (_Handler,), {"double": double})
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    double.issuer = "http://127.0.0.1:%d" % server.server_address[1]
+    double.origin = double.issuer
+    double.rp_id = "127.0.0.1"
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server
