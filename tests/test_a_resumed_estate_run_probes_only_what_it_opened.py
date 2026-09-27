@@ -110,9 +110,10 @@ class AResumedRunProbesOnlyWhatItOpened(unittest.TestCase):
         self.assertIn("probe not made (a viewer's session at an author route: POST %s): no policy interview id in this run" % PLACEHOLDER_PATH, notes)
         self.assertIn("probe not made: no policy interview id in this run", notes)
         self.assertIn("probe not made (a second confirm of an already confirmed interview (the policy interview)): no policy interview id in this run", notes)
-        self.assertEqual(not_made, len([n for n in notes if "not made" in n]), "every probe not made is counted, and only those")
-        self.assertEqual(line, "the attacker: 17 probe(s), %d not made, %d finding(s)" % (not_made, found))
-        self.assertGreaterEqual(not_made, 3)
+        counted_spellings = ("probe not made", "the replay probe was not made", "the passkey probes were not made")
+        self.assertEqual(not_made, len([n for n in notes if n.startswith(counted_spellings)]),
+                         "every probe counted and not made is counted, and only those (the draft-probe notes say 'not made' too and are not counted)")
+        self.assertEqual(line, "the attacker: 17 probe(s), 5 not made, %d finding(s)" % found)
         # the run went on to the end
         self.assertEqual(outcomes["S12"].outcome, H.PASS, outcomes["S12"].line)
         self.assertIn("S14", outcomes)

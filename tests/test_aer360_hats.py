@@ -756,7 +756,7 @@ Spec T7, 19 September 2026. Base URL https://accounts.aeredium.io.
 | S8 Journey and readiness | pass | journey stage 3 of 7 (working_the_sandbox) |
 | S9 The tour | out of scope | the tour's answers as Claude would see them are out of scope: the harness is the founder, not Claude |
 | S10 The auditor | fail | the auditor: 7 finding(s); 16 refusal(s) met in S1 to S9 checked for Rule 13; 93 call(s) checked for the minor-unit law |
-| S11 The attacker | fail | the attacker: 17 probe(s), 2 finding(s) |
+| S11 The attacker | fail | the attacker: 17 probe(s), 1 not made, 2 finding(s) |
 | S12 The optimizer | pass | the optimizer: 123 call(s), 4 over 2 seconds, largest answer 6853 bytes, 8 retried after a 5xx |
 
 Findings under S10 and S11: 9.
@@ -792,7 +792,7 @@ Outcome: **fail**. the auditor: 7 finding(s)
 
 ## S11 — The attacker
 
-Outcome: **fail**. the attacker: 17 probe(s), 2 finding(s)
+Outcome: **fail**. the attacker: 17 probe(s), 1 not made, 2 finding(s)
 
 Note: probe not made (the clerk approving her own payment (S7's P3)): S7 left no submitted run for P3
 

@@ -2,12 +2,14 @@
 Spec T22 (27 September 2026): the Trader's list is B3's list at consent, and B3 reads what stands before it waits.
 From the corridor harness's Series A of 26 September as tester `bear` (run `2026-09-26-215325-bear`): A5 was refused by
 MCP Police — "This agent's destination list is empty: its owner has listed nobody yet, so it may pay nobody." — because
-the answer book filed `counterparties: []` for every Trader it consented. Each test here was red on main: the book filed
-an empty list, the record carried none, and B3 waited ninety seconds for a hash that had no reason to move.
+the answer book filed `counterparties: []` for every Trader it consented. Each test here was red on main unless it says
+it is a guard: the book filed an empty list, the record carried none, and B3 waited ninety seconds for a hash that had
+no reason to move.
 
 The doubles are the existing injection points: `answer_book` is pure; the consent walks against the connector double
 (tests/consent_double.py) through `corridor_harness.http_request`; `step_pause` runs against the fake MCP session
-(tests/fakes.py) through `session_factory`, with a token store of its own carrying the Trader's consent record.
+(tests/fakes.py) through `session_factory` — its `document` the Trader's compiled document as `aerconnect_my_agent` states
+it — with a token store of its own carrying the Trader's consent record.
 """
 import os
 import re
@@ -30,6 +32,8 @@ except ImportError:  # run as a top-level module by `unittest discover tests`
     from test_the_harness_consents_its_own_agents import ConsentBase, FUNDING
 
 B3_LIST = [T.address(key) for key in T.TRADER_LIST_B3]
+# the platform's document states the list lower-cased (the connector double does as payeeaddress.ts does), and in its own order
+PLATFORM_LIST = [address.lower() for address in reversed(B3_LIST)]
 OTHER_HASH = "0x9f41ad0c6e2b58147ac3d9f0b6512e8837d4ca7091fe2b6d5308cc41ab97e260"
 FILED_AT = "2026-09-27T01:00:00Z"
 TRADER_ROW = {"id": "trader.v1", "name": "Trader", "defaultRank": "agent",
@@ -37,6 +41,11 @@ TRADER_ROW = {"id": "trader.v1", "name": "Trader", "defaultRank": "agent",
                                 "assets": ["USDC", "USDT", "WETH"], "venues": ["uniswap_v3", "pancakeswap_v3", "curve", "best_direct", "cctp", "usdt0"]}}
 PAYER_ROW = {"id": "payer.v1", "name": "Payer", "defaultRank": "agent",
              "questionnaire": {"holdAboveUsd": "10", "maxTxPerDay": "20", "chains": ["arbitrum", "base", "ethereum"], "assets": ["USDC", "USDT"]}}
+
+
+def document(listed):
+    """The Trader's compiled document as `aerconnect_my_agent` states it (mcprelay.ts `document`), with the given list."""
+    return {"scope": {"chains": ["arbitrum", "base"], "counterparties_allowed": list(listed), "counterparties_whitelist_scope": "agent"}}
 
 
 class TheBookFilesB3sList(unittest.TestCase):
@@ -126,8 +135,12 @@ class B3Base(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def runner_with(self, session, extra=None, answer=""):
-        """A runner whose store holds t-trader's tokens with `extra` on the record (None: no record at all)."""
-        oauth = h.Oauth("https://mcppro.aeredium.io", os.path.join(self.tmp, "store"), say=self.said.append)
+        """
+        A runner of its own: a fresh store holding t-trader's tokens with `extra` on the record (None: no record at all),
+        and fresh `said`, `asked` and clock, so two runners in one test never share a store (store_tokens merges over a record that stands).
+        """
+        self.said, self.asked, self.clock = [], [], FakeClock()
+        oauth = h.Oauth("https://mcppro.aeredium.io", tempfile.mkdtemp(dir=self.tmp), say=self.said.append)
         if extra is not None:
             oauth.store_tokens("t-trader", {"access_token": "at-" + "x" * 24, "refresh_token": "rt-" + "x" * 24}, "mcp-x", extra=extra)
 
@@ -146,7 +159,7 @@ class B3Base(unittest.TestCase):
 
 
 class MovingSession(FakeSession):
-    """A Wallet whose hash moves after the first reads: the save changed something, as B3 always expected."""
+    """A Wallet whose hash moves after the first reads: something changed the pact, as B3 always expected a save to."""
 
     def __init__(self, moves_after=1, **kwargs):
         super().__init__(**kwargs)
@@ -163,18 +176,20 @@ class MovingSession(FakeSession):
 class B3ReadsWhatStandsBeforeItWaits(B3Base):
     RECORD = {"counterparties": B3_LIST, "consented_at": FILED_AT}
 
-    def test_b3_passes_with_the_stood_sentence_and_both_hashes_without_a_wait_where_the_list_stands_and_the_hash_does_not_move(self):
-        session = FakeSession(role_id="trader.v1")
+    def test_b3_passes_with_the_stood_sentence_the_platforms_list_and_both_hashes_without_a_wait_where_the_document_lists_the_eight(self):
+        session = FakeSession(role_id="trader.v1", document=document(PLATFORM_LIST))
         runner = self.runner_with(session, self.RECORD)
         outcome = self.b3(runner)
         self.assertEqual(outcome.outcome, h.PASS, outcome.sentence)
-        self.assertEqual(outcome.sentence, "the list stood from consent (eight lines, filed %s); the save changed nothing and the hash did not move (before %s, after %s)."
+        self.assertEqual(outcome.sentence, "the list stood from consent (eight lines, filed %s); nothing was saved and the hash did not move (before %s, after %s)."
                          % (FILED_AT, POLICY_HASH, POLICY_HASH))
         self.assertEqual(outcome.line, outcome.sentence)
-        self.assertEqual(outcome.evidence["came_back"], "before: %s\nafter: %s" % (POLICY_HASH, POLICY_HASH), "both hashes are the evidence")
+        # the evidence: the platform's list as the document states it (lower-cased, its own order), and both hashes
+        self.assertEqual(outcome.evidence["came_back"], "the platform's list (scope.counterparties_allowed): %s\nbefore: %s\nafter: %s"
+                         % (", ".join(PLATFORM_LIST), POLICY_HASH, POLICY_HASH))
         self.assertEqual(outcome.evidence["policy_hash"], POLICY_HASH)
         self.assertEqual(outcome.evidence["expected"], h.B3_STOOD_EXPECTED)
-        self.assertEqual(outcome.evidence["who"], "the MCP Wallet's wallet_status")
+        self.assertEqual(outcome.evidence["who"], h.B3_WHO)
         # no ninety-second wait: the clock never moved, nobody was asked to wait or skip, and the hash was read once before and once after
         self.assertEqual(self.clock.now, 0.0)
         self.assertEqual(self.asked, ["Press Enter when done: "])
@@ -184,8 +199,47 @@ class B3ReadsWhatStandsBeforeItWaits(B3Base):
             self.assertIn("  %s: %s" % (what, T.address(key)), self.said)
         self.assertNotIn("  " + h.B3_NOT_FROM_CONSENT_LINE, self.said)
 
+    def test_the_platform_decides_the_pass_a_document_that_lists_nothing_fails_with_the_sentence_and_the_platforms_list_as_evidence(self):
+        session = FakeSession(role_id="trader.v1", document=document([]))
+        runner = self.runner_with(session, self.RECORD)
+        outcome = self.b3(runner)
+        self.assertEqual(outcome.outcome, h.FAIL, outcome.sentence)
+        self.assertEqual(outcome.sentence, "the consent record says the eight lines were filed, but the platform's compiled document lists 0 entries: none; the list does not stand.")
+        self.assertEqual(outcome.line, outcome.sentence)
+        self.assertEqual(outcome.evidence["came_back"], "the platform's list (scope.counterparties_allowed): none\nbefore: %s\nafter: %s" % (POLICY_HASH, POLICY_HASH))
+        self.assertEqual(outcome.evidence["who"], h.B3_WHO)
+        self.assertEqual(self.clock.now, 0.0, "the record decided to read, so there was no wait; the platform decided the failure")
+        self.assertEqual(self.asked, ["Press Enter when done: "])
+
+    def test_a_document_that_lists_another_list_fails_naming_what_it_lists(self):
+        seven = PLATFORM_LIST[:7]
+        runner = self.runner_with(FakeSession(role_id="trader.v1", document=document(seven)), self.RECORD)
+        outcome = self.b3(runner)
+        self.assertEqual(outcome.outcome, h.FAIL, outcome.sentence)
+        self.assertEqual(outcome.sentence, "the consent record says the eight lines were filed, but the platform's compiled document lists 7 entries: %s; the list does not stand." % ", ".join(seven))
+        runner = self.runner_with(FakeSession(role_id="trader.v1", document=document([OWNER.lower()])), self.RECORD)
+        outcome = self.b3(runner)
+        self.assertEqual(outcome.outcome, h.FAIL, outcome.sentence)
+        self.assertEqual(outcome.sentence, "the consent record says the eight lines were filed, but the platform's compiled document lists 1 entry: %s; the list does not stand." % OWNER.lower())
+
+    def test_an_answer_that_states_no_document_fails_saying_so(self):
+        runner = self.runner_with(FakeSession(role_id="trader.v1"), self.RECORD)  # my_agent without a compiled document
+        outcome = self.b3(runner)
+        self.assertEqual(outcome.outcome, h.FAIL, outcome.sentence)
+        self.assertEqual(outcome.sentence, "the consent record says the eight lines were filed, but the platform's compiled document lists 0 entries: "
+                                           "none (aerconnect_my_agent states no list); the list does not stand.")
+
+    def test_the_platforms_list_is_read_case_insensitively_and_in_any_order(self):
+        for listed in (B3_LIST, list(reversed(B3_LIST)), [a.upper().replace("0X", "0x") for a in B3_LIST], PLATFORM_LIST):
+            with self.subTest(listed=listed):
+                runner = self.runner_with(FakeSession(role_id="trader.v1", document=document(listed)), self.RECORD)
+                outcome = self.b3(runner)
+                self.assertEqual(outcome.outcome, h.PASS, outcome.sentence)
+                self.assertTrue(outcome.sentence.startswith("the list stood from consent"), outcome.sentence)
+
     def test_b3_passes_with_todays_sentence_where_the_list_stands_and_the_hash_moved(self):
-        session = MovingSession(moves_after=1, role_id="trader.v1")
+        """A guard: today's moved-hash pass, read before the document is."""
+        session = MovingSession(moves_after=1, role_id="trader.v1", document=document([]))
         runner = self.runner_with(session, self.RECORD)
         outcome = self.b3(runner)
         self.assertEqual(outcome.outcome, h.PASS, outcome.sentence)
@@ -194,7 +248,8 @@ class B3ReadsWhatStandsBeforeItWaits(B3Base):
         self.assertEqual(self.asked, ["Press Enter when done: "])
 
     def test_a_record_carrying_no_list_takes_todays_road_and_a_hash_that_does_not_move_is_never_a_pass(self):
-        session = FakeSession(role_id="trader.v1")
+        """Red on main only by its reference to the new constant: the wait and the skip are today's road."""
+        session = FakeSession(role_id="trader.v1", document=document(PLATFORM_LIST))
         runner = self.runner_with(session, {"consented_at": FILED_AT})  # a Trader consented before Spec T22
         outcome = self.b3(runner)
         self.assertEqual(outcome.outcome, h.SKIPPED, outcome.sentence)
@@ -204,6 +259,7 @@ class B3ReadsWhatStandsBeforeItWaits(B3Base):
         self.assertIn("  " + h.B3_NOT_FROM_CONSENT_LINE, self.said, "the person is told the list does not stand from consent")
 
     def test_a_record_carrying_no_list_still_passes_where_the_hash_moves(self):
+        """A guard: today's road, untouched."""
         session = MovingSession(moves_after=2, role_id="trader.v1")
         runner = self.runner_with(session, {"consented_at": FILED_AT})
         outcome = self.b3(runner)
@@ -212,42 +268,41 @@ class B3ReadsWhatStandsBeforeItWaits(B3Base):
 
     def test_a_record_carrying_another_list_takes_todays_road(self):
         for other in (B3_LIST[:7], list(reversed(B3_LIST)), [OWNER], [], [a.lower() for a in B3_LIST]):
-            self.setUp()
-            session = FakeSession(role_id="trader.v1")
-            runner = self.runner_with(session, {"counterparties": other, "consented_at": FILED_AT})
-            self.assertIsNone(runner.trader_list_from_consent(), other)
-            outcome = self.b3(runner)
-            self.assertEqual(outcome.outcome, h.SKIPPED, (other, outcome.sentence))
-            self.assertIn("  " + h.B3_NOT_FROM_CONSENT_LINE, self.said)
-            self.tearDown()
+            with self.subTest(other=other):
+                session = FakeSession(role_id="trader.v1", document=document(PLATFORM_LIST))
+                runner = self.runner_with(session, {"counterparties": other, "consented_at": FILED_AT})
+                self.assertIsNone(runner.trader_list_from_consent())
+                outcome = self.b3(runner)
+                self.assertEqual(outcome.outcome, h.SKIPPED, outcome.sentence)
+                self.assertIn("  " + h.B3_NOT_FROM_CONSENT_LINE, self.said)
 
     def test_no_record_and_no_token_store_take_todays_road(self):
-        session = FakeSession(role_id="trader.v1")
+        session = FakeSession(role_id="trader.v1", document=document(PLATFORM_LIST))
         runner = self.runner_with(session, None)
         self.assertIsNone(runner.trader_list_from_consent())
         self.assertEqual(self.b3(runner).outcome, h.SKIPPED)
-        self.setUp()
         runner = runner_for(FakeSession(role_id="trader.v1"), self.tmp)  # the unit tests' runner, with no store at all
         self.assertIsNone(runner.oauth)
         self.assertIsNone(runner.trader_list_from_consent())
         self.assertEqual(self.b3(runner).outcome, h.SKIPPED)
 
-    def test_the_reading_names_the_eight_and_when_they_were_filed(self):
+    def test_the_reading_is_the_filed_time_where_the_record_carries_the_eight(self):
         runner = self.runner_with(FakeSession(role_id="trader.v1"), self.RECORD)
-        self.assertEqual(runner.trader_list_from_consent(), {"counterparties": B3_LIST, "consented_at": FILED_AT})
-        self.setUp()  # a store of its own: store_tokens merges over a record that stands
+        self.assertEqual(runner.trader_list_from_consent(), FILED_AT)
         runner = self.runner_with(FakeSession(role_id="trader.v1"), {"counterparties": B3_LIST})
-        self.assertEqual(runner.trader_list_from_consent()["consented_at"], "a time the record does not state")
+        self.assertEqual(runner.trader_list_from_consent(), "a time the record does not state")
 
     def test_a_hash_the_wallet_never_stated_is_a_failure_to_read_even_where_the_list_stands(self):
-        session = FakeSession(role_id="trader.v1", policy_hash=None)
+        """A guard: a hash never stated was a failure to read before Spec T22, and is one still."""
+        session = FakeSession(role_id="trader.v1", policy_hash=None, document=document(PLATFORM_LIST))
         runner = self.runner_with(session, self.RECORD)
         outcome = self.b3(runner)
         self.assertEqual(outcome.outcome, h.FAIL, outcome.sentence)
         self.assertIn("the Wallet stated no policy hash before this step", outcome.sentence)
 
     def test_only_b3_reads_the_record_b8_still_waits_for_the_hash_to_move(self):
-        session = FakeSession(role_id="trader.v1")
+        """Red on main only by its reference to the new constant: B8's wait is today's road."""
+        session = FakeSession(role_id="trader.v1", document=document(PLATFORM_LIST))
         runner = self.runner_with(session, self.RECORD)
         test = S.BY_ID["B8"]
         first = test.steps[0]
@@ -258,16 +313,16 @@ class B3ReadsWhatStandsBeforeItWaits(B3Base):
         self.assertGreaterEqual(self.clock.now, h.HASH_WAIT_SECONDS, "B8 exercises the mirror's refresh (Rule 9): the hash must move")
         self.assertNotIn("  " + h.B3_NOT_FROM_CONSENT_LINE, self.said)
 
-    def test_b3s_pause_tells_the_person_the_lines_stand_from_consent_and_to_change_nothing(self):
+    def test_b3s_pause_tells_the_person_the_lines_stand_from_consent_to_change_nothing_and_to_press_enter_and_asks_for_no_save(self):
         step = S.BY_ID["B3"].steps[0]
         self.assertIsInstance(step, S.Pause)
         self.assertTrue(step.hash_moves)
         self.assertEqual(step.agent, "trader")
-        for words in ("stand from consent", "Open Set limits for the Trader", "change nothing", "press Enter"):
-            self.assertIn(words, step.text, words)
-        self.assertNotIn("write exactly", step.text)
-        self.assertEqual(S.BY_ID["B3"].text, S.BY_ID["B3"].text.strip(), "the Series' own paragraph is untouched")
-        self.assertIn("write exactly these lines and save", S.BY_ID["B3"].text)
+        self.assertEqual(step.text, "The Trader's eight lines stand from consent. Open Set limits for the Trader, read the destination list against the eight lines "
+                                    "the harness prints below, with 'a list for this agent only' chosen, change nothing, and press Enter.")
+        self.assertNotIn("Save", step.text)
+        self.assertNotIn("passkey", step.text)
+        self.assertIn("write exactly these lines and save", S.BY_ID["B3"].text, "the Series' own paragraph is untouched")
 
 
 if __name__ == "__main__":

@@ -104,11 +104,16 @@ RELAY_LAPSED = "Tell the person to pay the subscription"
 
 
 # B3 reads what stands before it waits (Spec T22 §2): where the Trader's consent record says the harness filed B3's eight
-# lines at consent, a save that changes nothing need not move the hash, and B3 says so with both hashes and the time the
-# list was filed. Where the record carries no such list, the person is told so, and the hash must move as it always had to.
-B3_STOOD_SENTENCE = ("the list stood from consent (eight lines, filed %s); the save changed nothing and the hash did not move "
+# lines at consent, nothing is saved and the hash need not move. The record decides whether to read; the platform decides the
+# pass: the Trader's compiled document, read off aerconnect_my_agent as B4 reads the Payer's, must list the eight, and B3 says
+# so with the platform's list, both hashes and the time the list was filed — or fails naming what the document lists instead.
+# Where the record carries no such list, the person is told so, and the hash must move as it always had to.
+B3_STOOD_SENTENCE = ("the list stood from consent (eight lines, filed %s); nothing was saved and the hash did not move "
                      "(before %s, after %s).")
-B3_STOOD_EXPECTED = "the eight lines stand from consent, so a save that changes nothing leaves the hash where it was"
+B3_NOT_STANDING_SENTENCE = ("the consent record says the eight lines were filed, but the platform's compiled document lists %d entr%s: %s; "
+                            "the list does not stand.")
+B3_STOOD_EXPECTED = "the platform's compiled document lists the eight lines filed at consent, and with nothing saved the hash does not move"
+B3_WHO = "aerconnect_my_agent's compiled document (scope.counterparties_allowed) and the MCP Wallet's wallet_status"
 B3_NOT_FROM_CONSENT_LINE = ("This Trader's consent record carries no such list, so the eight lines do not stand from consent: "
                             "write them, save, and the hash must move.")
 
@@ -1977,7 +1982,8 @@ class Runner:
     def payer_list(self, role: str) -> Optional[List[str]]:
         """
         The agent's destination list as `aerconnect_my_agent` states the compiled document (`document`,
-        `scope.counterparties_allowed`, mcprelay.ts): what B4 reads since Spec T21. None where the answer carries no list.
+        `scope.counterparties_allowed`, mcprelay.ts): what B4 reads for the Payer since Spec T21, and B3 for the Trader since
+        Spec T22 (the platform's list decides B3's pass). None where the answer carries no list.
         """
         raw = self.facts(role).get("raw")
         found = find_key(raw, ["counterparties_allowed"], list) if isinstance(raw, (dict, list)) else None
@@ -2403,14 +2409,15 @@ class Runner:
                                 "one list for all my agents" if self.payer_list_scope == "shared" else "a list for this agent only"))
                 return Outcome(test, PASS, sentence, line=sentence)
         before = self.read_policy_hash(role, test.id) if step.hash_moves is not None else None
-        # Spec T22 §2: B3 reads what stands before it waits — the Trader's consent record says whether the harness filed the eight lines
-        stands = self.trader_list_from_consent() if test.id == "B3" and step.hash_moves else None
+        # Spec T22 §2: B3 reads what stands before it waits — the Trader's consent record says whether the harness filed the eight
+        # lines, and when (the filed time); None where it carries no such list
+        filed_at = self.trader_list_from_consent() if test.id == "B3" and step.hash_moves else None
         self.say("")
         self.say("PAUSE for %s: %s" % (test.id, step.text))
         if test.id == "B3":
             for what, key in S.B3_LINES:
                 self.say("  %s: %s" % (what, T.address(key)))
-            if stands is None:
+            if filed_at is None:
                 self.say("  " + B3_NOT_FROM_CONSENT_LINE)
         if test.id == "B4":
             self.say("  The owner's listed address: %s" % (self.owner_address or "(not in the run file)"))
@@ -2445,17 +2452,25 @@ class Runner:
                                                "the MCP Wallet's wallet_status", previous=previous),
                            line="no policy hash to compare")
         if step.hash_moves is not None:
-            if stands is not None:
-                # Spec T22 §2: the list stood from consent, so one read after the press decides: a hash that did not move is a pass
-                # naming both hashes and when the list was filed; a hash that moved is today's pass. Without such a reading — a
-                # record carrying no list, or another list — a hash that does not move is never a pass: the wait below decides.
+            if filed_at is not None:
+                # Spec T22 §2: the list stood from consent, so one read after the press decides: a hash that did not move is judged
+                # on the platform's own list — the Trader's compiled document, read as B4 reads the Payer's — a pass naming the list,
+                # both hashes and when the list was filed where the document lists the eight (case-insensitive, order ignored), and
+                # a failure naming what it lists instead where it does not; a hash that moved is today's pass. Without such a
+                # reading — a record carrying no list, or another list — a hash that does not move is never a pass: the wait below decides.
                 after = self.read_policy_hash(role, test.id)
                 moved = hash_moved(before, after)
                 if not moved:
-                    sentence = B3_STOOD_SENTENCE % (stands["consented_at"], before, after)
-                    evidence = self.evidence_block(test, B3_STOOD_EXPECTED, "before: %s\nafter: %s" % (before, after),
-                                                   "the MCP Wallet's wallet_status", previous=previous, policy_hash=after)
-                    return Outcome(test, PASS, sentence, evidence, line=sentence)
+                    listed = self.payer_list(role)
+                    platform = [str(address) for address in listed] if listed is not None else []
+                    words = ", ".join(platform) if platform else ("none" if listed is not None else "none (aerconnect_my_agent states no list)")
+                    came_back = "the platform's list (scope.counterparties_allowed): %s\nbefore: %s\nafter: %s" % (words, before, after)
+                    evidence = self.evidence_block(test, B3_STOOD_EXPECTED, came_back, B3_WHO, previous=previous, policy_hash=after)
+                    if sorted(address.lower() for address in platform) == sorted(T.address(key).lower() for key in T.TRADER_LIST_B3):
+                        sentence = B3_STOOD_SENTENCE % (filed_at, before, after)
+                        return Outcome(test, PASS, sentence, evidence, line=sentence)
+                    sentence = B3_NOT_STANDING_SENTENCE % (len(platform), "y" if len(platform) == 1 else "ies", words)
+                    return Outcome(test, FAIL, sentence, evidence, line=sentence)
             else:
                 after, moved = self.wait_for_hash(role, before, test.id, want_change=step.hash_moves)
                 if moved is None:
@@ -2478,11 +2493,11 @@ class Runner:
                 sentence += " The page's sentence was not the one the Series gives; both are quoted."
         return Outcome(test, outcome, sentence, evidence, note, line=sentence)
 
-    def trader_list_from_consent(self) -> Optional[Dict[str, Any]]:
+    def trader_list_from_consent(self) -> Optional[str]:
         """
-        Spec T22 §2: what the Trader's consent record says the harness filed. The eight addresses of `tables.TRADER_LIST_B3`,
-        in B3's order, under `counterparties` — the list written at consent since Spec T22 — with the time they were filed
-        (`consented_at`); None where the record carries no list (a Trader consented before Spec T22, or handed over) or
+        Spec T22 §2: when the Trader's consent record says the harness filed B3's list — `counterparties` equal to the eight
+        addresses of `tables.TRADER_LIST_B3`, in B3's order, the list written at consent since Spec T22 — as the record's
+        `consented_at`; None where the record carries no list (a Trader consented before Spec T22, or handed over) or
         another list, and then B3's hash must move as it always had to.
         """
         label = self.label_for("trader")
@@ -2491,10 +2506,9 @@ class Runner:
         record = self.oauth.tokens(label)
         if not isinstance(record, dict) or not isinstance(record.get("counterparties"), list):
             return None
-        filed = [str(address) for address in record["counterparties"]]
-        if filed != [T.address(key) for key in T.TRADER_LIST_B3]:
+        if [str(address) for address in record["counterparties"]] != [T.address(key) for key in T.TRADER_LIST_B3]:
             return None
-        return {"counterparties": filed, "consented_at": str(record.get("consented_at") or "a time the record does not state")}
+        return str(record.get("consented_at") or "a time the record does not state")
 
     def read_policy_hash(self, role: str, test_id: str) -> Optional[str]:
         """

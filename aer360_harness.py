@@ -4090,11 +4090,11 @@ class Runner:
             ("POST", "/v1/invites", {"displayName": "Viewer probe", "email": "harness+probe@aeredium.io", "role": "author"}),
             # Spec T22 §3: the answers road is built only from an interview id this run holds; `<policy interview>` is the --dry
             # printer's spelling and never a path (a resumed run sent it on 26 September, and http.client refused the URL)
-            ("POST", self.ANSWERS_ROAD % interview_id if interview_id else None, {"questionId": "A1", "value": {"text": "Viewer probe"}}),
+            ("POST", (self.ANSWERS_ROAD % interview_id) if interview_id else None, {"questionId": "A1", "value": {"text": "Viewer probe"}}),
         ]
         for method, path, body in viewer_probes:
             probes += 1
-            probe = "a viewer's session at an author route: %s %s" % (method, path or self.ANSWERS_ROAD % "<policy interview>")
+            probe = "a viewer's session at an author route: %s %s" % (method, path or (self.ANSWERS_ROAD % "<policy interview>"))
             if path is None:
                 not_made += 1
                 self.note("S11", "probe not made (%s): no policy interview id in this run" % probe)
@@ -4125,7 +4125,7 @@ class Runner:
                 probes += 1
                 probe = "an answer for a question the interview did not serve (B4 while A9 is unanswered)"
                 body = {"questionId": "B4", "value": {"choices": []}}
-                answer = self.request(founder, "POST", "/v1/onboarding/interviews/%s/answers" % draft_id, body, "S11")
+                answer = self.request(founder, "POST", self.ANSWERS_ROAD % draft_id, body, "S11")
                 self.probe_step(probe, answer, body, "400 ANSWER_INVALID: this question is not asked given the answers so far", founder.name)
                 self.refused_or_finding(probe, body, answer, "refused: a question the interview did not serve takes no answer")
                 probes += 1
@@ -4145,14 +4145,14 @@ class Runner:
                 drafts.append(("wallet_account", draft_id))
                 for qid in ("W0", "WN", "W1"):
                     value = A.ACCOUNT_ANSWERS[qid]
-                    page_answer = self.request(founder, "POST", "/v1/onboarding/interviews/%s/answers" % draft_id, {"questionId": qid, "value": value}, "S11")
+                    page_answer = self.request(founder, "POST", self.ANSWERS_ROAD % draft_id, {"questionId": qid, "value": value}, "S11")
                     self.probe_step("the probe draft walked to its first money question", page_answer, {"questionId": qid, "value": value}, "the next page", founder.name)
                     if not page_answer.ok:
                         break
                 probes += 1
                 probe = "an answer of the wrong kind (a string where money is asked, O1)"
                 body = {"questionId": "O1", "value": {"cents": "fifty thousand dollars"}}
-                answer = self.request(founder, "POST", "/v1/onboarding/interviews/%s/answers" % draft_id, body, "S11")
+                answer = self.request(founder, "POST", self.ANSWERS_ROAD % draft_id, body, "S11")
                 self.probe_step(probe, answer, body, "400 ANSWER_INVALID: an amount is a whole number of cents", founder.name)
                 self.refused_or_finding(probe, body, answer, "refused: money is a whole number of cents, never a string of words")
             else:
