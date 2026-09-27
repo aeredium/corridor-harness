@@ -228,7 +228,7 @@ class TheBookPaysOnArbitrum(unittest.TestCase):
 
     def test_the_venue_probe_expects_payee_is_venue_contract_on_arbitrum_and_the_checksum_probe_is_unchanged(self):
         o = self.outcomes["S11"]
-        self.assertEqual(o.line, "the attacker: 17 probe(s), 1 finding(s)")
+        self.assertEqual(o.line, "the attacker: 17 probe(s), 0 not made, 1 finding(s)")
         venue = [s for s in self.runner.evidence["S11"] if "a real venue contract" in str(s.get("probe", ""))]
         self.assertEqual(len(venue), 1)
         self.assertEqual(venue[0]["sent"]["addresses"][0], {"chain": "arbitrum", "address": SWAPROUTER02_ON_ARBITRUM_ONE})

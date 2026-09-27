@@ -27,6 +27,7 @@ import aer360_passkey as PK  # noqa: E402
 import corridor_consent as C  # noqa: E402
 import corridor_harness as h  # noqa: E402
 import series as S  # noqa: E402
+import tables as T  # noqa: E402
 
 try:
     from .consent_double import ConnectorDouble, ISSUER, serve
@@ -220,7 +221,7 @@ class ASeatedTesterConsentsByCreating(ConsentBase):
         self.assertEqual((press["name"], press["roleId"], press["fundingAddress"], press["rank"]), ("alpha-trader", "trader.v1", FUNDING, "agent"))
         self.assertEqual(press["answers"], {"perTxUsd": "20", "dailyUsd": "100", "holdAboveUsd": "50", "maxTxPerDay": "50",
                                             "chains": ["arbitrum", "base"], "assets": ["USDC", "USDT", "WETH"],
-                                            "counterpartiesScope": "agent", "counterparties": []})
+                                            "counterpartiesScope": "agent", "counterparties": [T.address(key) for key in T.TRADER_LIST_B3]})  # Spec T22: B3's list
         self.assertEqual(self.double.assertions_verified, 1, "the step-up's assertion was verified under the purpose approve")
         connection = self.double.connection_of(self.double.agents[0]["id"])
         self.assertEqual(self.double.finishes, [{"body": {"connectionId": connection["id"]}, "customerId": customer["id"]}],

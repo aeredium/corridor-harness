@@ -260,7 +260,7 @@ class TheFoundersRoad(unittest.TestCase):
         for f in findings:
             self.assertTrue(f.said.startswith("ACCEPTED:"), f.said)
             self.assertTrue(f.came_back.startswith("HTTP 20"), f.came_back)
-        self.assertIn("17 probe(s), 1 finding(s)", o.line)
+        self.assertIn("17 probe(s), 0 not made, 1 finding(s)", o.line)
         # Spec T11 §3: the charter answered No at C19, so the probe expects the payee door's refusal by name, in the estate's sentence
         venue = [s for s in self.runner.evidence["S11"] if "a real venue contract" in str(s.get("probe", ""))]
         self.assertEqual(len(venue), 1)
@@ -386,7 +386,7 @@ class TheEstateBeforeSpec91(unittest.TestCase):
         self.assertTrue(p3["landed"], p3["said"])
         probes = [f.probe for f in self.runner.findings if f.station == "S11"]
         self.assertEqual(probes, ["a payee address with a wrong checksum"], "P3 was executed in S7, so the clerk's own press meets the run settled")
-        self.assertIn("17 probe(s), 1 finding(s)", self.outcomes["S11"].line)
+        self.assertIn("17 probe(s), 0 not made, 1 finding(s)", self.outcomes["S11"].line)
 
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
