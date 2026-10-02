@@ -1,0 +1,17 @@
+{
+  "_readme": "A Solana transaction as getTransaction answers it with encoding jsonParsed, trimmed to the token balances the SPL reader reads: a swap that sold 100000 minor units of one mint and bought 40000 of another, the venue paying 5 bps of the 40000 bought, rounded down (20), to a fee wallet. The owners are synthetic, for the test alone: tables.py pins no Solana fee address, and this fixture names none as one.",
+  "slot": 300000000,
+  "meta": {
+    "err": null,
+    "preTokenBalances": [
+      {"accountIndex": 1, "mint": "SoldMint1111111111111111111111111111111111", "owner": "AgentWa11et1111111111111111111111111111111", "uiTokenAmount": {"amount": "100000", "decimals": 6}},
+      {"accountIndex": 2, "mint": "BoughtMint111111111111111111111111111111111", "owner": "AgentWa11et1111111111111111111111111111111", "uiTokenAmount": {"amount": "0", "decimals": 8}},
+      {"accountIndex": 3, "mint": "BoughtMint111111111111111111111111111111111", "owner": "TestFeeWa11et11111111111111111111111111111", "uiTokenAmount": {"amount": "500", "decimals": 8}}
+    ],
+    "postTokenBalances": [
+      {"accountIndex": 1, "mint": "SoldMint1111111111111111111111111111111111", "owner": "AgentWa11et1111111111111111111111111111111", "uiTokenAmount": {"amount": "0", "decimals": 6}},
+      {"accountIndex": 2, "mint": "BoughtMint111111111111111111111111111111111", "owner": "AgentWa11et1111111111111111111111111111111", "uiTokenAmount": {"amount": "39980", "decimals": 8}},
+      {"accountIndex": 3, "mint": "BoughtMint111111111111111111111111111111111", "owner": "TestFeeWa11et11111111111111111111111111111", "uiTokenAmount": {"amount": "520", "decimals": 8}}
+    ]
+  }
+}

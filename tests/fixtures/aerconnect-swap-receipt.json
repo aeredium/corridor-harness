@@ -1,0 +1,56 @@
+{
+  "_readme": "A swap's handleOps receipt, as Arbitrum One answers eth_getTransactionReceipt: ten cents of USDC sold for WETH through Uniswap v3's SwapRouter02, the venue paying its commission as the MCP Wallet builds it (sweepTokenWithFee): the pool pays the router the gross output, the router pays five basis points of it to the agents' fee address and the rest to the wallet. The addresses are placeholders the test fills from tables.py (<ROUTER> is UNISWAP_V3_ARBITRUM, <FEE_ADDRESS> is FEE_ADDRESS) and from aerconnect_harness (<PAYMASTER>, the events), so the fixture can never name a fee wallet the table does not. Gross 40000000000000 wei of WETH; five basis points of it, rounded down, is 20000000000.",
+  "transactionHash": "0x5a1e5f0000000000000000000000000000000000000000000000000000c0ffee",
+  "status": "0x1",
+  "blockNumber": "0x17d78407",
+  "gasUsed": "0x61a80",
+  "effectiveGasPrice": "0x989680",
+  "logs": [
+    {
+      "address": "<USDC>",
+      "topics": [
+        "<TRANSFER>",
+        "<WALLET>",
+        "<POOL>"
+      ],
+      "data": "0x00000000000000000000000000000000000000000000000000000000000186a0"
+    },
+    {
+      "address": "<WETH>",
+      "topics": [
+        "<TRANSFER>",
+        "<POOL>",
+        "<ROUTER>"
+      ],
+      "data": "0x0000000000000000000000000000000000000000000000000000246139ca8000"
+    },
+    {
+      "address": "<WETH>",
+      "topics": [
+        "<TRANSFER>",
+        "<ROUTER>",
+        "<FEE_ADDRESS>"
+      ],
+      "data": "0x00000000000000000000000000000000000000000000000000000004a817c800"
+    },
+    {
+      "address": "<WETH>",
+      "topics": [
+        "<TRANSFER>",
+        "<ROUTER>",
+        "<WALLET>"
+      ],
+      "data": "0x0000000000000000000000000000000000000000000000000000245c91b2b800"
+    },
+    {
+      "address": "<ENTRY_POINT>",
+      "topics": [
+        "<USER_OPERATION_EVENT>",
+        "0x7e57000000000000000000000000000000000000000000000000000000000001",
+        "<WALLET>",
+        "<PAYMASTER>"
+      ],
+      "data": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000003a3529440000000000000000000000000000000000000000000000000000000000000061a80"
+    }
+  ]
+}
