@@ -1,0 +1,437 @@
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "tools": [
+      {
+        "name": "aerconnect_my_agent",
+        "title": "aerconnect_my_agent",
+        "description": "aerconnect_my_agent (the double)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        },
+        "annotations": {
+          "title": "aerconnect_my_agent"
+        }
+      },
+      {
+        "name": "aerconnect_guide",
+        "title": "aerconnect_guide",
+        "description": "aerconnect_guide (the double)",
+        "inputSchema": {
+          "type": "object",
+          "required": [],
+          "properties": {
+            "question": {
+              "type": "string"
+            }
+          }
+        },
+        "annotations": {
+          "title": "aerconnect_guide"
+        }
+      },
+      {
+        "name": "wallet.wallet_status",
+        "title": "wallet.wallet_status",
+        "description": "wallet.wallet_status (the double)",
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "wallet_id"
+          ],
+          "properties": {
+            "wallet_id": {
+              "type": "string"
+            }
+          }
+        },
+        "annotations": {
+          "title": "wallet.wallet_status"
+        }
+      },
+      {
+        "name": "wallet.mint_wallet",
+        "title": "wallet.mint_wallet",
+        "description": "wallet.mint_wallet (the double)",
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "funding_address",
+            "role"
+          ],
+          "properties": {
+            "agent_id": {
+              "type": "string"
+            },
+            "funding_address": {
+              "type": "string"
+            },
+            "role": {
+              "type": "string"
+            },
+            "chain": {
+              "type": "string"
+            },
+            "custody_type": {
+              "type": "string"
+            },
+            "custom_role_id": {
+              "type": "string"
+            },
+            "client_request_id": {
+              "type": "string"
+            }
+          }
+        },
+        "annotations": {
+          "title": "wallet.mint_wallet"
+        }
+      },
+      {
+        "name": "wallet.get_address",
+        "title": "wallet.get_address",
+        "description": "wallet.get_address (the double)",
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "wallet_id"
+          ],
+          "properties": {
+            "wallet_id": {
+              "type": "string"
+            }
+          }
+        },
+        "annotations": {
+          "title": "wallet.get_address"
+        }
+      },
+      {
+        "name": "wallet.get_balances",
+        "title": "wallet.get_balances",
+        "description": "wallet.get_balances (the double)",
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "wallet_id"
+          ],
+          "properties": {
+            "wallet_id": {
+              "type": "string"
+            }
+          }
+        },
+        "annotations": {
+          "title": "wallet.get_balances"
+        }
+      },
+      {
+        "name": "wallet.build_transaction",
+        "title": "wallet.build_transaction",
+        "description": "wallet.build_transaction (the double)",
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "wallet_id",
+            "action"
+          ],
+          "properties": {
+            "pact_id": {
+              "type": "string"
+            },
+            "wallet_id": {
+              "type": "string"
+            },
+            "action": {
+              "type": "string"
+            },
+            "amount_usd": {
+              "type": "string"
+            },
+            "to_address": {
+              "type": "string"
+            },
+            "chain": {
+              "type": "string"
+            },
+            "asset": {
+              "type": "string"
+            },
+            "venue": {
+              "type": "string"
+            },
+            "function": {
+              "type": "string"
+            },
+            "counterparty_address": {
+              "type": "string"
+            },
+            "contract_address": {
+              "type": "string"
+            },
+            "to_asset": {
+              "type": "string"
+            },
+            "to_chain": {
+              "type": "string"
+            },
+            "method_selector": {
+              "type": "string"
+            },
+            "approval_id": {
+              "type": "string"
+            },
+            "client_request_id": {
+              "type": "string"
+            },
+            "police_receipt": {
+              "type": "string"
+            }
+          }
+        },
+        "annotations": {
+          "title": "wallet.build_transaction"
+        }
+      },
+      {
+        "name": "wallet.submit_transaction",
+        "title": "wallet.submit_transaction",
+        "description": "wallet.submit_transaction (the double)",
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "agent_id",
+            "wallet_id",
+            "pact_id",
+            "ticket_id",
+            "action"
+          ],
+          "properties": {
+            "agent_id": {
+              "type": "string"
+            },
+            "wallet_id": {
+              "type": "string"
+            },
+            "pact_id": {
+              "type": "string"
+            },
+            "ticket_id": {
+              "type": "string"
+            },
+            "action": {
+              "type": "string"
+            },
+            "amount_usd": {
+              "type": "string"
+            },
+            "to_address": {
+              "type": "string"
+            },
+            "chain": {
+              "type": "string"
+            },
+            "asset": {
+              "type": "string"
+            },
+            "venue": {
+              "type": "string"
+            },
+            "function": {
+              "type": "string"
+            },
+            "counterparty_address": {
+              "type": "string"
+            },
+            "contract_address": {
+              "type": "string"
+            },
+            "method_selector": {
+              "type": "string"
+            },
+            "to_asset": {
+              "type": "string"
+            },
+            "to_chain": {
+              "type": "string"
+            }
+          }
+        },
+        "annotations": {
+          "title": "wallet.submit_transaction"
+        }
+      },
+      {
+        "name": "wallet.ticket_status",
+        "title": "wallet.ticket_status",
+        "description": "wallet.ticket_status (the double)",
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "ticket_id"
+          ],
+          "properties": {
+            "ticket_id": {
+              "type": "string"
+            }
+          }
+        },
+        "annotations": {
+          "title": "wallet.ticket_status"
+        }
+      },
+      {
+        "name": "wallet.my_usage",
+        "title": "wallet.my_usage",
+        "description": "wallet.my_usage (the double)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        },
+        "annotations": {
+          "title": "wallet.my_usage"
+        }
+      },
+      {
+        "name": "police.list_roles",
+        "title": "police.list_roles",
+        "description": "police.list_roles (the double)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        },
+        "annotations": {
+          "title": "police.list_roles"
+        }
+      },
+      {
+        "name": "police.describe_role",
+        "title": "police.describe_role",
+        "description": "police.describe_role (the double)",
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "role_id"
+          ],
+          "properties": {
+            "role_id": {
+              "type": "string"
+            }
+          }
+        },
+        "annotations": {
+          "title": "police.describe_role"
+        }
+      },
+      {
+        "name": "police.check_action",
+        "title": "police.check_action",
+        "description": "police.check_action (the double)",
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "role_id",
+            "amount_usd_cents"
+          ],
+          "properties": {
+            "role_id": {
+              "type": "string"
+            },
+            "action_kind": {
+              "type": "string"
+            },
+            "chain": {
+              "type": "string"
+            },
+            "to_chain": {
+              "type": "string"
+            },
+            "asset_symbol": {
+              "type": "string"
+            },
+            "venue": {
+              "type": "string"
+            },
+            "to_asset": {
+              "type": "string"
+            },
+            "route_chosen_by": {
+              "type": "string"
+            },
+            "route_detail": {
+              "type": "string"
+            },
+            "function": {
+              "type": "string"
+            },
+            "amount_usd_cents": {
+              "type": "string"
+            },
+            "child_wallet_id": {
+              "type": "string"
+            },
+            "to_address": {
+              "type": "string"
+            },
+            "counterparty_address": {
+              "type": "string"
+            },
+            "contract_address": {
+              "type": "string"
+            },
+            "method_selector": {
+              "type": "string"
+            },
+            "spent_today_usd_cents": {
+              "type": "string"
+            },
+            "transactions_today": {
+              "type": "string"
+            },
+            "slippage_bps": {
+              "type": "string"
+            },
+            "price_deviation_bps": {
+              "type": "string"
+            },
+            "simulation_passed": {
+              "type": "string"
+            },
+            "oracle_check_passed": {
+              "type": "string"
+            },
+            "amount": {
+              "type": "string",
+              "description": "NOT ACCEPTED. Present only so an amount sent in dollars is refused rather than silently ignored."
+            },
+            "amount_usd": {
+              "type": "string",
+              "description": "NOT ACCEPTED. Present only so an amount sent in dollars is refused rather than silently ignored."
+            },
+            "amount_dollars": {
+              "type": "string",
+              "description": "NOT ACCEPTED. Present only so an amount sent in dollars is refused rather than silently ignored."
+            }
+          }
+        },
+        "annotations": {
+          "title": "police.check_action"
+        }
+      },
+      {
+        "name": "police.my_usage",
+        "title": "police.my_usage",
+        "description": "police.my_usage (the double)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        },
+        "annotations": {
+          "title": "police.my_usage"
+        }
+      }
+    ]
+  }
+}
