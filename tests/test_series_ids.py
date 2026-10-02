@@ -49,6 +49,9 @@ def test_id_of(paragraph):
     return found.group(1) if found else None
 
 
+test_id_of.__test__ = False  # a helper, not a test: pytest would otherwise collect it and ask for a fixture called `paragraph`
+
+
 def read(path):
     with open(path, "r", encoding="utf-8") as handle:
         return handle.read()

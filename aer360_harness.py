@@ -196,6 +196,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import aer360_answers as A  # noqa: E402
+import aer360_estate_road as R  # noqa: E402  (the payee road S6 walks, shared with Pathfinder's S11 since Spec T23)
 import aer360_passkey as PK  # noqa: E402
 import aer360_tables as T  # noqa: E402
 
@@ -2571,47 +2572,22 @@ class Runner:
         all_whitelisted = True
         for payee in T.PAYEES:
             address = T.address(payee["key"])
-            # Spec T18 §2: the payee is created on PAYEE_CHAIN, read here and never copied into a row of the table
-            body = {"displayName": payee["name"], "defaultAsset": T.PAYMENT_ASSET, "defaultChain": T.PAYEE_CHAIN,
-                    "addresses": [{"chain": T.PAYEE_CHAIN, "address": address}]}
-            created = self.request(founder, "POST", "/v1/payees", body, "S6")
-            self.step("S6", created, "201 with the payee and its proposed address on %s" % T.PAYEE_CHAIN, "created" if created.ok else created.sentence(), body, founder.name)
-            if not created.ok or not isinstance(created.json, dict):
-                said.append("%s: %s" % (payee["name"], created.sentence()))
+            # Spec T18 §2: the payee is created on PAYEE_CHAIN, read here and never copied into a row of the table. The road —
+            # create, promote, the roster's presses to the quorum — is aer360_estate_road.propose_payee, this station's own code
+            # lifted out so Pathfinder's S11 walks it for the agent's wallet exactly as S6 walks it for Northwind (Spec T23).
+            _, words, whole = R.propose_payee(self, founder, payee["name"], payee["key"], address, T.PAYEE_CHAIN, "S6")
+            said.append(words)
+            if not whole:
                 all_whitelisted = False
-                continue
-            row = created.json.get("payee") or {}
-            addresses = row.get("addresses") or []
-            address_id = str(addresses[0].get("id")) if addresses else None
-            record = {"key": payee["key"], "name": payee["name"], "payee_id": row.get("id"), "address_id": address_id, "address": address, "chain": T.PAYEE_CHAIN,
-                      "promoted": None, "approved": None, "presses": []}
-            self.facts["payees"].append(record)
-            if not address_id:
-                said.append("%s: created with no address id" % payee["name"])
-                all_whitelisted = False
-                continue
-            promoted = self.request(founder, "POST", "/v1/payees/addresses/%s/promote" % address_id, {}, "S6")
-            self.step("S6", promoted, "a ceremony: status pending_promotion, platformMembershipId, ceremony", "answered" if promoted.ok else promoted.sentence(), {}, founder.name)
-            record["promoted"] = promoted.json if promoted.ok else promoted.sentence()
-            promote_said = "promoted" if promoted.ok else "promote answered %s" % promoted.sentence()
-            said.append("%s: created on %s; %s; %s" % (payee["name"], T.PAYEE_CHAIN, promote_said, self.approve_to_quorum(record)))
         # Spec T13 §3: the register is the judge, not the press. After the presses, GET /v1/payees decides each payee on its
         # whitelistStatus; a register that reads proposed after the platform counted the quorum fails with the mirror sentence.
-        register = self.request(founder, "GET", "/v1/payees", None, "S6")
-        self.step("S6", register, "the payees register with both addresses whitelisted, read by this run's payee ids — the judgement is the register's, not the press's (Spec T13 §3)",
-                  "answered" if register.ok else register.sentence(), None, founder.name)
-        self.facts["payees_register"] = register.json if isinstance(register.json, dict) else None
+        # Spec T18 §2: a same-named payee an earlier run left on another chain is left alone, named here, and never paid.
+        R.judge_payee_register(self, founder, "S6", self.facts["payees"],
+                               "the payees register with both addresses whitelisted, read by this run's payee ids — the judgement is the register's, not the press's (Spec T13 §3)")
         for record in self.facts["payees"]:
-            status = self.register_status_of(register.json, record)
-            record["register_status"] = status
-            record["mirror"] = self.mirror_sentence(record, status)
-            # Spec T18 §2: a same-named payee an earlier run left on another chain is left alone, named here, and never paid
-            record["elsewhere"] = self.same_name_elsewhere(register.json, record)
-            if status != "whitelisted":
+            if record.get("register_status") != "whitelisted":
                 all_whitelisted = False
-        detail = "payees: %s; register: %s" % ("; ".join(said), ", ".join(
-            "%s %s%s%s" % (r["name"], r.get("register_status"), (" (%s)" % r["mirror"]) if r.get("mirror") else "",
-                           (" (%s)" % self.elsewhere_words(r["name"], r["elsewhere"])) if r.get("elsewhere") else "") for r in self.facts["payees"]) or "none")
+        detail = "payees: %s; register: %s" % ("; ".join(said), R.register_words(self, self.facts["payees"]))
         return Outcome("S6", PASS if all_whitelisted and self.facts["payees"] else FAIL, detail)
 
     @staticmethod

@@ -1151,8 +1151,16 @@ class EstateDouble:
                  treasury_usdc_cents: int = 10000, treasury_funding_wallet: str = "born", quote_ceiling_usd_cents: int = QUOTE_CEILING_USD_CENTS,
                  actual_gas_usd_cents: int = ACTUAL_GAS_USD_CENTS, gas_refusal_names_other_figures: bool = False, review_refuses_but_pays: bool = False,
                  before_spec_106: bool = False, recorded_chains: Optional[Sequence[str]] = None,
-                 before_spec_109: Optional[bool] = None, list_ceremony_lapses: int = 0, second_account_refused: Optional[str] = None):
+                 before_spec_109: Optional[bool] = None, list_ceremony_lapses: int = 0, second_account_refused: Optional[str] = None,
+                 refuses_payee_addresses: Sequence[str] = (), settle_after_reads: int = 0):
         self.currency_spoken_as_code = currency_spoken_as_code  # False: main's default arm (JSON); True: Spec 88's code
+        # Spec T23's dials. `refuses_payee_addresses`: addresses the payee door refuses whatever the charter says, under the stand-in
+        # refusal Spec T8's `refuses_venue_contract=True` uses (ADDRESS_PROPOSAL_REFUSED, 422, the stipulation sentence) — an estate that
+        # will not have the agent's wallet as a payee, in its own sentence. `settle_after_reads`: an execute that answers with the run
+        # executing and its instruction still queued, and a register that settles it only on the n-th GET /v1/sets/{id} after — the
+        # chain taking its time — so a harness that waits for its own money is proved to wait, and to stop at its bound.
+        self.refuses_payee_addresses = tuple(a.lower() for a in refuses_payee_addresses)
+        self.settle_after_reads = settle_after_reads
         # Spec T19's dials (AER 360 Spec 109). `before_spec_109`: the estate before it — the platform's 409 on the list's creation leaves the compile as a
         # failed write (CHARTER_WRITE_UNFINISHED, the platform's sentence in the cause), and the ceremonies door and the sign roads are not there.
         # `list_ceremony_lapses`: the next list ceremonies born lapse at birth (the platform's clock is past their expires_at). `second_account_refused`:
@@ -1565,6 +1573,7 @@ class EstateDouble:
                 row = self.sets.get(m.group(1))
                 if not row:
                     raise Refusal("SET_NOT_EDITABLE", detail={"cause": "no such run"})
+                self.settle_on_read(caller, row)
                 return 200, {"set": self.set_view(row, caller)}
             if method == "POST" and m.group(2) == "/submit":
                 return self.submit_set(headers, m.group(1))
@@ -3095,7 +3104,7 @@ class EstateDouble:
                             else "an address is 32 to 44 base58 characters, and base58 leaves out the digit zero, capital O, capital I and lower-case L")
                 raise Refusal("ADDRESS_MALFORMED", "That is not an address %s can pay, so nothing was saved. On %s, %s." % (named, named, expected),
                               {"field": "address", "chain": a["chain"], "address": address, "expected": expected}, provenance={"source": "chain_registry", "reference": a["chain"]})
-            if self.refuses_venue_contract is True and address.lower() == T.venue_address_for_probe()["address"].lower():
+            if (self.refuses_venue_contract is True and address.lower() == T.venue_address_for_probe()["address"].lower()) or address.lower() in self.refuses_payee_addresses:
                 # Spec T8's stand-in: a door that refuses the probe address whatever its charter says, under the code the estate used for
                 # an address it would not propose — since Spec 92 an estate refusing against a charter that says accepted
                 raise Refusal("ADDRESS_PROPOSAL_REFUSED", VENUE_STIPULATION,
@@ -3911,6 +3920,16 @@ class EstateDouble:
             row["status"] = "executing"
             row["executedAt"] = self._now_iso()
             self.append_trail("set.execution_started", caller["credentialId"], {"setDigest": row["setDigest"], "road": "gas_roads", "account": self.source_account}, subject_id=set_id)
+            if self.settle_after_reads > 0:
+                row["settles_in"] = self.settle_after_reads  # Spec T23: the chain takes its time; the register settles the run on a later read
+        if not row.get("settles_in"):
+            self.drive_and_settle(caller, row)
+        return 200, {"setId": set_id, "setStatus": row["status"],
+                     "instructions": [{"instructionId": i["id"], "sequence": i["sequence"], "status": i["status"], "txHash": i["txHash"], "holdId": i["holdId"],
+                                       "failureReason": i["failureReason"], "waiting": None} for i in row["instructions"]]}
+
+    def drive_and_settle(self, caller: Dict[str, Any], row: Dict[str, Any]) -> None:
+        """Every instruction not yet terminal driven, then the run's outcome resolved (states.ts resolveSetOutcome) and the trail's set.settled row written."""
         for instruction in row["instructions"]:
             if instruction["status"] in T.INSTRUCTION_TERMINAL_STATES or instruction["status"] == "held":
                 continue
@@ -3919,10 +3938,15 @@ class EstateDouble:
         if statuses and all(s in T.INSTRUCTION_TERMINAL_STATES for s in statuses) and row["status"] == "executing":
             row["status"] = "settled" if all(s == "confirmed" for s in statuses) else "partially_settled"  # states.ts resolveSetOutcome
             self.append_trail("set.settled", caller["credentialId"], {"outcome": row["status"], "confirmed": statuses.count("confirmed"), "failed": statuses.count("failed"),
-                                                                       "rejected": statuses.count("rejected")}, subject_id=set_id)
-        return 200, {"setId": set_id, "setStatus": row["status"],
-                     "instructions": [{"instructionId": i["id"], "sequence": i["sequence"], "status": i["status"], "txHash": i["txHash"], "holdId": i["holdId"],
-                                       "failureReason": i["failureReason"], "waiting": None} for i in row["instructions"]]}
+                                                                       "rejected": statuses.count("rejected")}, subject_id=row["id"])
+
+    def settle_on_read(self, caller: Dict[str, Any], row: Dict[str, Any]) -> None:
+        """Spec T23's dial: a run executing counts the register's reads down, and settles — the payment driven, the trail written — on the last."""
+        if row.get("settles_in"):
+            row["settles_in"] -= 1
+            if row["settles_in"] == 0:
+                row.pop("settles_in", None)
+                self.drive_and_settle(caller, row)
 
     def drive_payment(self, caller: Dict[str, Any], instruction: Dict[str, Any]) -> None:
         """

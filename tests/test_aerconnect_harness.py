@@ -27,11 +27,14 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import aer360_harness as E  # noqa: E402
 import aer360_passkey as PK  # noqa: E402
+import aer360_tables as ET  # noqa: E402
 import aerconnect_harness as P  # noqa: E402
 import corridor_consent as C  # noqa: E402
 import corridor_harness as H  # noqa: E402
 import tables as T  # noqa: E402
+from tests.test_aer360_double import EstateDouble, runner_on  # noqa: E402  (the estate Harness Holdings pays from, Spec T23)
 
 try:
     from .pathfinder_double import ISSUER, PathfinderDouble
@@ -50,6 +53,23 @@ GUARDED_ROUTES = (("POST", "/v1/auth/signup/options"), ("POST", "/v1/auth/signup
 def fourteen():
     with open(TOOLS_LIST, "r", encoding="utf-8") as handle:
         return [tool["name"] for tool in json.load(handle)["result"]["tools"]]
+
+
+def standing_estate(tmp, **double_kwargs):
+    """
+    Harness Holdings and Harness Treasury as the estate harness leaves them (Spec T23 §5: the estate's people and roads come from where
+    they already are): one full run of the estate harness against their double (tests/test_aer360_double.py) — the people enrolled, their
+    passkeys stored under <store>/harness-holdings/ and harness-treasury/, admin.env filed, the charters compiled, the funding wallets born,
+    the Treasury's float born and T14's three payments made. Holdings is born holding US$50.00 (`holdings_usdc_cents`, the double's word for
+    the USDC Bear funds a wallet with), so after the three payments it holds US$31.76 and pays the agents' wallets from that; the Treasury
+    holds its US$100.00. Answers the double and the store.
+    """
+    double_kwargs.setdefault("holdings_usdc_cents", 5000)
+    double = EstateDouble(**double_kwargs)
+    runner = runner_on(double, tmp, invite=double.mint_founder_link())
+    outcomes = {o.station: o for o in runner.run()}
+    assert outcomes["S7"].outcome == E.PASS, outcomes["S7"].line
+    return double, runner.store_dir
 
 
 class FakeClock:
@@ -137,6 +157,16 @@ class TheDryWalk(unittest.TestCase):
 class PathfinderBase(unittest.TestCase):
     options = {"account_group": "group-100"}
 
+    @classmethod
+    def setUpClass(cls):
+        # Spec T23: the estate the owner's money is in stands before any run, once per class; every walk below pays its agent's wallet from it
+        cls.estate_tmp = tempfile.mkdtemp()
+        cls.estate_double, cls.estate_store = standing_estate(cls.estate_tmp)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.estate_tmp, ignore_errors=True)
+
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.store = os.path.join(self.tmp, "store")
@@ -144,7 +174,8 @@ class PathfinderBase(unittest.TestCase):
         self.funding = os.path.join(self.tmp, "funding-wallet.json")
         with open(self.funding, "w", encoding="utf-8") as handle:
             json.dump({"address": FUNDING, "chain": "arbitrum", "keyId": "key-1"}, handle)
-        self.double = PathfinderDouble(**self.options)
+        # the child wallet's USDC lives on the estate's chain: what Holdings pays through the estate's road is what the Wallet door reads
+        self.double = PathfinderDouble(estate_chain=self.estate_double.chain, **self.options)
         self._http = H.http_request
         H.http_request = self.double
         self.said = []
@@ -158,8 +189,20 @@ class PathfinderBase(unittest.TestCase):
     def runner(self, rings=(ISSUER,), base=ISSUER, **kwargs):
         self.runs += 1
         started = datetime.datetime(2026, 10, 2, 3, 0, self.runs, tzinfo=datetime.timezone.utc)
+        kwargs.setdefault("estate_base", self.estate_double.base)
+        kwargs.setdefault("estate_store", self.estate_store)
+        kwargs.setdefault("estate_transport", self.estate_double)
         return P.Pathfinder(base=base, owner="alpha", store_dir=self.store, out_dir=self.out, test_rings=rings, funding_wallet=self.funding,
                             say=self.said.append, sleep=self.clock.sleep, clock=self.clock.now, started_at=started, **kwargs)
+
+    def holdings_and_treasury_hold(self, holdings_minor, treasury_minor):
+        """Harness Holdings' and Harness Treasury's USDC on the estate's chain set for one test, and put back after it."""
+        chain = self.estate_double.chain
+        addresses = (self.estate_double.source_account.lower(), self.estate_double.treasury.source_account.lower())
+        kept = {a: chain.balance_of(a) for a in addresses}
+        self.addCleanup(chain.balances.update, kept)
+        chain.balances[addresses[0]] = holdings_minor
+        chain.balances[addresses[1]] = treasury_minor
 
     def walk(self, **kwargs):
         runner = self.runner(**kwargs)
@@ -230,8 +273,9 @@ class AWholeWalk(PathfinderBase):
 
     def test_main_runs_the_walk_from_the_command_line(self):
         code = P.main(["--base", ISSUER, "--test-ring", ISSUER, "--owner", "alpha", "--store", self.store, "--out", self.out,
-                       "--funding-wallet", self.funding], say=self.said.append, sleep=self.clock.sleep, clock=self.clock.now)
-        self.assertEqual(code, 0)
+                       "--funding-wallet", self.funding, "--estate-base", self.estate_double.base, "--estate-store", self.estate_store],
+                      say=self.said.append, sleep=self.clock.sleep, clock=self.clock.now, estate_transport=self.estate_double)
+        self.assertEqual(code, 0, "\n".join(self.said))
         self.assertTrue(any(line.startswith("Report: %s" % self.out) for line in self.said))
 
     def test_it_imports_the_standard_library_and_this_repository_only(self):
@@ -239,7 +283,8 @@ class AWholeWalk(PathfinderBase):
             text = handle.read()
         imported = set(re.findall(r"^import ([A-Za-z_][A-Za-z0-9_.]*)", text, re.M)) | set(re.findall(r"^from ([A-Za-z_][A-Za-z0-9_.]*) import", text, re.M))
         self.assertEqual(imported, {"__future__", "argparse", "datetime", "json", "os", "re", "secrets", "sys", "time", "urllib.parse", "typing",
-                                    "corridor_harness", "corridor_consent", "series", "tables"})
+                                    "corridor_harness", "corridor_consent", "series", "tables",
+                                    "aer360_answers", "aer360_estate_road", "aer360_harness", "aer360_tables"})
 
 
 class TheGuard(PathfinderBase):
@@ -410,9 +455,9 @@ class TheTeardown(PathfinderBase):
         self.assertEqual(len(self.double.customers), 1)
 
     def test_a_run_stopped_at_the_trade_removes_its_connection_and_its_agent(self):
-        self.double.funding_usdc = 0
+        self.holdings_and_treasury_hold(0, 0)  # Spec T23: the one stop on the funding road a person must mend — the Treasury's float
         runner = self.walk()
-        self.assertEqual(self.words(runner)["S11"], P.STOPPED)
+        self.assertEqual(self.words(runner)["S11"], P.STOPPED, self.line_of(runner, "S11"))
         self.assertEqual(self.words(runner)["S12"], P.NOT_RUN)
         self.assertEqual(self.double.revoked, [runner.facts["connection_id"]])
         self.assertEqual(self.double.deleted, [runner.facts["agent_id"]])
@@ -640,26 +685,37 @@ class TheStationsSayWhatHappened(PathfinderBase):
         self.assertEqual(runner.outcome_of("S11").outcome, P.NOT_RUN)
         self.assertEqual(runner.outcome_of("S13").outcome, P.PASS)
 
-    def test_s11_waits_for_the_funds_to_the_deadline_then_stops_in_one_sentence(self):
-        self.double.funding_usdc = 0
+    def test_s11_waits_for_its_own_payment_to_the_deadline_then_stops_naming_the_set_and_its_state(self):
+        """Spec T23 §3: the wait is for the payment the harness made; --funds-wait bounds it; the stop names the set and the state the register last gave it."""
+        self.estate_double.settle_after_reads = 10 ** 6  # a chain that never gets there within the wait
+        self.addCleanup(setattr, self.estate_double, "settle_after_reads", 0)
         runner = self.walk()
         s11 = runner.outcome_of("S11")
         address = runner.facts["wallet"]["address"]
-        self.assertEqual(s11.outcome, P.STOPPED)
-        self.assertEqual(s11.line, "the trade: " + P.UNFUNDED_SENTENCE % (address, "arbitrum", "0 minor units of USDC", P.TRADE_RAW, int(P.TRADE_DEADLINE_SECONDS)))
-        self.assertIn(P.FUND_SENTENCE % (address, "arbitrum", int(P.TRADE_DEADLINE_SECONDS), "0 minor units of USDC"), runner.notes["S11"])
+        set_id = runner.state["estate"]["set_id"]
+        self.assertEqual(s11.outcome, P.FAIL)
+        self.assertEqual(s11.line, "the trade: " + P.NOT_LANDED_SENTENCE % (address, "arbitrum", "0 minor units of USDC", P.TRADE_RAW, set_id, int(P.TRADE_DEADLINE_SECONDS),
+                                                                             "the instruction queued, the run executing"))
+        self.assertIn(P.FUNDING_SENTENCE % (address, "arbitrum", set_id, runner.run_id), runner.notes["S11"])
         balances = [name for name, _ in self.double.tool_calls if name == "wallet.get_balances"]
         self.assertGreater(len(balances), 2, "the wallet is read every interval")
+        self.assertGreater(len([s for s in runner.steps["S11"] if s["route"] == "GET /v1/sets/%s" % set_id]), E.LANDING_READS, "the run is read again from the register while it is not settled")
         self.assertGreaterEqual(self.clock.t, P.TRADE_DEADLINE_SECONDS)
         self.assertNotIn("wallet.build_transaction", [name for name, _ in self.double.tool_calls])
+        self.assertEqual(self.estate_double.sets[set_id]["status"], "executing", "the register still had the run executing when the wait ended")
 
-    def test_s11_waits_for_the_funds_and_trades_once_they_arrive(self):
-        self.double.funded_at_read = 3
+    def test_s11_trades_the_moment_its_own_payment_lands(self):
+        """The register settles the run after the payment road's own bounded reads gave up; until_funded reads it again, judges the landing on the trail, and trades."""
+        self.estate_double.settle_after_reads = E.LANDING_READS + 3
+        self.addCleanup(setattr, self.estate_double, "settle_after_reads", 0)
         runner = self.walk()
         self.assertEqual(runner.outcome_of("S11").outcome, P.PASS, self.line_of(runner, "S11"))
-        self.assertEqual([name for name, _ in self.double.tool_calls].count("wallet.get_balances"), 4, "three in S11, one in S12")
-        self.assertIn("the wallet holds 100000 minor units of USDC now; the trade goes on", runner.notes["S11"])
-        self.assertEqual(self.clock.slept[:2], [P.TRADE_POLL_SECONDS, P.TRADE_POLL_SECONDS])
+        funded = runner.facts["funded"]
+        self.assertTrue(funded["landed"], funded)
+        self.assertEqual((funded["status"], funded["set_status"]), ("confirmed", "settled"))
+        self.assertIn(P.FUNDED_SENTENCE % (P.TRADE_RAW, funded["tx_hash"]), runner.notes["S11"])
+        self.assertGreaterEqual(self.clock.slept.count(P.TRADE_POLL_SECONDS), 3, "the wallet and the register are read every interval until the payment lands")
+        self.assertIn("landed (+US$0.10): instruction confirmed, run settled, userOpHash 0x", self.line_of(runner, "S11"))
 
     def test_s11_follows_the_ticket_until_the_operation_lands(self):
         self.double.lands_later = 2
@@ -1170,8 +1226,10 @@ class TheTradeRoadSaysWhatHappened(PathfinderBase):
         self.assertIn("the debit: US$3.30 for 1200000000000000 wei of gas", self.line_of(runner, "S12"))
 
     def test_s5_says_where_the_wallet_is_not_shown_bound_to_the_owner(self):
+        """A connector whose account page names another funding wallet than the one it let S3 register against: S5 says so (the page answers the owner's own at S2 and S3, another from S5 on)."""
         other = H.checksum_address("0x" + "77" * 20)
         self.double.account_funding = other
+        self.double.account_funding_after = 2
         runner = self.walk()
         self.assertEqual(runner.outcome_of("S5").outcome, P.FAIL)
         self.assertIn("is not shown bound to the owner: the owner's funding wallet is %s, and S3 minted the agent against %s" % (other, FUNDING),

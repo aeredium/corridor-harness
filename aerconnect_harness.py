@@ -31,7 +31,8 @@ THE STATIONS, A TO Z
   S8  The catalogue      MCP initialize, tools/list — the fourteen tools
   S9  The agent          aerconnect_my_agent — the wallet UUID, the pact, the gas balance
   S10 The judgment       police.check_action — the trade within the mandate, a receipt
-  S11 The trade          wallet.build_transaction, wallet.submit_transaction — a real swap, landed, sponsored by the paymaster
+  S11 The trade          the agent's wallet funded by Harness Holdings through the estate's own road where it is short (Spec T23),
+                         then wallet.build_transaction, wallet.submit_transaction — a real swap, landed, sponsored by the paymaster
   S12 The reader         the chain and the gas trail — the swap on chain, the debit with its 10% charge, the balances reconciled
   S12a The commission check  the trading fee on chain: five basis points of the trade's output, in the ERC-20 Transfer logs, to
                          the agents' fee address — FEE_BPS and FEE_ADDRESS read from tables.py, judged by fee_check
@@ -124,6 +125,19 @@ WHERE THE SPEC AND THE CODE PART COMPANY, each cited here and in the README (the
   4. S2. GET /v1/account at 9e20d6c states the account's signing group on no field (the group is
      CONNECTOR_SIGNING_GROUP, named at the account's birth); S2 reads every field that could carry it and says so.
 
+THE HARNESS FUNDS ITS OWN AGENT (Spec T23, 2 October 2026; Bear: "I am not intervening in the harnessed dealings. It has to be done
+automatically. We already financed the gas. That's all there is."). The run of that evening stopped at S11 waiting for a person to send
+ten cents to the child wallet. The harness IS the owner; the owner's money is Harness Holdings'; and the estate harness already moves
+Holdings' USDC with no key in anyone's hands, through AER 360's own payment road (`aer360_harness.py`). So where S11 finds the wallet
+short of TRADE_RAW it makes the wallet a payee of Harness Holdings exactly as the estate harness's S6 makes Northwind one
+(`aer360_estate_road.propose_payee`, one writing shared by both), has Holdings pay it TRADE_RAW and no more through T14's machinery
+by import (`Runner.pay`: review, create, submit, the signers' presses, execute, the landing reads; `treasury_pays_the_shortfall` where
+Holdings is short; `credit_gas` through the admin road where the review refuses for want of gas), and waits for its own money: the set
+settled, the instruction confirmed, the wallet's USDC read through wallet.get_balances. The estate's people come from where they are
+(`~/.aer360-harness/`); the one sentence on this road that names a thing a person must do is T14's treasury top-up. And S3 sends, S5
+and S9 expect, the funding wallet the connector's own register holds for an owner that already exists (`GET /v1/account`): a funding
+root is registered once (connector Spec 8), and the file is read only when the owner's root is about to be registered.
+
 THE LIVE TIGHTENING (AAOI IM3) is a marked second pass: every body below is derived from the source, and only the bodies
 the source leaves genuinely ambiguous carry a LIVE-TODO comment. `--dry` is the walk, green now; the live run is proven
 once the production connector is deployed.
@@ -148,6 +162,10 @@ import corridor_harness as H  # noqa: E402  (the OAuth road, the MCP session, th
 import corridor_consent as C  # noqa: E402  (the harness's own customer and the consent road)
 import series as S  # noqa: E402
 import tables as T  # noqa: E402
+import aer360_answers as A  # noqa: E402  (Harness Holdings' people, by name: the founder, the roster, the clerk)
+import aer360_estate_road as R  # noqa: E402  (the estate's payee road, one writing shared with the estate harness's S6)
+import aer360_harness as E  # noqa: E402  (the estate harness: its Runner is the road Harness Holdings pays on — review, create, submit, sign, execute, land)
+import aer360_tables as ET  # noqa: E402  (the estate's own words for money, the Treasury, the admin credential)
 
 # ---------------------------------------------------------------------------
 # Where it runs, who it is, where it keeps things.
@@ -159,6 +177,11 @@ DEFAULT_BASE = H.DEFAULT_ISSUER  # the customer connector the Owner's Guide send
 # without --i-mean-it.
 TEST_RINGS: Tuple[str, ...] = ()
 STORE_DIR = "~/.connect-harness"  # ~/.connect-harness/<owner>/: passkey.json, customer.json, client.json, run.json, tokens
+# The estate the owner's money is in (Spec T23): Harness Holdings and Harness Treasury as the estate harness left them — the people's
+# passkeys under ~/.aer360-harness/harness-holdings/ and harness-treasury/, the platform's admin credential in admin.env, the funding wallet
+# file beside them. The base is the estate harness's own default (aer360_tables.py names no base URL; aer360_harness.py does).
+ESTATE_BASE = E.DEFAULT_BASE
+ESTATE_STORE_DIR = C.AER360_STORE_DIR
 RUNS_DIR = H.RUNS_DIR  # the report and the evidence go to a folder of their own here, never into the checkout
 DEFAULT_OWNER = "pathfinder"  # harness+pathfinder@aeredium.io
 EXPECTED_GROUP = "group-100"  # S2: the production signing group (the Group 100 brief of 27 September 2026)
@@ -263,10 +286,31 @@ TRADE: Dict[str, Any] = {
 }
 TRADE_USD_CENTS = 10
 TRADE_RAW = TRADE_USD_CENTS * 10 ** (T.DECIMALS["USDC"] - 2)  # 100000: ten cents of USDC at six decimals
-FUND_SENTENCE = ("fund %s on %s with US$0.10 of USDC (100000 minor units) and no more — the teardown's delete refuses while the "
-                 "wallet holds a cent of a stablecoin; the harness reads the wallet for %d s, and it holds %s")
-UNFUNDED_SENTENCE = ("the wallet %s on %s holds %s, and the swap needs %d minor units of USDC: nothing arrived within %d s, so no swap "
-                     "was made — this run's agent is born with an empty wallet, and no station funds it")
+# S11 FUNDS THE AGENT ITSELF (Spec T23; Bear, 2 October 2026: "I am not intervening in the harnessed dealings. It has to be done
+# automatically. We already financed the gas. That's all there is."). The harness IS the owner; the owner's money is Harness Holdings';
+# and the estate harness already moves Holdings' USDC with no key in anyone's hands, through AER 360's own payment road. So where the
+# child wallet is short of TRADE_RAW, S11 makes the wallet a payee of Harness Holdings (exactly as the estate harness's S6 makes Northwind
+# one) and has Holdings pay it TRADE_RAW and no more — reviewed, created, submitted, approved by the signers and executed by its author
+# through the estate's own machinery (aer360_harness.Runner.pay), with Harness Treasury paying Holdings the shortfall first where Holdings
+# is short (T14) and gas credited through the platform's admin road where the review refuses for want of it (T14). The only sentence on
+# this road that names a thing a person must do names a treasury top-up (T14's), never a per-run act. No key is anywhere.
+PAYEE_NAME = "%s (agent wallet)"  # <owner>-trader-<run id> (agent wallet): the payee that is this run's agent
+FUNDING_SENTENCE = "funding %s on %s with US$0.10 of USDC from Harness Holdings through the estate's own road: set %s, run %s"
+FUNDED_SENTENCE = "the wallet holds %d minor units of USDC now (handleOps %s); the trade goes on"
+SHORT_SENTENCE = "the wallet %s on %s holds %s, and the swap needs %d minor units of USDC: Harness Holdings funds it through the estate's own road"
+HELD_ALREADY_SENTENCE = "the wallet %s on %s holds %d minor units of USDC already, at or above the swap's %d, so nothing is funded this run"
+NOT_LANDED_SENTENCE = ("the wallet %s on %s holds %s, and the swap needs %d minor units of USDC: the payment Harness Holdings made for it (set %s) "
+                       "had not landed within %d s — %s; no swap was made")
+PAYEE_REFUSED_SENTENCE = "the estate refused the agent's wallet %s as a payee — %s; nothing was sent"
+NOT_WHITELISTED_SENTENCE = "the estate's register reads %s for the payee %s, not whitelisted (%s); nothing was sent"
+FUNDING_FAILED_SENTENCE = "the funding payment from Harness Holdings did not land — %s; no swap was made"
+TREASURY_PAYMENT_FAILED_SENTENCE = "Harness Treasury's payment of the shortfall to Harness Holdings did not land — %s; nothing was sent to the agent's wallet"
+# The estate harness's own sentence for a founder it holds no passkey for (aer360_harness.py, station_s1), with what to run first.
+ESTATE_FOUNDER_ABSENT = "no passkey is stored for %s at %s and no --invite <link> was given; the first run needs the invitation link"
+RUN_THE_ESTATE_FIRST = "run aer360_harness.py first"
+NO_ESTATE_FOUNDER_SENTENCE = "%s — " + ESTATE_FOUNDER_ABSENT + "; " + RUN_THE_ESTATE_FIRST + " (S1 enrols Harness Holdings' founder); nothing was sent"
+NO_ESTATE_WALLET_SENTENCE = "Harness Holdings has no funding wallet to pay from — %s; " + RUN_THE_ESTATE_FIRST + " (S5 births the funding wallet); nothing was sent"
+ESTATE_NOT_HOLDINGS_SENTENCE = "the founder's session at %s names the workspace %r, not %r; nothing was sent"
 # The ERC-4337 paymaster deployed for group-100 on Arbitrum, as the architecture of 2 October 2026 names it ("the ERC-4337
 # paymaster at 0x2275…70ec on Arbitrum"); the platform's gas road points at it on P0. Read off the chain, never sent to.
 PAYMASTER = {"arbitrum": "0x2275c477acef13886c0cb3eb7ab55ea1e07370ec"}
@@ -1159,7 +1203,8 @@ class Pathfinder:
                  say: Callable[[str], None] = print, sleep: Callable[[float], None] = time.sleep,
                  clock: Callable[[], float] = time.monotonic, openssl: str = C.PK.OPENSSL,
                  started_at: Optional[_dt.datetime] = None, interval: float = TRADE_POLL_SECONDS,
-                 deadline: float = TRADE_DEADLINE_SECONDS, dry: bool = False):
+                 deadline: float = TRADE_DEADLINE_SECONDS, dry: bool = False, estate_base: str = ESTATE_BASE,
+                 estate_store: str = ESTATE_STORE_DIR, estate_transport: Optional[E.Transport] = None, estate_admin_env: Optional[str] = None):
         self.base = base.rstrip("/")
         self.owner = owner
         self.store_dir = os.path.expanduser(store_dir)
@@ -1167,7 +1212,14 @@ class Pathfinder:
         self.start_at = start_at
         self.i_mean_it = i_mean_it
         self.rings = tuple(TEST_RINGS) + tuple(test_rings)
-        self.funding_wallet = funding_wallet
+        # Spec T23: the estate the owner's money is in, read from where the estate harness keeps it — its base, its store (the people's passkeys
+        # under harness-holdings/ and harness-treasury/), the admin credential in admin.env, and the funding wallet file beside them
+        self.estate_base = estate_base.rstrip("/")
+        self.estate_store = os.path.expanduser(estate_store)
+        self.estate_transport: E.Transport = estate_transport or E.urllib_transport
+        self.estate_admin_env = estate_admin_env or os.path.join(self.estate_store, ET.ADMIN_ENV_FILE)
+        self.funding_wallet = funding_wallet or os.path.join(self.estate_store, C.HARNESS_HOLDINGS, C.FUNDING_WALLET_FILE)
+        self.estate: Optional[E.Runner] = None
         self.rpc_url = rpc_url or T.REHEARSAL_RPC[TRADE["chain"]].url
         self._say = say
         self.sleep = sleep
@@ -1558,12 +1610,14 @@ class Pathfinder:
     def station_s3(self) -> Outcome:
         self.guard("S3")
         self.need(self.signed_in, NO_SESSION)
-        funding = C.funding_wallet_address(self.funding_wallet)  # refuses before any call, in the consent's own sentence
         self.expect("", **{
+            "GET " + ACCOUNT_ROUTE: "200 with the owner's account: customer.fundingWallet.address, the funding root the connector registered at the "
+                                    "owner's first agent and keeps since (connector Spec 8: registered once), or null for an owner it holds none for yet",
             "GET " + AGENTS_NEW_ROUTE: "200 with the roles, each with its questionnaire (trader.v1 among them), and the chain offer",
             "POST " + C.STEPUP_OPTIONS: "200 with options (challenge, rpId) under the purpose approve, the nonce and issuedAtMs",
             "POST " + AGENTS_ROUTE: "200 with the agent (its id, its child wallet, its pact read back from the platform) and how Claude reaches it",
         })
+        funding, funding_words = self.funding_wallet_for_the_press()  # the connector's, else the file's — refused before any press where both are missing
         answer, offer = self.call("GET", AGENTS_NEW_ROUTE)
         if answer.status != 200 or not isinstance(offer, dict):
             refusal = C.refusal_of(offer) or {}
@@ -1609,9 +1663,9 @@ class Pathfinder:
         self.save_state()
         if agent.get("name") != self.label or agent.get("roleId") != ROLE_ID:
             raise StationStop("the press created %s (%s), and the harness asked for %s (%s)" % (agent.get("name"), agent.get("roleId"), self.label, ROLE_ID), outcome=FAIL)
-        return Outcome("S3", PASS, "create agent: %s (%s) created with a fresh passkey; agent %s, child wallet %s at %s on %s, funding wallet %s; "
+        return Outcome("S3", PASS, "create agent: %s (%s) created with a fresh passkey; agent %s, child wallet %s at %s on %s, funding wallet %s — %s; "
                        "the chains %s, per trade US$%s, per day US$%s, ask me first above US$%s, %s transactions a day"
-                       % (self.label, ROLE_ID, agent.get("id"), wallet.get("id"), wallet.get("address"), wallet.get("chain"), funding,
+                       % (self.label, ROLE_ID, agent.get("id"), wallet.get("id"), wallet.get("address"), wallet.get("chain"), funding, funding_words,
                           ", ".join(answers["chains"]), answers["perTxUsd"], answers["dailyUsd"], answers["holdAboveUsd"], answers["maxTxPerDay"])
                        + ("; the pact %s %s" % (pact.get("id"), pact.get("state")) if pact else ""))
 
@@ -1659,10 +1713,38 @@ class Pathfinder:
                        + ("; %s" % filed.get("entrySaid") if filed.get("entrySaid") else ""))
 
     # -- S5 The child wallet --------------------------------------------------------------------------------
+    def registered_funding_wallet(self) -> Optional[str]:
+        """
+        The funding wallet the connector's register of record holds for this owner — GET /v1/account, customer.fundingWallet.address: the
+        funding root registered at the owner's first agent and kept since (connector Spec 8, services/ceremony.ts provisionCustomer: "a customer
+        who already has a funding root keeps it") — in the connector's own spelling, or None where the connector holds none for the owner yet.
+        """
+        answer, owner = self.call("GET", ACCOUNT_ROUTE)
+        if answer.status != 200 or not isinstance(owner, dict):
+            raise self.refused("the account", "GET " + ACCOUNT_ROUTE, answer, owner)
+        customer = owner.get("customer") if isinstance(owner.get("customer"), dict) else {}
+        top = customer.get("fundingWallet") if isinstance(customer.get("fundingWallet"), dict) else {}
+        address = str(top.get("address") or "").strip()
+        return address if C.ADDRESS_FORM.match(address) else None
+
+    def funding_wallet_for_the_press(self) -> Tuple[str, str]:
+        """
+        Spec T23: the connector is right about an owner's funding wallet — the root is registered once, at the owner's first agent — so for an
+        owner that already exists S3 sends, and S5 and S9 expect, the address GET /v1/account reports; the file (the estate harness's
+        funding-wallet.json, rewritten by every estate run that births a wallet) is read only for an owner the connector lists no funding wallet
+        for, the one this press is about to register. Answers the address and the S3 line's words saying which was used and why.
+        """
+        registered = self.registered_funding_wallet()
+        if registered:
+            return registered, ("the connector's, registered at the owner's first agent and kept since (GET %s customer.fundingWallet; a funding root is "
+                                "registered once, connector Spec 8), so the file at %s was not read" % (ACCOUNT_ROUTE, self.funding_wallet))
+        funding = C.funding_wallet_address(self.funding_wallet)  # refuses before any press, in the consent's own sentence
+        return funding, "the file's (%s): the connector lists no funding wallet for this owner yet, and this press registers it" % self.funding_wallet
+
     def funding_address(self) -> str:
-        """The funding wallet S3 sent, or — on a run resumed past S3 — the same file read again."""
+        """The funding wallet S3 sent, or — on a run resumed past S3 — the connector's registered one read again, else the file's."""
         if not self.facts.get("funding"):
-            self.facts["funding"] = C.funding_wallet_address(self.funding_wallet)
+            self.facts["funding"] = self.funding_wallet_for_the_press()[0]
         return str(self.facts["funding"])
 
     def station_s5(self) -> Outcome:
@@ -1683,8 +1765,8 @@ class Pathfinder:
             raise StationStop("the Wallet minted a mock wallet (isMock true): its address holds no key and nothing can be signed for it", outcome=FAIL)
         # Bound to the owner: the child wallet is minted against the owner's own top-level wallet, the funding wallet S3 sent,
         # and the account the owner's session reads lists the agent as the owner's.
-        funding = self.funding_address()
         self.expect("200 with the owner's account: its funding wallet the one S3 sent, and this run's agent among its agents")
+        funding = self.funding_address()
         account, owner = self.call("GET", ACCOUNT_ROUTE)
         if account.status != 200 or not isinstance(owner, dict):
             raise self.refused("the account", "GET " + ACCOUNT_ROUTE, account, owner)
@@ -2000,15 +2082,16 @@ class Pathfinder:
                               "at S10" % self.start_at, outcome=NOT_RUN)
         self.need(self.facts.get("receipt"), NO_RECEIPT)
         facts = {"wallet_id": wallet["id"]}
-        # the wallet's own balances first: the harness trades only what the wallet holds
-        self.expect("the wallet's balances on its own chain: USDC at least %d minor units (US$0.10)" % TRADE_RAW)
-        args, _ = H.arguments_for(self.mcp.schema_of("wallet.get_balances"), {}, facts)
-        balances = self.mcp.call("wallet.get_balances", args, "S11")
-        usdc = balance_row(balances.data, TRADE["chain"], TRADE["asset"])
-        weth = balance_row(balances.data, TRADE["chain"], TRADE["to_asset"])
-        held = raw_of(usdc)
+        # the wallet's own balances first: the harness trades only what the wallet holds — and where the wallet is short, the harness funds it
+        # itself, from Harness Holdings through the estate's own road (Spec T23); no station asks a person for anything
+        self.expect("the wallet's balances on its own chain: USDC at least %d minor units (US$0.10); short of it, Harness Holdings funds the "
+                    "wallet through the estate's own road" % TRADE_RAW)
+        balances, usdc, weth, held = self.read_agent_balances(facts)
+        funded: Optional[str] = None
         if held is None or held < TRADE_RAW:
-            usdc, weth, held = self.until_funded(wallet, facts, held, balances)
+            usdc, weth, held, funded = self.fund_the_wallet(wallet, facts, held, balances)
+        else:
+            self.note(HELD_ALREADY_SENTENCE % (wallet.get("address"), TRADE["chain"], held, TRADE_RAW))
         self.facts["before"] = {"usdc": held, "weth": raw_of(weth), "usdc_contract": contract_of(usdc), "weth_contract": contract_of(weth)}
         self.expect("200: the gas account read live, before the trade")
         gas_answer, gas = self.call("GET", GAS_ACCOUNT_ROUTE)
@@ -2100,8 +2183,10 @@ class Pathfinder:
         if problems:
             raise StationStop("; ".join(problems), outcome=FAIL)
         self.facts["event"] = event
-        return Outcome("S11", PASS, "the trade: ticket %s submitted; the operation %s landed in the handleOps transaction %s (block %s), from the wallet "
+        return Outcome("S11", PASS, "the trade: %sticket %s submitted; the operation %s landed in the handleOps transaction %s (block %s), from the wallet "
                        "%s, sponsored by the paymaster %s; the Wallet's calls %s; reserved US$%s, debited US$%s" % (
+                           ("funded by Harness Holdings through the estate's own road — %s; " % funded) if funded
+                           else "the wallet held %d minor units of USDC already, so nothing was funded; " % held,
                            build["ticket_id"], user_op_hash, handle_ops, H.hex_quantity(receipt.get("blockNumber")), event["sender"], event["paymaster"],
                            ", ".join(operation.get("calls") or []) or "not stated", operation.get("reserved_usd") or "not stated",
                            operation.get("debited_usd") or "not stated"))
@@ -2118,27 +2203,282 @@ class Pathfinder:
         }
         self.save_state()
 
-    def until_funded(self, wallet: Dict[str, Any], facts: Dict[str, Any], held: Optional[int], balances: H.McpAnswer
+    # -- S11 funds the agent itself (Spec T23) ----------------------------------------------------------------
+    def read_agent_balances(self, facts: Dict[str, Any]) -> Tuple[H.McpAnswer, Optional[Dict[str, Any]], Optional[Dict[str, Any]], Optional[int]]:
+        """The child wallet's balances through wallet.get_balances: the answer, its USDC and WETH rows on the trade's chain, and the USDC held in minor units."""
+        args, _ = H.arguments_for(self.mcp.schema_of("wallet.get_balances"), {}, facts)
+        balances = self.mcp.call("wallet.get_balances", args, "S11")
+        usdc = balance_row(balances.data, TRADE["chain"], TRADE["asset"])
+        return balances, usdc, balance_row(balances.data, TRADE["chain"], TRADE["to_asset"]), raw_of(usdc)
+
+    @staticmethod
+    def holds_words(held: Optional[int], balances: H.McpAnswer) -> str:
+        return ("%d minor units of USDC" % held) if held is not None else "no USDC row the harness could read (%s)" % short_json(balances.data, 300)
+
+    def agent_wallet_usdc(self, facts: Dict[str, Any]) -> Tuple[Optional[int], str]:
+        """The payee's balance as the estate's payment road reads one (Runner.pay, before and after): the child wallet's USDC through wallet.get_balances."""
+        balances, _, _, held = self.read_agent_balances(facts)
+        return held, self.holds_words(held, balances)
+
+    def fund_the_wallet(self, wallet: Dict[str, Any], facts: Dict[str, Any], held: Optional[int], balances: H.McpAnswer
+                        ) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]], int, str]:
+        """
+        Spec T23: this run's agent is born with an empty wallet, and the harness — the owner — funds it from Harness Holdings through the
+        estate's own road, exactly as the estate harness moves Holdings' money (S6, S7, T14): the wallet made a payee at the roster's quorum,
+        one one-off set of one payment of TRADE_RAW, reviewed, created, submitted, approved and executed through the estate's machinery, the
+        Treasury paying Holdings the shortfall first where Holdings is short, gas credited through the admin road where the review refuses
+        for want of it; then the harness waits for its own money (until_funded). The estate harness's own stops travel in its words: a
+        missing prerequisite — the Treasury not born, no admin credential — is a stop this run cannot get past by itself; the estate's
+        refusal is the estate failing; a transport fault is unreachable. Answers the wallet's USDC and WETH rows, the USDC held, and the words.
+        """
+        address = str(wallet.get("address") or "")
+        self.note(SHORT_SENTENCE % (address, TRADE["chain"], self.holds_words(held, balances), TRADE_RAW))
+        self.facts["estate_sent"] = []
+        try:
+            return self.holdings_pays_the_wallet(address, facts)
+        except E.StationStop as stop:
+            raise StationStop("%s; %s" % (stop, self.sent_words()) if stop.prerequisite else "%s; %s" % (stop.sentence, self.sent_words()),
+                              outcome=STOPPED if stop.prerequisite else FAIL)
+        except E.Unreachable as err:
+            raise StationStop("unreachable: the estate could not be reached, so nothing was judged: %s; %s" % (err, self.sent_words()), outcome=FAIL)
+        except E.HarnessError as err:
+            raise StationStop("the estate harness could not complete the funding (a fault, not a judgment): %s; %s" % (err, self.sent_words()), outcome=FAIL)
+
+    def sent_words(self) -> str:
+        """What this run's funding road had sent when it stopped — nothing, or each payment that left, named — so no stop says 'nothing was sent' untruthfully."""
+        sent = self.facts.get("estate_sent") or []
+        return "nothing was sent" if not sent else "sent before the stop: %s" % "; ".join(sent)
+
+    def estate_runner(self) -> E.Runner:
+        """
+        The estate harness's own Runner for Harness Holdings — its wire, its people, its payee and payment roads — on the estate's base and
+        store, with this run's clock, sleep and terminal, and its evidence written into this run's record as it happens (the Treasury's own
+        runner beside it the same). Built once per run; nothing is sent until a station asks it to.
+        """
+        if self.estate is None:
+            estate = E.Runner(self.estate_base, self.estate_store, transport=self.estate_transport, say=self.say, sleep=self.sleep, clock=self.clock,
+                              openssl=self.customer.openssl, admin_env=self.estate_admin_env, in_colour=False)
+            estate.load_passkeys()
+            self.adopt_estate_records(estate, A.ESTATE["company"])
+            self.adopt_estate_records(estate.for_treasury(), ET.TREASURY["company"])
+            self.estate = estate
+        return self.estate
+
+    def adopt_estate_records(self, runner: E.Runner, where: str) -> None:
+        """
+        Every evidence entry, note and finding the estate runner writes is written into this run's record the moment it is written — the
+        route, who, what was sent, what came back (redacted by the estate runner to the last four characters, and once more here with every
+        secret it has seen), the expectation and the result — so the report's S11 carries the estate's road call by call beside the
+        connector's and the doors'. The runner's own records are kept as they are.
+        """
+        original_step, original_note, original_finding = runner.step, runner.note, runner.finding
+
+        def step(station: str, call_answer: Any, expected: str, result: str, sent: Any = None, who: str = "") -> None:
+            original_step(station, call_answer, expected, result, sent, who)
+            entry = runner.evidence[station][-1]
+            for value in runner.secrets.values:
+                if value not in self.secrets:
+                    self.secrets.append(value)
+            line = {"at": H.now_iso(), "station": self.current, "route": entry["route"], "who": "%s (%s)" % (entry["who"] or "nobody", where),
+                    "sent": H.redact(entry["sent"], self.secrets, mask=C.last4), "status": entry["status"],
+                    "came_back": H.redact(entry["came_back"], self.secrets, mask=C.last4), "headers": None, "elapsed_ms": entry["elapsed_ms"],
+                    "expected": entry["expected"], "result": entry["result"]}
+            self.steps.setdefault(self.current, []).append(line)
+            self.folder.record(**line)
+
+        def note(station: str, text: str) -> None:
+            original_note(station, text)
+            self.notes.setdefault(self.current, []).append("%s: %s" % (where, text))
+
+        def finding(station: str, probe: str, sent: Any, answer: Any, expected: str, said: str) -> Any:
+            found = original_finding(station, probe, sent, answer, expected, said)
+            self.notes.setdefault(self.current, []).append("a finding of the estate's at %s — %s: %s" % (where, probe, said))
+            return found
+
+        runner.step, runner.note, runner.finding = step, note, finding  # type: ignore[assignment]
+
+    def estate_people(self) -> Tuple[E.Runner, E.Person, E.Person]:
+        """
+        Harness Holdings' people, from where they already are (Spec T23 §5): each of the census — the founder who creates the payee, the roster
+        who press it to its quorum, the clerk who authors the payment, the signers — signed in with the passkey the estate harness stored under
+        ~/.aer360-harness/harness-holdings/ (the newest file per person), on the estate's own base. A founder with no passkey stops S11 with the
+        estate harness's own sentence for that absence; a person without one is noted and does not press. Answers the runner, the founder and the clerk.
+        """
+        estate = self.estate_runner()
+        founder = estate.people[A.FOUNDER]
+        if founder.passkey is None:
+            raise StationStop(NO_ESTATE_FOUNDER_SENTENCE % (E.FOUNDER_NOT_ENROLLED, founder.name, estate.key_path(founder)), outcome=STOPPED)
+        for key in A.CENSUS_ORDER:
+            person = estate.people[key]
+            if person.passkey is None:
+                self.note("%s has no passkey stored at %s, so %s does not press for %s this run" % (person.name, estate.key_path(person), person.name, A.ESTATE["company"]))
+                continue
+            verified, _ = estate.sign_in(person, "S11")
+            estate.step("S11", verified, "a session for %s at %s, with the stored passkey" % (person.name, A.ESTATE["company"]),
+                        "signed in" if verified.ok else verified.sentence(), {"nonce": "<nonce>", "issuedAtMs": "<issuedAtMs>", "response": "<assertion>"}, person.name)
+            if not verified.ok:
+                if key == A.FOUNDER:
+                    raise StationStop("%s's founder could not sign in — POST /v1/auth/login/verify answered %s; nothing was sent" % (A.ESTATE["company"], verified.sentence()), outcome=FAIL)
+                self.note("%s could not sign in at %s (%s), so %s does not press this run" % (person.name, A.ESTATE["company"], verified.sentence(), person.name))
+        workspace = (founder.session or {}).get("workspace") or {}
+        name = str(workspace.get("name") or "")
+        if name.strip().lower() != A.ESTATE["company"].lower():
+            raise StationStop(ESTATE_NOT_HOLDINGS_SENTENCE % (self.estate_base, name, A.ESTATE["company"]), outcome=FAIL)
+        estate.facts["workspace"] = workspace
+        return estate, founder, estate.clerk()
+
+    def holdings_pays_the_wallet(self, address: str, facts: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]], int, str]:
+        """
+        The road, in order (Spec T23 §1 to §3). The reads first, which create nothing: Holdings' workspace (its funding wallet, the operating
+        account the agent is paid from, and the platform account its gas stands on), the admin credential, Holdings' USDC — and where Holdings is
+        short of TRADE_RAW, the Treasury brought in and its USDC read, so a Treasury that cannot cover the shortfall stops the run with T14's
+        sentence before anything is made. Then the payee: this run's agent's wallet, named `<label> (agent wallet)`, created, promoted and
+        pressed to the roster's quorum exactly as S6 does Northwind, the register the judge; a refusal is the estate's, in its sentence. Then
+        the money: the Treasury pays Holdings the shortfall first, where there is one (T14 §2); then Holdings pays the wallet TRADE_RAW and no
+        more, through T14's `pay` — the review (gas credited through the admin road where the gas gate refuses, and the review asked again),
+        the creation, the submit, the signers' presses in the spec's order while the run waits, the execute by its author, the register read
+        until the instruction is terminal, the wallet's USDC before and after — judged on the trail as T14 judges a landing. Then the wait.
+        """
+        chain = ET.PAYEE_CHAIN
+        estate, founder, clerk = self.estate_people()
+        workspace = estate.request(clerk, "GET", "/v1/workspace", None, "S11")
+        estate.step("S11", workspace, "%s's workspace: its funding wallet — the operating account the agent's wallet is paid from — and the platform account its gas "
+                    "stands on (workspace.aapAccountId, Spec 104 §1)" % A.ESTATE["company"], "answered" if workspace.ok else workspace.sentence(), None, clerk.name)
+        view = workspace.json if isinstance(workspace.json, dict) else {}
+        funding = view.get("fundingWallet") if isinstance(view.get("fundingWallet"), dict) and view["fundingWallet"].get("address") else None
+        if funding is None:
+            raise StationStop(NO_ESTATE_WALLET_SENTENCE % (view.get("fundingWalletAbsence") or workspace.sentence()), outcome=STOPPED)
+        if isinstance(view.get("workspace"), dict):
+            estate.facts["workspace"] = view  # the whole answer, as the estate's S5 and S7 keep it: the platform account rides in workspace.aapAccountId
+        estate.facts["funding_wallet"] = funding
+        admin = estate.read_admin_env("S11")
+        estate.facts["money"] = {"treasury": {"credited": 0, "payment": None}, "holdings": {"credited": 0}, "payments": []}
+        # 1. the money before: Holdings' USDC; and where Holdings is short, the Treasury's (T14 §2) — reads, which create nothing
+        h_usdc, h_words, _ = estate.read_usdc_balance(estate, clerk, "S11", "Harness Holdings")
+        if h_usdc is None:
+            raise StationStop("%s; nothing was sent" % h_words, outcome=FAIL)
+        shortfall = max(0, TRADE_RAW - h_usdc)
+        treasury: Optional[Dict[str, Any]] = None
+        t: Optional[E.Runner] = None
+        t_founder: Optional[E.Person] = None
+        if shortfall:
+            treasury = estate.bring_in_the_treasury("S11")
+            t = estate.treasury
+            assert t is not None
+            t_founder = t.founder()
+            t_usdc, _, _ = estate.read_usdc_balance(t, t_founder, "S11", ET.TREASURY["short"])
+            needs = "the trade needs %s and Harness Holdings holds %s" % (ET.usdc_dollars(TRADE_RAW), ET.usdc_dollars(h_usdc))
+            if t_usdc is None or t_usdc < shortfall:
+                # T14's sentences, word for word: the one place on this road that names a thing only a person can do — a treasury top-up, never a per-run act
+                holds = ET.usdc_dollars(t_usdc) if t_usdc is not None else "a balance the estate could not say"
+                if treasury.get("born_this_run"):
+                    raise StationStop("%s — %s (%s; the Treasury holds %s); nothing was sent" % (
+                        E.TREASURY_NOT_FUNDED, ET.FUND_TREASURY_SENTENCE % (treasury.get("address"), chain), needs, holds), outcome=STOPPED)
+                raise StationStop("%s — %s (%s); nothing was sent" % (
+                    E.TREASURY_SHORT, ET.TREASURY_SHORT_SENTENCE % (holds, ET.usdc_dollars(shortfall), treasury.get("address"), chain), needs), outcome=STOPPED)
+            money_words = "Harness Holdings holds %s, short of the trade's %s by %s, and %s holds %s" % (
+                ET.usdc_dollars(h_usdc), ET.usdc_dollars(TRADE_RAW), ET.usdc_dollars(shortfall), ET.TREASURY["short"], ET.usdc_dollars(t_usdc))
+        else:
+            money_words = "Harness Holdings holds %s, at or above the trade's %s, so the Treasury was not asked" % (ET.usdc_dollars(h_usdc), ET.usdc_dollars(TRADE_RAW))
+        # 2. the payee is the child wallet (§1): exactly as the estate harness's S6 makes Northwind one, and the register is the judge
+        name = PAYEE_NAME % self.label
+        record, payee_words, whole = R.propose_payee(estate, founder, name, self.label, address, chain, "S11")
+        if record is None or not whole:
+            raise StationStop(PAYEE_REFUSED_SENTENCE % (address, payee_words), outcome=FAIL)
+        R.judge_payee_register(estate, founder, "S11", [record],
+                               "the payees register reading whitelisted for %s, by this run's payee id — the judgement is the register's, not the press's (Spec T13 §3)" % name)
+        self.state["estate"] = {"payee": name, "payee_id": record.get("payee_id"), "address_id": record.get("address_id"), "chain": chain}
+        self.save_state()  # what this run made at the estate is on record the moment it exists
+        if record.get("register_status") != "whitelisted":
+            raise StationStop(NOT_WHITELISTED_SENTENCE % (record.get("register_status"), name, "; ".join(w for w in (payee_words, record.get("mirror")) if w)), outcome=FAIL)
+        payee_said = "the payee %s; the register reads %s" % (payee_words, record.get("register_status"))
+        # 3. the shortfall, paid by the Treasury first, through the same road (T14 §2)
+        treasury_said = ""
+        if shortfall:
+            assert t is not None and t_founder is not None and treasury is not None
+            paid_t = estate.treasury_pays_the_shortfall(t, t_founder, clerk, shortfall, funding["address"], admin)
+            estate.facts["money"]["treasury"]["payment"] = paid_t
+            self.facts["estate_sent"].append("%s's payment of %s to Harness Holdings (set %s)" % (ET.TREASURY["short"], ET.usdc_dollars(shortfall), paid_t.get("set_id")))
+            if not paid_t["landed"]:
+                raise StationStop(TREASURY_PAYMENT_FAILED_SENTENCE % paid_t["said"], outcome=FAIL)
+            treasury_said = "; %s paid Harness Holdings (%s) the shortfall of %s first: %s" % (ET.TREASURY["short"], funding["address"], ET.usdc_dollars(shortfall), paid_t["said"])
+        # 4. Holdings pays the trade's amount, and no more (§2)
+
+        def more_gas(ceiling: Optional[int]) -> bool:
+            credit = estate.credit_gas(estate, "S11", admin, "Harness Holdings", E.Runner.gas_credit_for(ceiling))
+            estate.facts["money"]["holdings"]["credited"] += credit["amount_usd_cents"]
+            return True
+
+        row = {"payeeAddressId": record["address_id"], "asset": ET.PAYMENT_ASSET, "chain": chain, "amountMinor": str(TRADE_RAW), "invoiceRef": "PF-%s" % self.run_id}
+        signers = [estate.people[k] for k in E.SIGNERS_IN_ORDER]
+        expect_words = "Harness Holdings pays %s of %s to %s, the agent's wallet, and no more — the trade's amount (Spec T23 §2)" % (ET.usdc_dollars(TRADE_RAW), ET.PAYMENT_ASSET, address)
+        paid = estate.pay(estate, clerk, self.label, row, TRADE_RAW, address, signers, expect_words, lambda: self.agent_wallet_usdc(facts), station="S11", more_gas=more_gas)
+        self.state["estate"].update(set_id=paid.get("set_id"), instruction_id=paid.get("instruction_id"))
+        self.save_state()
+        if not paid.get("set_id"):
+            raise StationStop(FUNDING_FAILED_SENTENCE % paid["said"], outcome=FAIL)
+        self.facts["estate_sent"].append("Harness Holdings' payment of %s to the agent's wallet (set %s)" % (ET.usdc_dollars(TRADE_RAW), paid["set_id"]))
+        self.note(FUNDING_SENTENCE % (address, chain, paid["set_id"], self.run_id))
+        trail = estate.read_trail(estate, founder, "S11", "the trail: the %s row for the funding payment — userOpHash, the handleOps txHash, gasDebitUsdCents and gasDebit (Spec 104 §2, §5)" % ET.INSTRUCTION_CONFIRMED)
+        estate.judge_landing(paid, trail)
+        if paid.get("executed") is None or isinstance(paid.get("executed"), str):
+            raise StationStop(FUNDING_FAILED_SENTENCE % paid["said"], outcome=FAIL)  # refused at the review or the creation, not submitted, waiting with nobody left to sign, or the execute refused: in the words it stopped with
+        usdc, weth, held = self.until_funded(estate, founder, clerk, paid, address, facts)
+        self.facts["funded"] = {k: paid.get(k) for k in ("set_id", "instruction_id", "status", "set_status", "tx_hash", "user_op_hash", "gas_debit", "gas_debit_cents", "landed",
+                                                           "balance_before", "balance_after")}
+        self.facts["funded"].update(payee_id=record.get("payee_id"), address_id=record.get("address_id"), holdings_before=h_usdc, shortfall=shortfall,
+                                    treasury_payment=(estate.facts["money"]["treasury"].get("payment") or {}).get("set_id"), gas_credited=estate.facts["money"]["holdings"]["credited"])
+        return usdc, weth, held, "%s; %s%s; Harness Holdings paid the agent's wallet %s: %s" % (payee_said, money_words, treasury_said, ET.usdc_dollars(TRADE_RAW), paid["said"])
+
+    @staticmethod
+    def landing_words(paid: Dict[str, Any]) -> str:
+        """The payment's state in the estate's words: the instruction, its failure reason where it has one, the run, the handleOps hash where it is named."""
+        return "the instruction %s%s, the run %s%s" % (paid.get("status") or "not read", (" (%s)" % paid["failure_reason"]) if paid.get("failure_reason") else "",
+                                                       paid.get("set_status") or "not read", (", handleOps %s" % paid["tx_hash"]) if paid.get("tx_hash") else "")
+
+    def read_the_set_again(self, estate: E.Runner, clerk: E.Person, paid: Dict[str, Any]) -> None:
+        """One read of the run as the register shows it (GET /v1/sets/{id}), the payment's record updated from it: the run's status, the instruction's, its txHash, its failure reason."""
+        answer = estate.request(clerk, "GET", "/v1/sets/%s" % paid["set_id"], None, "S11")
+        estate.step("S11", answer, "the run as the register shows it: the instruction confirmed (the platform reported the operation landed) and the run settled, or not yet",
+                    "answered" if answer.ok else answer.sentence(), None, clerk.name)
+        if not answer.ok or not isinstance(answer.json, dict):
+            return
+        set_row = answer.json.get("set") if isinstance(answer.json.get("set"), dict) else {}
+        instruction = next((i for i in (set_row.get("instructions") or []) if isinstance(i, dict)), None) or {}
+        paid.update(view=answer.json, set_status=set_row.get("status"), status=instruction.get("status"), tx_hash=instruction.get("txHash") or paid.get("tx_hash"),
+                    failure_reason=instruction.get("failureReason"), gas_value=instruction.get("gasValue"))
+
+    def until_funded(self, estate: E.Runner, founder: E.Person, clerk: E.Person, paid: Dict[str, Any], address: str, facts: Dict[str, Any]
                      ) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]], int]:
         """
-        This run's agent was born with this run, so its wallet is born empty, and no station funds it: the harness says once what
-        the swap needs and where, then reads the wallet's balances every interval to the deadline. Funded, the trade goes on;
-        not funded, S11 stops in one sentence, and the teardown removes an agent whose wallet holds nothing.
+        The loop that once waited for a person waits for the harness's own money (Spec T23 §3): the set settled and the instruction confirmed —
+        read again from the estate's register, every interval, while they are not — and the child wallet's USDC, read through wallet.get_balances,
+        at or above TRADE_RAW; --funds-wait bounds the wait. Landed, the trade goes on; a payment the estate reports failed or rejected stops S11 in
+        the estate's words; one not landed within the wait stops S11 naming the set and the state the register last gave it.
         """
-        holds = ("%d minor units of USDC" % held) if held is not None else "no USDC row the harness could read (%s)" % short_json(balances.data, 300)
-        self.note(FUND_SENTENCE % (wallet.get("address"), TRADE["chain"], int(self.deadline), holds))
+        set_id = str(paid.get("set_id"))
         deadline_at = self.clock() + self.deadline
-        while self.clock() < deadline_at:
+        while True:
+            status, set_status = str(paid.get("status") or ""), str(paid.get("set_status") or "")
+            terminal = set_status in ET.SET_TERMINAL_STATES and status in ET.INSTRUCTION_TERMINAL_STATES
+            if status in ("failed", "rejected") or (terminal and status != ET.INSTRUCTION_CONFIRMED_STATE):
+                raise StationStop(FUNDING_FAILED_SENTENCE % self.landing_words(paid), outcome=FAIL)
+            balances, usdc, weth, held = self.read_agent_balances(facts)
+            if set_status == ET.SET_SETTLED and status == ET.INSTRUCTION_CONFIRMED_STATE and held is not None and held >= TRADE_RAW:
+                if not paid.get("landed"):
+                    # the register says it landed after the payment road's own bounded reads had given up: judged again, on the trail, as T14 judges a
+                    # landing — the earlier verdict's words set aside first, since judge_landing carries a record's standing failure into its count
+                    paid.update(balance_after=held, failure=None, spoken=[w for w in (paid.get("spoken") or []) if not str(w).startswith("not landed — ")])
+                    trail = estate.read_trail(estate, founder, "S11", "the trail, read again now the register says the run settled: the %s row for the funding payment" % ET.INSTRUCTION_CONFIRMED)
+                    estate.judge_landing(paid, trail)
+                self.note(FUNDED_SENTENCE % (held, paid.get("tx_hash") or "not named"))
+                return usdc, weth, held
+            if self.clock() >= deadline_at:
+                break
             self.sleep(self.interval)
-            args, _ = H.arguments_for(self.mcp.schema_of("wallet.get_balances"), {}, facts)
-            balances = self.mcp.call("wallet.get_balances", args, "S11")
-            usdc = balance_row(balances.data, TRADE["chain"], TRADE["asset"])
-            held = raw_of(usdc)
-            if held is not None and held >= TRADE_RAW:
-                self.note("the wallet holds %d minor units of USDC now; the trade goes on" % held)
-                return usdc, balance_row(balances.data, TRADE["chain"], TRADE["to_asset"]), held
-        raise StationStop(UNFUNDED_SENTENCE % (wallet.get("address"), TRADE["chain"], ("%d minor units of USDC" % held) if held is not None else
-                                               "no USDC the harness could read", TRADE_RAW, int(self.deadline)))
+            if not terminal:
+                self.read_the_set_again(estate, clerk, paid)
+        raise StationStop(NOT_LANDED_SENTENCE % (address, TRADE["chain"], self.holds_words(held, balances), TRADE_RAW, set_id, int(self.deadline), self.landing_words(paid)), outcome=FAIL)
 
     def until_landed(self, operation: Dict[str, Any], ticket_id: str) -> Dict[str, Any]:
         """
@@ -2631,7 +2971,8 @@ def _j(value: Any) -> str:
 
 
 def dry_lines(base: str = DEFAULT_BASE, owner: str = DEFAULT_OWNER, store_dir: str = STORE_DIR, start_at: Optional[str] = None,
-              i_mean_it: bool = False, test_rings: Sequence[str] = (), funding_wallet: Optional[str] = None) -> List[str]:
+              i_mean_it: bool = False, test_rings: Sequence[str] = (), funding_wallet: Optional[str] = None, estate_base: str = ESTATE_BASE,
+              estate_store: str = ESTATE_STORE_DIR) -> List[str]:
     """Every station and every call the harness would make, in order. Nothing is sent and nothing is written."""
     if not C.TESTER_NAME.match(owner):
         raise C.ConsentStop(C.TESTER_NAME_SENTENCE % (owner, C.HARNESS_EMAIL % "<owner>"))
@@ -2683,8 +3024,10 @@ def dry_lines(base: str = DEFAULT_BASE, owner: str = DEFAULT_OWNER, store_dir: s
     station("S2", "the account: the owner born once, the seat's standing, the assigned group %s" % EXPECTED_GROUP)
     call("S2", "GET %s → expect 200: customer.id = customer.json's, subscription.standing paid, the assigned signing group %s" % (ACCOUNT_ROUTE, EXPECTED_GROUP))
     station("S3", "this run's own agent, %s (%s), with a fresh passkey" % (label, ROLE_ID))
-    call("S3", "[file] the funding wallet from %s (checksummed; refused before any call where it is missing)" % (
-        funding_wallet or os.path.join(C.AER360_STORE_DIR, C.HARNESS_HOLDINGS, C.FUNDING_WALLET_FILE)))
+    call("S3", "GET %s → expect 200: customer.fundingWallet.address, the funding root the connector registered at the owner's first agent and keeps since "
+         "(connector Spec 8: registered once) — sent as fundingAddress for an owner that already has one; for an owner the connector lists none for, [file] "
+         "the funding wallet from %s (checksummed; refused before any press where it is missing)" % (
+             ACCOUNT_ROUTE, funding_wallet or os.path.join(estate_store, C.HARNESS_HOLDINGS, C.FUNDING_WALLET_FILE)))
     call("S3", "GET %s → expect 200: roles (%s with its questionnaire: holdAboveUsd, maxTxPerDay, chains, assets), chainOffer.chains (%s among them)" % (
         AGENTS_NEW_ROUTE, ROLE_ID, TRADE["chain"]))
     call("S3", "POST %s {} → expect 200: options (challenge, rpId) under the purpose approve, nonce, issuedAtMs" % C.STEPUP_OPTIONS)
@@ -2717,9 +3060,36 @@ def dry_lines(base: str = DEFAULT_BASE, owner: str = DEFAULT_OWNER, store_dir: s
     call("S9", "MCP tools/call %s {} → expect wallet.id (a UUID, S3's), limits.pactId (S4's) and state active, gas_account US$<available>" % H.MY_AGENT_TOOL)
     station("S10", "the judgment: the trade within the mandate, a receipt")
     call("S10", "MCP tools/call police.check_action %s → expect allow with a receipt" % _j(trade_check))
-    station("S11", "a real swap, landed, sponsored by the paymaster")
-    call("S11", "MCP tools/call wallet.get_balances %s → expect USDC on %s of at least %d minor units, else: \"%s\"" % (
-        _j({"wallet_id": "<wallet UUID>"}), TRADE["chain"], TRADE_RAW, FUND_SENTENCE % ("<wallet address>", TRADE["chain"], int(TRADE_DEADLINE_SECONDS), "<what it holds>")))
+    station("S11", "the agent's wallet funded by Harness Holdings through the estate's own road where it is short, then a real swap, landed, sponsored by the paymaster")
+    call("S11", "MCP tools/call wallet.get_balances %s → expect USDC on %s of at least %d minor units; short of it: \"%s\"" % (
+        _j({"wallet_id": "<wallet UUID>"}), TRADE["chain"], TRADE_RAW, SHORT_SENTENCE % ("<wallet address>", TRADE["chain"], "<what it holds>", TRADE_RAW)))
+    estate_people = os.path.join(estate_store, A.ESTATE["client_id"])
+    call("S11", "[estate %s] POST /v1/auth/login/options {}, POST /v1/auth/login/verify {nonce, issuedAtMs, response} as each of %s with the passkey stored under %s "
+         "→ expect a session in the workspace %s; the founder's absence: \"%s\"" % (
+             estate_base, ", ".join(A.PEOPLE[k].name for k in A.CENSUS_ORDER), estate_people, A.ESTATE["company"],
+             NO_ESTATE_FOUNDER_SENTENCE % (E.FOUNDER_NOT_ENROLLED, A.PEOPLE[A.FOUNDER].name, os.path.join(estate_people, "%s.json" % A.FOUNDER))))
+    call("S11", "[estate] GET /v1/workspace → expect fundingWallet.address, Harness Holdings' operating account, and workspace.aapAccountId; [file] %s read for the platform's "
+         "admin credential (%s, %s), never printed" % (os.path.join(estate_store, ET.ADMIN_ENV_FILE), ET.ADMIN_ENV_URL_KEY, ET.ADMIN_ENV_KEY_KEY))
+    call("S11", "[estate] GET %s → expect Harness Holdings' %s on %s; where it is short of %d minor units, Harness Treasury signed in from %s, its %s read, and short: "
+         "\"%s\" (T14's sentence; nothing is sent)" % (
+             ET.FUNDING_BALANCES_ROUTE, ET.PAYMENT_ASSET, ET.PAYEE_CHAIN, TRADE_RAW, os.path.join(estate_store, ET.TREASURY["client_id"]), ET.PAYMENT_ASSET,
+             ET.TREASURY_SHORT_SENTENCE % ("<what it holds>", "US$0.10", "<the Treasury's address>", ET.PAYEE_CHAIN)))
+    call("S11", "[estate] POST /v1/payees %s → expect 201 with the payee and its proposed address; POST /v1/payees/addresses/<id>/promote {} → pending_promotion; "
+         "POST /v1/payees/addresses/<id>/approve {} as each roster member in T12's order until whitelisted; GET /v1/payees → the register reads whitelisted, by this run's payee id" % (
+             _j({"displayName": PAYEE_NAME % label, "defaultAsset": ET.PAYMENT_ASSET, "defaultChain": ET.PAYEE_CHAIN,
+                 "addresses": [{"chain": ET.PAYEE_CHAIN, "address": "<wallet address>"}]})))
+    call("S11", "[estate] where Harness Holdings is short: Harness Treasury pays Harness Holdings the shortfall first, one one-off set of one payment, approved with the Treasury "
+         "founder's passkey, executed, read until settled (T14 §2)")
+    call("S11", "[estate] POST /v1/sets/review %s → expect the gates passed; %s at the gas gate → POST %s on the platform's admin road (%s), then the review again" % (
+        _j({"pays": [{"payeeAddressId": "<address id>", "asset": ET.PAYMENT_ASSET, "chain": ET.PAYEE_CHAIN, "amountMinor": str(TRADE_RAW), "invoiceRef": "PF-<run id>"}],
+            "duplicatesAcknowledged": False}), ET.GAS_SHORTFALL, ET.ADMIN_CREDIT_ROUTE % "<workspace.aapAccountId>", ET.ADMIN_CREDIT_REASON % "<stamp>"))
+    call("S11", "[estate] POST /v1/sets {pays, idempotencyKey, reference}, POST /v1/sets/<id>/submit {} → approved, or pending_approval and each of %s presses "
+         "POST /v1/approvals/<id>/challenge and /approve while it waits; POST /v1/sets/<id>/execute {} by its author; GET /v1/sets/<id> until the instruction is terminal; "
+         "GET %s?limit=%d → the %s row" % (", ".join(A.PEOPLE[k].name for k in E.SIGNERS_IN_ORDER), ET.AUDIT_EXPORT_ROUTE, ET.AUDIT_EXPORT_LIMIT, ET.INSTRUCTION_CONFIRMED))
+    call("S11", "note: \"%s\"" % (FUNDING_SENTENCE % ("<wallet address>", ET.PAYEE_CHAIN, "<set id>", "<run id>")))
+    call("S11", "MCP tools/call wallet.get_balances %s every %s s, with GET /v1/sets/<id> while the run is not settled, until the set is settled, the instruction confirmed and "
+         "USDC on %s is at least %d minor units, deadline %s s (--funds-wait) → note: \"%s\"" % (
+             _j({"wallet_id": "<wallet UUID>"}), TRADE_POLL_SECONDS, TRADE["chain"], TRADE_RAW, TRADE_DEADLINE_SECONDS, FUNDED_SENTENCE % (TRADE_RAW, "<hash>")))
     call("S11", "GET %s → expect 200: the gas account before the trade" % GAS_ACCOUNT_ROUTE)
     call("S11", "MCP tools/call wallet.build_transaction %s → expect a ticket and the pact it was built under" % _j(trade_build))
     call("S11", "MCP tools/call wallet.submit_transaction %s → expect the execution: user_op_hash, handle_ops_tx_hash, status, reserved_usd, debited_usd" % _j(trade_submit))
@@ -2760,17 +3130,23 @@ def main(argv: Optional[Sequence[str]] = None, **inject: Any) -> int:
     parser.add_argument("--test-ring", dest="test_rings", action="append", default=[], metavar="BASE", help="declare a base a test ring (repeatable)")
     parser.add_argument("--store", default=STORE_DIR, help="where the owner's passkey, customer id, tokens and run state are kept (default %s)" % STORE_DIR)
     parser.add_argument("--out", default=RUNS_DIR, help="where the run's folder (report.md, evidence.jsonl) is written (default %s)" % RUNS_DIR)
-    parser.add_argument("--funding-wallet", dest="funding_wallet", default=None, help="the owner's funding-wallet file (default %s)" % C.funding_wallet_path())
+    parser.add_argument("--funding-wallet", dest="funding_wallet", default=None,
+                        help="the owner's funding-wallet file, read only for an owner the connector lists no funding wallet for (default <estate store>/%s/%s)"
+                             % (C.HARNESS_HOLDINGS, C.FUNDING_WALLET_FILE))
+    parser.add_argument("--estate-base", dest="estate_base", default=ESTATE_BASE,
+                        help="the AER 360 estate Harness Holdings lives at, which S11 pays the agent's wallet from (default %s, the estate harness's --base)" % ESTATE_BASE)
+    parser.add_argument("--estate-store", dest="estate_store", default=ESTATE_STORE_DIR,
+                        help="where the estate harness keeps Harness Holdings' and Harness Treasury's passkeys and admin.env (default %s, its --store)" % ESTATE_STORE_DIR)
     parser.add_argument("--rpc", default=None, help="the %s JSON-RPC endpoint the reader reads (default %s)" % (TRADE["chain"], T.REHEARSAL_RPC[TRADE["chain"]].url))
     parser.add_argument("--funds-wait", dest="funds_wait", type=float, default=TRADE_DEADLINE_SECONDS, metavar="SECONDS",
-                        help="how long S11 waits for the operator to fund the agent's wallet before it stops (default %d s); the same "
-                             "deadline bounds the ticket's landing" % int(TRADE_DEADLINE_SECONDS))
+                        help="how long S11 waits for the payment it made from Harness Holdings to land in the agent's wallet before it stops (default %d s); "
+                             "the same deadline bounds the ticket's landing" % int(TRADE_DEADLINE_SECONDS))
     args = parser.parse_args(list(argv) if argv is not None else None)
     if args.start_at and args.start_at not in STATION_IDS:
         parser.error("--from takes a station: %s" % ", ".join(STATION_IDS))
     if args.dry:
         try:
-            lines = dry_lines(args.base, args.owner, args.store, args.start_at, args.i_mean_it, args.test_rings, args.funding_wallet)
+            lines = dry_lines(args.base, args.owner, args.store, args.start_at, args.i_mean_it, args.test_rings, args.funding_wallet, args.estate_base, args.estate_store)
         except C.ConsentStop as stop:
             print(stop.sentence)
             return 2
@@ -2783,6 +3159,8 @@ def main(argv: Optional[Sequence[str]] = None, **inject: Any) -> int:
             print("--funds-wait must be a positive number of seconds")
             return 2
         inject.setdefault("deadline", args.funds_wait)
+        inject.setdefault("estate_base", args.estate_base)
+        inject.setdefault("estate_store", args.estate_store)
         runner = Pathfinder(args.base, args.owner, args.store, args.out, args.start_at, args.i_mean_it, args.test_rings,
                             args.funding_wallet, args.rpc, **inject)
     except C.ConsentStop as stop:
