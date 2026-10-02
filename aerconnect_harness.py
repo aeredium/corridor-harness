@@ -23,7 +23,8 @@ THE STATIONS, A TO Z
   S1  Sign up            POST /v1/auth/signup/options, /verify — born once; a stored passkey is signed in with
   S2  The account        GET /v1/account — the owner born once, the seat's standing, the assigned group group-100
   S3  Create agent       GET /v1/account/agents/new, the step-up, POST /v1/account/agents — trader.v1, this run's own agent
-  S4  Set the policy     POST /v1/account/agents/:id/limits — the questionnaire the server returned becomes the pact
+  S4  Recall the policy  POST /v1/account/agents/:id/policy — the policy S3 was born with, recalled and re-filed as an edit;
+                         the pact keeps its id, the agent and its token are not touched (the law of 2 October 2026)
   S5  The child wallet   GET /v1/account/agents/:id/wallet-record — provisioned, not a mock, the owner's
   S6  Buy gas            POST /v1/account/gas (the floor, then ten dollars), GET /v1/account/gas-account — read live
   S7  Connect Claude     /authorize, the consent's step three, /finish, /token — the per-connection credential
@@ -83,7 +84,7 @@ READ FROM THE CODE RATHER THAN FROM MEMORY, in fresh clones (as T21 read the con
     apps/server/src/routes/account.ts   GET /v1/account; GET /v1/account/agents/new (roles with their questionnaire, the
                                         chain offer; it provisions the account, so it is guarded with the press);
                                         POST /v1/account/agents {name, roleId, fundingAddress, answers, nonce, issuedAtMs,
-                                        response}; POST /v1/account/agents/:id/limits {answers}; GET
+                                        response}; POST /v1/account/agents/:id/policy {answers}; GET
                                         /v1/account/agents/:id/wallet-record (read through the agent's own connection,
                                         so before S7 it says why it cannot); POST /v1/account/gas {amountUsd} (US$10.00
                                         floor, refused below it by name; a Stripe Checkout, credited only by the desk's
@@ -172,7 +173,7 @@ REASON = "Pathfinder run %s: the harness tears down the agent it created"  # the
 ACCOUNT_ROUTE = "/v1/account"
 AGENTS_NEW_ROUTE = "/v1/account/agents/new"
 AGENTS_ROUTE = "/v1/account/agents"
-LIMITS_ROUTE = "/v1/account/agents/%s/limits"
+POLICY_ROUTE = "/v1/account/agents/%s/policy"  # the edit road; the old /limits road was removed by Spec C-BIRTH-100
 WALLET_RECORD_ROUTE = "/v1/account/agents/%s/wallet-record"
 GAS_ROUTE = "/v1/account/gas"
 GAS_ACCOUNT_ROUTE = "/v1/account/gas-account"
@@ -199,7 +200,7 @@ STATIONS: List[Tuple[str, str]] = [
 STATION_IDS = [station for station, _ in STATIONS]
 TITLES = dict(STATIONS)
 # What each state-creating station would do, as the guard's sentence says it.
-GUARDED = {"S1": "sign up an owner", "S3": "create an agent", "S4": "set an agent's limits", "S6": "buy gas",
+GUARDED = {"S1": "sign up an owner", "S3": "create an agent", "S4": "recall and re-file an agent's policy", "S6": "buy gas",
            "S7": "connect Claude", "S11": "trade"}
 
 PASS = "pass"
@@ -1068,7 +1069,7 @@ class RecordedChain(H.ChainRpc):
 # ---------------------------------------------------------------------------
 def answers_from(questionnaire: Dict[str, Any], offered: Sequence[str], role_id: str = ROLE_ID) -> Dict[str, Any]:
     """
-    The answers `POST /v1/account/agents` and `POST /v1/account/agents/:id/limits` carry (routes/consent.ts answersBody):
+    The answers `POST /v1/account/agents` and `POST /v1/account/agents/:id/policy` carry (routes/consent.ts answersBody):
     the questionnaire the server returned, as it returned it, where it gave a starting answer — the hold, the count of
     transactions a day, the assets — and the owner's own figures where the form opens empty and the owner must write one:
     the two budgets (Spec 41: "we do not have an opinion on the figure"; the harness writes the corridor's book, per trade
@@ -1597,6 +1598,8 @@ class Pathfinder:
         pact = agent.get("pact") if isinstance(agent.get("pact"), dict) else {}
         if not agent.get("id"):
             raise StationStop("the press answered 200 with an agent carrying no id, so nothing the harness could tear down: %s" % short_json(created), outcome=FAIL)
+        if pact.get("id"):
+            self.facts["born_pact_id"] = pact.get("id")  # born with the agent (the law): S4 must find the same pact
         self.facts.update({"agent_id": agent.get("id"), "agent_name": agent.get("name"), "wallet": {
             "id": wallet.get("id"), "address": wallet.get("address"), "chain": wallet.get("chain"), "isMock": wallet.get("isMock")}})
         self.facts.pop("resume_refused", None)  # this run has its own agent now
@@ -1627,11 +1630,11 @@ class Pathfinder:
             chain_offer = offer.get("chainOffer") if isinstance(offer.get("chainOffer"), dict) else {}
             offered = [str(c.get("key")) for c in (chain_offer.get("chains") or []) if isinstance(c, dict) and c.get("key")]
             answers = answers_from(role.get("questionnaire") if isinstance(role.get("questionnaire"), dict) else {}, offered)
-        route = LIMITS_ROUTE % self.facts["agent_id"]
-        self.expect("200 with the pact: its id, its state, and the document carrying the answers sent (the questionnaire become the pact)")
+        route = POLICY_ROUTE % self.facts["agent_id"]
+        self.expect("200 with the pact S3 was born with: the same id, state active, and the document carrying the answers sent — the edit re-files the policy only, and touches neither the agent nor its token")
         answer, filed = self.call("POST", route, {"answers": answers})
         if answer.status != 200 or not isinstance(filed, dict) or not isinstance(filed.get("pact"), dict):
-            raise self.refused("the agent's limits", "POST " + LIMITS_ROUTE % ":id", answer, filed)
+            raise self.refused("the agent's policy edit", "POST " + POLICY_ROUTE % ":id", answer, filed)
         pact = filed["pact"]
         document = pact.get("document") if isinstance(pact.get("document"), dict) else {}
         self.facts["pact_id"] = pact.get("id")
@@ -1642,10 +1645,13 @@ class Pathfinder:
             problems.append("the pact carries no id")
         if str(pact.get("state") or "") != "active":
             problems.append("the pact's state is %r, not active" % pact.get("state"))
+        born = self.facts.get("born_pact_id")
+        if born and pact.get("id") != born:
+            problems.append("the edit changed the pact: born %s, now %s — the agent and its token must not be touched" % (born, pact.get("id")))
         problems.extend(document_disagreements(document, answers))
         if problems:
             raise StationStop("the connector filed pact %s, and %s" % (pact.get("id"), "; ".join(problems)), outcome=FAIL)
-        return Outcome("S4", PASS, "set the policy: pact %s %s; the document carries the questionnaire's answers as sent — per trade US$%s, per "
+        return Outcome("S4", PASS, "recall the policy: pact %s %s unchanged by the edit; the document carries the questionnaire's answers as sent — per trade US$%s, per "
                        "day US$%s, ask me first above US$%s, %s transactions a day, the chains %s (the wallet's first), the %d contracts of the "
                        "Trader's list under the scope %r" % (pact.get("id"), pact.get("state"), answers["perTxUsd"], answers["dailyUsd"],
                                                              answers["holdAboveUsd"], answers["maxTxPerDay"], ", ".join(answers["chains"]),
@@ -2686,7 +2692,7 @@ def dry_lines(base: str = DEFAULT_BASE, owner: str = DEFAULT_OWNER, store_dir: s
         AGENTS_ROUTE, _j({"name": label, "roleId": ROLE_ID, "fundingAddress": "<the funding wallet>", "answers": answers,
                           "nonce": "<nonce>", "issuedAtMs": "<issuedAtMs>", "response": "<AuthenticationResponseJSON>"})))
     station("S4", "the questionnaire the server returned, filed as the pact")
-    call("S4", "POST %s %s → expect 200: pact {id, state active, document = the answers sent}" % (LIMITS_ROUTE % "<agent id>", _j({"answers": "<the answers S3 sent>"})))
+    call("S4", "POST %s %s → expect 200: pact {id = S3's, unchanged, state active, document = the answers sent}; the agent and its token untouched" % (POLICY_ROUTE % "<agent id>", _j({"answers": "<the answers S3 sent>"})))
     station("S5", "the child wallet: provisioned, not a mock, the owner's")
     call("S5", "GET %s → expect 200: walletRecord.walletId = S3's wallet; its status, or the connector's sentence for why it cannot be read before S7" % (
         WALLET_RECORD_ROUTE % "<agent id>"))

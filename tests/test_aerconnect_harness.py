@@ -260,7 +260,7 @@ class TheGuard(PathfinderBase):
         self.assertFalse(P.is_test_ring("http://sandbox.example", ("https://sandbox.example",)), "another scheme is another base")
         self.assertFalse(P.is_test_ring("https://sandbox.example.evil.test", ("https://sandbox.example",)))
         self.assertTrue(P.is_test_ring(ISSUER + "/", (ISSUER,)))
-        self.assertEqual(P.GUARDED, {"S1": "sign up an owner", "S3": "create an agent", "S4": "set an agent's limits", "S6": "buy gas",
+        self.assertEqual(P.GUARDED, {"S1": "sign up an owner", "S3": "create an agent", "S4": "recall and re-file an agent's policy", "S6": "buy gas",
                                      "S7": "connect Claude", "S11": "trade"})
 
     def test_no_owner_is_born_on_a_base_that_is_not_a_test_ring(self):

@@ -429,7 +429,7 @@ class PathfinderDouble(ConnectorDouble):
                 raise H.Unreachable("POST %s/v1/account/agents: timed out" % self.issuer)  # created, and the answer lost on the way back
             return 200, {"agent": self.agent_view(agent), "howClaudeReachesIt": "To let Claude act as this agent, connect AER Connect from Claude and choose it at step three.",
                          "said": "%s is created. It has its own child wallet, its own credential and a pact at the access platform carrying the limits you set." % agent["name"]}, {}
-        match = re.match(r"^/agents/([^/]+)/(limits|wallet-record|halt|delete)$", rest)
+        match = re.match(r"^/agents/([^/]+)/(policy|wallet-record|halt|delete)$", rest)
         if match:
             agent_id, action = match.groups()
             if action == "wallet-record" and method == "GET":
@@ -444,17 +444,16 @@ class PathfinderDouble(ConnectorDouble):
             if method != "POST":
                 raise AssertionError("the test reached for %s %s" % (method, path))
             customer = self.owner(headers, mutating=True)
-            if action == "limits":
+            if action == "policy":  # the edit road (Spec C-BIRTH-100): re-files the policy only; the pact keeps its id, the agent and its token are untouched
                 body = payload or {}
                 if "answers" not in body:
                     raise AccountRefused("REQUEST_MALFORMED", issues="answers: Required")
                 agent = self.mine(customer, agent_id)
                 read = self.read_answers(body["answers"])
                 agent["document"] = self.document_of(agent["id"], agent["roleId"], read)
-                agent["pactId"] = "aerconn:%s:%d" % (agent["id"], int(time.time() * 1000) % 100000)
                 return 200, {"agent": {"id": agent["id"], "name": agent["name"], "roleId": agent["roleId"]},
                              "pact": {"id": agent["pactId"], "state": "active", "validUntil": None, "document": agent["document"]},
-                             "entrySaid": None, "said": "Your agent now has a pact at the access platform carrying the limits you set."}, {}
+                             "entrySaid": None, "said": "%s’s policy is edited; the agent and its credential are untouched." % agent["name"]}, {}
             reason = self.reason_of(payload)
             agent = self.mine(customer, agent_id)
             if action == "halt":
