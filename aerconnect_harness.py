@@ -2762,6 +2762,9 @@ def main(argv: Optional[Sequence[str]] = None, **inject: Any) -> int:
     parser.add_argument("--out", default=RUNS_DIR, help="where the run's folder (report.md, evidence.jsonl) is written (default %s)" % RUNS_DIR)
     parser.add_argument("--funding-wallet", dest="funding_wallet", default=None, help="the owner's funding-wallet file (default %s)" % C.funding_wallet_path())
     parser.add_argument("--rpc", default=None, help="the %s JSON-RPC endpoint the reader reads (default %s)" % (TRADE["chain"], T.REHEARSAL_RPC[TRADE["chain"]].url))
+    parser.add_argument("--funds-wait", dest="funds_wait", type=float, default=TRADE_DEADLINE_SECONDS, metavar="SECONDS",
+                        help="how long S11 waits for the operator to fund the agent's wallet before it stops (default %d s); the same "
+                             "deadline bounds the ticket's landing" % int(TRADE_DEADLINE_SECONDS))
     args = parser.parse_args(list(argv) if argv is not None else None)
     if args.start_at and args.start_at not in STATION_IDS:
         parser.error("--from takes a station: %s" % ", ".join(STATION_IDS))
@@ -2776,6 +2779,10 @@ def main(argv: Optional[Sequence[str]] = None, **inject: Any) -> int:
         print("Dry walk: nothing was sent.")
         return 0
     try:
+        if args.funds_wait <= 0:
+            print("--funds-wait must be a positive number of seconds")
+            return 2
+        inject.setdefault("deadline", args.funds_wait)
         runner = Pathfinder(args.base, args.owner, args.store, args.out, args.start_at, args.i_mean_it, args.test_rings,
                             args.funding_wallet, args.rpc, **inject)
     except C.ConsentStop as stop:
