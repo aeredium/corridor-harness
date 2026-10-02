@@ -177,7 +177,7 @@ class PathfinderDouble(ConnectorDouble):
     def __init__(self, seated=True, catalogue=None, account_group=None, door_key=True, credit_on_checkout=0, gas_cents=1000,
                  wallet_usdc=0, funding_usdc=P.TRADE_RAW, funded_at_read=1, lands_later=0, delegate_first=True, police_verdict="allow", price_usd=PRICE_USD,
                  funds_left=False, margin_bps=P.MARGIN_BPS, gas_price_wei=GAS_PRICE_WEI, interrupt_on=None, receipt_lag=0,
-                 fee_bps=T.FEE_BPS, fee_to=None, fee_leg=True, lose_press_answer=False, rpc_error_on=None, actual_gas_factor=1,
+                 fee_bps=T.FEE_BPS, fee_to=None, fee_leg=True, lose_press_answer=False, rpc_error_on=None, rpc_error_times=None, actual_gas_factor=1,
                  event_for_another_hash=False, account_funding=None, my_agent_wallet=None, rpc_host=RPC_HOST, **kwargs):
         """
         `catalogue` the names tools/list answers (default the fourteen); `account_group` a group GET /v1/account states under
@@ -194,10 +194,11 @@ class PathfinderDouble(ConnectorDouble):
         (venues/uniswapv3 sweepTokenWithFee): the pool pays the router the gross, the router pays `fee_bps` of it to `fee_to`
         (default the agents' fee address, tables.py's) and the rest to the wallet; `fee_leg` False takes no commission at all.
         `lose_press_answer` creates the agent and then loses the answer on the way back, as a timeout would; `rpc_error_on` a
-        JSON-RPC method the chain refuses with an error of its own; `actual_gas_factor` makes the EntryPoint's actualGasCost that
-        many times the receipt's cost (the platform debits the greater, settle.go); `event_for_another_hash` logs the
-        UserOperationEvent of another operation; `account_funding` the funding wallet GET /v1/account states instead of the
-        owner's; `my_agent_wallet` the wallet id aerconnect_my_agent states instead of the agent's; `rpc_host` the RPC's host.
+        JSON-RPC method the chain refuses with an error of its own, `rpc_error_times` times (None: always); `actual_gas_factor`
+        makes the EntryPoint's actualGasCost that many times the receipt's cost (the platform debits the greater, settle.go);
+        `event_for_another_hash` logs the UserOperationEvent of another operation; `account_funding` the funding wallet GET
+        /v1/account states instead of the owner's; `my_agent_wallet` the wallet id aerconnect_my_agent states instead of the
+        agent's; `rpc_host` the RPC's host.
         """
         super().__init__(seated=seated, **kwargs)
         self.catalogue = list(catalogue) if catalogue is not None else list(P.CATALOGUE)
@@ -224,6 +225,8 @@ class PathfinderDouble(ConnectorDouble):
         self.fee_leg = fee_leg
         self.lose_press_answer = lose_press_answer
         self.rpc_error_on = rpc_error_on
+        self.rpc_error_times = rpc_error_times
+        self.rpc_errors_given = 0
         self.actual_gas_factor = actual_gas_factor
         self.event_for_another_hash = event_for_another_hash
         self.account_funding = account_funding
@@ -753,7 +756,8 @@ class PathfinderDouble(ConnectorDouble):
         method = payload.get("method")
         params = payload.get("params") or []
         rpc_id = payload.get("id")
-        if self.rpc_error_on and method == self.rpc_error_on:
+        if self.rpc_error_on and method == self.rpc_error_on and (self.rpc_error_times is None or self.rpc_errors_given < self.rpc_error_times):
+            self.rpc_errors_given += 1
             return {"jsonrpc": "2.0", "id": rpc_id, "error": {"code": -32005, "message": "limit exceeded: 25 requests per second"}}
         if method == "eth_getTransactionReceipt":
             key = str(params[0]).lower()

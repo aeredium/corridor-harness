@@ -982,7 +982,12 @@ class EveryAgentARunCreatesIsRemoved(PathfinderBase):
         self.double.lose_press_answer = True
         runner = self.walk()
         self.assertEqual(runner.outcome_of("S3").outcome, P.FAIL)
-        self.assertIn("unreachable", self.line_of(runner, "S3"))
+        line = self.line_of(runner, "S3")
+        self.assertIn("unreachable: the connector could not be reached at POST /v1/account/agents", line)
+        self.assertIn("its answer never arrived, so whether the connector carried it out is not known; S13 looks for an agent named %s on "
+                      "the account and removes it" % runner.label, line)
+        self.assertNotIn("nothing was changed", line, "the connector did create it: the harness says only what it knows")
+        self.assertEqual(self.line_of(runner, "S4"), "set the policy: " + P.NO_AGENT, "what this run holds, never that no agent stands")
         created = [a for a in self.double.agents if a["name"] == runner.label]
         self.assertEqual(len(created), 1, "the connector created it; the answer was lost")
         self.assertEqual(runner.outcome_of("S13").outcome, P.PASS, self.line_of(runner, "S13"))
@@ -1043,6 +1048,20 @@ class OneConnectorPerOwner(PathfinderBase):
                                                  route="POST /v1/auth/signin/options"))
         self.assertEqual(stop.sentence, "unreachable: the connector could not answer at POST /v1/auth/signin/options (HTTP 500) — INTERNAL_ERROR (500): "
                                         "AER Connect failed and did not expect to. Nothing was changed. [unclassified]; nothing was judged, and a retry may reach it")
+
+    def test_a_press_whose_answer_never_arrived_is_not_said_to_have_changed_nothing(self):
+        lost = "unreachable: the connector could not be reached at %s: %s https://connector.test%s: timed out; nothing was changed, and a retry may reach it"
+        finish = "/v1/consent/abc/finish"
+        retold = P.press_unreachable(lost % ("POST " + finish, "POST", finish), "POST " + finish)
+        self.assertTrue(retold.endswith("timed out; its answer never arrived, so whether the connector carried it out is not known"), retold)
+        read = lost % ("GET /v1/account", "GET", "/v1/account")
+        self.assertEqual(P.press_unreachable(read, "GET /v1/account"), read, "of a read, nothing was changed is true")
+        road = ("unreachable: the connector could not be reached for the discovery or the client registration: POST https://connector.test/register: "
+                "timed out; nothing was changed, and a retry may reach it")
+        self.assertTrue(P.press_unreachable(road).endswith(P.PRESS_UNREACHABLE_TAIL), "the transport's own words name the method where no route is kept")
+        stop = self.runner().consent_stop(C.ConsentStop(lost % ("POST " + finish, "POST", finish), outcome="unreachable", route="POST " + finish))
+        self.assertEqual(stop.outcome, P.FAIL)
+        self.assertNotIn("nothing was changed", stop.sentence)
 
     def test_a_refresh_the_harness_could_not_ask_for_is_not_the_endpoints_answer(self):
         stop = P.refresh_stop(H.HarnessError("no refresh token is stored for alpha-trader-x; run --consent trader"))
@@ -1109,6 +1128,33 @@ class TheTradeRoadSaysWhatHappened(PathfinderBase):
         self.assertNotIn("a fault, not a judgment", line)
         traded = H.read_json(os.path.join(self.store, "alpha", P.RUN_FILE))["traded"]
         self.assertTrue(traded["handle_ops_tx_hash"] and traded["user_op_hash"], "the Wallet's hashes are written before the chain is read")
+        self.assertIn("the Wallet says the operation %s landed in the handleOps transaction %s" % (traded["user_op_hash"], traded["handle_ops_tx_hash"]), line)
+        for station in ("S12", "S12a"):
+            later = self.line_of(runner, station)
+            self.assertEqual(runner.outcome_of(station).outcome, P.FAIL, later)
+            self.assertIn("refused: the arbitrum RPC at https://arb1.arbitrum.io refused eth_getTransactionReceipt", later)
+            self.assertNotIn(P.NO_LANDING, later, "the Wallet said it landed: the chain's refusal is the cause, and no landing is denied")
+
+    def test_s12_reads_again_the_receipt_the_rpc_refused_s11(self):
+        self.double.rpc_error_on, self.double.rpc_error_times = "eth_getTransactionReceipt", 1
+        runner = self.walk()
+        self.assertEqual(runner.outcome_of("S11").outcome, P.FAIL)
+        self.assertIn("run.json keeps both hashes, and S12 reads the receipt again", self.line_of(runner, "S11"))
+        for station in ("S12", "S12a", "S13"):
+            self.assertEqual(runner.outcome_of(station).outcome, P.PASS, runner.line(runner.outcome_of(station)))
+        self.assertIn("S11 could not read the handleOps receipt; it is read here, by the hash the Wallet named", runner.notes["S12"])
+        self.assertTrue(self.line_of(runner, "S12a").startswith("commission 0.00000002 WETH to 0xabd0… (5 bps)"))
+
+    def test_a_trade_s11_never_landed_is_not_read_in_its_place(self):
+        """A resumed run whose S10 the Police refuses: S11 trades nothing, and the trade an earlier run left in run.json never stands in."""
+        first = self.runner()
+        for station, title in P.STATIONS[:11]:
+            self.assertEqual(first.run_station(station, title).outcome, P.PASS)
+        self.double.police_verdict = "deny"
+        runner = self.walk(start_at="S10")
+        self.assertNotEqual(runner.outcome_of("S11").outcome, P.PASS)
+        for station in ("S12", "S12a"):
+            self.assertEqual(self.line_of(runner, station), "%s: %s" % (P.TITLES[station].lower(), P.NO_LANDING))
 
     def test_the_event_of_another_operation_never_stands_in(self):
         self.double.event_for_another_hash = True

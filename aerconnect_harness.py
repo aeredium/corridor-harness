@@ -211,13 +211,15 @@ SKIPPED = "skipped"  # passed over by --from
 
 GUARD_SENTENCE = ("%s is not a declared test ring (a test ring, the sandbox among them, is named with --test-ring), so the harness "
                   "refuses to %s there without --i-mean-it.")
-NO_SESSION = "the owner holds no session: S1 did not sign in"
-NO_AGENT = "no agent stands for this run: S3 did not create one"
-NO_CONNECTION = "the agent holds no connection: S7 did not connect Claude"
+# What this run holds, and the station whose own line says why: never a cause in the world the harness does not know (a press
+# whose answer was lost may have created the agent, and a Police that did not answer may have issued a receipt).
+NO_SESSION = "the owner holds no session: its sign-in did not complete (S1's line says why, or the resume's where S1 was passed over)"
+NO_AGENT = "this run holds no agent: S3 named none (its own line says why)"
+NO_CONNECTION = "this run holds no credential for the agent: S7 did not connect Claude (its own line says why)"
 NO_MCP = "there is no MCP session: S8 did not open one"
 NO_WALLET_ID = "the agent's wallet UUID is not known: neither S3 nor S9 named it"
-NO_RECEIPT = "the Police issued no receipt for the trade: S10 did not allow it"
-NO_LANDING = "the swap did not land: S11 has no landed operation to read"
+NO_RECEIPT = "this run holds no Police receipt for the trade: S10 obtained none (its own line says why)"
+NO_LANDING = "S11 did not confirm a landed swap on chain (its own line says why), so there is no landed operation to read"
 # S12a. The rate and the fee wallet are tables.py's (T.FEE_BPS, T.address("FEE_ADDRESS")) and the arithmetic is
 # corridor_harness.fee_check: read, never declared here, so the owner harness and the corridor harness check one figure against
 # one wallet. A Solana fee address would be pinned in tables.py under this key; tables.py pins none (the corridor's knowledge base:
@@ -814,6 +816,27 @@ class ChainRefused(H.HarnessError):
     """The chain's JSON-RPC endpoint answered the harness's question with an error of its own: its words travel, and it is no fault of the harness."""
 
 
+# corridor_consent's unreachable sentence ends so, which is true of a read; of a press it is told as what is known (press_unreachable).
+WIRE_UNREACHABLE_TAIL = "; nothing was changed, and a retry may reach it"
+PRESS_UNREACHABLE_TAIL = "; its answer never arrived, so whether the connector carried it out is not known"
+_SENT_METHOD = re.compile(r"\b(GET|HEAD|POST|PUT|PATCH|DELETE) (?:https?://|/)")
+
+
+def press_unreachable(sentence: str, route: Optional[str] = None) -> str:
+    """
+    The transport cannot tell a request that never left from an answer lost on its way back (a timeout), so "nothing was
+    changed" is the harness's to say of a read only. Of a press — any method but GET — it says what it knows: the answer never
+    arrived, and whether the connector carried the press out is not known. The method is the route's, else the one the
+    transport's own error names.
+    """
+    if not sentence.endswith(WIRE_UNREACHABLE_TAIL):
+        return sentence
+    found = _SENT_METHOD.search(route or "") or _SENT_METHOD.search(sentence)
+    if found is None or found.group(1) in ("GET", "HEAD"):
+        return sentence
+    return sentence[: -len(WIRE_UNREACHABLE_TAIL)] + PRESS_UNREACHABLE_TAIL
+
+
 def landed_word(operation: Dict[str, Any]) -> bool:
     """Whether the Wallet's own word says the operation landed: the status landed, or the debit it states once it has."""
     return str(operation.get("status") or "") == "landed" or bool(operation.get("debited_usd"))
@@ -1239,12 +1262,19 @@ class Pathfinder:
         self.folder.record(**entry)
 
     # -- the owner's wire -----------------------------------------------------------------------------------
-    def call(self, method: str, path: str, body: Any = None) -> Tuple[H.HttpAnswer, Any]:
-        """One call as the account page makes it, on the owner's own session; a connector that cannot be reached is a fault in its words."""
+    def call(self, method: str, path: str, body: Any = None, lost: str = "") -> Tuple[H.HttpAnswer, Any]:
+        """
+        One call as the account page makes it, on the owner's own session; a connector that cannot be reached fails the station
+        in the wire's words, and a press whose answer never arrived is told as not known to have been carried out, with `lost`,
+        what the run does about it, after.
+        """
         try:
             return self.customer.wire.call(method, path, body)
         except C.ConsentStop as stop:
-            raise StationStop("%s; nothing was judged" % stop.sentence, outcome=FAIL)
+            sentence = press_unreachable(stop.sentence, stop.route) if stop.outcome == "unreachable" else stop.sentence
+            if lost and sentence.endswith(PRESS_UNREACHABLE_TAIL):
+                sentence = "%s; %s" % (sentence, lost)
+            raise StationStop("%s; nothing was judged" % sentence, outcome=FAIL)
 
     def refused(self, what: str, route: str, answer: H.HttpAnswer, parsed: Any) -> StationStop:
         """Every catch classifies (kind_of), and each class says what happened in the connector's own words, then the lexicon's."""
@@ -1276,7 +1306,8 @@ class Pathfinder:
         if stop.outcome == "fault" and stop.status and 500 <= int(stop.status) < 600:
             return StationStop("unreachable: the connector could not answer at %s (HTTP %d) — %s; nothing was judged, and a retry may reach it" % (
                 stop.route or "the sign-in road", int(stop.status), named(stop.said or stop.sentence, stop.code)), outcome=FAIL)
-        sentence = stop.sentence if stop.code is None else "%s [%s]" % (stop.sentence, "; ".join(
+        told = press_unreachable(stop.sentence, stop.route) if stop.outcome == "unreachable" else stop.sentence
+        sentence = told if stop.code is None else "%s [%s]" % (told, "; ".join(
             "%s: %s" % (n, LEXICON[n]["description"]) for n in lexicon_names_in(stop.sentence, stop.code)) or UNCLASSIFIED)
         if stop.outcome == "stopped" or stop.code in C.SEAT_CODES:
             return StationStop(sentence, outcome=STOPPED)
@@ -1558,7 +1589,7 @@ class Pathfinder:
         self.state["pressed"] = {"label": self.label, "at": H.now_iso()}
         self.facts["funding"] = funding
         self.save_state()
-        pressed, created = self.call("POST", AGENTS_ROUTE, body)
+        pressed, created = self.call("POST", AGENTS_ROUTE, body, lost="S13 looks for an agent named %s on the account and removes it" % self.label)
         if pressed.status != 200 or not isinstance(created, dict) or not isinstance(created.get("agent"), dict):
             raise self.refused("the agent's creation", "POST " + AGENTS_ROUTE, pressed, created)
         agent = created["agent"]
@@ -2033,10 +2064,18 @@ class Pathfinder:
                               "keeps both hashes for --from S12" % (user_op_hash or "(no hash)", int(self.deadline), operation.get("status") or "not stated",
                                                                    handle_ops or "not named", build["ticket_id"]), outcome=FAIL)
         self.expect("the handleOps receipt: status 0x1, and the UserOperationEvent for this userOpHash: success, from the wallet, paid by the group-100 paymaster")
-        receipt = self.receipt_of(handle_ops, wait=True)
+        # The Wallet's word that it landed travels with any answer the chain could not give: the hashes are in run.json, and S12 reads again.
+        kept = ("the Wallet says the operation %s landed in the handleOps transaction %s; run.json keeps both hashes, and S12 reads the "
+                "receipt again" % (user_op_hash or "(no hash)", handle_ops))
+        try:
+            receipt = self.receipt_of(handle_ops, wait=True)
+        except ChainRefused as err:
+            raise StationStop("refused: %s; the chain's own word, and no judgment of the trade — %s" % (err, kept), outcome=FAIL)
+        except H.Unreachable as err:
+            raise StationStop("unreachable: %s; nothing was judged, and a retry may reach it — %s" % (err, kept), outcome=FAIL)
         if not isinstance(receipt, dict):
-            raise StationStop("%s names no receipt for the handleOps transaction %s within %d s; the Wallet says it landed, and run.json keeps the "
-                              "hash" % (self.chain.host, handle_ops, int(self.deadline)), outcome=FAIL)
+            raise StationStop("%s names no receipt for the handleOps transaction %s within %d s — %s" % (self.chain.host, handle_ops, int(self.deadline), kept),
+                              outcome=FAIL)
         self.facts["receipt_tx"] = receipt
         event = next((e for e in user_operation_events(receipt) if e["user_op_hash"] == user_op_hash), None)
         problems: List[str] = []
@@ -2122,13 +2161,31 @@ class Pathfinder:
     # -- S12 The reader -------------------------------------------------------------------------------------
     def landing(self) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """
-        The landed swap's receipt and its UserOperationEvent: S11's, or — on a run resumed past S11 — read again from the chain by
-        the hashes run.json keeps, with the readings S11 took before the trade.
+        The landed swap's receipt and its UserOperationEvent: S11's; or, where the Wallet told this run's S11 that the operation
+        landed and the chain did not answer S11's read (an RPC that refused, or lagged past the deadline), read again by the hash
+        the Wallet named; or — on a run resumed past S11 — read again by the hashes run.json keeps, with the readings S11 took
+        before the trade. Only this run's own facts are read for the first two: a trade of an earlier run never stands in.
         """
         if self.facts.get("receipt_tx") and self.facts.get("event"):
             return self.facts["receipt_tx"], self.facts["event"]
         s11 = self.outcome_of("S11")
-        if s11 is None or s11.outcome != SKIPPED:
+        if s11 is not None and s11.outcome != SKIPPED:
+            operation = self.facts.get("operation") or {}
+            handle_ops = str(operation.get("handle_ops_tx_hash") or "").lower()
+            user_op_hash = str(operation.get("user_op_hash") or "").lower()
+            if self.facts.get("receipt_tx") or not landed_word(operation) or not H.HEX64.fullmatch(handle_ops) or not user_op_hash:
+                raise StationStop(NO_LANDING, outcome=NOT_RUN)  # S11 read the receipt and judged it, or no landing was ever said
+            self.expect("the handleOps receipt S11 could not read, read again by the hash the Wallet named")
+            receipt = self.receipt_of(handle_ops)
+            event = next((e for e in user_operation_events(receipt) if e["user_op_hash"] == user_op_hash), None) if isinstance(receipt, dict) else None
+            if event is None:
+                raise StationStop("the Wallet says the operation %s landed in the handleOps transaction %s, and %s %s" % (
+                    user_op_hash, handle_ops, self.chain.host, "names no receipt for it" if not isinstance(receipt, dict)
+                    else "names a receipt carrying no UserOperationEvent for it"), outcome=FAIL)
+            self.note("S11 could not read the handleOps receipt; it is read here, by the hash the Wallet named")
+            self.facts.update(receipt_tx=receipt, event=event)
+            return receipt, event
+        if s11 is None:
             raise StationStop(NO_LANDING, outcome=NOT_RUN)
         traded = self.state.get("traded") if isinstance(self.state.get("traded"), dict) else {}
         handle_ops, user_op_hash = traded.get("handle_ops_tx_hash"), traded.get("user_op_hash")
