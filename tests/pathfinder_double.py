@@ -175,7 +175,7 @@ def tool_listing(name):
 
 class PathfinderDouble(ConnectorDouble):
     def __init__(self, seated=True, catalogue=None, account_group=None, door_key=True, credit_on_checkout=0, gas_cents=1000,
-                 wallet_usdc=0, funding_usdc=P.TRADE_RAW, funded_at_read=1, lands_later=0, delegate_first=True, police_verdict="allow", price_usd=PRICE_USD,
+                 wallet_usdc=0, estate_chain=None, wallet_address=None, lands_later=0, delegate_first=True, police_verdict="allow", price_usd=PRICE_USD,
                  funds_left=False, margin_bps=P.MARGIN_BPS, gas_price_wei=GAS_PRICE_WEI, interrupt_on=None, receipt_lag=0,
                  fee_bps=T.FEE_BPS, fee_to=None, fee_leg=True, lose_press_answer=False, rpc_error_on=None, rpc_error_times=None, actual_gas_factor=1,
                  event_for_another_hash=False, account_funding=None, my_agent_wallet=None, rpc_host=RPC_HOST, **kwargs):
@@ -184,8 +184,10 @@ class PathfinderDouble(ConnectorDouble):
         customer.signingGroup (None: it states none, as the connector at 9e20d6c does); `door_key` False is a deployment with
         no AAP_GAS_DOOR_KEY; `credit_on_checkout` cents the test ring credits when a checkout opens; `gas_cents` the gas
         account once the platform account exists; `wallet_usdc` what a new child wallet holds at birth (nothing, as a real one);
-        `funding_usdc` what arrives in it by its `funded_at_read`-th balance read, standing in for the operator's transfer the
-        harness asks for (0: nothing ever arrives); `lands_later` how many
+        `estate_chain` the payment chain's USDC as the estate double holds it (tests/test_aer360_double.py UsdcChainDouble): with it,
+        a child wallet's USDC is the chain's balance of its address — what Harness Holdings' payment through the estate's own road
+        delivers is what the Wallet door reads and the swap sells (Spec T23) — and without it the Wallet's own ledger; `wallet_address`
+        the address every child wallet is minted at (None: a fresh one each), so a test can name it to the estate before the walk; `lands_later` how many
         ticket_status reads pass before the operation names its handleOps transaction; `delegate_first` makes the first
         operation of a key delegate it (a second operation the platform debits); `funds_left` leaves funds behind the swap;
         `margin_bps` and `gas_price_wei` are the platform's margin and the chain's price of gas; `interrupt_on` an MCP method
@@ -208,8 +210,8 @@ class PathfinderDouble(ConnectorDouble):
         self.gas_start = gas_cents
         self.gas = {}  # customer id → available cents
         self.wallet_usdc = wallet_usdc
-        self.funding_usdc = funding_usdc
-        self.funded_at_read = funded_at_read
+        self.estate_chain = estate_chain
+        self.wallet_address = wallet_address
         self.balance_reads = {}  # wallet address (lower) → how many times get_balances read it
         self.lands_later = lands_later
         self.delegate_first = delegate_first
@@ -230,6 +232,8 @@ class PathfinderDouble(ConnectorDouble):
         self.actual_gas_factor = actual_gas_factor
         self.event_for_another_hash = event_for_another_hash
         self.account_funding = account_funding
+        self.account_funding_after = 0  # how many GET /v1/account reads answer the owner's own funding wallet before `account_funding` takes over
+        self.account_reads = 0
         self.my_agent_wallet = my_agent_wallet
         self.rpc_host = rpc_host
         self.receipt_reads = {}
@@ -362,7 +366,8 @@ class PathfinderDouble(ConnectorDouble):
         if method == "GET" and rest == "":
             customer = self.owner(headers)
             subscription, standing = self.standing_of(customer["id"])
-            funding = self.account_funding or customer.get("fundingAddress")
+            self.account_reads += 1
+            funding = self.account_funding if self.account_funding and self.account_reads > self.account_funding_after else customer.get("fundingAddress")
             view_customer = {"id": customer["id"], "displayName": customer["displayName"], "email": customer["email"], "country": customer["country"],
                              "fundingWallet": {"address": funding} if funding else None}
             if self.account_group:
@@ -419,12 +424,14 @@ class PathfinderDouble(ConnectorDouble):
             if customer.get("fundingAddress") is None:
                 customer["fundingAddress"] = body["fundingAddress"].strip()
             agent_id = str(uuid.uuid4())
-            address = H.checksum_address("0x" + secrets.token_hex(20))
+            address = H.checksum_address(self.wallet_address or ("0x" + secrets.token_hex(20)))
             agent = {"id": agent_id, "customerId": customer["id"], "name": body["name"].strip(), "roleId": body["roleId"], "state": "active",
                      "walletId": str(uuid.uuid4()), "walletAddress": address, "walletChain": read["homeChain"],
                      "document": self.document_of(agent_id, body["roleId"], read), "pactId": "aerconn:%s" % agent_id, "pactState": "active"}
             self.agents.append(agent)
-            self.holdings[address.lower()] = {"USDC": self.wallet_usdc, "WETH": 0, "ETH": 0}
+            self.holdings[address.lower()] = {"USDC": 0 if self.estate_chain is not None else self.wallet_usdc, "WETH": 0, "ETH": 0}
+            if self.estate_chain is not None and self.wallet_usdc:
+                self.estate_chain.credit(address, self.wallet_usdc)
             if self.lose_press_answer:
                 raise H.Unreachable("POST %s/v1/account/agents: timed out" % self.issuer)  # created, and the answer lost on the way back
             return 200, {"agent": self.agent_view(agent), "howClaudeReachesIt": "To let Claude act as this agent, connect AER Connect from Claude and choose it at step three.",
@@ -469,7 +476,7 @@ class PathfinderDouble(ConnectorDouble):
             if action == "delete":
                 if agent["state"] == "deleted":
                     raise AccountRefused("AGENT_NOT_CONNECTABLE", message="%s was deleted at %s." % (agent["name"], agent.get("deletedAt")))
-                held = self.holdings.get(agent["walletAddress"].lower(), {})
+                held = self.held_by(agent["walletAddress"])
                 funds = ["%s %s on %s" % (H.format_units(raw, DECIMALS[asset]), asset, agent["walletChain"]) for asset, raw in held.items()
                          if raw >= FUNDS_THRESHOLDS[asset]]
                 if funds:
@@ -628,8 +635,27 @@ class PathfinderDouble(ConnectorDouble):
             receipt["token"] = token
         return self.tool_json(rpc_id, dict(base, verdict="allow", decision="commit", reason="allowed", context_incomplete=None, receipt=receipt))
 
+    # -- the child wallet's holdings: USDC on the estate's chain where one is wired in, the Wallet's own ledger otherwise ------------------
+    def usdc_of(self, address):
+        if self.estate_chain is not None:
+            return self.estate_chain.balance_of(address)
+        return self.holdings.get(address.lower(), {}).get("USDC", 0)
+
+    def move_usdc(self, address, delta):
+        if self.estate_chain is not None:
+            self.estate_chain.balances[address.lower()] = self.estate_chain.balance_of(address) + delta
+            return
+        held = self.holdings.setdefault(address.lower(), {})
+        held["USDC"] = held.get("USDC", 0) + delta
+
+    def held_by(self, address):
+        """Every asset the wallet holds, USDC from wherever it lives."""
+        held = dict(self.holdings.get(address.lower(), {}))
+        held["USDC"] = self.usdc_of(address)
+        return held
+
     def balances_of(self, agent):
-        held = self.holdings.get(agent["walletAddress"].lower(), {})
+        held = self.held_by(agent["walletAddress"])
         rows = []
         for asset, contract in (("USDC", USDC_ARBITRUM), ("WETH", WETH_ARBITRUM)):
             raw = held.get(asset, 0)
@@ -643,9 +669,6 @@ class PathfinderDouble(ConnectorDouble):
             return self.tool_text(rpc_id, "wallet_not_accessible: wallet not accessible to agent", error=True)
         key = agent["walletAddress"].lower()
         self.balance_reads[key] = self.balance_reads.get(key, 0) + 1
-        if self.balance_reads[key] == self.funded_at_read and self.funding_usdc:
-            held = self.holdings.setdefault(key, {})
-            held["USDC"] = held.get("USDC", 0) + self.funding_usdc  # the operator's transfer, arrived
         return self.tool_json(rpc_id, self.balances_of(agent))
 
     def tool_wallet_build_transaction(self, rpc_id, agent, connection, args):
@@ -656,10 +679,9 @@ class PathfinderDouble(ConnectorDouble):
             return self.tool_text(rpc_id, "receipt_missing: this door demands MCP Police's pre-flight receipt for this exact action", error=True)
         if "amount_usd_cents" in args or not isinstance(args.get("amount_usd"), (int, float)):
             return self.tool_text(rpc_id, "amount_invalid: amount_usd is required, in US dollars", error=True)
-        held = self.holdings.get(agent["walletAddress"].lower(), {})
         raw = int(round(float(args["amount_usd"]) * 10 ** DECIMALS["USDC"]))
-        if held.get("USDC", 0) < raw:
-            return self.tool_text(rpc_id, "insufficient_balance: the wallet holds %d minor units of USDC and the trade sells %d" % (held.get("USDC", 0), raw), error=True)
+        if self.usdc_of(agent["walletAddress"]) < raw:
+            return self.tool_text(rpc_id, "insufficient_balance: the wallet holds %d minor units of USDC and the trade sells %d" % (self.usdc_of(agent["walletAddress"]), raw), error=True)
         ticket_id = str(uuid.uuid4())
         self.tickets[ticket_id] = {"id": ticket_id, "agent": agent["id"], "args": dict(args), "raw": raw, "state": "minted", "reads": 0}
         return self.tool_json(rpc_id, {"ticket_id": ticket_id, "pact_id": agent["pactId"], "legs": [{"call": "approve"}, {"call": "swap"}],
@@ -680,10 +702,10 @@ class PathfinderDouble(ConnectorDouble):
         fee = gross * self.fee_bps // 10000 if self.fee_leg else 0
         bought = gross - fee
         router = ticket["args"].get("contract_address") or T.address("UNISWAP_V3_ARBITRUM")
-        held["USDC"] = held.get("USDC", 0) - ticket["raw"]
+        self.move_usdc(address, -ticket["raw"])
         held["WETH"] = held.get("WETH", 0) + bought
         if self.funds_left:
-            held["USDC"] += 50000
+            self.move_usdc(address, 50000)
         user_op_hash = "0x" + secrets.token_hex(32)
         handle_ops = "0x" + secrets.token_hex(32)
         self.block += 7
