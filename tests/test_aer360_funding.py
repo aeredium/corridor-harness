@@ -101,7 +101,7 @@ class TheHarnessPressesForTheFundingWallet(unittest.TestCase):
     def test_s7_pays_and_s8_reads_transactable_true_and_names_the_wallet(self):
         self.assertEqual(self.outcomes["S7"].outcome, H.PASS, self.outcomes["S7"].line)
         # Spec T14: the Treasury paid the shortfall through the estate's own road, S7a was proved, and the three payments landed
-        self.assertIn("Harness Treasury pays Harness Holdings (%s) the shortfall of US$18.24" % self.wallet["address"], self.outcomes["S7"].line)
+        self.assertIn("Harness Treasury pays Harness Holdings (%s) the shortfall of US$1.00" % self.wallet["address"], self.outcomes["S7"].line)  # the one-dollar book (Spec T24)
         self.assertIn("S7a proved", self.outcomes["S7"].line)
         s8 = self.outcomes["S8"]
         self.assertEqual(s8.outcome, H.PASS, s8.line)
@@ -112,7 +112,7 @@ class TheHarnessPressesForTheFundingWallet(unittest.TestCase):
         self.assertIn("Funding wallet: %s on double-stack-1, key %s (GET /v1/workspace; https://testnet.explorer.aeredium.io/address/%s)." % (
             self.wallet["address"], self.wallet["keyId"], self.wallet["address"]), summary)
         self.assertIn("Gas: 0 SEAR (0 wei) read from %s; the faucet paid: paid true, tx_hash %s, times_paid 1." % (RPC, self.double.faucet.tx_hash), summary)
-        self.assertIn("The asset: the three payments together need US$18.24 of USDC; Harness Treasury pays Harness Holdings the shortfall through the estate's own road (Spec T14); the harness never mints the asset and holds no key.", summary)
+        self.assertIn("The asset: the three payments together need US$1.00 of USDC; Harness Treasury pays Harness Holdings the shortfall through the estate's own road (Spec T14); the harness never mints the asset and holds no key.", summary)
         self.assertIn("Harness Treasury: funding wallet %s — the float Bear funds with USDC on arbitrum, once" % self.double.treasury.source_account, summary)
         path = self.runner.write_report()
         read = H.read_report(path)

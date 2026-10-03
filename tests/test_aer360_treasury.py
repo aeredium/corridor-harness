@@ -6,6 +6,10 @@ proves the gas refusal (S7a), and S7 passes with money that moved; S10 counts th
 The double is the estate at AER 360 Spec 104 beside the platform at Spec 154 (tests/test_aer360_double.py): two workspaces on one estate, sharing
 the platform's gas ledger (PlatformDouble, whose one road on the wire is the admin credit road) and the payment chain's USDC (UsdcChainDouble, whose
 public RPC answers balanceOf). Harness Holdings holds no USDC and no gas; Harness Treasury holds the US$100.00 Bear funded it with and no gas.
+
+Spec T24 (3 October 2026): on a real chain — and the double's chain is `arbitrum` — the book is one dollar (0.50, 0.01 and 0.49) and every payment goes
+to the owner's own wallet, which the tests file in the store's payee.env as OWNER_WALLET_FOR_TESTS; the Treasury's shortfall is US$1.00, and under the
+book's US$10.00 hold no payment of the three is held, so the signers are not asked.
 """
 import json
 import os
@@ -19,10 +23,10 @@ import aer360_harness as H  # noqa: E402
 import aer360_passkey as PK  # noqa: E402
 import aer360_tables as T  # noqa: E402
 from tests.test_aer360_double import (  # noqa: E402
-    AAP_ACCOUNT_ID, EstateDouble, PLATFORM_ADMIN_INVALID, PLATFORM_BASE, PlatformDouble, TREASURY_ACCOUNT_ID, UsdcChainDouble, runner_on,
+    AAP_ACCOUNT_ID, EstateDouble, OWNER_WALLET_FOR_TESTS, PLATFORM_ADMIN_INVALID, PLATFORM_BASE, PlatformDouble, TREASURY_ACCOUNT_ID, UsdcChainDouble, runner_on,
 )
 
-SHORTFALL_MINOR = 18240000  # the three payments together, in USDC minor units: 1.25 + 4.99 + 12.00
+SHORTFALL_MINOR = 1000000  # the three payments together, in USDC minor units: 0.50 + 0.01 + 0.49 — the one-dollar book of Spec T24 on a real chain
 U3_SENTENCE = "Your gas account holds US$0.00. This set needs at most US$1.20 of gas. Nothing was sent. Buy gas below."
 
 
@@ -35,7 +39,7 @@ def run_against(tmp=None, admin_env=True, **double_kwargs):
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
 class TheTreasuryPaysAndTheThreePaymentsLand(unittest.TestCase):
-    """Holdings at US$0.00 and the Treasury at US$100.00: the one payment of US$18.24, S7a, the two credits, the three payments, and S10's count."""
+    """Holdings at US$0.00 and the Treasury at US$100.00: the one payment of US$1.00, S7a, the two credits, the three payments, and S10's count."""
 
     @classmethod
     def setUpClass(cls):
@@ -67,8 +71,8 @@ class TheTreasuryPaysAndTheThreePaymentsLand(unittest.TestCase):
         self.assertTrue(str(record["user_op_hash"]).startswith("0x") and str(record["tx_hash"]).startswith("0x"))
         self.assertEqual((record["balance_before"], record["balance_after"]), (0, SHORTFALL_MINOR))
         self.assertEqual(record["gas_debit_cents"], 31)
-        self.assertIn("Harness Treasury pays Harness Holdings (%s) the shortfall of US$18.24: submitted: status pending_approval, approvalsRequired 1; Harriet Founder signed (1 of 1): approved; landed (+US$18.24): instruction confirmed, run settled, userOpHash 0x" % self.holdings_wallet, o.line)
-        self.assertIn("payee US$0.00 → US$18.24, gas US$0.31", o.line)
+        self.assertIn("Harness Treasury pays Harness Holdings (%s) the shortfall of US$1.00: submitted: status pending_approval, approvalsRequired 1; Harriet Founder signed (1 of 1): approved; landed (+US$1.00): instruction confirmed, run settled, userOpHash 0x" % self.holdings_wallet, o.line)
+        self.assertIn("payee US$0.00 → US$1.00, gas US$0.31", o.line)
         # the road, as the estate's own: review, create, submit, challenge, approve, execute, the register until terminal, the trail
         # the Treasury founder's calls are labelled with her workspace in Every call, so the two founders named Harriet Founder are told apart
         routes = [c.route for c in self.runner.calls if c.station == "S7" and c.who == "Harriet Founder (Harness Treasury)" and c.path.startswith(("/v1/sets", "/v1/approvals", "/v1/export"))]
@@ -92,7 +96,7 @@ class TheTreasuryPaysAndTheThreePaymentsLand(unittest.TestCase):
         self.assertEqual((s7a["verdict"], s7a["available"], s7a["ceiling"], s7a["sentence"], s7a["left"]), ("proved", 0, 120, U3_SENTENCE, []))
         self.assertEqual(s7a["detail"]["availableUsdCents"], "0")
         self.assertEqual(s7a["detail"]["payments"], "3")
-        self.assertIn("S7a proved: the review refused GAS_SHORTFALL — \"%s\" — naming the US$0.00 the harness read and the gate's ceiling US$1.20; nothing left (no new run in the register; Holdings' USDC unchanged at US$18.24)" % U3_SENTENCE, self.outcomes["S7"].line)
+        self.assertIn("S7a proved: the review refused GAS_SHORTFALL — \"%s\" — naming the US$0.00 the harness read and the gate's ceiling US$1.20; nothing left (no new run in the register; Holdings' USDC unchanged at US$1.00)" % U3_SENTENCE, self.outcomes["S7"].line)
         review = next(s for s in self.runner.evidence["S7"] if s["route"] == "POST /v1/sets/review" and str(s["expected"]).startswith("S7a:"))
         self.assertEqual(len(review["sent"]["pays"]), 3, "the set of three")
         self.assertEqual(review["result"], "refused as U3 says: %s" % U3_SENTENCE)
@@ -132,37 +136,43 @@ class TheTreasuryPaysAndTheThreePaymentsLand(unittest.TestCase):
     def test_the_three_payments_land_with_the_gas_lines_and_the_signers_press_in_the_specs_order(self):
         o = self.outcomes["S7"]
         sets = self.runner.facts["sets"]
-        for key, amount in (("P1", 1250000), ("P2", 4990000), ("P3", 12000000)):
+        for key, amount in (("P1", 500000), ("P2", 10000), ("P3", 490000)):
             record = sets[key]
             self.assertTrue(record["landed"], record["said"])
             self.assertEqual((record["status"], record["set_status"], record["amount_minor"]), ("confirmed", "settled", amount))
             self.assertEqual(record["balance_after"] - record["balance_before"], amount, key)
             self.assertEqual((record["gas_debit_cents"], record["gas_debit"]), (31, "US$0.31"))
             self.assertTrue(str(record["user_op_hash"]).startswith("0x") and str(record["tx_hash"]).startswith("0x"))
+            self.assertEqual(record["payee"], OWNER_WALLET_FOR_TESTS, "Spec T24: every payment on a real chain goes to the owner's wallet")
         self.assertEqual([a["who"] for a in sets["P1"]["approvals"]], [], "the estate asked no signature within the hold for a listed payee")
-        self.assertEqual([(a["who"], a["refusal_code"], a["status_after"]) for a in sets["P2"]["approvals"]],
-                         [("Ben Signatory", "ROLE_NOT_GRANTED", None), ("Cora Clerk", "ROLE_NOT_GRANTED", None), ("Ada Approver", None, "approved")],
-                         "the spec's order: the holder, the clerk, then the approver; the estate admits the approver standing alone and says so")
-        self.assertEqual([(a["who"], a["status_after"]) for a in sets["P3"]["approvals"]][-1], ("Ada Approver", "approved"))
+        # Spec T24: the one-dollar book is under the US$10.00 hold throughout, and HH-0001 paid the owner's wallet moments before HH-0002, so Spec 69
+        # holds nothing — the estate asks no signature for any of the three, and the signers are never pressed
+        self.assertEqual([(a["who"], a["refusal_code"], a["status_after"]) for a in sets["P2"]["approvals"]], [],
+                         "the one-off destination is already paid by this estate (HH-0001), so Spec 69's hold is not provable and the estate asked no signature")
+        self.assertEqual(sets["P2"]["approvals_required"], 0)
+        self.assertEqual(sets["P3"]["approvals"], [], "US$0.49 is under the hold")
         self.assertEqual(o.line.count("gas US$0.31"), 4, "the Treasury's payment and the three, each with its gas debit beside it")
         self.assertEqual(len(self.double.chain.transfers), 4)
         self.assertEqual(self.double.chain.balance_of(self.holdings_wallet), 0, "Holdings paid out exactly what it received")
-        self.assertEqual(self.double.chain.balance_of(T.address("NORTHWIND_ETHEREUM")), 1250000)
-        self.assertEqual(self.double.chain.balance_of(T.address("CONTOSO_ETHEREUM")), 12000000)
+        self.assertEqual(self.double.chain.balance_of(OWNER_WALLET_FOR_TESTS), 1000000, "the owner's wallet received the whole dollar")
+        self.assertEqual(self.double.chain.balance_of(T.address("NORTHWIND_ETHEREUM")), 0, "no derived address was paid on a real chain (Spec T24)")
+        self.assertEqual(self.double.chain.balance_of(T.address("CONTOSO_ETHEREUM")), 0)
         # the payees' balances were read from the chain's public RPC, before and after, against the contract the estate names
         rpc_calls = [c for c in self.runner.calls if c.station == "S7" and c.path == T.public_rpc_url(T.PAYEE_CHAIN)]
         self.assertEqual(len(rpc_calls), 6)
         self.assertTrue(all(c.sent["params"][0]["to"] == self.double.chain.token for c in rpc_calls))
         self.assertEqual(self.runner.facts["usdc_token"], self.double.chain.token)
-        self.assertEqual(self.double.chain.calls[0]["body"]["params"][0]["data"], T.balance_of_call_data(T.address("NORTHWIND_ETHEREUM")))
-        self.assertEqual(self.outcomes["S11"].line, "the attacker: 17 probe(s), 0 not made, 1 finding(s)", "the settled runs answer S11's probes as refusals")
+        self.assertEqual(self.double.chain.calls[0]["body"]["params"][0]["data"], T.balance_of_call_data(OWNER_WALLET_FOR_TESTS))
+        self.assertEqual(self.outcomes["S11"].line, "the attacker: 17 probe(s), 1 not made, 1 finding(s)",
+                         "the settled runs answer S11's probes as refusals; the hold probe is not made on the one-dollar book, where P3 is under the hold (Spec T24)")
 
     def test_s10_counts_the_money_to_the_cent(self):
         notes = [n for n in self.runner.notes["S10"] if n.startswith("money moved (Spec T14 §5)")]
-        self.assertEqual(notes, ["money moved (Spec T14 §5): Harness Treasury's USDC US$100.00 → US$81.76 (paid US$18.24); Harness Holdings' USDC US$0.00 → US$0.00 (received US$18.24; the three payments US$18.24, of which US$18.24 landed); "
-                                 "Harness Holdings' gas account US$0.00 → US$9.07 (credited US$10.00; gas debits US$0.93 over 3 of 3 payments that landed): every pair reconciles to the cent"])
+        self.assertEqual(notes, ["money moved (Spec T14 §5): Harness Treasury's USDC US$100.00 → US$99.00 (paid US$1.00); Harness Holdings' USDC US$0.00 → US$0.00 (received US$1.00; the three payments US$1.00, of which US$1.00 landed); "
+                                 "Harness Holdings' gas account US$0.00 → US$9.07 (credited US$10.00; gas debits US$0.93 over 3 of 3 payments that landed); "
+                                 "Harness Holdings' USDC fell by US$1.00 and its gas account by US$0.93, US$1.93 in all — exactly the payments that landed (US$1.00) plus their gas (US$0.93): every pair reconciles to the cent"])
         self.assertEqual([f.probe for f in self.runner.findings if f.probe.startswith("money moved")], [])
-        self.assertEqual(self.money["treasury"]["usdc_after"], 81760000)
+        self.assertEqual(self.money["treasury"]["usdc_after"], 99000000)
         self.assertEqual(self.money["holdings"]["gas_after"], 907)
         self.assertEqual(self.double.platform.balance(AAP_ACCOUNT_ID), {"balance_usd_cents": 907, "reserved_usd_cents": 0, "available_usd_cents": 907})
         self.assertEqual(self.double.platform.balance(TREASURY_ACCOUNT_ID), {"balance_usd_cents": 969, "reserved_usd_cents": 0, "available_usd_cents": 969})
@@ -172,7 +182,8 @@ class TheTreasuryPaysAndTheThreePaymentsLand(unittest.TestCase):
     def test_the_report_names_the_treasury_and_the_money_and_reads_back(self):
         report = self.runner.report()
         self.assertIn("Harness Treasury: funding wallet %s — the float Bear funds with USDC on arbitrum, once; it pays Harness Holdings' shortfall through the estate's own road, and the harness holds no key for it (Spec T14)." % self.treasury.source_account, report)
-        self.assertIn("The asset: the three payments together need US$18.24 of USDC; Harness Treasury pays Harness Holdings the shortfall through the estate's own road (Spec T14); the harness never mints the asset and holds no key.", report)
+        self.assertIn("The asset: the three payments together need US$1.00 of USDC; Harness Treasury pays Harness Holdings the shortfall through the estate's own road (Spec T14); the harness never mints the asset and holds no key. "
+                      "On arbitrum every payment goes to the owner's wallet, %s, read from ~/.aer360-harness/payee.env and never from the repository; the book there is one dollar in all (Spec T24)." % OWNER_WALLET_FOR_TESTS, report)
         self.assertIn("| POST %s%s |" % (PLATFORM_BASE, T.ADMIN_CREDIT_ROUTE % AAP_ACCOUNT_ID), report, "the admin credit is in Every call")
         self.assertIn("| POST %s |" % T.public_rpc_url(T.PAYEE_CHAIN), report)
         path = self.runner.write_report()
@@ -184,18 +195,18 @@ class TheTreasuryPaysAndTheThreePaymentsLand(unittest.TestCase):
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
 class TheTreasuryIsShort(unittest.TestCase):
     def test_s7_fails_with_the_sentence_and_nothing_is_sent(self):
-        double, runner, outcomes = run_against(treasury_usdc_cents=1000)
+        double, runner, outcomes = run_against(treasury_usdc_cents=50)  # fifty cents: short of the one-dollar book (Spec T24)
         o = outcomes["S7"]
         self.assertEqual(o.outcome, H.FAILED_PREREQUISITE, o.line)  # Spec T19 §3: the stop is a missing prerequisite, named in the line
-        sentence = T.TREASURY_SHORT_SENTENCE % ("US$10.00", "US$18.24", double.treasury.source_account, "arbitrum")
-        self.assertEqual(sentence, "Harness Treasury holds US$10.00; the run needs US$18.24; fund %s on arbitrum" % double.treasury.source_account)
-        self.assertTrue(o.line.endswith("%s (the three payments need US$18.24 and Harness Holdings holds US$0.00); nothing was sent" % sentence), o.line)
+        sentence = T.TREASURY_SHORT_SENTENCE % ("US$0.50", "US$1.00", double.treasury.source_account, "arbitrum")
+        self.assertEqual(sentence, "Harness Treasury holds US$0.50; the run needs US$1.00; fund %s on arbitrum" % double.treasury.source_account)
+        self.assertTrue(o.line.endswith("%s (the three payments need US$1.00 and Harness Holdings holds US$0.00); nothing was sent" % sentence), o.line)
         self.assertIn("payments: %s — " % H.TREASURY_SHORT, o.line, "the summary line names the scenario and the missing prerequisite")
         self.assertFalse(any(sentence in n for n in runner.notes["S7"]), "Spec T19 §3: the note beside the stop is gone; its figures travel in the line")
         self.assertEqual([c.route for c in runner.calls if c.station == "S7" and c.method == "POST" and c.path.startswith("/v1/sets")], [], "nothing was submitted")
         self.assertEqual(double.platform.requests, [], "no gas was credited either")
         self.assertEqual(double.chain.transfers, [])
-        self.assertEqual(double.chain.balance_of(double.treasury.source_account), 10000000)
+        self.assertEqual(double.chain.balance_of(double.treasury.source_account), 500000)
         self.assertTrue(any(n.startswith("the money was not counted: S7 did not read the balances before and after") for n in runner.notes["S10"]))
 
 
@@ -219,9 +230,9 @@ class S7aAgainstDoublesThatAnswerDifferently(unittest.TestCase):
         self.assertEqual(s7a["verdict"], "failed")
         self.assertEqual(len(s7a["left"]), 2, s7a["left"])
         self.assertTrue(s7a["left"][0].startswith("the review created run(s) set-"), s7a["left"])
-        self.assertEqual(s7a["left"][1], "Harness Holdings' USDC moved from US$18.24 to US$0.00")
+        self.assertEqual(s7a["left"][1], "Harness Holdings' USDC moved from US$1.00 to US$0.00")
         self.assertIn("S7a failed: a payment left — the review created run(s) set-", o.line)
-        self.assertIn("; Harness Holdings' USDC moved from US$18.24 to US$0.00", o.line)
+        self.assertIn("; Harness Holdings' USDC moved from US$1.00 to US$0.00", o.line)
 
     def test_a_balance_that_already_covers_the_ceiling_is_reported_not_failed(self):
         double = EstateDouble()
@@ -293,21 +304,21 @@ class TheAdminCreditRoad(unittest.TestCase):
 class APaymentWhosePayeeBalanceDoesNotRise(unittest.TestCase):
     def test_each_payment_fails_naming_the_two_figures(self):
         # Holdings already holds the three payments (no Treasury payment to fail first); the chain debits the sender and credits nobody
-        double, runner, outcomes = run_against(holdings_usdc_cents=1824, chain=UsdcChainDouble(lose_transfers=True))
+        double, runner, outcomes = run_against(holdings_usdc_cents=100, chain=UsdcChainDouble(lose_transfers=True))
         o = outcomes["S7"]
         self.assertEqual(o.outcome, H.FAIL, o.line)
-        self.assertIn("Harness Holdings holds US$18.24, at or above the three payments' US$18.24, so the Treasury was not asked to pay", o.line)
-        for key, amount in (("P1", "US$1.25"), ("P2", "US$4.99"), ("P3", "US$12.00")):
+        self.assertIn("Harness Holdings holds US$1.00, at or above the three payments' US$1.00, so the Treasury was not asked to pay", o.line)
+        for key, amount in (("P1", "US$0.50"), ("P2", "US$0.01"), ("P3", "US$0.49")):
             record = runner.facts["sets"][key]
             self.assertFalse(record["landed"])
             self.assertEqual(record["failure"], "the payee's USDC balance did not rise by %s: US$0.00 → US$0.00" % amount)
-            self.assertIn("%s (%s USDC, expected to" % (key, amount[3:]), o.line)
+            self.assertIn("%s (%s USDC to %s, the owner's wallet, expected to" % (key, amount[3:], OWNER_WALLET_FOR_TESTS), o.line)
             self.assertEqual((record["status"], record["set_status"]), ("confirmed", "settled"), "the estate says landed; the chain says otherwise, and the chain decides")
-        self.assertIn("not landed — the payee's USDC balance did not rise by US$1.25: US$0.00 → US$0.00 (instruction confirmed, run settled, userOpHash 0x", o.line)
+        self.assertIn("not landed — the payee's USDC balance did not rise by US$0.50: US$0.00 → US$0.00 (instruction confirmed, run settled, userOpHash 0x", o.line)
         self.assertTrue(any(f.probe.startswith("money moved: Harness Holdings' USDC does not reconcile") for f in runner.findings), "S10: nothing landed, and Holdings' USDC still fell")
 
     def test_a_balance_the_rpc_could_not_read_is_not_a_pass(self):
-        double, runner, outcomes = run_against(holdings_usdc_cents=1824, chain=UsdcChainDouble(fault="down"))
+        double, runner, outcomes = run_against(holdings_usdc_cents=100, chain=UsdcChainDouble(fault="down"))
         o = outcomes["S7"]
         self.assertEqual(o.outcome, H.FAIL, o.line)
         record = runner.facts["sets"]["P1"]
@@ -326,7 +337,9 @@ class TheAuditorCountsTheMoney(unittest.TestCase):
                          [("S10", "money moved: Harness Holdings' gas account does not reconcile to the cent", "US$0.00 before, plus US$10.00 credited, less US$0.93 of gas debits: US$9.07", "the estate reads US$9.04 after")])
         self.assertEqual(outcomes["S10"].outcome, H.FAIL)
         note = next(n for n in runner.notes["S10"] if n.startswith("money moved (Spec T14 §5)"))
-        self.assertTrue(note.endswith("Harness Holdings' gas account US$0.00 → US$9.04 (credited US$10.00; gas debits US$0.93 over 3 of 3 payments that landed): 1 pair(s) do not reconcile to the cent — findings above"), note)
+        self.assertTrue(note.endswith("Harness Holdings' gas account US$0.00 → US$9.04 (credited US$10.00; gas debits US$0.93 over 3 of 3 payments that landed); "
+                                      "Harness Holdings' USDC fell by US$1.00 and its gas account by US$0.96, US$1.96 in all — which is not the payments that landed (US$1.00) plus their gas (US$0.93): "
+                                      "1 pair(s) do not reconcile to the cent — findings above"), note)
 
     def test_the_count_is_pure_arithmetic_on_the_figures_read(self):
         runner = H.Runner("https://estate.test", tempfile.mkdtemp(), None, False, None, tempfile.mkdtemp(), say=lambda s: None, sleep=lambda s: None)
@@ -362,7 +375,7 @@ class TheBirthRunStopsWithTheFundSentence(unittest.TestCase):
         address = double.treasury.source_account
         sentence = T.FUND_TREASURY_SENTENCE % (address, "arbitrum")
         self.assertEqual(sentence, "fund Harness Treasury: %s on arbitrum, then rerun" % address)
-        self.assertTrue(o.line.endswith("%s (the three payments need US$18.24 and Harness Holdings holds US$0.00; the Treasury holds US$0.00); nothing was sent" % sentence), o.line)
+        self.assertTrue(o.line.endswith("%s (the three payments need US$1.00 and Harness Holdings holds US$0.00; the Treasury holds US$0.00); nothing was sent" % sentence), o.line)
         self.assertIn("payments: %s — " % H.TREASURY_NOT_FUNDED, o.line, "the summary line names the scenario and the missing prerequisite")
         self.assertIn("the interviews walked from the book with the Treasury's own name, approver and account approvers (23 and 18 questions)", o.line)
         self.assertIn("funding wallet: %s on double-stack-1, key %s (born by this run's press)" % (address, double.treasury.custody_key_id), o.line)
@@ -389,7 +402,7 @@ class TheBirthRunStopsWithTheFundSentence(unittest.TestCase):
         self.assertIn("Harness Treasury: the Treasury founder signed in with the stored passkey; funding wallet: %s on double-stack-1, key %s (already born; not pressed for again); before:" % (address, double.treasury.custody_key_id), o2.line)
         self.assertEqual([c.route for c in runner2.calls if c.station == "S7" and "/onboarding/" in c.path], ["GET /v1/onboarding/charter"])
         self.assertIn("Harness Treasury holds US$50.00 of USDC on arbitrum", o2.line)
-        self.assertIn("Harness Treasury pays Harness Holdings (%s) the shortfall of US$18.24" % double.source_account, o2.line)
+        self.assertIn("Harness Treasury pays Harness Holdings (%s) the shortfall of US$1.00" % double.source_account, o2.line)
         self.assertEqual(sorted(os.listdir(os.path.join(runner2.store_dir, T.TREASURY["client_id"]))), ["harriet.json"], "one passkey, kept across the runs")
 
 

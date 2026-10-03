@@ -83,7 +83,7 @@ class AResumedRunProbesOnlyWhatItOpened(unittest.TestCase):
         return runner, said
 
     def test_the_first_run_made_every_probe(self):
-        self.assertEqual(self.first["S11"].line, "the attacker: 17 probe(s), 0 not made, 1 finding(s)")
+        self.assertEqual(self.first["S11"].line, "the attacker: 17 probe(s), 1 not made, 1 finding(s)", "Spec T24: on the one-dollar book P3 is under the hold, so the hold probe is counted not made")
         self.assertEqual(self.first["S11"].outcome, H.FAIL, "the wrong-checksum probe is accepted by the estate, as it is by the double")
 
     def test_a_run_resumed_at_s11_builds_no_path_from_the_placeholder_and_names_the_probes_it_could_not_make(self):
@@ -113,7 +113,7 @@ class AResumedRunProbesOnlyWhatItOpened(unittest.TestCase):
         counted_spellings = ("probe not made", "the replay probe was not made", "the passkey probes were not made")
         self.assertEqual(not_made, len([n for n in notes if n.startswith(counted_spellings)]),
                          "every probe counted and not made is counted, and only those (the draft-probe notes say 'not made' too and are not counted)")
-        self.assertEqual(line, "the attacker: 17 probe(s), 5 not made, %d finding(s)" % found)
+        self.assertEqual(line, "the attacker: 17 probe(s), 5 not made, %d finding(s)" % found)  # Spec T22's five: S7 ran no P3 here, which is the hold probe's reason before the one-dollar book's (Spec T24)
         # the run went on to the end
         self.assertEqual(outcomes["S12"].outcome, H.PASS, outcomes["S12"].line)
         self.assertIn("S14", outcomes)

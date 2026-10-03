@@ -22,6 +22,7 @@ import aer360_answers as A  # noqa: E402
 import aer360_harness as H  # noqa: E402
 import aer360_passkey as PK  # noqa: E402
 import aer360_tables as T  # noqa: E402
+from tests.test_aer360_double import OWNER_WALLET_FOR_TESTS  # noqa: E402  (Spec T24: the owner's wallet the tests file)
 from tests.test_aer360_double import (  # noqa: E402
     EstateDouble, MESSAGES, PLATFORM_EXPIRED, PLATFORM_NOT_AUTHORIZED_SENTENCE, FUNDING_WALLET_PURPOSE, WORKSPACE_ID, runner_on,
 )
@@ -139,7 +140,8 @@ class TheApproversSignAdasSeatHome(unittest.TestCase):
         self.assertEqual(o.outcome, H.PASS, o.line)
         self.assertEqual(o.line, "payees: Northwind Supplies: created on arbitrum; promoted; Ada Approver counted (1 of 2); Ben Signatory counted (2 of 2): whitelisted; "
                                  "Contoso Legal: created on arbitrum; promoted; Ada Approver counted (1 of 2); Ben Signatory counted (2 of 2): whitelisted; "
-                                 "register: Northwind Supplies whitelisted, Contoso Legal whitelisted")
+                                 "register: Northwind Supplies whitelisted, Contoso Legal whitelisted; "
+                                 "both at %s, the owner's wallet (read from ~/.aer360-harness/payee.env; never a derived address on arbitrum, Spec T24)" % OWNER_WALLET_FOR_TESTS)
         for record in self.runner.facts["payees"]:
             self.assertEqual([(p["who"], p["status"]) for p in record["presses"]], [("Ada Approver", 200), ("Ben Signatory", 200)], "Cora is not asked")
             self.assertEqual(record["presses"][0]["answer"]["approvals"], {"required": 2, "collected": 1, "remaining": 1})

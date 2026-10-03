@@ -4,15 +4,26 @@ corridor's tables.py; the one venue address S11 sends on purpose is read from th
 at run time and is never in the harness's own (Spec T7). Since Spec T18 the chain is one word in one
 place, `arbitrum`, the venue probe sends the corridor's Arbitrum row, and the pinned keys keep the
 names they were first minted under, so no address moved.
+
+Spec T24 (3 October 2026; the owner: "No more than $1." and "The money should always be paid to my MetaMask address. Always."): the law of a
+real chain — on a chain not in TESTNET_CHAIN_NAMES no payment may go to a derived address, every one goes to the owner's own wallet read from
+payee.env, the book's total may not exceed 1000000 minor units of USDC, and payee.env absent stops S6 and S7 with the spec's sentence. Each
+test of the law was red on main.
 """
+import json
 import os
 import re
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import aer360_answers as A  # noqa: E402
+import aer360_harness as H  # noqa: E402
+import aer360_passkey as PK  # noqa: E402
 import aer360_tables as T  # noqa: E402
 import tables as corridor  # noqa: E402
+from tests.test_aer360_double import EstateDouble, OWNER_WALLET_FOR_TESTS, file_the_owner_payee, runner_on  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -94,6 +105,129 @@ class TheTables(unittest.TestCase):
             T.minor_units("-1", 6)
         with self.assertRaises(ValueError):
             T.minor_units("1e3", 6)
+
+
+# The spec's sentences, word for word (SPEC.md §1 and §2), held here so no edit can move a word unnoticed.
+THE_STOP_SENTENCE = ("the owner's payee address is not filed at ~/.aer360-harness/payee.env (OWNER_PAYEE_ADDRESS); "
+                     "on arbitrum the harness pays only the owner's own wallet; nothing was sent")
+THE_HOLD_SENTENCE = "the one-off destination is the owner's wallet, already paid by this estate, so Spec 69's hold is not provable this run"
+
+
+def pays_to(runner, station="S7"):
+    """
+    Every (invoiceRef, destination) a POST /v1/sets or /v1/sets/review body of the station names — the one-off's address, or `<payee id>` for a
+    payeeAddressId. Harness Holdings' payments carry HH- references; the Treasury's shortfall payment to Holdings' own wallet carries HT-.
+    """
+    out = []
+    for call in runner.calls:
+        if call.station != station or call.route not in ("POST /v1/sets", "POST /v1/sets/review") or not isinstance(call.sent, dict):
+            continue
+        for row in call.sent.get("pays") or []:
+            out.append((str(row.get("invoiceRef") or ""), (row.get("oneOff") or {}).get("address") or ("<payee %s>" % row.get("payeeAddressId"))))
+    return out
+
+
+class TheLawOfTheRealChain(unittest.TestCase):
+    """Spec T24 §5: the guards. `arbitrum`, the payments' chain since Spec T18, is not one of TESTNET_CHAIN_NAMES, so the law is in force on the double."""
+
+    def test_the_payments_chain_is_a_real_one_and_the_testnet_is_named(self):
+        self.assertEqual(T.TESTNET_CHAIN_NAMES, ("aeredium-testnet", "aeredium"))
+        self.assertNotIn(T.PAYEE_CHAIN, T.TESTNET_CHAIN_NAMES)
+        self.assertTrue(T.pays_a_real_chain())
+        self.assertTrue(T.pays_a_real_chain("arbitrum") and T.pays_a_real_chain("ethereum"))
+        self.assertFalse(T.pays_a_real_chain("aeredium-testnet") or T.pays_a_real_chain("aeredium") or T.pays_a_real_chain("AEREDIUM"))
+        self.assertEqual((T.is_testnet("aeredium"), T.is_testnet("arbitrum"), T.is_testnet(None)), (True, False, False))
+        self.assertEqual((T.payee_words(), T.payee_words("aeredium-testnet")), ("the owner's wallet", "a test address derived from the seed"))
+
+    def test_the_books_total_on_a_real_chain_may_not_exceed_one_dollar(self):
+        self.assertEqual(T.ONE_DOLLAR_MINOR, 1000000)
+        for chain in ("arbitrum", "ethereum", "base", "polygon", T.PAYEE_CHAIN):
+            book = A.payments_for(chain)
+            self.assertLessEqual(A.payments_total_minor(book), T.ONE_DOLLAR_MINOR, chain)
+            self.assertLessEqual(sum(int(p.amount_minor) for p in book), 1000000, chain)
+        self.assertLessEqual(A.payments_total_minor(), T.ONE_DOLLAR_MINOR, "the book in force")
+        self.assertEqual(A.payments_total_minor(), 1000000, "the owner's dollar, to the cent: 0.50 + 0.01 + 0.49")
+        self.assertGreater(A.payments_total_minor(A.PAYMENTS_ON_THE_TESTNET), T.ONE_DOLLAR_MINOR, "the testnet's figures are not under the law, and are never in force on a real chain")
+        for chain in T.TESTNET_CHAIN_NAMES:
+            self.assertIs(A.payments_for(chain), A.PAYMENTS_ON_THE_TESTNET)
+
+    def test_the_owners_file_is_checked_and_a_checksum_that_does_not_spell_itself_is_refused(self):
+        good = OWNER_WALLET_FOR_TESTS
+        self.assertTrue(T.is_checksummed(good))
+        self.assertEqual(T.owner_payee_of("OWNER_PAYEE_ADDRESS=%s\nOWNER_PAYEE_CHAIN=arbitrum\n" % good), (good, None))
+        self.assertEqual(T.owner_payee_of("# a comment\nexport OWNER_PAYEE_ADDRESS='%s'\nOWNER_PAYEE_CHAIN=\"Arbitrum\"\n" % good), (good, None), "quotes and export, as a shell file")
+        self.assertEqual(T.owner_payee_of("OWNER_PAYEE_ADDRESS=%s\nOWNER_PAYEE_CHAIN=ethereum\n" % good, "ethereum"), (good, None), "the chain the test moves to")
+        cases = [
+            ("", "names no OWNER_PAYEE_ADDRESS"),
+            ("OWNER_PAYEE_CHAIN=arbitrum\n", "names no OWNER_PAYEE_ADDRESS"),
+            ("OWNER_PAYEE_ADDRESS=0x1234\nOWNER_PAYEE_CHAIN=arbitrum\n", "OWNER_PAYEE_ADDRESS is not 0x and forty hexadecimal characters"),
+            ("OWNER_PAYEE_ADDRESS=%s\nOWNER_PAYEE_CHAIN=arbitrum\n" % good.lower(), "OWNER_PAYEE_ADDRESS does not spell its own EIP-55 checksum (copy the address from the wallet again)"),
+            ("OWNER_PAYEE_ADDRESS=%s\nOWNER_PAYEE_CHAIN=arbitrum\n" % T.wrong_checksum(good), "OWNER_PAYEE_ADDRESS does not spell its own EIP-55 checksum (copy the address from the wallet again)"),
+            ("OWNER_PAYEE_ADDRESS=%s\nOWNER_PAYEE_CHAIN=arbitrum\n" % T.address("NORTHWIND_ETHEREUM"), "OWNER_PAYEE_ADDRESS is one of the harness's own derived test addresses, which no key stands behind"),
+            ("OWNER_PAYEE_ADDRESS=%s\n" % good, "names no OWNER_PAYEE_CHAIN (the payments are made on arbitrum)"),
+            ("OWNER_PAYEE_ADDRESS=%s\nOWNER_PAYEE_CHAIN=ethereum\n" % good, "OWNER_PAYEE_CHAIN is 'ethereum', not arbitrum, the chain the payments are made on"),
+        ]
+        for text, wrong in cases:
+            self.assertEqual(T.owner_payee_of(text), (None, wrong), text)
+        self.assertEqual(T.NO_OWNER_PAYEE_SENTENCE % T.PAYEE_CHAIN, THE_STOP_SENTENCE)
+        self.assertEqual(T.ONE_OFF_ALREADY_PAID_SENTENCE, THE_HOLD_SENTENCE)
+        self.assertEqual((T.PAYEE_ENV_FILE, T.OWNER_PAYEE_ADDRESS_KEY, T.OWNER_PAYEE_CHAIN_KEY), ("payee.env", "OWNER_PAYEE_ADDRESS", "OWNER_PAYEE_CHAIN"))
+        self.assertEqual(T.OWNER_PAYEE_PLACEHOLDER, "<OWNER_PAYEE_ADDRESS from ~/.aer360-harness/payee.env>")
+
+    @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
+    def test_on_a_real_chain_no_payment_goes_to_a_derived_address_and_the_run_moves_no_more_than_one_dollar(self):
+        double = EstateDouble()
+        runner = runner_on(double, tempfile.mkdtemp(), invite=double.mint_founder_link())
+        outcomes = {o.station: o for o in runner.run()}
+        self.assertEqual(outcomes["S7"].outcome, H.PASS, outcomes["S7"].line)
+        # every payment of Harness Holdings — S7's three, and S7a's review of the set of three — names the owner's wallet, never a derived address;
+        # the Treasury's one payment (HT-) names Holdings' own wallet, as T14 §2 has it
+        rows = pays_to(runner)
+        holdings_rows = [(ref, d) for ref, d in rows if ref.startswith("HH-")]
+        treasury_rows = [(ref, d) for ref, d in rows if ref.startswith("HT-")]
+        self.assertEqual(len(holdings_rows), 9, "S7a's three, and each payment's review and creation")
+        self.assertEqual(len(treasury_rows), 2, "the Treasury's review and creation")
+        self.assertEqual(len(rows), len(holdings_rows) + len(treasury_rows))
+        for ref, destination in holdings_rows:
+            address = double.addresses[destination[len("<payee "):-1]]["address"] if destination.startswith("<payee ") else destination
+            self.assertEqual(address.lower(), OWNER_WALLET_FOR_TESTS.lower(), (ref, destination))
+            self.assertFalse(T.is_pinned(address), "a derived address was named on a real chain: %s" % destination)
+        self.assertEqual({d.lower() for _, d in treasury_rows}, {double.source_account.lower()})
+        instructions = [i for s in double.sets.values() for i in s["instructions"]]
+        self.assertEqual({i["address"] for i in instructions}, {OWNER_WALLET_FOR_TESTS.lower()})
+        self.assertFalse(any(T.is_pinned(i["address"]) for i in instructions))
+        self.assertEqual(sum(int(i["amountMinor"]) for i in instructions), 1000000, "the run moved one dollar from Harness Holdings, and no more")
+        self.assertLessEqual(sum(int(i["amountMinor"]) for i in instructions), T.ONE_DOLLAR_MINOR)
+        treasury_instructions = [i for s in double.treasury.sets.values() for i in s["instructions"]]
+        self.assertLessEqual(sum(int(i["amountMinor"]) for i in treasury_instructions), T.ONE_DOLLAR_MINOR, "the Treasury's shortfall payment is computed from the one-dollar book")
+        self.assertEqual({i["address"] for i in treasury_instructions}, {double.source_account.lower()}, "the Treasury pays Holdings' own wallet (Spec T14 §2)")
+        self.assertEqual(double.chain.balance_of(OWNER_WALLET_FOR_TESTS), 1000000)
+        for key in T.PINNED:
+            self.assertEqual(double.chain.balance_of(T.address(key)), 0, key)
+        # the payees S6 whitelisted are at the owner's wallet too, so a later run resolving by (name, chain) finds nothing derived to pay
+        self.assertEqual({a["address"] for a in double.addresses.values() if a["payeeId"] in {p["id"] for p in double.payees.values() if p["displayName"] in ("Northwind Supplies", "Contoso Legal")}},
+                         {OWNER_WALLET_FOR_TESTS.lower()})
+
+    @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
+    def test_payee_env_absent_s7_stops_with_the_sentence_and_nothing_was_sent(self):
+        double = EstateDouble()
+        runner = runner_on(double, tempfile.mkdtemp(), invite=double.mint_founder_link(), payee_env=False)
+        outcomes = {o.station: o for o in runner.run()}
+        o6, o7 = outcomes["S6"], outcomes["S7"]
+        self.assertEqual(o7.outcome, H.FAILED_PREREQUISITE, o7.line)
+        self.assertTrue(o7.line.endswith(THE_STOP_SENTENCE), o7.line)
+        self.assertTrue(o7.line.startswith("payments: %s — " % H.OWNER_PAYEE_NOT_FILED), o7.line)
+        self.assertIn("before: Harness Holdings holds US$0.00 of USDC on arbitrum", o7.line, "the money before is read and reported, as T14 reads it before the credit step")
+        self.assertEqual(o6.outcome, H.FAILED_PREREQUISITE, o6.line)
+        self.assertEqual(o6.line, "payees: %s — %s" % (H.OWNER_PAYEE_NOT_FILED, THE_STOP_SENTENCE))
+        self.assertEqual(pays_to(runner), [], "nothing was reviewed, created or sent")
+        self.assertEqual(double.sets, {}, "no run of Harness Holdings")
+        self.assertEqual(double.treasury.sets, {}, "the stop comes before the Treasury pays")
+        self.assertEqual(double.chain.transfers, [])
+        self.assertEqual(double.platform.requests, [], "no gas was credited")
+        self.assertEqual([p["displayName"] for p in double.payees.values() if p["displayName"] in ("Northwind Supplies", "Contoso Legal")], [], "no payee was made at a derived address")
+        self.assertFalse(any(T.is_pinned(a["address"]) and a["whitelistStatus"] != "proposed" for a in double.addresses.values()), "S11's probe payee is the one row the estate holds, proposed and never paid")
+        self.assertEqual([c.route for c in runner.calls if c.station == "S6"], [], "S6 asked the estate nothing")
 
 
 if __name__ == "__main__":

@@ -7,6 +7,10 @@ The double is the estate at AER 360 Spec 106 (tests/test_aer360_double.py): C9 a
 compiler writes a chosen network by the registry's id. `before_spec_106=True` is the estate before it, `recorded_chains=[…]` a compiler that
 records those networks whatever was chosen (the charter double S3 is judged against), and `hold_payee(name, chain, address, status)` a payee
 an earlier run left in the register.
+
+Spec T24 (3 October 2026): `arbitrum` is a real chain, so the payees' address — the one S7 resolves by (name, chain) and the one the register
+doubles hold — is the owner's own wallet, which the tests file as OWNER_WALLET_FOR_TESTS; the derived NORTHWIND bytes stay only as the proof that
+no address of the table moved. The book is the one-dollar book.
 """
 import json
 import os
@@ -21,7 +25,7 @@ import aer360_harness as H  # noqa: E402
 import aer360_passkey as PK  # noqa: E402
 import aer360_tables as T  # noqa: E402
 import tables as corridor  # noqa: E402
-from tests.test_aer360_double import EstateDouble, VENUE_CONTRACTS, chain_allowlist, runner_on  # noqa: E402
+from tests.test_aer360_double import EstateDouble, OWNER_WALLET_FOR_TESTS, VENUE_CONTRACTS, chain_allowlist, file_the_owner_payee, runner_on  # noqa: E402
 
 # Uniswap's published deployments for Arbitrum One (chain id 42161), read once on 24 September 2026 — the row "SwapRouter02". The
 # harness never writes the bytes in a table of its own (Spec T7); the corridor's row is held to them here.
@@ -31,7 +35,8 @@ SWAPROUTER02_ON_ARBITRUM_ONE = "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45"
 VENUE_SENTENCE_ON_ARBITRUM = "This address is the contract of Uniswap v3 on arbitrum. Your charter says a payee must be a wallet held by a person or a company (question C19). Nothing was saved."
 # SPEC.md §4's sentence, for the offer of 21 September.
 NOT_LIVE = "Spec 106 is not live: C9 offers ['Ethereum', 'Solana', 'Bitcoin']; nothing amended"
-NORTHWIND = T.address("NORTHWIND_ETHEREUM")
+NORTHWIND = T.address("NORTHWIND_ETHEREUM")  # the derived bytes: on a real chain never a payee's address (Spec T24), kept as the proof that the table did not move
+PAYEE = OWNER_WALLET_FOR_TESTS  # the address Northwind Supplies is made at and resolved by on arbitrum since Spec T24: the owner's wallet
 
 
 def run_against(tmp=None, said=None, start_at=None, **double_kwargs):
@@ -41,11 +46,12 @@ def run_against(tmp=None, said=None, start_at=None, **double_kwargs):
     return double, runner, outcomes
 
 
-def offline_runner():
-    """A runner that reaches no estate: for the resolution of a payee from a register already in hand."""
+def offline_runner(chain=None):
+    """A runner that reaches no estate: for the resolution of a payee from a register already in hand. Spec T24: the owner's wallet is filed in its store, for the chain the test moves to."""
     def no_transport(request):
         raise AssertionError("no call was expected: %s" % request.full_url)
     tmp = tempfile.mkdtemp()
+    file_the_owner_payee(os.path.join(tmp, "store"), chain=chain)
     return H.Runner("https://estate.test", os.path.join(tmp, "store"), None, False, None, os.path.join(tmp, "out"), transport=no_transport, say=lambda s: None, sleep=lambda s: None)
 
 
@@ -69,10 +75,10 @@ def single_source_evidence(chain):
         s6 = [l for l in lines if l.startswith("S6 — POST /v1/payees {")]
         for line in s6:
             out.append("S6 creates: %s" % line.split(" — ", 1)[1].split(" (as ", 1)[0])
-        runner = offline_runner()
-        runner.facts["payees_register"] = register_of(("Northwind Supplies", "ethereum", NORTHWIND, "whitelisted", "addr-eth"),
-                                                      ("Northwind Supplies", "arbitrum", NORTHWIND, "whitelisted", "addr-arb"),
-                                                      ("Northwind Supplies", chain, NORTHWIND, "whitelisted", "addr-%s" % chain))
+        runner = offline_runner(chain=chain)
+        runner.facts["payees_register"] = register_of(("Northwind Supplies", "ethereum", PAYEE, "whitelisted", "addr-eth"),
+                                                      ("Northwind Supplies", "arbitrum", PAYEE, "whitelisted", "addr-arb"),
+                                                      ("Northwind Supplies", chain, PAYEE, "whitelisted", "addr-%s" % chain))
         address_id, words = runner.resolve_payee("NORTHWIND_ETHEREUM", "Northwind Supplies")
         out.append("S7 resolves Northwind Supplies to %s — %s" % (address_id, words))
         s7 = [l for l in lines if l.startswith("S7 — ")]
@@ -157,21 +163,25 @@ class TheChainIsOneWordInOnePlace(unittest.TestCase):
     def test_the_resolution_is_by_name_and_chain_and_a_record_on_another_chain_is_never_paid(self):
         runner = offline_runner()
         self.assertEqual(runner.resolve_payee("NORTHWIND_ETHEREUM", "Northwind Supplies"), (None, "no payee register was read, so Northwind Supplies could not be resolved on arbitrum"))
-        runner.facts["payees_register"] = register_of(("Northwind Supplies", "ethereum", NORTHWIND, "whitelisted", "addr-eth"),
-                                                      ("Northwind Supplies", "arbitrum", NORTHWIND, "whitelisted", "addr-arb"))
+        runner.facts["payees_register"] = register_of(("Northwind Supplies", "ethereum", PAYEE, "whitelisted", "addr-eth"),
+                                                      ("Northwind Supplies", "arbitrum", PAYEE, "whitelisted", "addr-arb"))
         self.assertEqual(runner.resolve_payee("NORTHWIND_ETHEREUM", "Northwind Supplies"),
                          ("addr-arb", "the register's Northwind Supplies on arbitrum, whitelisted (the register also holds Northwind Supplies on ethereum: left alone, never paid)"))
         self.assertEqual(runner.payee_address_id("NORTHWIND_ETHEREUM"), "addr-arb")
-        runner.facts["payees_register"] = register_of(("Northwind Supplies", "ethereum", NORTHWIND, "whitelisted", "addr-eth"))
+        runner.facts["payees_register"] = register_of(("Northwind Supplies", "ethereum", PAYEE, "whitelisted", "addr-eth"))
         self.assertEqual(runner.resolve_payee("NORTHWIND_ETHEREUM", "Northwind Supplies"),
                          (None, "no payee Northwind Supplies on arbitrum: the register holds Northwind Supplies on ethereum only, which is never paid"))
         self.assertIsNone(runner.payee_address_id("NORTHWIND_ETHEREUM"))
-        # a whitelisted record on the chain before a proposed one; the same name on the chain at another address is not the pinned payee
-        runner.facts["payees_register"] = register_of(("Northwind Supplies", "arbitrum", NORTHWIND, "proposed", "addr-old"),
-                                                      ("Northwind Supplies", "arbitrum", T.address("CONTOSO_ETHEREUM"), "whitelisted", "addr-other"),
-                                                      ("Northwind Supplies", "arbitrum", NORTHWIND, "whitelisted", "addr-new"))
+        # a whitelisted record on the chain before a proposed one; the same name on the chain at another address is not the payee — Spec T24: a record
+        # of Northwind at the DERIVED address, which earlier runs left, is never paid on a real chain
+        runner.facts["payees_register"] = register_of(("Northwind Supplies", "arbitrum", PAYEE, "proposed", "addr-old"),
+                                                      ("Northwind Supplies", "arbitrum", NORTHWIND, "whitelisted", "addr-derived"),
+                                                      ("Northwind Supplies", "arbitrum", PAYEE, "whitelisted", "addr-new"))
         self.assertEqual(runner.resolve_payee("NORTHWIND_ETHEREUM", "Northwind Supplies")[0], "addr-new")
-        runner.facts["payees_register"] = register_of(("Contoso Legal", "arbitrum", NORTHWIND, "whitelisted", "addr-contoso"))
+        runner.facts["payees_register"] = register_of(("Northwind Supplies", "arbitrum", NORTHWIND, "whitelisted", "addr-derived"))
+        self.assertEqual(runner.resolve_payee("NORTHWIND_ETHEREUM", "Northwind Supplies"), (None, "no payee Northwind Supplies on arbitrum in the register"),
+                         "Spec T24: the derived address an earlier run whitelisted is not the payee on a real chain")
+        runner.facts["payees_register"] = register_of(("Contoso Legal", "arbitrum", PAYEE, "whitelisted", "addr-contoso"))
         self.assertEqual(runner.resolve_payee("NORTHWIND_ETHEREUM", "Northwind Supplies"), (None, "no payee Northwind Supplies on arbitrum in the register"))
         # this run's own record comes first, and only on the chain
         runner.facts["payees"].append({"key": "NORTHWIND_ETHEREUM", "name": "Northwind Supplies", "address_id": "addr-mine", "chain": "arbitrum"})
@@ -228,7 +238,7 @@ class TheBookPaysOnArbitrum(unittest.TestCase):
 
     def test_the_venue_probe_expects_payee_is_venue_contract_on_arbitrum_and_the_checksum_probe_is_unchanged(self):
         o = self.outcomes["S11"]
-        self.assertEqual(o.line, "the attacker: 17 probe(s), 0 not made, 1 finding(s)")
+        self.assertEqual(o.line, "the attacker: 17 probe(s), 1 not made, 1 finding(s)")  # Spec T24: the hold probe is not made on the one-dollar book
         venue = [s for s in self.runner.evidence["S11"] if "a real venue contract" in str(s.get("probe", ""))]
         self.assertEqual(len(venue), 1)
         self.assertEqual(venue[0]["sent"]["addresses"][0], {"chain": "arbitrum", "address": SWAPROUTER02_ON_ARBITRUM_ONE})
@@ -315,8 +325,8 @@ class TheRegisterDouble(unittest.TestCase):
 
     def test_holding_northwind_on_ethereum_and_on_arbitrum_p1_pays_the_arbitrum_record(self):
         double = EstateDouble()
-        on_ethereum = double.hold_payee("Northwind Supplies", "ethereum", NORTHWIND)
-        on_arbitrum = double.hold_payee("Northwind Supplies", "arbitrum", NORTHWIND)
+        on_ethereum = double.hold_payee("Northwind Supplies", "ethereum", PAYEE)
+        on_arbitrum = double.hold_payee("Northwind Supplies", "arbitrum", PAYEE)
         runner = runner_on(double, tempfile.mkdtemp(), invite=double.mint_founder_link())
         outcomes = {o.station: o for o in runner.run()}
         o6, o7 = outcomes["S6"], outcomes["S7"]
@@ -340,7 +350,7 @@ class TheRegisterDouble(unittest.TestCase):
 
     def test_holding_northwind_on_ethereum_only_s6_creates_it_on_arbitrum_names_the_other_and_it_is_never_paid(self):
         double = EstateDouble()
-        on_ethereum = double.hold_payee("Northwind Supplies", "ethereum", NORTHWIND)
+        on_ethereum = double.hold_payee("Northwind Supplies", "ethereum", PAYEE)
         runner = runner_on(double, tempfile.mkdtemp(), invite=double.mint_founder_link())
         outcomes = {o.station: o for o in runner.run()}
         o6, o7 = outcomes["S6"], outcomes["S7"]
@@ -348,7 +358,7 @@ class TheRegisterDouble(unittest.TestCase):
         self.assertIn("payees: Northwind Supplies: created on arbitrum; promoted; Ada Approver counted (1 of 2); Ben Signatory counted (2 of 2): whitelisted; ", o6.line)
         self.assertIn("register: Northwind Supplies whitelisted (the register also holds Northwind Supplies on ethereum: left alone, never paid), Contoso Legal whitelisted", o6.line)
         created = [s for s in runner.evidence["S6"] if s["route"] == "POST /v1/payees" and s["sent"]["displayName"] == "Northwind Supplies"]
-        self.assertEqual(created[0]["sent"]["addresses"], [{"chain": "arbitrum", "address": NORTHWIND}])
+        self.assertEqual(created[0]["sent"]["addresses"], [{"chain": "arbitrum", "address": PAYEE}], "Spec T24: the owner's wallet, never the derived bytes")
         self.assertEqual(o7.outcome, H.PASS, o7.line)
         paid_ids = [b["pays"][0]["payeeAddressId"] for b in self.sets_bodies(runner) if "payeeAddressId" in b["pays"][0]]
         self.assertNotIn(on_ethereum["id"], paid_ids, "a payee record on ethereum is never paid")
@@ -361,7 +371,7 @@ class TheRegisterDouble(unittest.TestCase):
     def test_a_run_resumed_at_s7_reads_the_register_once_and_pays_the_arbitrum_record_never_the_ethereum_one(self):
         tmp = tempfile.mkdtemp()
         double = EstateDouble()
-        on_ethereum = double.hold_payee("Northwind Supplies", "ethereum", NORTHWIND)
+        on_ethereum = double.hold_payee("Northwind Supplies", "ethereum", PAYEE)
         first = runner_on(double, tmp, invite=double.mint_founder_link())
         first_outcomes = {o.station: o for o in first.run()}
         self.assertEqual(first_outcomes["S7"].outcome, H.PASS, first_outcomes["S7"].line)
@@ -378,12 +388,12 @@ class TheRegisterDouble(unittest.TestCase):
         first_northwind = first.facts["payees"][0]["address_id"]
         self.assertEqual(second.facts["payee_resolution"]["P1"],
                          "the register's Northwind Supplies on arbitrum, whitelisted (the register also holds Northwind Supplies on ethereum: left alone, never paid)")
-        self.assertIn("P1 (1.25 USDC, expected to proceeds to approval): paid to the register's Northwind Supplies on arbitrum, whitelisted (the register also holds Northwind Supplies on ethereum: left alone, never paid); submitted:", o.line)
+        self.assertIn("P1 (0.50 USDC to %s, the owner's wallet, expected to proceeds to approval): paid to the register's Northwind Supplies on arbitrum, whitelisted (the register also holds Northwind Supplies on ethereum: left alone, never paid); submitted:" % PAYEE, o.line)
         paid_ids = [b["pays"][0]["payeeAddressId"] for b in self.sets_bodies(second) if "payeeAddressId" in b["pays"][0]]
         self.assertIn(first_northwind, paid_ids, "the first run's whitelisted record on arbitrum")
         self.assertNotIn(on_ethereum["id"], paid_ids)
         self.assertEqual({double.addresses[i]["chain"] for i in paid_ids}, {"arbitrum"})
-        self.assertEqual(len(H.dry_lines()), 231, "the conditional register read is one dry line under S7 (193 → 194); Spec T19 adds S5's head and S14 (194 → 231)")
+        self.assertEqual(len(H.dry_lines()), 234, "the conditional register read is one dry line under S7 (193 → 194); Spec T19 adds S5's head and S14 (194 → 231); Spec T24 adds the payee.env reads and the one-off's register read (231 → 234)")
 
     def test_a_register_holding_the_payee_on_ethereum_only_at_s7_sends_nothing_for_it_and_says_so(self):
         """A run resumed at S7 on an estate whose register holds Northwind on ethereum only: P1 is not sent, and the line says which record was never paid."""
@@ -391,15 +401,15 @@ class TheRegisterDouble(unittest.TestCase):
         double = EstateDouble()
         first = runner_on(double, tmp, invite=double.mint_founder_link())
         first.run()
-        # the earlier runs' arbitrum records are gone from this register double; an ethereum record stands in their place
-        for address_id in [i for i, a in double.addresses.items() if a["address"] == NORTHWIND.lower()]:
+        # the earlier runs' arbitrum records of Northwind are gone from this register double (Contoso's, at the same owner's wallet, stay); an ethereum record stands in their place
+        for address_id in [i for i, a in double.addresses.items() if a["address"] == PAYEE.lower() and double.payees[a["payeeId"]]["displayName"] == "Northwind Supplies"]:
             del double.addresses[address_id]
-        on_ethereum = double.hold_payee("Northwind Supplies", "ethereum", NORTHWIND)
+        on_ethereum = double.hold_payee("Northwind Supplies", "ethereum", PAYEE)
         second = runner_on(double, tmp, start_at="S7")
         outcomes = {o.station: o for o in second.run()}
         o = outcomes["S7"]
         self.assertEqual(o.outcome, H.FAIL, o.line)
-        self.assertIn("P1 (1.25 USDC, expected to proceeds to approval): no payee Northwind Supplies on arbitrum: the register holds Northwind Supplies on ethereum only, which is never paid; nothing was sent;", o.line)
+        self.assertIn("P1 (0.50 USDC, expected to proceeds to approval): no payee Northwind Supplies on arbitrum: the register holds Northwind Supplies on ethereum only, which is never paid; nothing was sent;", o.line)
         self.assertIn("S7a not made: no payee Northwind Supplies on arbitrum: the register holds Northwind Supplies on ethereum only, which is never paid, so the set of three could not be reviewed", o.line)
         paid_ids = [b["pays"][0]["payeeAddressId"] for b in self.sets_bodies(second) if "payeeAddressId" in b["pays"][0]]
         self.assertNotIn(on_ethereum["id"], paid_ids)

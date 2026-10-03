@@ -30,7 +30,7 @@ import aer360_answers as A  # noqa: E402
 import aer360_harness as H  # noqa: E402
 import aer360_passkey as PK  # noqa: E402
 import aer360_tables as T  # noqa: E402
-from tests.test_aer360_double import Clock, EstateDouble, VENUE_STIPULATION, runner_on  # noqa: E402
+from tests.test_aer360_double import Clock, EstateDouble, VENUE_STIPULATION, file_the_owner_payee, runner_on, the_testnet_book  # noqa: E402
 
 # The payee door's sentence for the probe address (packages/shared/src/refusals.ts, payeeIsVenueContractSentence), word for word — on the
 # payments' chain, which is `arbitrum` since Spec T18 (the probe moves with the payees).
@@ -576,10 +576,12 @@ class TheAttackerAgainstTheDouble(unittest.TestCase):
         self.assertFalse(any(f.probe == "the clerk approving her own payment (S7's P3)" for f in self.runner.findings))
         # Spec T14: on the shared credential the charter's Yes still lets the clerk's credential release her own run — but S7 now has the
         # signers press while the run waits, so Ben's press, wearing the one credential four people wear, approves P3 and it is executed
-        # before S11 asks; the acceptance shows in S7's record (the approving credential is Cora's own), and S11's probe meets the run settled
+        # before S11 asks; the acceptance shows in S7's record (the approving credential is Cora's own), and S11's probe meets the run settled.
+        # Spec T24: that needs a payment the band holds, so this run walks T14's testnet book under the patch (the one-dollar book holds none)
         pre_91 = EstateDouble(before_spec_91=True)
         runner = runner_on(pre_91, tempfile.mkdtemp(), invite=pre_91.mint_founder_link())
-        runner.run()
+        with the_testnet_book():
+            runner.run()
         self.assertFalse(any(f.probe == "the clerk approving her own payment (S7's P3)" for f in runner.findings))
         p3 = runner.facts["sets"]["P3"]
         first = p3["approvals"][0]
@@ -593,7 +595,7 @@ class TheAttackerAgainstTheDouble(unittest.TestCase):
     def test_findings_are_printed_in_the_failure_form_with_the_probe(self):
         lines = [l for l in self.said if l.startswith("S11 — fail — ") and ": ACCEPTED: " in l]
         self.assertEqual(len(lines), 1, "the wrong checksum; the venue is refused as the charter says, and the clerk is refused at the guard")
-        self.assertIn("S11 — fail — the attacker: 17 probe(s), 0 not made, 1 finding(s)", self.said)
+        self.assertIn("S11 — fail — the attacker: 17 probe(s), 1 not made, 1 finding(s)", self.said)  # Spec T24: the hold probe is not made on the one-dollar book
 
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
@@ -617,7 +619,7 @@ class TheVenueProbeFollowsTheCharter(unittest.TestCase):
         self.assertEqual(finding.expected, "HTTP 422 PAYEE_IS_VENUE_CONTRACT: %s (this run's compiled policy charter says payeeVenueContracts \"refused\")" % VENUE_DOOR_SENTENCE)
         self.assertEqual(finding.route, "POST /v1/payees")
         self.assertTrue(finding.came_back.startswith("HTTP 201 — "), finding.came_back)
-        self.assertIn("17 probe(s), 0 not made, 2 finding(s)", outcomes["S11"].line)
+        self.assertIn("17 probe(s), 1 not made, 2 finding(s)", outcomes["S11"].line)  # Spec T24: the hold probe is not made on the one-dollar book
         step = [s for s in runner.evidence["S11"] if "a real venue contract" in str(s.get("probe", ""))][-1]
         self.assertEqual(step["status"], 201)
         self.assertEqual(step["result"], "accepted (HTTP 201) — the charter says otherwise")
@@ -634,7 +636,7 @@ class TheVenueProbeFollowsTheCharter(unittest.TestCase):
         self.assertTrue(finding.said.endswith("— expected PAYEE_IS_VENUE_CONTRACT, 422, %r" % VENUE_DOOR_SENTENCE), finding.said)
         self.assertTrue(finding.came_back.startswith("HTTP 422 — "), finding.came_back)
         self.assertIn(VENUE_STIPULATION, finding.came_back, "the estate's own words travel with the finding")
-        self.assertIn("17 probe(s), 0 not made, 2 finding(s)", outcomes["S11"].line)
+        self.assertIn("17 probe(s), 1 not made, 2 finding(s)", outcomes["S11"].line)  # Spec T24: the hold probe is not made on the one-dollar book
         step = [s for s in runner.evidence["S11"] if "a real venue contract" in str(s.get("probe", ""))][-1]
         self.assertEqual(step["result"], "refused, but not as the charter's door refuses: ADDRESS_PROPOSAL_REFUSED: %s (a stipulation this door applies whatever the charter says; this double stands in for an estate that does)" % VENUE_STIPULATION)
 
@@ -650,14 +652,14 @@ class TheVenueProbeFollowsTheCharter(unittest.TestCase):
             self.assertEqual(step["expected"], "HTTP 201: accepted, as the law says (%s; this run's compiled policy charter says payeeVenueContracts \"accepted\")" % H.VENUE_RULING)
             self.assertEqual(step["result"], "accepted, as the law says (%s)" % H.VENUE_RULING)
             self.assertTrue(any(l.startswith("  S11 — accepted, as the law says — %s: HTTP 201" % self.VENUE_PROBE) for l in said))
-            self.assertIn("17 probe(s), 0 not made, 1 finding(s)", outcomes["S11"].line)
+            self.assertIn("17 probe(s), 1 not made, 1 finding(s)", outcomes["S11"].line)
             # the same estate with a door that refuses regardless: the finding of Spec T8, with the ruling quoted
             runner, outcomes, said = self.run_against(refuses_venue_contract=True)
             finding = next(f for f in runner.findings if f.station == "S11" and "a real venue contract" in f.probe)
             self.assertTrue(finding.said.startswith("REFUSED: ADDRESS_PROPOSAL_REFUSED: %s" % VENUE_STIPULATION), finding.said)
             self.assertIn("the law says otherwise (%s; a contract is an address; this run's compiled policy charter says payeeVenueContracts \"accepted\")" % H.VENUE_RULING, finding.said)
             self.assertEqual(finding.expected, "HTTP 201: accepted, as the law says (%s; this run's compiled policy charter says payeeVenueContracts \"accepted\")" % H.VENUE_RULING)
-            self.assertIn("17 probe(s), 0 not made, 2 finding(s)", outcomes["S11"].line)
+            self.assertIn("17 probe(s), 1 not made, 2 finding(s)", outcomes["S11"].line)  # Spec T24: the hold probe is not made on the one-dollar book
             self.assertIn("Bear, 20 September 2026", runner.report())
         self.assertEqual(A.POLICY_ANSWERS["C19"]["choice"], A.VENUE_NO, "the book's own answer stands")
 
@@ -897,6 +899,7 @@ class TheLastRunColumn(unittest.TestCase):
         out = os.path.join(tmp, "out")
         # the first run: the estate at Spec 92 with main's currency arm — the currency read back as JSON, the venue contract refused as the charter says
         first_double = EstateDouble()
+        file_the_owner_payee(os.path.join(tmp, "store-1"))  # Spec T24: the owner's wallet, so S6 and S7 walk
         first = H.Runner(first_double.base, os.path.join(tmp, "store-1"), first_double.mint_founder_link(), False, None, out, transport=first_double, say=lambda s: None, sleep=lambda s: None)
         first.run()
         first_path = first.write_report()
@@ -907,6 +910,7 @@ class TheLastRunColumn(unittest.TestCase):
         # the rerun after a fix: Spec 88 has landed, so the currency is read back as its code; and this estate's payee door never
         # learned C19, so it saves the venue's contract the charter says to refuse (Spec T11) — a new finding
         second_double = EstateDouble(currency_spoken_as_code=True, refuses_venue_contract=False)
+        file_the_owner_payee(os.path.join(tmp, "store-2"))
         second = H.Runner(second_double.base, os.path.join(tmp, "store-2"), second_double.mint_founder_link(), False, None, out, transport=second_double, say=lambda s: None, sleep=lambda s: None)
         second.run()
         second_path = second.write_report()
@@ -935,6 +939,7 @@ class TheLastRunColumn(unittest.TestCase):
         self.assertNotIn("- closed — S11", report)
         # a third run against today's estate again — the door following the charter: the venue finding closes, the currency finding is new once more
         third_double = EstateDouble()
+        file_the_owner_payee(os.path.join(tmp, "store-3"))
         third = H.Runner(third_double.base, os.path.join(tmp, "store-3"), third_double.mint_founder_link(), False, None, out, transport=third_double, say=lambda s: None, sleep=lambda s: None)
         third.run()
         third_report = third.report()

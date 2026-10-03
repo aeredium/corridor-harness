@@ -294,7 +294,62 @@ class EstateHarnessReadmeTest(unittest.TestCase):
         self.assertIn("a closing table of the thirteen stations (S1 to S12, then S14 since Spec T19)", self.section)
 
 
+    def test_it_says_the_estate_pays_the_owners_wallet_since_spec_t24(self):
+        self.assertIn("Spec T24, 3 October 2026", self.section)
+        for words in ("*\"No more than $1.\"*", "*\"The money should always be paid to my MetaMask address. Always.\"*",
+                      "*nothing here is a real counterparty's; every address is derived by the harness from a fixed seed — keccak-256 of the seed and a label, the last twenty bytes*",
+                      "the run of 28 September paid US$18.24 to addresses nobody can spend from", "HH-0001 US$12.50 to Northwind, HH-0002 US$4.99 to an unlisted destination, HH-0003 US$0.75 to Contoso; Holdings fell from US$50.00 to US$31.76",
+                      "the book at main split the same US$18.24 as 1.25, 4.99 and 12.00", "the register of 28 September is the truth of the split",
+                      "*The owner's wallet is the payee on a real chain.*", "`~/.aer360-harness/payee.env`", "`OWNER_PAYEE_ADDRESS`, EIP-55 checksummed", "`OWNER_PAYEE_CHAIN`, which must equal `PAYEE_CHAIN`",
+                      "`set_owner_payee.sh`", "never in the repository, in a test or in a fixture", "`OWNER_WALLET_FOR_TESTS`", "*both at <address>, the owner's wallet*",
+                      "a checksum that does not spell itself", "`owner_payee_of`", "**FAILED — prerequisite**, *the owner's payee address not filed*",
+                      "*the owner's payee address is not filed at ~/.aer360-harness/payee.env (OWNER_PAYEE_ADDRESS); on arbitrum the harness pays only the owner's own wallet; nothing was sent*",
+                      "never a derived address on a real chain, by any path", "On the testnet the derived table is used as today",
+                      "*The book's amounts on a real chain: 50, 1 and 49 cents.*", "HH-0001 US$0.50, HH-0002 US$0.01, HH-0003 US$0.49 — US$1.00 in all", "`PAYMENTS_ON_A_REAL_CHAIN`", "`PAYMENTS_ON_THE_TESTNET`",
+                      "`payments()`, which reads `PAYEE_CHAIN` at call time", "`ONE_DOLLAR_MINOR`", "the gas credit of S7 is unchanged", "no payment of the one-dollar book is held by the US$10.00 band (O2)",
+                      "*wait where the destination is new (Spec 69)*", "*the one-dollar book (Spec T24): 0.50 USDC to the owner's wallet, under the US$10.00 hold (O2), so the band asks no second hand*", "`road_words`",
+                      "is made only where P3 is above the hold", "never a finding that lies",
+                      "*The one-off's proof is stated honestly.*", "`setgates.ts`, `isDestinationNew`", "HH-0001 pays the owner's wallet moments before HH-0002", "`one_off_words`",
+                      "*the one-off destination is the owner's wallet, already paid by this estate, so Spec 69's hold is not provable this run*", "a pass with the words, not a failure",
+                      "*the one-off destination is the owner's wallet, which this estate has never paid, so Spec 69's hold is provable this run*", "the owner's to rule on, said here rather than resolved silently",
+                      "*S7 names where every cent went.*", "*P1 (0.50 USDC to <address>, the owner's wallet, expected to proceeds to approval): …*",
+                      "*the payee on arbitrum: <address>, the owner's wallet (read from ~/.aer360-harness/payee.env; Spec T24)*",
+                      "*Harness Holdings' USDC fell by US$1.00 and its gas account by US$0.93, US$1.93 in all — exactly the payments that landed (US$1.00) plus their gas (US$0.93)*",
+                      "`<OWNER_PAYEE_ADDRESS from ~/.aer360-harness/payee.env>`", "the printer never reads the file", "231 → 234 lines",
+                      "*The guards.*", "no payment may go to a derived address and the book's total may not exceed 1000000 minor units", "`tests/test_the_estate_pays_the_owners_wallet.py`",
+                      "`file_the_owner_payee`", "`payee_env=False`", "`the_testnet_book`", "Not touched, as the fence requires: `aerconnect_harness.py`, `corridor_consent.py`, the corridor's `tables.py`, the passkeys, the stores",
+                      "`--from S7 --out ~/Downloads/harness-runs`", "Each of the spec's tests was red on main"):
+            self.assertIn(words, self.section, words)
+        self.assertLess(self.section.index("Spec T22, 27 September 2026"), self.section.index("Spec T24, 3 October 2026"))
+        self.assertLess(self.section.index("Spec T24, 3 October 2026"), self.section.index("**Running it.**"))
+        # the living paragraph names both books, and the running-it paragraph the file
+        self.assertIn("is the book on the AEREDIUM testnet; on a real chain, and `arbitrum` is one, the book is one dollar since Spec T24: US$0.50, US$0.01 and US$0.49, every cent to the owner's own wallet read from `~/.aer360-harness/payee.env`, never a derived address", self.section)
+        self.assertIn("the payee of every payment is the owner's own wallet, read from `payee.env` beside the passkeys (Spec T24", self.section)
+
+
 class ChangelogTest(unittest.TestCase):
+    def test_the_changelog_records_spec_t24_first_and_names_every_change(self):
+        text = read("CHANGELOG.md")
+        title = "## Spec T24 — On a real chain the estate harness pays the owner's own wallet, and the book's payments total no more than one dollar (3 October 2026)"
+        self.assertIn(title, text)
+        t23 = "## Spec T23 — Pathfinder funds its own agent"
+        self.assertLess(text.index(title), text.index(t23))
+        entry = text.split(title, 1)[1].split(t23, 1)[0]
+        for words in ("No more than $1.", "The money should always be paid to my MetaMask address. Always.", "`aer360-harness-2026-10-03.md`", "`-223016.md`",
+                      "Nothing here is a real counterparty's. Every address is DERIVED by the harness from a fixed seed — keccak-256 of the seed and a label, the last twenty bytes",
+                      "HH-0001 US$12.50 to Northwind, HH-0002 US$4.99 to an unlisted destination, HH-0003 US$0.75 to Contoso; Holdings fell from US$50.00 to US$31.76", "1.25, 4.99 and 12.00",
+                      "`PAYEE_ENV_FILE`", "`OWNER_PAYEE_ADDRESS_KEY`", "`OWNER_PAYEE_CHAIN_KEY`", "`OWNER_WALLET_WORDS`", "`DERIVED_WORDS`", "`OWNER_PAYEE_PLACEHOLDER`", "`ONE_DOLLAR_MINOR`",
+                      "`NO_OWNER_PAYEE_SENTENCE`", "`ONE_OFF_ALREADY_PAID_SENTENCE`", "`ONE_OFF_NEW_SENTENCE`", "`is_testnet`", "`pays_a_real_chain`", "`payee_words`", "`owner_payee_of(text, chain)`",
+                      "copy the address from the wallet again", "`PAYMENTS_ON_THE_TESTNET`", "`PAYMENTS_ON_A_REAL_CHAIN`", "HH-0001 `\"0.50\"`, HH-0002 `\"0.01\"`, HH-0003 `\"0.49\"`",
+                      "`payments_for(chain)`", "`payments()`", "`payments_total_minor`", "`OWNER_PAYEE_NOT_FILED`", "`Runner(payee_env=…)`", "`payee_env_path`",
+                      "`read_owner_payee`", "`require_owner_payee`", "`payee_address(key, station)`", "`one_off_address`", "`one_off_words`", "`isDestinationNew`", "`road_words(key)`", "`TIER_ROAD_WORDS`",
+                      "*Harness Holdings' USDC fell by <x> and its gas account by <y>, <x+y> in all — exactly the payments that landed (<x>) plus their gas (<y>)*",
+                      "the one line outside S6, S7 and S10 touched", "`funding_summary_lines`", "231 → 234 lines", "`TheLawOfTheRealChain`", "1000000 minor units",
+                      "`tests/test_the_estate_pays_the_owners_wallet.py`", "`refuses_payee_addresses=(OWNER,)`", "`OWNER_WALLET_FOR_TESTS`", "`file_the_owner_payee`", "`runner_on(payee_env=…)`", "`the_testnet_book`",
+                      "`tests/fixtures/aer360-dry-calls.txt` regenerated", "**Where the spec and the code part company**", "the owner's to rule on", "a finding that lies",
+                      "Not touched, as the fence requires: `aerconnect_harness.py`, `corridor_consent.py`, the corridor's `tables.py`, the passkeys, the stores"):
+            self.assertIn(words, entry, words)
+
     def test_the_changelog_records_spec_t19_first_and_names_every_change(self):
         text = read("CHANGELOG.md")
         title = "## Spec T19 — The harness reaches the wait with a quorum of two, signs as two people, and a scenario that stops at its first line says so in red (25 September 2026)"
