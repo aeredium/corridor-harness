@@ -20,6 +20,7 @@ import os
 import re
 import sys
 import unittest
+import unittest.mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import aer360_answers as A  # noqa: E402
@@ -211,20 +212,48 @@ class TheBookIsTheSpecsEstate(unittest.TestCase):
         # C12A is No, so C12's one number governs every change family (onboardingcompiler.ts, governanceRecordsFor)
         self.assertEqual(A.POLICY_ANSWERS["C12A"]["choice"], "No")
 
-    def test_the_payments_the_spec_decided(self):
-        # Spec T14 §1: P1 US$1.25 (within the holder's figure), P2 US$4.99 (two signatures), P3 US$12.00 (three)
-        self.assertEqual([(p.key, p.amount, p.expect) for p in A.PAYMENTS],
+    def test_the_payments_the_spec_decided_on_the_testnet(self):
+        # Spec T14 §1: P1 US$1.25 (within the holder's figure), P2 US$4.99 (two signatures), P3 US$12.00 (three) — the book on the AEREDIUM testnet (Spec T24)
+        book = A.PAYMENTS_ON_THE_TESTNET
+        self.assertEqual([(p.key, p.amount, p.expect) for p in book],
                          [("P1", "1.25", "proceeds to approval"), ("P2", "4.99", "waits"), ("P3", "12.00", "held")])
-        self.assertEqual(A.PAYMENTS[0].amount_minor, "1250000")
-        self.assertEqual(A.PAYMENTS[1].amount_minor, "4990000")
-        self.assertEqual(A.PAYMENTS[2].amount_minor, "12000000")
-        self.assertEqual(T.payments_total([p.amount for p in A.PAYMENTS]), "18.24", "the three payments together: what the Treasury pays a fresh Holdings")
-        self.assertLess(int(A.PAYMENTS[0].amount_minor) // 10000, int(A.MONEY["holder_alone_cents"]), "P1 is within the holder's own figure")
-        self.assertLess(int(A.PAYMENTS[1].amount_minor) // 10000, int(A.MONEY["two_signatures_cents"]), "P2 is within the two-signature figure")
-        self.assertGreater(int(A.PAYMENTS[2].amount_minor) // 10000, int(A.MONEY["two_signatures_cents"]), "P3 is above the two-signature figure, and above the hold")
-        self.assertEqual(A.PAYMENTS[0].payee_key, "NORTHWIND_ETHEREUM")
-        self.assertIsNone(A.PAYMENTS[1].payee_key, "the second payment goes to an address not on the list")
-        self.assertEqual(A.PAYMENTS[2].payee_key, "CONTOSO_ETHEREUM")
+        self.assertEqual(book[0].amount_minor, "1250000")
+        self.assertEqual(book[1].amount_minor, "4990000")
+        self.assertEqual(book[2].amount_minor, "12000000")
+        self.assertEqual(T.payments_total([p.amount for p in book]), "18.24", "the three payments together: what the Treasury pays a fresh Holdings on the testnet")
+        self.assertLess(int(book[0].amount_minor) // 10000, int(A.MONEY["holder_alone_cents"]), "P1 is within the holder's own figure")
+        self.assertLess(int(book[1].amount_minor) // 10000, int(A.MONEY["two_signatures_cents"]), "P2 is within the two-signature figure")
+        self.assertGreater(int(book[2].amount_minor) // 10000, int(A.MONEY["two_signatures_cents"]), "P3 is above the two-signature figure, and above the hold")
+        self.assertEqual(book[0].payee_key, "NORTHWIND_ETHEREUM")
+        self.assertIsNone(book[1].payee_key, "the second payment goes to an address not on the list")
+        self.assertEqual(book[2].payee_key, "CONTOSO_ETHEREUM")
+        for chain in T.TESTNET_CHAIN_NAMES:
+            self.assertIs(A.payments_for(chain), book, chain)
+
+    def test_the_payments_the_owner_decided_on_a_real_chain(self):
+        # Spec T24 §3 (the owner: "No more than $1."): HH-0001 US$0.50, HH-0002 US$0.01, HH-0003 US$0.49 — one dollar in all, every one to the owner's wallet
+        book = A.PAYMENTS_ON_A_REAL_CHAIN
+        self.assertEqual([(p.key, p.amount, p.invoice) for p in book], [("P1", "0.50", "HH-0001"), ("P2", "0.01", "HH-0002"), ("P3", "0.49", "HH-0003")])
+        self.assertEqual([p.amount_minor for p in book], ["500000", "10000", "490000"])
+        self.assertEqual(T.payments_total([p.amount for p in book]), "1.00")
+        self.assertEqual(A.payments_total_minor(book), T.ONE_DOLLAR_MINOR)
+        self.assertEqual([p.payee_key for p in book], ["NORTHWIND_ETHEREUM", None, "CONTOSO_ETHEREUM"], "the same payees, the same one-off; only the figures moved")
+        self.assertEqual([p.invoice for p in book], [p.invoice for p in A.PAYMENTS_ON_THE_TESTNET])
+        # the holds and the tiers are T14's, so by the charter's own arithmetic nothing here is held by the band and nothing asks a second hand
+        for p in book:
+            self.assertLess(int(p.amount_minor) // 10000, int(A.MONEY["per_payment_cents"]), "%s is under the hold" % p.key)
+            self.assertLessEqual(int(p.amount_minor) // 10000, int(A.MONEY["holder_alone_cents"]), "%s is within the holder's own figure" % p.key)
+        self.assertEqual([p.expect for p in book], ["proceeds to approval", "wait where the destination is new (Spec 69)", "proceeds to approval"], "the words say what the figures can meet")
+        for chain in ("arbitrum", "ethereum", "base"):
+            self.assertIs(A.payments_for(chain), book, chain)
+        # the book in force follows PAYEE_CHAIN, read at call time
+        self.assertEqual(T.PAYEE_CHAIN, "arbitrum")
+        self.assertIs(A.payments(), book)
+        self.assertEqual(A.PAYMENTS, book)
+        with unittest.mock.patch.object(T, "PAYEE_CHAIN", "aeredium-testnet"):
+            self.assertIs(A.payments(), A.PAYMENTS_ON_THE_TESTNET)
+            self.assertEqual(A.payments_total_minor(), 18240000)
+        self.assertIs(A.payments(), book)
 
 
 class TheBookAnswersCatalogVersion14(unittest.TestCase):

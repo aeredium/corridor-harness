@@ -97,6 +97,19 @@ WHAT THE SPEC DECIDED, AND WHAT THE BOOK DECIDED WHERE THE SPEC LEFT IT TO THE H
   roster (AER 360 Spec 109), the compile answers 202 and the write waits; Ada and Ben sign it under their
   own passkeys and the second signature finishes the write. Nothing else in the book changes: the first
   account keeps WQ at one, so S5's write finishes on the founder's press as it always has.
+
+  SPEC T24 (3 October 2026, from the owner's two rulings of that night: "No more than $1." and "The money
+  should always be paid to my MetaMask address. Always."): THE BOOK ON A REAL CHAIN IS ONE DOLLAR, PAID TO
+  THE OWNER'S OWN WALLET. The three payments' figures depend on the chain the book pays on, read from
+  aer360_tables.PAYEE_CHAIN at call time (`payments`): on the AEREDIUM testnet T14's 1.25, 4.99 and 12.00
+  stand; on any other chain — real USDC — HH-0001 is 0.50, HH-0002 0.01 and HH-0003 0.49, US$1.00 in all,
+  and no run moves more (ONE_DOLLAR_MINOR). The payee of all three on a real chain is the owner's wallet,
+  read from ~/.aer360-harness/payee.env and never from this repository (aer360_tables.owner_payee_of); the
+  Treasury's shortfall payment (T14 §2) is computed from these figures. The holds and the tiers stand as T14
+  left them, so under the US$10.00 hold (O2) and the US$2.00 holder's figure (WO3) no payment of the one-dollar
+  book is held by the band and none asks a second hand: the expectation words say so, and Spec 69's hold on
+  the one-off is provable only where the owner's wallet is new to the estate — S7 reads the runs register
+  before paying it and says which it found.
 """
 from __future__ import annotations
 
@@ -226,7 +239,10 @@ class Payment(NamedTuple):
 
 # The payee keys are the pinned labels' names (aer360_tables.py PINNED): `_ETHEREUM` records where a label was first minted, never where
 # the payee pays — every payment is made on T.PAYEE_CHAIN, and S6 and S7 resolve a payee by (name, chain) before paying it (Spec T18 §2).
-PAYMENTS: List[Payment] = [
+# On a real chain the key names the payee, not its address: the address is the owner's wallet (Spec T24; aer360_harness.Runner.payee_address).
+#
+# THE BOOK ON THE TESTNET (Spec T14): the figures that exercise the hold, the tiers and Spec 69 with SEAR-chain USDC nobody can lose.
+PAYMENTS_ON_THE_TESTNET: List[Payment] = [
     Payment("P1", "NORTHWIND_ETHEREUM", "Northwind Supplies", "1.25", "HH-0001", "proceeds to approval",
             "listed, within limits; within the holder's own figure (WO3)"),
     Payment("P2", None, "Unlisted destination", "4.99", "HH-0002", "waits",
@@ -234,6 +250,39 @@ PAYMENTS: List[Payment] = [
     Payment("P3", "CONTOSO_ETHEREUM", "Contoso Legal", "12.00", "HH-0003", "held",
             "above the per-payment limit of 10.00; above the two-signature figure (WO4)"),
 ]
+# THE BOOK ON A REAL CHAIN (Spec T24 §3; the owner: "No more than $1."): fifty cents, one cent and forty-nine cents, one dollar in all, every
+# one of them to the owner's own wallet. The holds and the tiers are T14's, so by the charter's own arithmetic nothing here is held by the
+# band (every figure is under the US$10.00 hold, O2) and nothing asks a second hand (every figure is within the US$2.00 holder's figure,
+# WO3); the expectation words say so rather than promise a hold the figures cannot meet. The one-off is a declared one-off to the owner's
+# wallet: Spec 69 holds it only where that wallet is new to the estate (setgates.ts, isDestinationNew: any instruction not rejected, to any
+# payee, counts), and HH-0001 pays the same wallet first, so S7 reads the runs register before paying it and says which it found.
+PAYMENTS_ON_A_REAL_CHAIN: List[Payment] = [
+    Payment("P1", "NORTHWIND_ETHEREUM", "Northwind Supplies", "0.50", "HH-0001", "proceeds to approval",
+            "listed, under the hold; within the holder's own figure (WO3); the owner's wallet"),
+    Payment("P2", None, "Unlisted destination", "0.01", "HH-0002", "wait where the destination is new (Spec 69)",
+            "a declared one-off to the owner's wallet, under the hold; Spec 69 pauses it only where the estate has never paid that wallet"),
+    Payment("P3", "CONTOSO_ETHEREUM", "Contoso Legal", "0.49", "HH-0003", "proceeds to approval",
+            "listed, under the hold; within the holder's own figure (WO3); the owner's wallet"),
+]
+
+
+def payments_for(chain: str) -> List[Payment]:
+    """The book's payments on a chain: T14's figures on the AEREDIUM testnet, T24's one dollar on any other (Spec T24 §3)."""
+    return PAYMENTS_ON_THE_TESTNET if T.is_testnet(chain) else PAYMENTS_ON_A_REAL_CHAIN
+
+
+def payments() -> List[Payment]:
+    """The payments in force: the book for aer360_tables.PAYEE_CHAIN, read at call time so a moved chain moves the book with it."""
+    return payments_for(T.PAYEE_CHAIN)
+
+
+def payments_total_minor(book: Optional[Sequence[Payment]] = None) -> int:
+    """What a book's payments total, in the asset's minor units — the figure Spec T24 §5 holds under ONE_DOLLAR_MINOR on a real chain."""
+    return sum(int(p.amount_minor) for p in (payments() if book is None else book))
+
+
+# The book in force as this module was imported — for the tests and the printers; the harness reads `payments()` at each use.
+PAYMENTS: List[Payment] = payments()
 
 # ---------------------------------------------------------------------------
 # The catalog, as version 14 asks it: id, kind, the gate it hangs on, and its closed options.

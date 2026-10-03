@@ -17,7 +17,11 @@ Spec T18 moved the chain word: every S6, S7 and S11 call that names a chain name
 corridor's UNISWAP_V3_ARBITRUM row, and S7 gains one conditional call — the payees register read where S6 left no record (193 → 194 lines).
 Spec T19 added S5's head — the ceremonies read, the conditional Finish the write and the conditional signatures that finish a write an earlier run
 left waiting — and S14, the write that waits: the read, the second wallet account's walk, the compile answered 202, the four reads, the two
-signatures and the second press, the trail, the read after, the page and the workspace (194 → 231 lines).
+signatures and the second press, the trail, the read after, the page and the workspace (194 → 231 lines). Spec T24 made the owner's own wallet
+the payee on a real chain: S6 gains the payee.env read, S7 the same read where S6 did not make it (a run resumed at S7) and the runs register
+read before the one-off, so the line can say whether Spec 69's hold is provable; every address of a payee or the one-off is the placeholder
+`<OWNER_PAYEE_ADDRESS from ~/.aer360-harness/payee.env>` — the printer never reads the file, and no address of the owner's is in the fixture —
+and the book's figures are the one-dollar book's (231 → 234 lines).
 """
 import contextlib
 import io
@@ -122,25 +126,33 @@ class DryRunTest(unittest.TestCase):
         self.assertTrue(any("GET /v1/aer360/wallets" in l for l in lines if l.startswith("S5")))
         s6 = [l for l in lines if l.startswith("S6 — ")]
         self.assertEqual(len([l for l in s6 if "POST /v1/payees {" in l]), 2)
-        self.assertTrue(any(T.address("NORTHWIND_ETHEREUM") in l for l in s6))
-        self.assertTrue(any(T.address("CONTOSO_ETHEREUM") in l for l in s6))
+        # Spec T24: on a real chain the payees' address is the owner's wallet, which the printer never reads — the placeholder stands in, and no derived address is printed
+        self.assertTrue(s6[0].startswith("S6 — [file] ~/.aer360-harness/payee.env → OWNER_PAYEE_ADDRESS (the owner's own wallet, EIP-55 checksummed) and OWNER_PAYEE_CHAIN = arbitrum"), s6[0])
+        self.assertEqual(len([l for l in s6 if "POST /v1/payees {" in l and T.OWNER_PAYEE_PLACEHOLDER in l]), 2)
+        self.assertFalse(any(T.address("NORTHWIND_ETHEREUM") in l or T.address("CONTOSO_ETHEREUM") in l for l in lines), "no derived payee address on a real chain, anywhere in the dry run")
         self.assertEqual(len([l for l in s6 if "/promote" in l]), 2)
         self.assertEqual(len([l for l in s6 if "/approve" in l]), 6, "three roster pressers per payee: Ada, Ben, Cora (Spec T12)")
         s7 = [l for l in lines if l.startswith("S7 — ")]
         # Spec T14: the Treasury's review and creation, S7a's review of the set of three, and the three payments' reviews and creations
         self.assertEqual(len([l for l in s7 if "POST /v1/sets/review" in l]), 5)
         self.assertEqual(len([l for l in s7 if "POST /v1/sets {" in l]), 4)
-        self.assertTrue(any(T.address("UNLISTED_ETHEREUM") in l and '"declared": true' in l for l in s7))
+        self.assertTrue(any(T.OWNER_PAYEE_PLACEHOLDER in l and '"declared": true' in l for l in s7), "the one-off destination is the owner's wallet (Spec T24)")
+        self.assertFalse(any(T.address(key) in l for key in T.UNLISTED_KEYS for l in lines), "no derived one-off on a real chain")
         for payment in A.PAYMENTS:
-            self.assertTrue(any(payment.amount_minor in l for l in s7), payment.key)
+            self.assertTrue(any('"amountMinor": "%s"' % payment.amount_minor in l for l in s7), payment.key)
+        self.assertTrue(any(l.startswith("S7 — [file] ~/.aer360-harness/payee.env — only where S6 did not read it (a run resumed at S7)") for l in s7))
+        self.assertEqual(len([l for l in s7 if l.startswith("S7 — GET /v1/sets (as Cora Clerk) → the runs register, read for whether this estate has ever paid the owner's wallet")]), 1,
+                         "Spec T24 §2: read once, before the one-off")
         self.assertTrue(any("POST /v1/approvals/<run P1>/challenge {} then /approve" in l for l in s7))
         self.assertTrue(any("POST /v1/approvals/<run HT>/challenge {} then /approve" in l and "the Treasury founder" not in l and "Harriet Founder at Harness Treasury" in l for l in s7))
         # Spec T14 §4: the submit lines say what the spec asks and what the tiers would do, in cents
         submits = [l for l in s7 if "/submit {}" in l]
         self.assertEqual(len(submits), 4, "the Treasury's payment and the three")
-        self.assertIn("1.25 (USDC): expected to proceeds to approval; the spec: lands with one signature, the holder's (Ben Signatory); under the tiers: within the holder's own figure (US$2.00), one signature — the holder's", submits[1])
-        self.assertIn("4.99 (USDC): expected to waits; the spec: waits for two and lands when Ben Signatory and Cora Clerk sign; under the tiers: two signatures (above US$2.00, up to US$10.00)", submits[2])
-        self.assertIn("12.00 (USDC): expected to held; the spec: waits for three and lands when the third signs; under the tiers: three signatures (above US$10.00)", submits[3])
+        # Spec T24: the one-dollar book's figures, the arithmetic of the charter's hold beside each, and T14's tier words
+        self.assertIn("0.50 (USDC): expected to proceeds to approval; the one-dollar book (Spec T24): 0.50 USDC to the owner's wallet, under the US$10.00 hold (O2), so the band asks no second hand; under the tiers: within the holder's own figure (US$2.00), one signature — the holder's", submits[1])
+        self.assertIn("0.01 (USDC): expected to wait where the destination is new (Spec 69); the one-dollar book (Spec T24): 0.01 USDC as a declared one-off to the owner's wallet, under the US$10.00 hold (O2); Spec 69 holds it only where the estate has never paid that wallet; under the tiers: within the holder's own figure (US$2.00), one signature — the holder's", submits[2])
+        self.assertIn("0.49 (USDC): expected to proceeds to approval; the one-dollar book (Spec T24): 0.49 USDC to the owner's wallet, under the US$10.00 hold (O2), so the band asks no second hand; under the tiers: within the holder's own figure (US$2.00), one signature — the holder's", submits[3])
+        self.assertIn("approvalsRequired 1 where the shortfall is at or above the Treasury's US$10.00 hold or Holdings' address is new to it (Spec 69 on the Treasury's own charter), else approved with approvalsRequired 0 — on this book the shortfall is at most US$1.00", submits[0])
         self.assertEqual(len([l for l in s7 if "/execute {}" in l]), 4, "every approved run is executed by its author")
         self.assertEqual(len([l for l in s7 if "gas-account/credits" in l]), 3, "the Treasury's credit, Holdings' credit, and the Treasury's where it was not credited before")
         self.assertEqual(len([l for l in s7 if T.public_rpc_url(T.PAYEE_CHAIN) in l]), 6, "each payee's balance before and after, on the chain")
@@ -165,7 +177,7 @@ class DryRunTest(unittest.TestCase):
             self.assertIn(words, spec92[0], words)
         money = [l for l in s10 if "the money moved (Spec T14 §5)" in l]
         self.assertEqual(len(money), 1)
-        self.assertIn("the sum of the three payments (US$18.24)", money[0])
+        self.assertIn("the sum of the three payments (US$1.00)", money[0])
         self.assertIn("a finding where any pair does not reconcile to the cent", money[0])
         s11 = [l for l in lines if l.startswith("S11 — ")]
         for probe in ("without x-csrf-token", "Ben with the founder's passkey", "a viewer", '"role": "principal"', "not asked given the answers so far",
@@ -183,8 +195,16 @@ class DryRunTest(unittest.TestCase):
         """Spec T8: --dry unchanged in its calls. The fixture is the dry run at main after PR #5, its expectations cut off at the arrow."""
         with open(FROZEN_CALLS, "r", encoding="utf-8") as handle:
             frozen = handle.read().splitlines()
-        self.assertEqual(len(frozen), 231, "Spec T14 rewrote S7 (159 → 193); Spec T18 adds S7's conditional register read for a run resumed at S7 (193 → 194); Spec T19 adds S5's head — the ceremonies read and the conditional finish — and S14 (194 → 231)")
+        self.assertEqual(len(frozen), 234, "Spec T14 rewrote S7 (159 → 193); Spec T18 adds S7's conditional register read for a run resumed at S7 (193 → 194); Spec T19 adds S5's head — the ceremonies read and the conditional finish — and S14 (194 → 231); "
+                                            "Spec T24 adds S6's payee.env read, S7's conditional one, and the runs register read before the one-off (231 → 234)")
         self.assertEqual(calls_of(H.dry_lines()), frozen)
+        # Spec T24: no address of the owner's, and no derived address of a payee or the one-off, is in the fixture — the placeholder stands in for the file the printer never reads
+        self.assertEqual(len([l for l in frozen if T.OWNER_PAYEE_PLACEHOLDER in l]), 7, "the two payees, the set of three's one-off, and the one-off's balance read before, review, creation and balance read after")
+        self.assertEqual([l for l in frozen if l.startswith("S6 — [file]")], ["S6 — [file] ~/.aer360-harness/payee.env"])
+        self.assertEqual([l for l in frozen if l.startswith("S7 — [file]")], ["S7 — [file] ~/.aer360-harness/admin.env", "S7 — [file] ~/.aer360-harness/payee.env — only where S6 did not read it (a run resumed at S7)"])
+        self.assertEqual(len([l for l in frozen if l.startswith("S7 — ") and l.startswith("S7 — GET /v1/sets (as Cora Clerk)")]), 3, "S7a's two and the one-off's one")
+        for key in list(T.PAYEES[0].values()) and [p["key"] for p in T.PAYEES] + list(T.UNLISTED_KEYS):
+            self.assertFalse(any(T.address(key) in l for l in frozen), key)
         self.assertEqual(len([l for l in frozen if l.startswith("S4 — ") and "/v1/roster/changes" in l]), 4, "the list, the options, the press, the read-back after the count")
         self.assertEqual(len([l for l in frozen if l.startswith("S4 — ") and "/v1/approver-seats/grant" in l]), 3, "Spec T10's grant, Spec T17's grant of a stale seat, and Spec T15's seat granted again for an expired change")
         self.assertEqual(len([l for l in frozen if l.startswith("S10 — ") and "/v1/export/audit" in l]), 1, "the trail is read once")

@@ -4093,12 +4093,40 @@ class EstateDouble:
 # ---------------------------------------------------------------------------
 # A runner wired to the double, for the tests that follow.
 # ---------------------------------------------------------------------------
+# THE OWNER'S WALLET THE TESTS FILE (Spec T24): a made-up address, checksummed, nobody's — the stand-in for the owner's own in payee.env. The
+# owner's real address is in no test, fixture or file of this repository; the doubles' chain credits whatever address a payment names.
+OWNER_WALLET_FOR_TESTS = T.checksum_address("0x" + "5afe" * 10)
+
+
+def file_the_owner_payee(store: str, address: str = OWNER_WALLET_FOR_TESTS, chain: Optional[str] = None, text: Optional[str] = None) -> str:
+    """payee.env as set_owner_payee.sh writes it (Spec T24 §1): the owner's wallet and the chain it was filed for, mode 0600, beside the passkeys; `text` writes a file of another shape."""
+    os.makedirs(store, exist_ok=True)
+    path = os.path.join(store, T.PAYEE_ENV_FILE)
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(text if text is not None else "# The owner's own wallet: every payment the estate harness makes on a real chain goes here (Spec T24).\n%s=%s\n%s=%s\n" % (
+            T.OWNER_PAYEE_ADDRESS_KEY, address, T.OWNER_PAYEE_CHAIN_KEY, chain or T.PAYEE_CHAIN))
+    os.chmod(path, 0o600)
+    return path
+
+
+def the_testnet_book():
+    """
+    Spec T24: the double's chain is `arbitrum`, so the book in force is the one-dollar book, under which no payment is above the hold and none
+    waits. The tests that prove the signing road — a payment the band holds, the signers pressing in the spec's order, the approver's own
+    credential releasing a run — walk T14's testnet figures under this patch: the harness reads `aer360_answers.payments()` at each use, so
+    patching that one name moves the book and nothing else. The payee stays the owner's wallet, and the law of the real chain
+    (tests/test_aer360_tables.py) is proved on the unpatched code.
+    """
+    return unittest.mock.patch.object(A, "payments", lambda: list(A.PAYMENTS_ON_THE_TESTNET))
+
+
 def runner_on(double: EstateDouble, tmp: str, invite: Optional[str] = None, start_at: Optional[str] = None, said: Optional[List[str]] = None,
-              treasury_invite: Optional[str] = None, admin_env: bool = True, **kwargs: Any) -> H.Runner:
+              treasury_invite: Optional[str] = None, admin_env: bool = True, payee_env: bool = True, **kwargs: Any) -> H.Runner:
     """
     A runner wired to the double. Spec T14: unless told otherwise it is given the Treasury founder's invitation (the Treasury double mints one; a
     stored passkey makes it unspent) and the platform's admin credential is filed in the store's admin.env, as Bear files it — `admin_env=False`
-    is the estate whose operator filed nothing.
+    is the estate whose operator filed nothing. Spec T24: the owner's wallet is filed in the store's payee.env (OWNER_WALLET_FOR_TESTS, on the
+    payments' chain) unless `payee_env=False`, the owner who filed nothing; a file already there is left as the test wrote it.
     """
     store = os.path.join(tmp, "store")
     os.makedirs(store, exist_ok=True)
@@ -4108,6 +4136,8 @@ def runner_on(double: EstateDouble, tmp: str, invite: Optional[str] = None, star
         with open(env_path, "w", encoding="utf-8") as handle:
             handle.write("%s=%s\n%s=%s\n" % (T.ADMIN_ENV_URL_KEY, PLATFORM_BASE, T.ADMIN_ENV_KEY_KEY, platform.admin_key))
         os.chmod(env_path, 0o600)
+    if payee_env and not os.path.exists(os.path.join(store, T.PAYEE_ENV_FILE)):
+        file_the_owner_payee(store)
     treasury = getattr(double, "treasury", None)
     if treasury_invite is None and treasury is not None:
         treasury_invite = treasury.mint_founder_link()

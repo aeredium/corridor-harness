@@ -14,12 +14,21 @@ The ONE venue address S11 sends on purpose — to prove the estate's answer to a
 address is a real exchange contract — is read from the corridor's `tables.py` AT RUN TIME
 (`venue_address_for_probe`) and is never written here: the harness must never be able to
 whitelist one by accident, and a table that does not hold it cannot be misread into doing so.
+
+ON A REAL CHAIN THE PAYEE IS THE OWNER'S OWN WALLET (Spec T24, 3 October 2026). The derived addresses
+have no key behind them: harmless on the AEREDIUM testnet, lost money anywhere else — since Spec T18
+moved PAYEE_CHAIN to `arbitrum` the payments are real USDC, and the run of 28 September 2026 paid
+US$18.24 to addresses nobody can spend from. So where PAYEE_CHAIN is not one of TESTNET_CHAIN_NAMES
+the harness pays only the owner's own wallet, read at run time from ~/.aer360-harness/payee.env
+(OWNER_PAYEE_ADDRESS, EIP-55 checksummed; OWNER_PAYEE_CHAIN equal to PAYEE_CHAIN) and never written
+here or anywhere in the repository; the derived table serves the testnet and the probes S11 expects
+refused. The book's three payments on a real chain total one dollar (`aer360_answers.py`).
 """
 from __future__ import annotations
 
 import os
 import sys
-from typing import Any, Dict, List, NamedTuple, Optional
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from corridor_harness import checksum_address, keccak256  # noqa: E402  the corridor's own keccak and EIP-55
@@ -452,3 +461,68 @@ def parse_env_file(text: str) -> Dict[str, str]:
             value = value[1:-1]
         out[key.strip()] = value
     return out
+
+
+# ---------------------------------------------------------------------------
+# THE OWNER'S OWN WALLET IS THE PAYEE ON A REAL CHAIN (Spec T24, 3 October 2026). The owner's two rulings of that night: "No more than
+# $1." and "The money should always be paid to my MetaMask address. Always." Every address this file derives has no key behind it —
+# harmless on the AEREDIUM testnet (SEAR), lost money on a real chain: since Spec T18 moved PAYEE_CHAIN to `arbitrum` the payments are
+# real USDC, and the run of 28 September 2026 paid US$18.24 (HH-0001, HH-0002, HH-0003; Harness Holdings fell from US$50.00 to
+# US$31.76) to addresses nobody can spend from, recorded as lost. So where PAYEE_CHAIN is not one of TESTNET_CHAIN_NAMES the harness
+# reads ~/.aer360-harness/payee.env — a 0600 file beside the passkeys, filed by the owner with set_owner_payee.sh, never in the
+# repository — and the address it names is Northwind Supplies', Contoso Legal's and the one-off destination's. The file missing or
+# malformed stops S6 before any payee is made and S7 before any payment with NO_OWNER_PAYEE_SENTENCE, never a derived address on a
+# real chain; a checksum that does not spell itself is malformed. On the testnet the derived table is used as before.
+# ---------------------------------------------------------------------------
+PAYEE_ENV_FILE = "payee.env"                     # under ~/.aer360-harness/, beside admin.env and the passkeys, mode 0600
+OWNER_PAYEE_ADDRESS_KEY = "OWNER_PAYEE_ADDRESS"  # the owner's own wallet, spelled with its EIP-55 checksum
+OWNER_PAYEE_CHAIN_KEY = "OWNER_PAYEE_CHAIN"      # the chain the file was filed for; it must equal PAYEE_CHAIN
+OWNER_WALLET_WORDS = "the owner's wallet"        # the words every S7 payment line carries beside the payee's address on a real chain (Spec T24 §4)
+DERIVED_WORDS = "a test address derived from the seed"  # the testnet's words in the same place
+OWNER_PAYEE_PLACEHOLDER = "<%s from ~/.aer360-harness/%s>" % (OWNER_PAYEE_ADDRESS_KEY, PAYEE_ENV_FILE)  # what --dry prints: the printer never reads the file
+ONE_DOLLAR_MINOR = 1000000                       # US$1.00 of USDC in minor units: the most the book's payments may total on a real chain (Spec T24 §3, §5)
+# The sentences this spec adds, word for word (SPEC.md §1 and §2). The stop names ~/.aer360-harness whatever --store says, as admin.env's does.
+NO_OWNER_PAYEE_SENTENCE = ("the owner's payee address is not filed at ~/.aer360-harness/payee.env (OWNER_PAYEE_ADDRESS); "
+                           "on %s the harness pays only the owner's own wallet; nothing was sent")
+ONE_OFF_ALREADY_PAID_SENTENCE = "the one-off destination is the owner's wallet, already paid by this estate, so Spec 69's hold is not provable this run"
+ONE_OFF_NEW_SENTENCE = "the one-off destination is the owner's wallet, which this estate has never paid, so Spec 69's hold is provable this run"
+
+
+def is_testnet(chain: Any) -> bool:
+    """Whether a chain word names the AEREDIUM testnet under either of the estate's names for it (TESTNET_CHAIN_NAMES)."""
+    return str(chain or "").strip().lower() in TESTNET_CHAIN_NAMES
+
+
+def pays_a_real_chain(chain: Optional[str] = None) -> bool:
+    """Spec T24: whether the payments' chain — PAYEE_CHAIN, read at call time — is a real chain, where the harness pays only the owner's wallet."""
+    return not is_testnet(PAYEE_CHAIN if chain is None else chain)
+
+
+def payee_words(chain: Optional[str] = None) -> str:
+    """The words beside a payee's address in S7's line: the owner's wallet on a real chain, a derived test address on the testnet."""
+    return OWNER_WALLET_WORDS if pays_a_real_chain(chain) else DERIVED_WORDS
+
+
+def owner_payee_of(text: str, chain: Optional[str] = None) -> Tuple[Optional[str], Optional[str]]:
+    """
+    The owner's wallet from payee.env's text, checked as Spec T24 §1 asks: (address, None) where OWNER_PAYEE_ADDRESS is 0x and forty hexadecimal
+    characters spelling its own EIP-55 checksum, is none of the harness's derived addresses, and OWNER_PAYEE_CHAIN equals the payments' chain;
+    else (None, what is wrong, in words naming the key), so the stop can say what it found rather than only that it stopped.
+    """
+    wanted_chain = str(PAYEE_CHAIN if chain is None else chain)
+    values = parse_env_file(text)
+    address = values.get(OWNER_PAYEE_ADDRESS_KEY, "").strip()
+    filed_chain = values.get(OWNER_PAYEE_CHAIN_KEY, "").strip()
+    if not address:
+        return None, "names no %s" % OWNER_PAYEE_ADDRESS_KEY
+    if len(address) != 42 or not address.startswith("0x") or any(c not in "0123456789abcdefABCDEF" for c in address[2:]):
+        return None, "%s is not 0x and forty hexadecimal characters" % OWNER_PAYEE_ADDRESS_KEY
+    if not is_checksummed(address):
+        return None, "%s does not spell its own EIP-55 checksum (copy the address from the wallet again)" % OWNER_PAYEE_ADDRESS_KEY
+    if is_pinned(address):
+        return None, "%s is one of the harness's own derived test addresses, which no key stands behind" % OWNER_PAYEE_ADDRESS_KEY
+    if not filed_chain:
+        return None, "names no %s (the payments are made on %s)" % (OWNER_PAYEE_CHAIN_KEY, wanted_chain)
+    if filed_chain.lower() != wanted_chain.lower():
+        return None, "%s is %r, not %s, the chain the payments are made on" % (OWNER_PAYEE_CHAIN_KEY, filed_chain, wanted_chain)
+    return address, None

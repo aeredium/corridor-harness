@@ -28,7 +28,7 @@ import aer360_answers as A  # noqa: E402
 import aer360_harness as H  # noqa: E402
 import aer360_passkey as PK  # noqa: E402
 import aer360_tables as T  # noqa: E402
-from tests.test_aer360_double import EstateDouble, MUTATION_CEREMONY_REQUIRED, interview_ceremony_sentence, runner_on  # noqa: E402
+from tests.test_aer360_double import EstateDouble, MUTATION_CEREMONY_REQUIRED, interview_ceremony_sentence, runner_on, the_testnet_book  # noqa: E402
 
 FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "aer360-write-waits-for-approvals.json")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -370,6 +370,11 @@ class TheWriteWaitsAndTwoPeopleSign(unittest.TestCase):
         self.assertTrue(any('a 202 (state awaiting_approvals — the write that waits for the client\'s approvers, Spec 109) is not a write that finishes: S5 stops with "the write is waiting for approvals; S5 expects a write that finishes"' in l for l in s5))
 
     def test_a_rerun_resumes_nothing_and_opens_another_account_and_the_next_payments_read_the_newest_charter(self):
+        # Spec T24: the proof needs a payment above the band (P3 at 12.00 asks one approval, then two under the approvals account); the one-dollar
+        # book of the real chain has none, so this test walks T14's testnet book under the patch — the payee is still the owner's wallet
+        self.book = the_testnet_book()
+        self.book.start()
+        self.addCleanup(self.book.stop)
         runner = runner_on(self.double, self.tmp)
         outcomes = {o.station: o for o in runner.run()}
         o = outcomes["S14"]
@@ -721,12 +726,12 @@ class APrerequisiteIsAFailureWithItsOwnName(unittest.TestCase):
         address = double.treasury.source_account
         sentence = T.FUND_TREASURY_SENTENCE % (address, T.PAYEE_CHAIN)
         self.assertTrue(o.line.startswith("payments: %s — Harness Treasury: the Treasury founder enrolled by invitation; " % H.TREASURY_NOT_FUNDED), o.line)
-        self.assertTrue(o.line.endswith("%s (the three payments need US$18.24 and Harness Holdings holds US$0.00; the Treasury holds US$0.00); nothing was sent" % sentence), o.line)
+        self.assertTrue(o.line.endswith("%s (the three payments need US$1.00 and Harness Holdings holds US$0.00; the Treasury holds US$0.00); nothing was sent" % sentence), o.line)
         self.assertEqual([n for n in runner.notes["S7"] if "nothing was sent" in n], [], "the note beside the stop is gone; its figures are in the line")
         self.assertTrue(any(n.startswith("%s — the estate's own words: " % sentence) for n in runner.notes["S7"]), "the estate's own fund sentence is still noted where the wallet is born")
 
     def test_a_short_treasury_stops_at_harness_treasury_short_of_the_run(self):
-        double, runner, outcomes = run_against(treasury_usdc_cents=1000)
+        double, runner, outcomes = run_against(treasury_usdc_cents=50)  # fifty cents: short of the one-dollar book (Spec T24)
         o = outcomes["S7"]
         self.assertEqual(o.outcome, H.FAILED_PREREQUISITE, o.line)
         self.assertIn("payments: %s — " % H.TREASURY_SHORT, o.line)
