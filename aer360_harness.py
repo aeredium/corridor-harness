@@ -132,11 +132,12 @@ on the platform and held in the enclave), whose address Bear funds with USDC onc
 their sum, the Treasury pays the shortfall to Holdings' address as one payment of one set, approved with the Treasury founder's passkey,
 through the estate's own road, and the harness waits for the run to land. Gas is a balance in dollars on the platform's ledger (U3): S7
 reads both workspaces' gas accounts from the estate, proves the review's refusal for want of gas in U3's sentence with the figures it read
-(S7a), then credits each gas account through the platform's ADMIN credit road with the credential Bear files in ~/.aer360-harness/admin.env
-(never in the repository, never printed). S7 is judged on money that moved — the run's status, the userOpHash, the handleOps transaction
-hash and the payee's USDC balance before and after, the gas debited beside — and S10 counts the money to the cent. The card road is not
-walked by the harness. The order S7 walks, and the signatures the estate asks against those the tiers would, are two disagreements carried
-to Bear in S7's own comment.
+(S7a), and credits a workspace's gas account through the platform's ADMIN credit road — with the credential Bear files in
+~/.aer360-harness/admin.env, never in the repository, never printed — only on the review's GAS_SHORTFALL for that workspace (Spec T26,
+below; T14's text had it credit each account on every run). S7 is judged on money that moved — the run's status, the userOpHash, the
+handleOps transaction hash and the payee's USDC balance before and after, the gas debited beside — and S10 counts the money to the cent.
+The card road is not walked by the harness. The signatures the estate asks against those the tiers would are a disagreement carried to
+Bear in S7's own comment; the order of the gas credits was a second, settled by Spec T26.
 
 Spec T18 (24 September 2026, from Bear's ruling "Let's move to Arbitrum."; amended 16:55: no address changes, the chain is one word in one
 place): the book pays on Arbitrum. The run of 16:00 refused S7 on `ethereum` because no chain names a paymaster; P1c deploys the corridor's
@@ -191,6 +192,26 @@ holds and the tiers stand as T14 left them, so by the charter's own arithmetic n
 band; S11's hold probe is made only where P3 is above the hold, and says so otherwise. On the testnet the derived table and T14's
 figures stand.
 
+Spec T26 (4 October 2026, from the owner's ruling on the estate run of 13:40 that day — the harness read Harness Holdings' gas account
+at US$99.71 and the Treasury's at US$119.95, found the set of three needed at most US$0.33 of gas, and went to credit ten more dollars
+to each through the platform's admin road, which could not be reached from the Mac, so S7 failed on a credit nobody needed: "That is
+stupid. Why is that happening? It's certainly not my rule. So, undo that now."): gas is credited only when the review says the account
+is short, never on a standing order. T14 said the sandbox credits gas "as the sandbox may", and the build read "may" as "does, every
+run"; the two balances are the measure of the error. A gas credit is a cure for a refusal: the harness credits a workspace's gas account
+only when the estate's review has refused GAS_SHORTFALL for that workspace in this run, once per refusal, sized by that refusal's
+ceilingUsdCents as T14 sizes it (ten dollars, or the next ten above twice the ceiling), and the review is asked again; a second
+GAS_SHORTFALL after a credit fails S7 naming both figures, the platform not having credited what it said it did. `credit_gas` is called
+from exactly two places — `more_gas_for_holdings` on a payment's review and the Treasury's own cure on its payment — and the standing
+credits of S7's old step 5 and the Treasury's pre-credit are gone. admin.env is read only when a credit is about to be made (`credit_gas`
+is handed the reader): its absence, or an admin road that cannot be reached, fails S7 only on a run that needed a credit, and the
+sentence names the refusal that needed it; a run whose gas accounts cover its sets credits nothing, needs no admin road, reads no
+credential and says nothing of it. S7a proves what T14 says it proves where Holdings' gas account is below the ceiling; where the account
+covers the ceiling S7a's line reads "S7a not provable this run: Harness Holdings' gas account holds US$X, and this set needs at most US$Y;
+the gate admitted the set, which is right" — a finding under S7 and in the report's Findings, never a fail, never a cause for a credit.
+S7's line carries both gas balances before and after; S10's money note reconciles each workspace's gas account — the credits made in this
+run less its gas debits equals the movement, to the cent. The two balances the sandbox accounts hold are left where they are: sandbox
+gas, spent by future runs at cents each.
+
 Runs on the Mac's own Python 3.9.6 with the standard library only: urllib.request, http.cookiejar,
 json, hashlib, secrets, base64, struct, subprocess. The one binary it calls is /usr/bin/openssl,
 through aer360_passkey.py. Nothing to install; nothing is shipped to any box.
@@ -212,7 +233,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import aer360_answers as A  # noqa: E402
@@ -310,9 +331,10 @@ PROPOSED_AFRESH = "proposed afresh"  # the pass's word for a change it could not
 SEAT_REREAD_ATTEMPTS = 3  # Spec T17 §2: after the count is met S4 re-reads the seat up to three times over a bounded wait, and says "moved" only on a true read
 SEAT_REREAD_WAIT_SECONDS = 1.0  # the bounded wait between those re-reads (no-op under the test clock)
 # Spec T14 (22 September 2026, amended 22:35; built 24 September 2026): the harness pays in cents, funds Harness Holdings from Harness Treasury —
-# a second sandbox workspace whose key lives only in the enclave — credits the gas account through the platform's admin road as the sandbox may,
-# proves the gas refusal (S7a) and judges S7 on money that moved. The rows, roads, codes and sentences are pinned in aer360_tables.py, read from
-# AER 360 Spec 104 and platform Spec 154; these are the harness's own bounds and the spec's order of signers.
+# a second sandbox workspace whose key lives only in the enclave — credits a gas account through the platform's admin road only on the review's
+# GAS_SHORTFALL (Spec T26, 4 October 2026: a credit is a cure for a refusal, never a standing order), proves the gas refusal (S7a) and judges S7
+# on money that moved. The rows, roads, codes and sentences are pinned in aer360_tables.py, read from AER 360 Spec 104 and platform Spec 154;
+# these are the harness's own bounds and the spec's order of signers.
 LANDING_READS = 30  # after POST /v1/sets/{id}/execute answers, GET /v1/sets/{id} is read up to this many times while an instruction is not terminal
 LANDING_WAIT_SECONDS = 3.0  # the bounded wait between those reads (no-op under the test clock)
 TRAIL_PAGES_AT_MOST = 40  # GET /v1/export/audit is followed by its nextCursor up to this many pages of AUDIT_EXPORT_LIMIT rows
@@ -323,7 +345,7 @@ TREASURY_NOT_FUNDED = "Harness Treasury not funded"        # the birth run: born
 TREASURY_SHORT = "Harness Treasury short of the run"       # it stood before and holds less than the shortfall
 TREASURY_NOT_SIGNED_IN = "Harness Treasury not signed in"  # its founder's session could not be opened
 TREASURY_NO_WALLET = "Harness Treasury has no funding wallet"
-NO_ADMIN_CREDENTIAL = "no admin credential filed"          # ~/.aer360-harness/admin.env is absent, so no gas can be credited
+NO_ADMIN_CREDENTIAL = "no admin credential filed"          # ~/.aer360-harness/admin.env is absent on a run whose review refused GAS_SHORTFALL, so the cure could not be made (Spec T26: read only then)
 OWNER_PAYEE_NOT_FILED = "the owner's payee address not filed"  # Spec T24: ~/.aer360-harness/payee.env absent or malformed on a real chain — S6 makes no payee, S7 pays nothing
 FOUNDER_NOT_ENROLLED = "the founder not enrolled here"     # S1: no passkey stored for the founder and no --invite <link>; the first run needs the link
 NO_FOUNDER_SESSION = "no founder session"                  # every station after S1 that needs the founder signed in
@@ -379,13 +401,15 @@ class StationStop(Exception):
     NAMES a missing prerequisite is the outcome kind FAILED — prerequisite: the station could not run to its judgment, so it proved nothing
     about the estate — which is not the estate's failure and not a pass (S7 with no Treasury: "Harness Treasury not born"; the sentence says
     the rest, and the line carries both). A stop that names none — a confirm or a compile answered a refusal code, a road refused — stays
-    `fail`: the estate failing, in its own words.
+    `fail`: the estate failing, in its own words. `because` (Spec T26 §3.3) is the refusal that needed the gas credit this stop ended — the
+    estate's S7 line says it before the sentence; a caller that formats the stop itself (Pathfinder's S11) keeps its own words.
     """
 
-    def __init__(self, sentence: str, prerequisite: Optional[str] = None):
+    def __init__(self, sentence: str, prerequisite: Optional[str] = None, because: Optional[str] = None):
         super().__init__(sentence)
         self.sentence = sentence
         self.prerequisite = prerequisite
+        self.because = because
 
     def __str__(self) -> str:
         return ("%s — %s" % (self.prerequisite, self.sentence)) if self.prerequisite else self.sentence
@@ -683,7 +707,7 @@ class Outcome:
 
 
 class Finding:
-    """A finding under S10 or S11: the probe, what was sent, what came back, the expectation, the result."""
+    """A finding under a station — the hats' (S10, S11), a station's own (S4, S5, S6, S14), or S7a not provable (Spec T26 §3.2): the probe, what was sent, what came back, the expectation, the result."""
 
     def __init__(self, station: str, probe: str, sent: Any, came_back: str, expected: str, said: str, route: str = ""):
         self.station = station
@@ -711,6 +735,7 @@ class Runner:
         self.estate_dir = os.path.join(store_dir, self.estate["client_id"])
         self.treasury_invite = treasury_invite
         self.admin_env_path = admin_env or os.path.join(store_dir, T.ADMIN_ENV_FILE)
+        self.admin_env: Optional[Dict[str, str]] = None  # Spec T26 §3.3: the credential, read only when a credit is about to be made, then kept for the run
         self.payee_env_path = payee_env or os.path.join(store_dir, T.PAYEE_ENV_FILE)  # Spec T24: the owner's own wallet, the payee on a real chain
         self.treasury: Optional["Runner"] = None
         self.answer_overrides: Dict[str, Dict[str, Dict[str, Any]]] = {}  # this workspace's own answers over the book's (the Treasury's A1, C11, WA1)
@@ -919,7 +944,8 @@ class Runner:
         self.notes.setdefault(station, []).append(text)
         self.say("  %s note: %s" % (station, text))
 
-    def finding(self, station: str, probe: str, sent: Any, answer: Optional[Answer], expected: str, said: str) -> Finding:
+    def finding(self, station: str, probe: str, sent: Any, answer: Optional[Answer], expected: str, said: str, fails: bool = True) -> Finding:
+        """One finding for the report, said on the terminal as a fail of its station — or, where `fails` is False (S7a not provable, Spec T26 §3.2), as a finding that fails nothing."""
         came_back = ""
         route = ""
         if answer is not None:
@@ -928,7 +954,7 @@ class Runner:
                                             else json.dumps(self.secrets.redact(answer.json), ensure_ascii=False))
         finding = Finding(station, probe, self.secrets.redact(sent), came_back, expected, said, route)
         self.findings.append(finding)
-        self.say("%s — %s — %s: %s" % (station, FAIL, probe, said))
+        self.say("%s — %s — %s: %s" % (station, FAIL, probe, said) if fails else "  %s finding: %s: %s" % (station, probe, said))
         return finding
 
     # -- the ceremonies -------------------------------------------------------------
@@ -2779,20 +2805,22 @@ class Runner:
             return "in the register without its address"
         return "absent from the register"
 
-    # -- S7 Payments (Spec T14, 22 September 2026, amended 22:35; built 24 September 2026) -------------------------------------------
-    # The harness pays in cents, funds Harness Holdings from a treasury workspace whose key lives only in the enclave, credits the gas
-    # account as the sandbox may, proves the gas refusal (S7a), and judges S7 on money that moved. Read from AER 360 Spec 104 and
-    # platform Spec 154 (aer360_tables.py names the files and commits); every sentence the estate or the platform speaks travels verbatim.
+    # -- S7 Payments (Spec T14, 22 September 2026, amended 22:35; built 24 September 2026; Spec T26, 4 October 2026) ------------------
+    # The harness pays in cents, funds Harness Holdings from a treasury workspace whose key lives only in the enclave, credits a gas
+    # account only where the review refuses GAS_SHORTFALL for it, proves the gas refusal (S7a), and judges S7 on money that moved. Read
+    # from AER 360 Spec 104 and platform Spec 154 (aer360_tables.py names the files and commits); every sentence the estate or the
+    # platform speaks travels verbatim.
     #
-    # THE ORDER S7 WALKS, AND WHY — A DISAGREEMENT CARRIED TO BEAR, NOT SILENTLY RESOLVED. SPEC.md §3 says the two gas accounts are
-    # credited AFTER S7a's refusal is proved; §2 says the Treasury pays Holdings' shortfall BEFORE S7. The Treasury's own payment is
-    # quoted, sponsored and sent by the platform's gas roads, so it cannot leave until the Treasury's gas account holds gas; and the
-    # review's dry quote of a payment simulates the transfer (Spec 154: the call gas from the chain's dry run of the callData), so an
-    # estate holding no USDC is refused for an unpriceable transfer, not for want of gas. So S7 credits the Treasury's gas first (§3's
-    # road, U3's US$10.00), has the Treasury pay the shortfall (§2), proves S7a on Holdings — whose gas nobody has credited yet (§3) —
-    # then credits Holdings' gas (§3) and makes the three payments (§4). Every other word of §2 to §4 is kept.
+    # THE ORDER S7 WALKS. The money before is read (both workspaces' USDC and gas accounts); the Treasury pays Holdings' shortfall where
+    # there is one (T14 §2), its own review's GAS_SHORTFALL cured with one credit; S7a is proved on Holdings, whose gas account nothing of
+    # this run has credited; the three payments are made (T14 §4), each review's GAS_SHORTFALL cured with one credit; the money after is
+    # read. T14 carried a disagreement to Bear about the ORDER of two standing gas credits (its spec credited both accounts after S7a; the
+    # Treasury's payment needed gas before it). Spec T26 settled it by the owner's ruling of 4 October 2026 — "That is stupid. Why is that
+    # happening? It's certainly not my rule. So, undo that now." — there is no standing credit to order: a credit is a cure for a refusal,
+    # made once per refusal, sized by the refusal's own ceiling, and a run whose gas accounts cover its sets credits nothing and reads no
+    # credential.
     #
-    # THE SIGNATURES — A SECOND DISAGREEMENT CARRIED TO BEAR. SPEC.md §4 says P1 lands with one signature (the holder's), P2 waits for two
+    # THE SIGNATURES — A DISAGREEMENT CARRIED TO BEAR, NOT SILENTLY RESOLVED. SPEC.md §4 says P1 lands with one signature (the holder's), P2 waits for two
     # and lands when Ben and Cora sign, P3 waits for three. Those are the signing tiers of Spec 92 (WO3, WO4), which the estate RECORDS
     # in the compiled charter and enforces nowhere on the payments road: at 8812c64 `signingTiers` is written by onboardingcompiler.ts
     # and read by no route; the approvals road asks `approvalsRequired` from the band (the per-payment hold) and the destination rule
@@ -3028,10 +3056,14 @@ class Runner:
     def read_admin_env(self, station: str) -> Optional[Dict[str, str]]:
         """
         Spec T14 §3: the platform's admin credential Bear keeps in ~/.aer360-harness/admin.env, in the estate's own setting names
-        (AERAccounts .env.example): AAP_ADMIN_BASE_URL and AAP_ADMIN_KEY. Read once per run and never printed — the key joins the
-        secrets and is redacted from every record. A file absent or incomplete is noted here and fails S7 at the credit step with the
-        spec's sentence, so the Treasury's birth and the balances are still read and reported first.
+        (AERAccounts .env.example): AAP_ADMIN_BASE_URL and AAP_ADMIN_KEY. Never printed — the key joins the secrets and is redacted from
+        every record. Spec T26 §3.3: read only when a credit is about to be made — `credit_gas` is handed this reader and calls it then,
+        and a credential read once serves every credit of the run — so a run whose gas accounts cover its sets never opens the file and
+        says nothing of it. A file absent or incomplete is noted here and fails S7 at the credit with the spec's sentence, which `pay`
+        prefixes with the refusal that needed the credit. Pathfinder's S11 reads it at its start, as before, and passes the credential on.
         """
+        if self.admin_env is not None:
+            return self.admin_env
         path = self.admin_env_path
         if not os.path.isfile(path):
             self.note(station, "%s is not filed: the gas credits below will fail with %r" % (path, T.NO_GAS_CREDIT_ROAD_SENTENCE))
@@ -3052,7 +3084,8 @@ class Runner:
         if not key.startswith(T.ADMIN_KEY_PREFIX):
             self.note(station, "%s's %s does not begin %s, which the platform's admin road requires (internal/api/middleware.go says \"invalid admin key format\"); the credit will be refused" % (
                 path, T.ADMIN_ENV_KEY_KEY, T.ADMIN_KEY_PREFIX))
-        return {"base": base, "key": key, "path": path}
+        self.admin_env = {"base": base, "key": key, "path": path}
+        return self.admin_env
 
     @staticmethod
     def treasury_overrides() -> Dict[str, Dict[str, Dict[str, Any]]]:
@@ -3248,15 +3281,21 @@ class Runner:
         return minor, "%s of %s (%d minor units) read from %s" % (T.usdc_dollars(minor), T.PAYMENT_ASSET, minor, url)
 
     # -- the gas credits (Spec T14 §3): the platform's admin credit road, never the card road ----------------------------------------
-    def credit_gas(self, runner: "Runner", station: str, admin: Optional[Dict[str, str]], who: str, cents: int) -> Dict[str, Any]:
+    def credit_gas(self, runner: "Runner", station: str, admin: Union[None, Dict[str, str], Callable[[], Optional[Dict[str, str]]]], who: str,
+                   cents: int) -> Dict[str, Any]:
         """
         One credit to a workspace's gas account through the platform's admin credit road (Spec 154 §1: POST
         /v1/admin/accounts/{id}/gas-account/credits under the admin key; reason required; audited gas.credited_by_admin), the reason
-        "sandbox run <run id>" and an idempotency key of this run's, so a post repeated credits once. The answer is classified as Rule
-        13 asks (`credit_words`): credited or deduped with the platform's balance; the platform's refusal of the credential in its own
-        words, the same on retry; the harness's or the deployment's mistake; a fault. Anything but a credit fails S7 naming it, and no
-        credential fails S7 with the spec's sentence.
+        "sandbox run <run id>" and an idempotency key of this run's, so a post repeated credits once. Spec T26 §2: a credit is a cure for
+        the review's GAS_SHORTFALL and nothing else makes one — the two callers are `more_gas_for_holdings` on a payment's review and the
+        Treasury's cure on its own payment (Pathfinder's S11 cures its funding payment the same way); `admin` is the credential, or the
+        reader that opens admin.env now that a credit is about to be made (§3.3). The answer is classified as Rule 13 asks (`credit_words`):
+        credited or deduped with the platform's balance; the platform's refusal of the credential in its own words, the same on retry;
+        the harness's or the deployment's mistake; a fault. Anything but a credit fails S7 naming it, and no credential fails S7 with the
+        spec's sentence.
         """
+        if callable(admin):
+            admin = admin()
         if admin is None:
             raise StationStop(T.NO_GAS_CREDIT_ROAD_SENTENCE, prerequisite=NO_ADMIN_CREDENTIAL)
         workspace = runner.facts.get("workspace")
@@ -3312,17 +3351,23 @@ class Runner:
     @staticmethod
     def gas_credit_for(ceiling_cents: Optional[int]) -> int:
         """
-        What a workspace is credited (Spec T14 §3, "as the sandbox may"): U3's ten dollars — or, where a set's ceiling read at S7a says
-        the run's reservations (the creations' quotes and the executions') would exceed them, the next ten dollars above twice that
-        ceiling (U3: "if they estimate that their transactions are large, they will need to put more"). Pure arithmetic on the platform's
-        own figure; nothing marked up.
+        What a workspace is credited to cure one GAS_SHORTFALL (Spec T14 §3's sizing; Spec T26 §2): U3's ten dollars — or, where the
+        refusal's ceiling says the run's reservations (the creations' quotes and the executions') would exceed them, the next ten dollars
+        above twice that ceiling (U3: "if they estimate that their transactions are large, they will need to put more"). Pure arithmetic
+        on the platform's own figure; nothing marked up.
         """
         if not isinstance(ceiling_cents, int) or ceiling_cents <= 0:
             return T.GAS_CREDIT_USD_CENTS
         need = 2 * ceiling_cents
         return max(T.GAS_CREDIT_USD_CENTS, -(-need // T.GAS_CREDIT_USD_CENTS) * T.GAS_CREDIT_USD_CENTS)
 
-    # -- S7a: the gas refusal, proved before any gas is credited (Spec T14 §3) ----------------------------------------------------
+    # -- S7a: the gas refusal, proved before any gas is credited (Spec T14 §3) — or not provable, a finding (Spec T26 §3.2) ----------
+    @staticmethod
+    def ceiling_in_evidence(evidence: str) -> Optional[int]:
+        """The set's ceiling in cents from the gas gate's own evidence sentence — "this set needs at most US$<x> of gas" (execution.ts gasAccountPreflight, formatUsdCents) — or None where it does not say."""
+        found = CEILING_IN_EVIDENCE.search(evidence or "")
+        return int(found.group(1)) * 100 + int(found.group(2)) if found else None
+
     def prove_the_gas_refusal(self, clerk: Person, rows: List[Dict[str, Any]], gas: Optional[Dict[str, Any]], usdc_before: Optional[int]) -> Dict[str, Any]:
         """
         With Harness Holdings' gas account below the review's ceiling, the set of three is submitted to the review (POST /v1/sets/review,
@@ -3330,8 +3375,10 @@ class Runner:
         US$… This set needs at most US$… of gas. Nothing was sent. Buy gas below." — the first the figure the harness read from GET
         /v1/gas/account, the second the gate's own ceilingUsdCents; and no payment may have left: the runs register carries no new run
         and Holdings' USDC is unchanged. Proved, S7a passes. A gate that admits the set because the balance already covers the ceiling is
-        reported and not failed (the estate did right; the refusal cannot be met this run). A refusal naming other figures, a refusal
-        for another cause, or a payment that left fails S7 naming it.
+        a finding under S7, never a fail and never a cause for a credit (Spec T26 §3.2: "S7a not provable this run: Harness Holdings' gas
+        account holds US$X, and this set needs at most US$Y; the gate admitted the set, which is right" — the estate did right; the
+        refusal cannot be met this run). A refusal naming other figures, a refusal for another cause, or a payment that left fails S7
+        naming it.
         """
         record: Dict[str, Any] = {"verdict": "not proved", "available": None, "ceiling": None, "sentence": None, "said": None, "left": None, "detail": None}
         self.facts["s7a"] = record
@@ -3361,9 +3408,15 @@ class Runner:
             result = "the review carries no %s gate (gates: %s)" % (T.GAS_GATE, ", ".join(str(g.get("gate")) for g in gates) or "none")
             record.update(verdict="failed", said="S7a failed: " + result)
         elif shortfall is None and gate.get("passed") is True:
-            result = "the gate admits the set: %s" % gate.get("evidence")
-            record["said"] = ("S7a not proved: Harness Holdings' gas account (%s available) covers the set's ceiling, so the review admits the set and the refusal cannot be met this run "
-                              "(the gate's evidence: %s)" % (T.format_usd_cents(available), gate.get("evidence")))
+            # Spec T26 §3.2: the account covers the ceiling and the gate rightly admits the set — a finding under S7 and in the Findings, never
+            # a fail, never a cause for a credit; the ceiling is read from the gate's own evidence sentence (execution.ts gasAccountPreflight)
+            evidence = str(gate.get("evidence") or "")
+            ceiling = self.ceiling_in_evidence(evidence)
+            result = "the gate admits the set: %s" % evidence
+            said = T.S7A_NOT_PROVABLE_SENTENCE % (T.format_usd_cents(available),
+                                                   T.format_usd_cents(ceiling) if ceiling is not None else "a ceiling the gate's evidence does not state (%s)" % evidence)
+            record.update(verdict="not provable", ceiling=ceiling, said="%s: %s" % (T.S7A_NOT_PROVABLE_PROBE, said))
+            self.finding("S7", T.S7A_NOT_PROVABLE_PROBE, body, review, expected, said, fails=False)
         elif shortfall is None:
             result = "the gate refused, but not for want of gas: %s" % ("; ".join("%s: %s" % (r.get("code"), r.get("message")) for r in refusals) or gate.get("evidence"))
             record.update(verdict="failed", said="S7a failed: " + result)
@@ -3413,7 +3466,9 @@ class Runner:
         the Treasury founder's seat); the run executed by its author (POST /v1/sets/{id}/execute: the estate quotes, signs, sponsors and
         sends through the platform's gas roads and waits for the platform to report the operation landed); the run read until its
         instruction is terminal; the payee's USDC before and after. `more_gas` may credit the workspace once where the review's gas gate
-        refuses GAS_SHORTFALL, and the review is asked again. The trail's row is read afterwards by `judge_landing`.
+        refuses GAS_SHORTFALL, and the review is asked again — the one road a gas credit takes (Spec T26 §2); a credit that could not be
+        made fails the station naming the refusal that needed it (§3.3), and a second GAS_SHORTFALL after the credit fails it naming both
+        figures, the platform not having credited what it said it did (§3.1). The trail's row is read afterwards by `judge_landing`.
         """
         record: Dict[str, Any] = {"key": key, "amount_minor": amount_minor, "payee": payee_address, "set_id": None, "instruction_id": None, "review": None, "created": None,
                                   "refusal": None, "submitted": None, "approvals_required": None, "approvals": [], "executed": None, "view": None, "status": None,
@@ -3423,19 +3478,38 @@ class Runner:
         before, before_words = read_payee_balance()
         record.update(balance_before=before, before_words=before_words)
         review_body = {"pays": [row], "duplicatesAcknowledged": False}
-        for attempt in range(2):
+        cured: Optional[Dict[str, Any]] = None  # the one credit made for this payment's GAS_SHORTFALL (Spec T26 §2: once per refusal)
+        for _ in range(2):  # the review, and the review again after a cure
             review = runner.request(author, "POST", "/v1/sets/review", review_body, station)
             runner.step(station, review, "the gates' review of the run before anything is created — the gas gate reading the gas account and one dry quote (Spec 104 §4); %s" % expect_words,
                         "answered" if review.ok else review.sentence(), review_body, author.name)
             record["review"] = review.json if review.ok else review.sentence()
             shortfall = self.gas_shortfall_of(review)
-            if shortfall is None or more_gas is None or attempt:
+            if shortfall is None or more_gas is None:
                 break
             detail = shortfall.get("detail") if isinstance(shortfall.get("detail"), dict) else {}
+            if cured is not None:
+                # Spec T26 §3.1: a second GAS_SHORTFALL after the credit — the platform did not credit what it said it did; both figures travel
+                balance_after = cured.get("balance_after") if isinstance(cured.get("balance_after"), dict) else {}
+                said_available = balance_after.get("available_usd_cents")
+                gate_available = str(detail.get("availableUsdCents", ""))
+                raise StationStop(T.GAS_CREDIT_HOLLOW_SENTENCE % (
+                    T.GAS_SHORTFALL, cured.get("who"), T.format_usd_cents(cured.get("amount_usd_cents") or 0),
+                    T.format_usd_cents(said_available) if isinstance(said_available, int) else "a balance the platform did not state",
+                    T.format_usd_cents(gate_available) if INTEGER_TEXT.match(gate_available) else "a figure the gate's detail does not state", shortfall.get("message")))
             ceiling_text = str(detail.get("ceilingUsdCents", ""))
-            if not more_gas(int(ceiling_text) if INTEGER_TEXT.match(ceiling_text) else None):
-                break
+            credits_before = len(self.facts["gas_credits"])
+            try:
+                if not more_gas(int(ceiling_text) if INTEGER_TEXT.match(ceiling_text) else None):
+                    break
+            except StationStop as err:
+                # Spec T26 §3.3: a credit that could not be made — no credential filed, the platform's refusal, an admin road that cannot be
+                # reached — fails the station only because this refusal needed it, and the station's line names the refusal before what stopped the cure
+                raise StationStop(err.sentence, prerequisite=err.prerequisite, because=T.GAS_CURE_NEEDED_CLAUSE % (T.GAS_SHORTFALL, shortfall.get("message")))
+            cured = self.facts["gas_credits"][credits_before] if len(self.facts["gas_credits"]) > credits_before else {}
             record["spoken"].append("the review refused %s (%s); gas credited and the review asked again" % (T.GAS_SHORTFALL, shortfall.get("message")))
+            if cured.get("said"):
+                record["spoken"].append(cured["said"])
         create_body = dict(review_body)
         create_body.update({"idempotencyKey": "aer360-harness-%s-%s" % (self.run_stamp, key), "reference": "Harness payment %s" % key})
         created = runner.request(author, "POST", "/v1/sets", create_body, station)
@@ -3630,12 +3704,15 @@ class Runner:
         record["said"] = "; ".join(spoken) if spoken else (record.get("said") or "")
         return record
 
-    def treasury_pays_the_shortfall(self, t: "Runner", founder: Person, clerk: Person, shortfall: int, holdings_address: str, admin: Optional[Dict[str, str]]) -> Dict[str, Any]:
+    def treasury_pays_the_shortfall(self, t: "Runner", founder: Person, clerk: Person, shortfall: int, holdings_address: str,
+                                    admin: Union[None, Dict[str, str], Callable[[], Optional[Dict[str, str]]]]) -> Dict[str, Any]:
         """
         Spec T14 §2: one payment of one set from Harness Treasury to Harness Holdings' address — a declared one-off of the shortfall —
         approved with the Treasury founder's passkey (the charter names her the payment approver; where the estate refuses her at the
         guard, her seat is granted once and she presses again), executed by her, and waited for until the estate reports it landed.
-        Holdings' balance is read before and after through the estate's own road, as the Treasury's payee.
+        Holdings' balance is read before and after through the estate's own road, as the Treasury's payee. Spec T26 §2: where its review
+        refuses GAS_SHORTFALL, the Treasury's gas account is credited once, sized by the refusal's ceiling, through `credit_gas` with
+        `admin` — the credential, or the reader that opens admin.env then — and the review is asked again; nothing else credits it.
         """
         row = {"oneOff": {"chain": T.PAYEE_CHAIN, "address": holdings_address, "declared": True, "payeeName": A.ESTATE["company"]},
                "asset": T.PAYMENT_ASSET, "chain": T.PAYEE_CHAIN, "amountMinor": str(shortfall), "invoiceRef": "HT-%s" % self.run_stamp}
@@ -3663,8 +3740,8 @@ class Runner:
             return self.walk_s7(said)
         except StationStop as err:
             # a stop carries what S7 had said before it — the Treasury brought in, the money before — so the line tells the whole road;
-            # the missing prerequisite it named travels with it (Spec T19 §3)
-            raise StationStop("; ".join(said + [err.sentence]), prerequisite=err.prerequisite)
+            # the missing prerequisite it named travels with it (Spec T19 §3), and the refusal that needed a cure it could not make (Spec T26 §3.3)
+            raise StationStop("; ".join(said + ([err.because] if err.because else []) + [err.sentence]), prerequisite=err.prerequisite)
 
     def walk_s7(self, said: List[str]) -> Outcome:
         clerk = self.clerk()
@@ -3685,7 +3762,12 @@ class Runner:
         if funding is None:
             self.note("S7", "Harness Holdings has no funding wallet (%s): the Treasury has no address to fund, and the estate refuses a run without one (routes/sets.ts, requireSourceAccount); see S5" % (
                 view.get("fundingWalletAbsence") or workspace.sentence()))
-        admin = self.read_admin_env("S7")
+
+        def read_admin() -> Optional[Dict[str, str]]:
+            # Spec T26 §3.3: the admin credential is read only when a credit is about to be made — `credit_gas` is handed this reader and calls
+            # it then; a run whose gas accounts cover its sets never opens the file and says nothing of it
+            return self.read_admin_env("S7")
+
         # 1. Harness Holdings' money before: its USDC through the estate's own balances road, its gas account from the platform through the estate (§3, §5)
         if funding is not None:
             h_usdc, h_words, token = self.read_usdc_balance(self, clerk, "S7", "Harness Holdings")
@@ -3727,7 +3809,8 @@ class Runner:
         owner = self.require_owner_payee("S7")
         if owner:
             said.append("the payee on %s: %s, %s (read from ~/.aer360-harness/%s; Spec T24)" % (T.PAYEE_CHAIN, owner, T.OWNER_WALLET_WORDS, T.PAYEE_ENV_FILE))
-        # 3. the shortfall, paid by the Treasury through the estate's own road (§2), its gas credited first (§3; see the order above)
+        # 3. the shortfall, paid by the Treasury through the estate's own road (§2); where its review refuses GAS_SHORTFALL the Treasury's gas is
+        # credited once, sized by the refusal's ceiling, and the review asked again (Spec T26 §2) — nothing credits it before the review asks
         if funding is not None and h_usdc is not None:
             if shortfall == 0:
                 said.append("Harness Holdings holds %s, at or above the three payments' %s, so the Treasury was not asked to pay" % (T.usdc_dollars(h_usdc), T.usdc_dollars(need)))
@@ -3746,10 +3829,7 @@ class Runner:
                                                             treasury.get("address"), T.PAYEE_CHAIN)
                     raise StationStop("%s (the three payments need %s and Harness Holdings holds %s); nothing was sent" % (sentence, T.usdc_dollars(need), T.usdc_dollars(h_usdc)),
                                       prerequisite=TREASURY_SHORT)
-                credit = self.credit_gas(t, "S7", admin, T.TREASURY["short"], T.GAS_CREDIT_USD_CENTS)
-                money["treasury"]["credited"] += credit["amount_usd_cents"]
-                said.append(credit["said"])
-                record = self.treasury_pays_the_shortfall(t, t_founder, clerk, shortfall, funding["address"], admin)
+                record = self.treasury_pays_the_shortfall(t, t_founder, clerk, shortfall, funding["address"], read_admin)
                 money["treasury"]["payment"] = record
                 said.append("Harness Treasury pays Harness Holdings (%s) the shortfall of %s: %s" % (funding["address"], T.usdc_dollars(shortfall), record["said"]))
                 if record["landed"]:
@@ -3760,7 +3840,8 @@ class Runner:
                     failures += 1
         else:
             said.append("the Treasury was not asked to pay: %s" % ("Harness Holdings has no funding wallet" if funding is None else "Harness Holdings' %s could not be read" % T.PAYMENT_ASSET))
-        # 4. S7a: the gas refusal proved on Holdings, whose gas account nobody has credited yet (§3); the listed payees resolved by (name, chain) first (Spec T18 §2)
+        # 4. S7a: the gas refusal proved on Holdings, whose gas account nothing of this run has credited (Spec T26: only a refusal does); the listed
+        # payees resolved by (name, chain) first (Spec T18 §2)
         self.read_the_register_for_s7(clerk)
         rows: List[Dict[str, Any]] = []
         for payment in payments:
@@ -3780,22 +3861,12 @@ class Runner:
         said.append(s7a["said"])
         if s7a["verdict"] == "failed":
             failures += 1
-        # 5. the gas credits (§3): Holdings now, sized by S7a's ceiling as the sandbox may; the Treasury's where it stands and was not credited above
-        if funding is not None:
-            credit = self.credit_gas(self, "S7", admin, "Harness Holdings", self.gas_credit_for(s7a.get("ceiling")))
-            money["holdings"]["credited"] += credit["amount_usd_cents"]
-            said.append(credit["said"])
-            if t is not None and not money["treasury"]["credited"]:
-                credit = self.credit_gas(t, "S7", admin, T.TREASURY["short"], T.GAS_CREDIT_USD_CENTS)
-                money["treasury"]["credited"] += credit["amount_usd_cents"]
-                said.append(credit["said"])
-        else:
-            self.note("S7", "no gas was credited: Harness Holdings has no funding wallet, so no payment of this run could leave whatever its gas account holds")
-        # 6. the three payments (§4), the signers pressing in the spec's order while a run waits
+        # 5. the three payments (§4), the signers pressing in the spec's order while a run waits; a review's GAS_SHORTFALL is cured with one
+        # credit to Holdings' gas account, sized by that refusal's ceiling, and the review asked again (Spec T26 §2) — the one road a credit takes
         signers = [self.people[k] for k in SIGNERS_IN_ORDER]
 
         def more_gas_for_holdings(ceiling: Optional[int]) -> bool:
-            extra = self.credit_gas(self, "S7", admin, "Harness Holdings", self.gas_credit_for(ceiling))
+            extra = self.credit_gas(self, "S7", read_admin, "Harness Holdings", self.gas_credit_for(ceiling))
             money["holdings"]["credited"] += extra["amount_usd_cents"]
             return True
 
@@ -3835,7 +3906,7 @@ class Runner:
                                       "user_op_hash": record.get("user_op_hash"), "tx_hash": record.get("tx_hash")})
             if not record["landed"]:
                 failures += 1
-        # 7. the money after (§5)
+        # 6. the money after (§5)
         h_usdc_after, h_words_after, _ = self.read_usdc_balance(self, clerk, "S7", "Harness Holdings") if funding is not None else (None, h_words, None)
         h_gas_after, h_gas_words_after = self.read_gas_account(self, clerk, "S7", "Harness Holdings") if funding is not None else (None, h_gas_words)
         if t is not None and t_founder is not None:
@@ -3998,6 +4069,8 @@ class Runner:
         sum of the three payments, Holdings' gas account before and after against the sum of the three gas debits — and a finding where
         any pair does not reconcile to the cent. USDC is reckoned in its own minor units (six decimals, exact); the gas account in the
         platform's cents on `balanceUsdCents`, credits less debits: a reservation the platform has not yet released is not money moved.
+        Spec T26 §3.4: each workspace's gas account is reconciled — the credits made in this run (only on the review's GAS_SHORTFALL) less
+        its gas debits equals the movement, to the cent; the Treasury's debit is its one payment's, where it made one.
         """
         money = self.facts.get("money") or {}
         treasury, holdings, payments = money.get("treasury") or {}, money.get("holdings") or {}, money.get("payments") or []
@@ -4026,6 +4099,27 @@ class Runner:
             pairs.append(("Harness Treasury's %s" % T.PAYMENT_ASSET, "%s before, less %s paid to Harness Holdings: %s" % (dollars(tb), dollars(paid), dollars(tb - paid)), dollars(ta), tb - paid == ta))
         else:
             unread.append("Harness Treasury's %s (%s before, %s after)" % (T.PAYMENT_ASSET, dollars(tb), dollars(ta)))
+        # Spec T26 §3.4: the Treasury's gas account, where the Treasury was brought in — before, plus the credits made in this run, less its payment's debit
+        tgb, tga = treasury.get("gas_before"), treasury.get("gas_after")
+        t_credited = int(treasury.get("credited") or 0)
+        t_payment = treasury.get("payment") if isinstance(treasury.get("payment"), dict) else None
+        t_debit: Optional[int]
+        if t_payment is None and paid == 0:
+            t_debit, t_debit_words = 0, "no payment, so no gas debit"
+        elif t_payment is not None and t_payment.get("landed") and isinstance(t_payment.get("gas_debit_cents"), int):
+            t_debit, t_debit_words = int(t_payment["gas_debit_cents"]), "gas debit %s on its payment" % cents(t_payment["gas_debit_cents"])
+        elif t_payment is not None:
+            t_debit, t_debit_words = None, "its payment's gas debit is not on the trail" if t_payment.get("landed") else "its payment did not land, so its gas debit is not counted"
+        else:
+            t_debit, t_debit_words = None, "its gas debit is unread"
+        treasury_gas = ""
+        if isinstance(tgb, int) or isinstance(tga, int):
+            treasury_gas = " Harness Treasury's gas account %s → %s (credited %s; %s);" % (cents(tgb), cents(tga), cents(t_credited), t_debit_words)
+            if isinstance(tgb, int) and isinstance(tga, int) and t_debit is not None:
+                pairs.append(("Harness Treasury's gas account", "%s before, plus %s credited, less %s of gas debit on its payment: %s" % (
+                    cents(tgb), cents(t_credited), cents(t_debit), cents(tgb + t_credited - t_debit)), cents(tga), tgb + t_credited - t_debit == tga))
+            else:
+                unread.append("Harness Treasury's gas account (%s before, %s after; %s)" % (cents(tgb), cents(tga), t_debit_words))
         hb, ha = holdings.get("usdc_before"), holdings.get("usdc_after")
         if isinstance(hb, int) and isinstance(ha, int):
             pairs.append(("Harness Holdings' %s" % T.PAYMENT_ASSET, "%s before, plus %s received from the Treasury, less %s of payments that landed: %s" % (
@@ -4065,9 +4159,9 @@ class Runner:
             difference = "; Harness Holdings' %s fell by %s and its gas account by %s, %s in all — %s the payments that landed (%s) plus their gas (%s)" % (
                 T.PAYMENT_ASSET, signed_dollars(usdc_fell), cents(gas_fell), signed_dollars(usdc_fell + T.usdc_minor_of_cents(gas_fell)),
                 "exactly" if equal else "which is not", dollars(landed_sum), cents(sum(known_debits)))
-        self.note(station, "money moved (Spec T14 §5): Harness Treasury's %s %s → %s (paid %s); Harness Holdings' %s %s → %s (received %s; the three payments %s, of which %s landed); "
+        self.note(station, "money moved (Spec T14 §5): Harness Treasury's %s %s → %s (paid %s);%s Harness Holdings' %s %s → %s (received %s; the three payments %s, of which %s landed); "
                   "Harness Holdings' gas account %s → %s (credited %s; gas debits %s over %d of %d payments that landed)%s: %s" % (
-                      T.PAYMENT_ASSET, dollars(tb), dollars(ta), dollars(paid), T.PAYMENT_ASSET, dollars(hb), dollars(ha), dollars(received), dollars(payments_sum), dollars(landed_sum),
+                      T.PAYMENT_ASSET, dollars(tb), dollars(ta), dollars(paid), treasury_gas, T.PAYMENT_ASSET, dollars(hb), dollars(ha), dollars(received), dollars(payments_sum), dollars(landed_sum),
                       cents(gb), cents(ga), cents(credited), cents(sum(known_debits)), len(known_debits), len(landed), difference, verdict))
 
     def seat_binding_notes(self) -> List[str]:
@@ -4652,7 +4746,9 @@ class Runner:
             cells.append(o.line)
             lines.append("| " + " | ".join(c.replace("|", "\\|") for c in cells) + " |")
         lines.append("")
-        lines.append("Findings under S10 and S11: %d." % len(self.findings))
+        by_station = [(s, sum(1 for f in self.findings if f.station == s)) for s in STATION_IDS]
+        where = ", ".join("%s %d" % (s, n) for s, n in by_station if n)
+        lines.append("Findings in this run: %d%s." % (len(self.findings), (" (%s)" % where) if where else ""))
         lines.append("")
         lines.extend(self.funding_summary_lines())  # Spec T13 §5: the funding wallet, the gas and the asset, by eye
         if last and fates is not None:
@@ -5088,6 +5184,9 @@ def audit_journey(journey: Dict[str, Any], registers: Dict[str, Any]) -> List[Di
 
 MONEY_KEY = re.compile(r"(Minor|Cents|cents|amountMinor|Bps)$")
 INTEGER_TEXT = re.compile(r"^-?\d+$")
+# Spec T26 §3.2: the set's ceiling in the gas gate's own evidence sentence where the gate admits the set (execution.ts gasAccountPreflight:
+# "gas account: US$<available> available; this set needs at most US$<ceiling> of gas over <n> payment(s)"; formatUsdCents groups nothing)
+CEILING_IN_EVIDENCE = re.compile(r"this set needs at most US\$(\d+)\.(\d{2}) of gas")
 
 
 def audit_money(calls: Sequence[Call]) -> List[Dict[str, Any]]:
@@ -5725,8 +5824,6 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     tier_two = (A.ACCOUNT_ANSWERS.get("WO4") or {}).get("cents")
     need_dollars = Runner.payments_need()[1]
     line("S7", "GET /v1/workspace (as %s) → expect the funding wallet S5 gave the estate (fundingWallet, with the fund sentence and the chains this deployment pays on, Spec 104 §1) and the platform account it stands on (workspace.aapAccountId)" % clerk.name)
-    line("S7", "[file] ~/.aer360-harness/%s → %s and %s, the platform's admin credential Bear files, read once and never printed; absent, S7 fails at the credit step with \"%s\"" % (
-        T.ADMIN_ENV_FILE, T.ADMIN_ENV_URL_KEY, T.ADMIN_ENV_KEY_KEY, T.NO_GAS_CREDIT_ROAD_SENTENCE))
     if real_chain:
         line("S7", "[file] ~/.aer360-harness/%s — only where S6 did not read it (a run resumed at S7) → %s, the owner's own wallet, the payee of every payment below; after the money before is read and before the Treasury pays, absent or malformed S7 stops FAILED — prerequisite: \"%s\" (Spec T24 §1)" % (
             T.PAYEE_ENV_FILE, T.OWNER_PAYEE_ADDRESS_KEY, T.NO_OWNER_PAYEE_SENTENCE % T.PAYEE_CHAIN))
@@ -5742,14 +5839,17 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     line("S7", "GET %s (as %s) → expect Harness Holdings' gas account, \"%s: US$…\" with availableUsdCents, balanceUsdCents, reservedUsdCents and low, read live from the platform (Spec 104 §3)" % (
         T.GAS_ACCOUNT_ROUTE, clerk.name, T.GAS_ACCOUNT_LABEL))
     line("S7", "GET %s (as %s) → expect Harness Treasury's gas account" % (T.GAS_ACCOUNT_ROUTE, treasurer))
-    credit_body = _j({"amount_usd_cents": T.GAS_CREDIT_USD_CENTS, "reason": T.ADMIN_CREDIT_REASON % "<run>", "idempotency_key": "aer360-harness-<run>-%s-gas-<n>" % T.TREASURY["client_id"]})
-    line("S7", "POST <%s>%s %s (Authorization: Bearer <%s>, at the platform's admin road) — only where Harness Holdings' %s is below the three payments' %s → expect 201: the line and the balance (Spec 154 §1, audited gas.credited_by_admin); where the Treasury holds less than the shortfall S7 stops instead: \"%s\" and nothing is sent; a refusal in the platform's words fails S7" % (
-        T.ADMIN_ENV_URL_KEY, T.ADMIN_CREDIT_ROUTE % "<the Treasury's aapAccountId>", credit_body, T.ADMIN_ENV_KEY_KEY, T.PAYMENT_ASSET, need_dollars,
-        T.TREASURY_SHORT_SENTENCE % ("US$<x>", "US$<y>", "<address>", T.PAYEE_CHAIN)))
     treasury_row = {"oneOff": {"chain": T.PAYEE_CHAIN, "address": "<Harness Holdings' funding wallet>", "declared": True, "payeeName": A.ESTATE["company"]},
                     "asset": T.PAYMENT_ASSET, "chain": T.PAYEE_CHAIN, "amountMinor": "<the shortfall in minor units>", "invoiceRef": "HT-<run>"}
-    line("S7", "POST /v1/sets/review %s (as %s) — only where Holdings is short → expect the gates' review; a %s refusal credits the Treasury more gas once and asks again" % (
-        _j({"pays": [treasury_row], "duplicatesAcknowledged": False}), treasurer, T.GAS_SHORTFALL))
+    line("S7", "POST /v1/sets/review %s (as %s) — only where Holdings is short → expect the gates' review; where the Treasury holds less than the shortfall S7 stops before it instead: \"%s\" and nothing is sent; a %s refusal credits the Treasury's gas once (the cure below) and asks again" % (
+        _j({"pays": [treasury_row], "duplicatesAcknowledged": False}), treasurer, T.TREASURY_SHORT_SENTENCE % ("US$<x>", "US$<y>", "<address>", T.PAYEE_CHAIN), T.GAS_SHORTFALL))
+    # Spec T26: the admin credential is read only when a credit is about to be made, and a credit is made only to cure a review's GAS_SHORTFALL
+    line("S7", "[file] ~/.aer360-harness/%s — only where a review refuses %s (Spec T26 §3.3: read when a credit is about to be made) → %s and %s, the platform's admin credential Bear files, never printed; absent on a run that needs a credit, S7 fails naming the refusal and \"%s\"; on a run whose gas accounts cover its sets the file is not read and nothing is said of it" % (
+        T.ADMIN_ENV_FILE, T.GAS_SHORTFALL, T.ADMIN_ENV_URL_KEY, T.ADMIN_ENV_KEY_KEY, T.NO_GAS_CREDIT_ROAD_SENTENCE))
+    treasury_credit = _j({"amount_usd_cents": "<%d, or the next ten dollars above twice the refusal's ceiling>" % T.GAS_CREDIT_USD_CENTS, "reason": T.ADMIN_CREDIT_REASON % "<run>",
+                          "idempotency_key": "aer360-harness-<run>-%s-gas-<n>" % T.TREASURY["client_id"]})
+    line("S7", "POST <%s>%s %s (Authorization: Bearer <%s>, at the platform's admin road) — only where the Treasury's review refused %s → expect 201: the line and the balance (Spec 154 §1, audited gas.credited_by_admin), one credit per refusal sized by its ceiling (Spec T14 §3; Spec T26 §2), then the review again; a second %s after it fails S7 naming both figures; a refusal in the platform's words fails S7; never made on a standing order" % (
+        T.ADMIN_ENV_URL_KEY, T.ADMIN_CREDIT_ROUTE % "<the Treasury's aapAccountId>", treasury_credit, T.ADMIN_ENV_KEY_KEY, T.GAS_SHORTFALL, T.GAS_SHORTFALL))
     line("S7", "POST /v1/sets %s (as %s) → expect 201: the run in draft" % (
         _j({"pays": [treasury_row], "duplicatesAcknowledged": False, "idempotencyKey": "aer360-harness-<run>-HT", "reference": "Harness payment HT"}), treasurer))
     line("S7", "POST /v1/sets/<run HT>/submit {} → expect status pending_approval, approvalsRequired 1 where the shortfall is at or above the Treasury's %s hold or Holdings' address is new to it (Spec 69 on the Treasury's own charter), else approved with approvalsRequired 0 — on this book the shortfall is at most %s" % (
@@ -5772,13 +5872,12 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     line("S7", "GET /v1/payees (as %s) — only where S6 left no record of a payee (a run resumed at S7) → expect the register; each listed payee is resolved by (name, chain): its row on %s at the payee's address (%s), whitelisted before any other; a record on another chain is named and never paid (Spec T18 §2)" % (
         clerk.name, T.PAYEE_CHAIN, "the owner's own wallet, Spec T24" if real_chain else "its pinned address"))
     line("S7", "GET /v1/sets (as %s) → the runs register before S7a's review, so a run the review created would be seen" % clerk.name)
-    line("S7", "POST /v1/sets/review %s (as %s) — S7a, with Harness Holdings' gas account below the set's ceiling → expect the gas gate (%s) refusing %s in U3's sentence with the figures the harness read: \"Your gas account holds US$<available>. This set needs at most US$<ceiling> of gas. Nothing was sent. Buy gas below.\" (Spec 104 §4); a gate that admits the set because the balance covers the ceiling is reported, not failed; a refusal naming other figures, or a payment that left, fails S7" % (
-        _j({"pays": three, "duplicatesAcknowledged": False}), clerk.name, T.GAS_GATE, T.GAS_SHORTFALL))
+    line("S7", "POST /v1/sets/review %s (as %s) — S7a, with Harness Holdings' gas account below the set's ceiling → expect the gas gate (%s) refusing %s in U3's sentence with the figures the harness read: \"Your gas account holds US$<available>. This set needs at most US$<ceiling> of gas. Nothing was sent. Buy gas below.\" (Spec 104 §4); a gate that admits the set because the account covers the ceiling is a finding, not a fail, and never a cause for a credit: \"%s: %s\" (Spec T26 §3.2); a refusal naming other figures, or a payment that left, fails S7" % (
+        _j({"pays": three, "duplicatesAcknowledged": False}), clerk.name, T.GAS_GATE, T.GAS_SHORTFALL, T.S7A_NOT_PROVABLE_PROBE, T.S7A_NOT_PROVABLE_SENTENCE % ("US$<available>", "US$<ceiling>")))
     line("S7", "GET /v1/sets (as %s) → expect no new run since S7a's review; then GET %s → expect Harness Holdings' %s unchanged: nothing left" % (clerk.name, T.FUNDING_BALANCES_ROUTE, T.PAYMENT_ASSET))
-    holdings_credit = _j({"amount_usd_cents": "<%d, or the next ten dollars above twice S7a's ceiling>" % T.GAS_CREDIT_USD_CENTS, "reason": T.ADMIN_CREDIT_REASON % "<run>", "idempotency_key": "aer360-harness-<run>-%s-gas-<n>" % A.ESTATE["client_id"]})
-    line("S7", "POST <%s>%s %s (Authorization: Bearer <%s>) → expect 201: Harness Holdings' gas account credited, the balance in the platform's own figures; a refusal in the platform's words fails S7" % (
-        T.ADMIN_ENV_URL_KEY, T.ADMIN_CREDIT_ROUTE % "<Harness Holdings' aapAccountId>", holdings_credit, T.ADMIN_ENV_KEY_KEY))
-    line("S7", "POST <%s>%s %s — only where the Treasury was not credited above → expect 201" % (T.ADMIN_ENV_URL_KEY, T.ADMIN_CREDIT_ROUTE % "<the Treasury's aapAccountId>", credit_body))
+    holdings_credit = _j({"amount_usd_cents": "<%d, or the next ten dollars above twice the refusal's ceiling>" % T.GAS_CREDIT_USD_CENTS, "reason": T.ADMIN_CREDIT_REASON % "<run>", "idempotency_key": "aer360-harness-<run>-%s-gas-<n>" % A.ESTATE["client_id"]})
+    line("S7", "POST <%s>%s %s (Authorization: Bearer <%s>) — only where a payment's review below refuses %s: made at that review, before the run is created → expect 201: Harness Holdings' gas account credited, the balance in the platform's own figures, one credit per refusal sized by its ceiling (Spec T26 §2), then the review again; a second %s after it fails S7 naming both figures; a refusal in the platform's words fails S7; never made on a standing order" % (
+        T.ADMIN_ENV_URL_KEY, T.ADMIN_CREDIT_ROUTE % "<Harness Holdings' aapAccountId>", holdings_credit, T.ADMIN_ENV_KEY_KEY, T.GAS_SHORTFALL, T.GAS_SHORTFALL))
     signers = names_in_words([A.PEOPLE[k].name for k in SIGNERS_IN_ORDER])
     for payment, row in zip(payments, three):
         tier_words = under_the_tiers(payment.amount, tier_alone, tier_two)
@@ -5791,7 +5890,7 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
             # Spec T24 §2: before the one-off is paid, the runs register says whether Spec 69's hold is provable this run
             line("S7", "GET /v1/sets (as %s) → the runs register, read for whether this estate has ever paid the owner's wallet on %s — any instruction not rejected, to any payee (setgates.ts, isDestinationNew), and HH-0001 pays it moments before — so the line says \"%s\" (a pass with the words, not a failure) or \"%s\" (Spec T24 §2)" % (
                 clerk.name, T.PAYEE_CHAIN, T.ONE_OFF_ALREADY_PAID_SENTENCE, T.ONE_OFF_NEW_SENTENCE))
-        line("S7", "POST /v1/sets/review %s (as %s) → expect the gates' review; %s; a %s refusal credits Holdings more gas once and asks again" % (_j({"pays": [row], "duplicatesAcknowledged": False}), clerk.name, tier_words, T.GAS_SHORTFALL))
+        line("S7", "POST /v1/sets/review %s (as %s) → expect the gates' review; %s; a %s refusal credits Holdings' gas once (the cure above, sized by this refusal's ceiling) and asks again (Spec T26 §2)" % (_j({"pays": [row], "duplicatesAcknowledged": False}), clerk.name, tier_words, T.GAS_SHORTFALL))
         line("S7", "POST /v1/sets %s (as %s) → expect 201: the run in draft" % (_j({"pays": [row], "duplicatesAcknowledged": False, "idempotencyKey": "aer360-harness-<run>-%s" % payment.key, "reference": "Harness payment %s" % payment.key}), clerk.name))
         line("S7", "POST /v1/sets/<run %s>/submit {} → expect status and approvalsRequired as the estate's band and destination rule decide; %s (%s): expected to %s; %s; %s" % (
             payment.key, payment.amount, T.PAYMENT_ASSET, payment.expect, Runner.road_words(payment.key), tier_words))
@@ -5824,8 +5923,8 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     line("S10", "[compare] the payees register with the whitelist the charter enforces and with what Ada approved")
     line("S10", "GET %s?limit=%d → [compare] the trail's %s row for each seat S4 moved: the ceremony's id, seatEmail, via %s, and signerNames naming every signer (Spec T15 §3); the note about a seat still bound to a retired passkey is dropped where S4 moved it" % (
         T.AUDIT_EXPORT_ROUTE, T.AUDIT_EXPORT_LIMIT, T.ROSTER_SEAT_REBOUND, T.VIA_ROSTER_CHANGE))
-    line("S10", "[compare] the money moved (Spec T14 §5): Harness Treasury's %s before and after, Harness Holdings' %s before and after, the sum of the three payments (%s), and Holdings' gas account before and after against the sum of the three gas debits — one note, and a finding where any pair does not reconcile to the cent" % (
-        T.PAYMENT_ASSET, T.PAYMENT_ASSET, Runner.payments_need()[1]))
+    line("S10", "[compare] the money moved (Spec T14 §5): Harness Treasury's %s before and after, Harness Holdings' %s before and after, the sum of the three payments (%s), and each workspace's gas account before and after against the credits made in this run (only on the review's %s, Spec T26 §3.4) less its gas debits — one note, and a finding where any pair does not reconcile to the cent" % (
+        T.PAYMENT_ASSET, T.PAYMENT_ASSET, Runner.payments_need()[1], T.GAS_SHORTFALL))
     # S11
     line("S11", "POST /v1/workspace/display-currency %s without x-csrf-token → expect 401 NOT_AUTHENTICATED" % _j({"displayCurrency": A.ESTATE["display_currency"]}))
     line("S11", "POST /v1/onboarding/interviews/<policy interview>/confirm/options {} then /confirm as Ben with the founder's passkey → expect a refusal by name")

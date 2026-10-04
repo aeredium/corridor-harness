@@ -78,17 +78,22 @@ class TheOwnersWalletIsThePayee(unittest.TestCase):
         self.assertEqual(self.double.chain.balance_of(T.address("NORTHWIND_ETHEREUM")) + self.double.chain.balance_of(T.address("CONTOSO_ETHEREUM")), 0)
         # Spec T24 §4: the line names where every cent went — the payee's address and the words "the owner's wallet" — on each payment
         self.assertIn("the payee on arbitrum: %s, the owner's wallet (read from ~/.aer360-harness/payee.env; Spec T24)" % OWNER, o.line)
-        self.assertIn("P1 (0.50 USDC to %s, the owner's wallet, expected to proceeds to approval): submitted: status approved, approvalsRequired 0; landed (+US$0.50)" % OWNER, o.line)
+        # Spec T26 §2: Holdings' gas account held nothing, so P1's review refused GAS_SHORTFALL and one credit cured it — said in P1's own line
+        cure = self.runner.facts["gas_credits"][-1]
+        self.assertEqual(cure["who"], "Harness Holdings")
+        self.assertIn("P1 (0.50 USDC to %s, the owner's wallet, expected to proceeds to approval): the review refused GAS_SHORTFALL (Your gas account holds US$0.00. This set needs at most US$0.40 of gas. Nothing was sent. Buy gas below.); "
+                      "gas credited and the review asked again; %s; submitted: status approved, approvalsRequired 0; landed (+US$0.50)" % (OWNER, cure["said"]), o.line)
         self.assertIn("P2 (0.01 USDC to %s, the owner's wallet, expected to wait where the destination is new (Spec 69)): " % OWNER, o.line)
         self.assertIn("P3 (0.49 USDC to %s, the owner's wallet, expected to proceeds to approval): submitted: status approved, approvalsRequired 0; landed (+US$0.49)" % OWNER, o.line)
         self.assertEqual(o.line.count("to %s, the owner's wallet" % OWNER), 3)
         self.assertIn("payee US$0.00 → US$0.50, gas US$0.31", o.line)
         self.assertIn("payee US$0.50 → US$0.51, gas US$0.31", o.line)
         self.assertIn("payee US$0.51 → US$1.00, gas US$0.31", o.line)
-        # Spec T24 §3: the Treasury's shortfall payment is computed from the one-dollar book; the gas credit of S7 is unchanged
+        # Spec T24 §3: the Treasury's shortfall payment is computed from the one-dollar book; Spec T26: gas is credited only to cure a review's GAS_SHORTFALL —
+        # the Treasury's and P1's, both accounts holding nothing in this double — one credit each, U3's ten dollars
         self.assertIn("Harness Treasury pays Harness Holdings (%s) the shortfall of US$1.00:" % self.double.source_account, o.line)
         self.assertEqual(self.runner.facts["money"]["treasury"]["paid_minor"], 1000000)
-        self.assertEqual([json.loads(r["body"])["amount_usd_cents"] for r in self.double.platform.requests], [1000, 1000], "U3's ten dollars each, as T14 credits them")
+        self.assertEqual([json.loads(r["body"])["amount_usd_cents"] for r in self.double.platform.requests], [1000, 1000], "one cure each (Spec T26): the Treasury's review and P1's refused GAS_SHORTFALL")
         # the payee's balance was read from the chain against the owner's wallet, before and after each payment
         rpc = [c for c in self.runner.calls if c.station == "S7" and c.path == T.public_rpc_url(T.PAYEE_CHAIN)]
         self.assertEqual(len(rpc), 6)
@@ -132,7 +137,7 @@ class TheOwnersWalletIsThePayee(unittest.TestCase):
 
     def test_the_report_carries_the_owners_wallet_and_reads_back(self):
         report = self.runner.report()
-        summary = report.split("Findings under S10 and S11", 1)[1].split("## S1 — Enrol", 1)[0]
+        summary = report.split("Findings in this run", 1)[1].split("## S1 — Enrol", 1)[0]
         self.assertIn("The asset: the three payments together need US$1.00 of USDC; Harness Treasury pays Harness Holdings the shortfall through the estate's own road (Spec T14); the harness never mints the asset and holds no key. "
                       "On arbitrum every payment goes to the owner's wallet, %s, read from ~/.aer360-harness/payee.env and never from the repository; the book there is one dollar in all (Spec T24)." % OWNER, summary)
         read = H.read_report(self.runner.write_report())
@@ -156,7 +161,11 @@ class TheFirstPaymentToTheOwnersWalletProvesTheHold(unittest.TestCase):
                          [("Ben Signatory", "ROLE_NOT_GRANTED", None), ("Cora Clerk", "ROLE_NOT_GRANTED", None), ("Ada Approver", None, "approved")],
                          "the signers press in the spec's order while the run waits, and the approver's signature releases it")
         self.assertTrue(p2["landed"], p2["said"])
-        self.assertIn("P2 (0.01 USDC to %s, the owner's wallet, expected to wait where the destination is new (Spec 69)): %s; submitted: status pending_approval, approvalsRequired 1;" % (OWNER, T.ONE_OFF_NEW_SENTENCE), o.line)
+        # Spec T26 §2: P2 is the first payment of Holdings reviewed here, its gas account holding nothing, so its review refused GAS_SHORTFALL and one credit cured it
+        cure = runner.facts["gas_credits"][-1]
+        self.assertEqual(cure["who"], "Harness Holdings")
+        self.assertIn("P2 (0.01 USDC to %s, the owner's wallet, expected to wait where the destination is new (Spec 69)): %s; the review refused GAS_SHORTFALL (Your gas account holds US$0.00. This set needs at most US$0.40 of gas. Nothing was sent. Buy gas below.); "
+                      "gas credited and the review asked again; %s; submitted: status pending_approval, approvalsRequired 1;" % (OWNER, T.ONE_OFF_NEW_SENTENCE, cure["said"]), o.line)
         self.assertIn("P1 (0.50 USDC, expected to proceeds to approval): no payee Northwind Supplies on arbitrum in the register; nothing was sent;", o.line)
         self.assertEqual(double.chain.balance_of(OWNER), 10000, "one cent moved, to the owner's wallet, and nothing else")
 

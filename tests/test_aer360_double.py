@@ -268,7 +268,10 @@ sign-in road — by handing it over (`owns`). Knobs: `treasury_usdc_cents` (US$1
 `treasury_funding_wallet` ("born": Bear birthed and funded it before this run; "press": this run births it and stops), `gas_refusal_names_other_figures`
 (a review whose sentence names other figures), `review_refuses_but_pays` (a review that says nothing was sent while money moved), `UsdcChainDouble(
 lose_transfers=True)` (a payee whose balance does not rise), `PlatformDouble(debit_gap_cents=1)` (a ledger one cent apart from the trail), and
-`runner_on(..., admin_env=False)` (no credential filed). `asset_short` is gone: the chain's balances decide.
+`runner_on(..., admin_env=False)` (no credential filed). `asset_short` is gone: the chain's balances decide. Spec T26: `holdings_gas_cents`
+and `treasury_gas_cents` are the gas the two accounts hold before the run (an earlier run's credit on the ledger; the sandbox held US$99.71 and
+US$119.95 on 4 October 2026), and `PlatformDouble(credit_is_hollow=True)` is a platform whose admin road says it credited and whose ledger holds
+nothing of it, so a second GAS_SHORTFALL after the credit can be driven.
 """
 from __future__ import annotations
 
@@ -966,13 +969,16 @@ class PlatformDouble:
     balance, 200 deduped; internal/api/middleware.go adminAuth — a bearer missing, malformed or wrong is 401 in three sentences; response.go writeError
     — every refusal is {"error": <sentence>}). The estate doubles read and move this ledger in process, as the estate reads the platform's roads;
     the harness reaches only the admin credit road, over HTTP, with the credential admin.env names. `down` is a platform that cannot be reached;
-    `debit_gap_cents` a ledger that debits more than the trail says, for S10's one-cent finding.
+    `debit_gap_cents` a ledger that debits more than the trail says, for S10's one-cent finding; `credit_is_hollow` (Spec T26 §3.1) an admin road
+    that answers 201 with the line and a balance counting the credit while the ledger holds nothing of it — the platform not crediting what it
+    said it did, so the review refuses GAS_SHORTFALL again.
     """
 
-    def __init__(self, admin_key: Optional[str] = None, down: bool = False, debit_gap_cents: int = 0):
+    def __init__(self, admin_key: Optional[str] = None, down: bool = False, debit_gap_cents: int = 0, credit_is_hollow: bool = False):
         self.admin_key = admin_key or (T.ADMIN_KEY_PREFIX + secrets.token_hex(16))
         self.down = down
         self.debit_gap_cents = debit_gap_cents
+        self.credit_is_hollow = credit_is_hollow
         self.accounts: Set[str] = set()
         self.lines: List[Dict[str, Any]] = []
         self.requests: List[Dict[str, Any]] = []
@@ -1064,6 +1070,18 @@ class PlatformDouble:
         if not isinstance(amount, int) or isinstance(amount, bool) or amount <= 0:
             return self._json(400, {"error": PLATFORM_AMOUNT_NOT_POSITIVE % (amount if isinstance(amount, int) else 0), "code": "validation"})
         key = str(body.get("idempotency_key") or "").strip() or ("admin:" + str(uuid.uuid4()))
+        if self.credit_is_hollow:
+            # Spec T26 §3.1's platform: the road says credited — 201, the line, the balance with the amount in it — and the ledger never holds it
+            line = {"id": str(uuid.uuid4()), "account_id": account_id, "kind": "credit", "amount_usd_cents": amount, "amount": T.format_usd_cents(amount),
+                    "idempotency_key": key, "created_at": EstateDouble._now_iso(), "actor": "admin:bearer", "source": "admin", "reason": reason,
+                    "words": "credit, %s, %s" % (T.format_usd_cents(amount), reason)}
+            balance = dict(self.balance(account_id))
+            balance["balance_usd_cents"] += amount
+            balance["available_usd_cents"] += amount
+            self.audit.append({"type": "gas.credited_by_admin", "result": "success", "account_id": account_id, "outcome": "credited",
+                               "amount_usd_cents": amount, "reason": reason, "idempotency_key": key})
+            return self._json(201, {"line": line, "deduped": False, "below_minimum": amount < T.GAS_CREDIT_USD_CENTS,
+                                    "minimum_top_up_usd_cents": T.GAS_CREDIT_USD_CENTS, "balance": balance})
         line, created = self.credit(account_id, amount, key, reason, "admin", "admin:bearer")
         answer: Dict[str, Any] = {"line": line, "deduped": not created, "below_minimum": line["amount_usd_cents"] < T.GAS_CREDIT_USD_CENTS,
                                   "minimum_top_up_usd_cents": T.GAS_CREDIT_USD_CENTS, "balance": self.balance(account_id)}
@@ -1149,6 +1167,7 @@ class EstateDouble:
                  platform: Optional[PlatformDouble] = None, chain: Optional[UsdcChainDouble] = None, treasury: bool = True, is_treasury: bool = False,
                  aap_account_id: Optional[str] = None, secret: Optional[bytes] = None, initial_usdc_cents: Optional[int] = None, holdings_usdc_cents: int = 0,
                  treasury_usdc_cents: int = 10000, treasury_funding_wallet: str = "born", quote_ceiling_usd_cents: int = QUOTE_CEILING_USD_CENTS,
+                 initial_gas_cents: Optional[int] = None, holdings_gas_cents: int = 0, treasury_gas_cents: int = 0,
                  actual_gas_usd_cents: int = ACTUAL_GAS_USD_CENTS, gas_refusal_names_other_figures: bool = False, review_refuses_but_pays: bool = False,
                  before_spec_106: bool = False, recorded_chains: Optional[Sequence[str]] = None,
                  before_spec_109: Optional[bool] = None, list_ceremony_lapses: int = 0, second_account_refused: Optional[str] = None,
@@ -1237,6 +1256,11 @@ class EstateDouble:
         self.chain = chain if chain is not None else UsdcChainDouble()
         self.aap_account_id = aap_account_id or AAP_ACCOUNT_ID
         self.platform.accounts.add(self.aap_account_id)
+        # Spec T26: the gas this workspace's account holds before the run — an earlier run's credit standing on the ledger, as the sandbox's two
+        # accounts stood on 4 October 2026 (US$99.71 and US$119.95); nothing of this run credits an account that covers its sets
+        self.initial_gas_cents = initial_gas_cents if initial_gas_cents is not None else holdings_gas_cents
+        if self.initial_gas_cents:
+            self.platform.credit(self.aap_account_id, self.initial_gas_cents, "an earlier run's credit:%s" % self.aap_account_id, "an earlier sandbox run", "admin", "admin:bearer")
         self.workspace_id = TREASURY_WORKSPACE_ID if is_treasury else WORKSPACE_ID
         self.initial_usdc_cents = initial_usdc_cents if initial_usdc_cents is not None else holdings_usdc_cents  # what the wallet holds when born: Bear's funding
         self.quote_ceiling_usd_cents = quote_ceiling_usd_cents
@@ -1293,6 +1317,7 @@ class EstateDouble:
                                          currency_spoken_as_code=currency_spoken_as_code, faucet=self.faucet, rpc=self.rpc, platform=self.platform, chain=self.chain,
                                          treasury=False, is_treasury=True, aap_account_id=TREASURY_ACCOUNT_ID, secret=self.secret, account_email=T.TREASURY["email"],
                                          initial_usdc_cents=treasury_usdc_cents if treasury_funding_wallet == "born" else 0,  # Bear funds an address he has seen: a wallet that stood
+                                         initial_gas_cents=treasury_gas_cents,
                                          quote_ceiling_usd_cents=quote_ceiling_usd_cents, actual_gas_usd_cents=actual_gas_usd_cents, before_spec_106=before_spec_106)
         if funding_wallet == "born":
             self.birth_funding_wallet(None, "account_creation_interview")

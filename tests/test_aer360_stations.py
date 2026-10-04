@@ -195,7 +195,11 @@ class TheFoundersRoad(unittest.TestCase):
         owner = OWNER_WALLET_FOR_TESTS
         self.assertIn("the payee on arbitrum: %s, the owner's wallet (read from ~/.aer360-harness/payee.env; Spec T24)" % owner, o.line)
         # Spec T12: S6 whitelisted Northwind, so the first payment to it is within the hold and clears at submission (the estate asks no signature)
-        self.assertIn("P1 (0.50 USDC to %s, the owner's wallet, expected to proceeds to approval): submitted: status approved, approvalsRequired 0; landed (+US$0.50): instruction confirmed, run settled, userOpHash 0x" % owner, o.line)
+        # Spec T26 §2: Holdings' gas account held nothing, so P1's review refused GAS_SHORTFALL and one credit cured it — said in P1's own line, before the submit
+        cure = self.runner.facts["gas_credits"][-1]
+        self.assertEqual(cure["who"], "Harness Holdings")
+        self.assertIn("P1 (0.50 USDC to %s, the owner's wallet, expected to proceeds to approval): the review refused GAS_SHORTFALL (Your gas account holds US$0.00. This set needs at most US$0.40 of gas. Nothing was sent. Buy gas below.); "
+                      "gas credited and the review asked again; %s; submitted: status approved, approvalsRequired 0; landed (+US$0.50): instruction confirmed, run settled, userOpHash 0x" % (owner, cure["said"]), o.line)
         self.assertIn("payee US$0.00 → US$0.50, gas US$0.31; the estate asked 0 signature(s) and the one-dollar book (Spec T24): 0.50 USDC to the owner's wallet, under the US$10.00 hold (O2), so the band asks no second hand; under the tiers: within the holder's own figure (US$2.00), one signature — the holder's", o.line)
         # Spec T24 §2: the one-off destination is the owner's wallet, which HH-0001 paid moments before, so Spec 69 holds nothing and the line says so
         self.assertIn("P2 (0.01 USDC to %s, the owner's wallet, expected to wait where the destination is new (Spec 69)): the one-off destination is the owner's wallet, already paid by this estate, so Spec 69's hold is not provable this run; "
@@ -211,7 +215,7 @@ class TheFoundersRoad(unittest.TestCase):
                           T.ONE_OFF_ALREADY_PAID_SENTENCE,
                           "under the tiers: within the holder's own figure (US$2.00), one signature — the holder's"])
         reviews = [s for s in self.runner.evidence["S7"] if s["route"].endswith("/sets/review") and "(figures from" in s["expected"]]
-        self.assertEqual(len(reviews), 3)
+        self.assertEqual(len(reviews), 4, "P1's twice — refused for want of gas, cured with one credit, asked again (Spec T26) — then P2's and P3's")
         self.assertTrue(all("(figures from this run's compiled account charter)" in s["expected"] for s in reviews), [s["expected"] for s in reviews])
         self.assertEqual([p.amount for p in A.PAYMENTS], ["0.50", "0.01", "0.49"])
         self.assertEqual(self.runner.facts["one_off"]["paid_before"], True)
@@ -315,7 +319,7 @@ class TheFoundersRoad(unittest.TestCase):
             self.assertIn("| %s %s |" % (station, title), self.report)
             self.assertIn("## %s — %s" % (station, title), self.report)
         self.assertEqual(len(self.runner.findings), 2, "A5 as JSON, the wrong checksum accepted")
-        self.assertIn("Findings under S10 and S11: 2.", self.report)
+        self.assertIn("Findings in this run: 2 (S10 1, S11 1).", self.report)
         self.assertIn("| Station | Outcome | Line |", self.report)
         self.assertNotIn("Last run", self.report, "no previous report in this run's folder, so no last-run column")
         self.assertIn("Specs T7 and T8, 19 and 20 September 2026.", self.report)
@@ -592,7 +596,7 @@ class TheRunContinuesPastAFailedStation(unittest.TestCase):
         self.assertNotIn("Harness Treasury pays Harness Holdings", o.line)
         self.assertIn("S7a not made: Harness Holdings has no funding wallet, so the estate refuses the set before its gas gate is reached", o.line)
         self.assertEqual([c for c in runner.calls if c.station == "S7" and "gas-account/credits" in c.path], [], "nothing of this run could leave, so no gas was credited")
-        self.assertTrue(any(n.startswith("no gas was credited: Harness Holdings has no funding wallet") for n in runner.notes["S7"]), runner.notes["S7"])
+        self.assertEqual([n for n in runner.notes["S7"] if "credit" in n.lower() or T.ADMIN_ENV_FILE in n], [], "Spec T26: no review refused, so nothing was credited, the credential was not read, and nothing is said of either")
         self.assertEqual(outcomes["S8"].outcome, H.PASS)
         self.assertIn("journey stage 3 of 7", outcomes["S8"].line)
         self.assertIn("readiness: transactable False, reason no funding wallet; funding wallet: none — %s" % NO_FUNDING_WALLET_SENTENCE, outcomes["S8"].line)
@@ -600,7 +604,7 @@ class TheRunContinuesPastAFailedStation(unittest.TestCase):
         # Rule 13 held: the 502 and the 503 named what happened, so S10 raised no finding about them
         self.assertFalse(any(f.probe.startswith("Rule 13") for f in runner.findings))
         self.assertTrue(any("S7 created no run for P3" in n for n in runner.notes["S11"]))
-        summary = runner.report().split("Findings under S10 and S11", 1)[1].split("## S1 — Enrol", 1)[0]
+        summary = runner.report().split("Findings in this run", 1)[1].split("## S1 — Enrol", 1)[0]
         self.assertIn("Funding wallet: none — %s The press answered WALLET_BIRTH_REFUSED: " % NO_FUNDING_WALLET_SENTENCE, summary)
 
     def test_an_unreachable_estate_is_a_fault_not_a_judgment(self):

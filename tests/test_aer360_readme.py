@@ -226,7 +226,7 @@ class EstateHarnessReadmeTest(unittest.TestCase):
                       "`GET /v1/workspace/funding-account/balances`", "one payment of one set, a declared one-off, approved with the Treasury founder's passkey", "`POST /v1/sets/{id}/execute`",
                       "Harness Treasury holds US$<x>; the run needs US$<y>; fund <address> on <chain>", "brings the Treasury in only where Holdings is short",
                       "an estate with no funding wallet has no address to fund", "*Harriet Founder (Harness Treasury)*", "refused at creation — <the estate's sentence>",
-                      "*Gas is credited as the sandbox may, and the refusal is proved first.*", "`GET /v1/gas/account`", "Gas account: US$…",
+                      "*Gas is credited only on the review's GAS_SHORTFALL, and the refusal is proved first.*", "`GET /v1/gas/account`", "Gas account: US$…",
                       "Your gas account holds US$… This set needs at most US$… of gas. Nothing was sent. Buy gas below.", "That is S7a",
                       "`POST /v1/admin/accounts/{id}/gas-account/credits`", "sandbox run <run id>", "`aer360-harness-<run>-<workspace>-gas-<n>`", "`~/.aer360-harness/admin.env`",
                       "`AAP_ADMIN_BASE_URL` and `AAP_ADMIN_KEY`", "never in the repository, never printed",
@@ -306,7 +306,7 @@ class EstateHarnessReadmeTest(unittest.TestCase):
                       "*the owner's payee address is not filed at ~/.aer360-harness/payee.env (OWNER_PAYEE_ADDRESS); on arbitrum the harness pays only the owner's own wallet; nothing was sent*",
                       "never a derived address on a real chain, by any path", "On the testnet the derived table is used as today",
                       "*The book's amounts on a real chain: 50, 1 and 49 cents.*", "HH-0001 US$0.50, HH-0002 US$0.01, HH-0003 US$0.49 — US$1.00 in all", "`PAYMENTS_ON_A_REAL_CHAIN`", "`PAYMENTS_ON_THE_TESTNET`",
-                      "`payments()`, which reads `PAYEE_CHAIN` at call time", "`ONE_DOLLAR_MINOR`", "the gas credit of S7 is unchanged", "no payment of the one-dollar book is held by the US$10.00 band (O2)",
+                      "`payments()`, which reads `PAYEE_CHAIN` at call time", "`ONE_DOLLAR_MINOR`", "T24 left the gas credit of S7 as T14 made it", "no payment of the one-dollar book is held by the US$10.00 band (O2)",
                       "*wait where the destination is new (Spec 69)*", "*the one-dollar book (Spec T24): 0.50 USDC to the owner's wallet, under the US$10.00 hold (O2), so the band asks no second hand*", "`road_words`",
                       "is made only where P3 is above the hold", "never a finding that lies",
                       "*The one-off's proof is stated honestly.*", "`setgates.ts`, `isDestinationNew`", "HH-0001 pays the owner's wallet moments before HH-0002", "`one_off_words`",
@@ -322,12 +322,61 @@ class EstateHarnessReadmeTest(unittest.TestCase):
             self.assertIn(words, self.section, words)
         self.assertLess(self.section.index("Spec T22, 27 September 2026"), self.section.index("Spec T24, 3 October 2026"))
         self.assertLess(self.section.index("Spec T24, 3 October 2026"), self.section.index("**Running it.**"))
+
+    def test_it_says_gas_is_credited_only_when_the_review_says_the_account_is_short_since_spec_t26(self):
+        self.assertIn("Spec T26, 4 October 2026", self.section)
+        for words in ("**Gas is credited only when the review says the account is short; never on a standing order (Spec T26, 4 October 2026).**",
+                      "`aer360-harness-2026-10-04-135413.md`", "US$99.71", "US$119.95", "US$0.33", "S7 failed on a credit nobody needed",
+                      "*\"That is stupid. Why is that happening? It's certainly not my rule. So, undo that now.\"*", "read *may* as *does, every run*",
+                      "about twelve runs of ten dollars each, against runs that use cents", "*The law.*", "A gas credit is a cure for a refusal, not a standing order",
+                      "only when the estate's review has refused `GAS_SHORTFALL` for that workspace in this run", "ten dollars, or the next ten above twice the ceiling where the ceiling is larger",
+                      "credits nothing, needs no admin road, and S7 is judged on the money that moved", "*The standing credits go.*", "the Treasury's pre-credit before its own payment",
+                      "`credit_gas` remains and is called from exactly two places", "`more_gas_for_holdings`", "once per refusal, sized by that refusal's `ceilingUsdCents`",
+                      "A second `GAS_SHORTFALL` after a credit fails S7 naming both figures", "`GAS_CREDIT_HOLLOW_SENTENCE`", "so the platform did not credit what it said it did",
+                      "*S7a is unchanged in what it proves, and honest about when it cannot.*",
+                      "*S7a not provable this run: Harness Holdings' gas account holds US$X, and this set needs at most US$Y; the gate admitted the set, which is right*",
+                      "`S7A_NOT_PROVABLE_PROBE`", "`S7A_NOT_PROVABLE_SENTENCE`", "`ceiling_in_evidence`", "never a fail, never a cause for a credit", "*S7 finding: …*",
+                      "*Findings in this run: N (S7 1, …)*", "*admin.env is read lazily.*", "`credit_gas` is handed the reader and calls it then", "names the refusal that needed it",
+                      "`GAS_CURE_NEEDED_CLAUSE`", "**FAILED — prerequisite**", "On a run that needed none, the file is not read and nothing is said of it", "*The gas accounts are stated.*",
+                      "*Harness Treasury's gas account US$119.95 → US$119.64 (credited US$0.00; gas debit US$0.31 on its payment)*", "credits made in this run less debits equals the movement, to the cent",
+                      "`aer360-harness-<run>-<workspace>-gas-<n>`, n counting only credits actually made", "234 → 233 lines", "`holdings_gas_cents`", "`treasury_gas_cents`",
+                      "`PlatformDouble(credit_is_hollow=True)`", "never opens admin.env", "`read_admin_env` patched to raise", "exactly one credit sized by the ceiling",
+                      "S7 fails with T14's sentence after the refusal", "the T25 guard (every fail reads fault) passes", "Untouched: the Pathfinder harness",
+                      "sandbox gas, spent by future runs at cents each, and nothing moves them", "the next live S7 makes no admin call"):
+            self.assertIn(words, self.section, words)
+        self.assertLess(self.section.index("Spec T24, 3 October 2026"), self.section.index("Spec T26, 4 October 2026"))
+        self.assertLess(self.section.index("Spec T26, 4 October 2026"), self.section.index("**Running it.**"))
+        # the T14 paragraph no longer says the harness credits gas each run, and the T24 paragraph says what T26 did to the credit it left alone
+        self.assertNotIn("Then the harness credits each workspace's gas account", self.section)
+        self.assertNotIn("US$10.00 each (U3's *ten at a time*)", self.section)
+        self.assertNotIn("credits the gas account as the sandbox may", self.section)
+        self.assertIn("only where a payment's review refuses `GAS_SHORTFALL` for it (Spec T26; T14's text credited each workspace on every run)", self.section)
+        self.assertIn("Spec T26 settled: there are no standing credits to order", self.section)
         # the living paragraph names both books, and the running-it paragraph the file
         self.assertIn("is the book on the AEREDIUM testnet; on a real chain, and `arbitrum` is one, the book is one dollar since Spec T24: US$0.50, US$0.01 and US$0.49, every cent to the owner's own wallet read from `~/.aer360-harness/payee.env`, never a derived address", self.section)
         self.assertIn("the payee of every payment is the owner's own wallet, read from `payee.env` beside the passkeys (Spec T24", self.section)
 
 
 class ChangelogTest(unittest.TestCase):
+    def test_the_changelog_records_spec_t26_first_and_names_every_change(self):
+        text = read("CHANGELOG.md")
+        title = "## Spec T26 — Gas is credited only when the review says the account is short; never on a standing order (4 October 2026)"
+        self.assertIn(title, text)
+        t25b = "## Spec T25b — The pinned catalogue is the fifteen"
+        self.assertLess(text.index(title), text.index(t25b))
+        entry = text.split(title, 1)[1].split(t25b, 1)[0]
+        for words in ("That is stupid. Why is that happening? It's certainly not my rule. So, undo that now.", "`aer360-harness-2026-10-04-135413.md`", "US$99.71", "US$119.95", "US$0.33",
+                      "`127.0.0.1:9620`", "read \"may\" as \"does, every run\"", "a gas credit is a cure for a refusal, not a standing order",
+                      "`aer360_harness.py`", "step 5", "the Treasury's pre-credit", "`credit_gas`", "`more_gas_for_holdings`", "`treasury_pays_the_shortfall`", "`pay`", "`read_admin_env`",
+                      "`Runner.admin_env`", "`ceiling_in_evidence`", "`CEILING_IN_EVIDENCE`", "`prove_the_gas_refusal`", "`finding(…, fails=False)`", "`audit_the_money_moved`", "Findings in this run",
+                      "`aer360_tables.py`", "`S7A_NOT_PROVABLE_PROBE`", "`S7A_NOT_PROVABLE_SENTENCE`", "`GAS_CURE_NEEDED_CLAUSE`", "`GAS_CREDIT_HOLLOW_SENTENCE`",
+                      "`tests/test_aer360_double.py`", "`EstateDouble(holdings_gas_cents=…, treasury_gas_cents=…)`", "`PlatformDouble(credit_is_hollow=True)`",
+                      "`tests/test_aer360_treasury.py`", "`GasIsCreditedOnlyWhenShort`", "`HoldingsIsShortAndTheTreasuryIsNot`", "`ThePlatformDidNotCreditWhatItSaid`",
+                      "`tests/fixtures/aer360-dry-calls.txt` regenerated", "234 → 233 lines", "`tests/test_a_fail_means_a_fault.py`",
+                      "AAOI, before the code", "**Auditor**", "**Attacker**", "**Optimiser**", "**Implementer**", "`services/execution.ts`", "`gasAccountPreflight`", "c35ece8",
+                      "Not touched, as the fence requires", "the Pathfinder harness", "`corridor_consent.py`", "nothing moves them"):
+            self.assertIn(words, entry, words)
+
     def test_the_changelog_records_spec_t24_first_and_names_every_change(self):
         text = read("CHANGELOG.md")
         title = "## Spec T24 — On a real chain the estate harness pays the owner's own wallet, and the book's payments total no more than one dollar (3 October 2026)"

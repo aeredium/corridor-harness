@@ -38,7 +38,7 @@ def run_against(**double_kwargs):
 
 def summary_of(runner):
     """The report's summary under the closing table: the funding wallet, the gas and the asset (Spec T13 §5)."""
-    return runner.report().split("Findings under S10 and S11", 1)[1].split("## S1 — Enrol", 1)[0]
+    return runner.report().split("Findings in this run", 1)[1].split("## S1 — Enrol", 1)[0]
 
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")

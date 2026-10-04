@@ -393,7 +393,8 @@ class TheRegisterDouble(unittest.TestCase):
         self.assertIn(first_northwind, paid_ids, "the first run's whitelisted record on arbitrum")
         self.assertNotIn(on_ethereum["id"], paid_ids)
         self.assertEqual({double.addresses[i]["chain"] for i in paid_ids}, {"arbitrum"})
-        self.assertEqual(len(H.dry_lines()), 234, "the conditional register read is one dry line under S7 (193 → 194); Spec T19 adds S5's head and S14 (194 → 231); Spec T24 adds the payee.env reads and the one-off's register read (231 → 234)")
+        self.assertEqual(len(H.dry_lines()), 233, "the conditional register read is one dry line under S7 (193 → 194); Spec T19 adds S5's head and S14 (194 → 231); Spec T24 adds the payee.env reads and the one-off's register read (231 → 234); "
+                                                   "Spec T26 drops the three standing gas credits for two conditional cures (234 → 233)")
 
     def test_a_register_holding_the_payee_on_ethereum_only_at_s7_sends_nothing_for_it_and_says_so(self):
         """A run resumed at S7 on an estate whose register holds Northwind on ethereum only: P1 is not sent, and the line says which record was never paid."""

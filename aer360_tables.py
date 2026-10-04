@@ -339,8 +339,10 @@ def account_name_of_list(list_name: Any) -> str:
 # found"): Harness Treasury is a second sandbox workspace the harness births exactly as Harness Holdings was born — its own founder
 # passkey under ~/.aer360-harness/harness-treasury/, its funding wallet a key allocated on the platform and held in the enclave. Bear
 # funds that wallet's address with USDC once; the harness holds no key for it and pays from it only through the estate's own road.
-# Gas is a balance in dollars on the platform's gas ledger (U3), credited for the sandbox through the platform's ADMIN credit road with
-# the admin credential Bear files in ~/.aer360-harness/admin.env — never in the repository, never printed. The card road is Bear's.
+# Gas is a balance in dollars on the platform's gas ledger (U3), credited for the sandbox through the platform's ADMIN credit road — with
+# the admin credential Bear files in ~/.aer360-harness/admin.env, never in the repository, never printed — only where the estate's review
+# refuses GAS_SHORTFALL for the workspace (Spec T26, 4 October 2026: a credit is a cure for a refusal, never a standing order). The card
+# road is Bear's.
 # ---------------------------------------------------------------------------
 TREASURY = {
     "company": "Harness Treasury Pty Ltd",   # the workspace's name, as the birth script names it; the session's workspace must begin with the short name
@@ -357,7 +359,7 @@ ADMIN_ENV_KEY_KEY = "AAP_ADMIN_KEY"          # AERAccounts .env.example: the adm
 ADMIN_KEY_PREFIX = "aek-admin-"
 ADMIN_CREDIT_ROUTE = "/v1/admin/accounts/%s/gas-account/credits"   # router.go: the admin credit road of the gas account (Spec 154 §1): the account's id
 ADMIN_CREDIT_REASON = "sandbox run %s"                             # gas_handlers.go PostAdminGasAccountCredit: reason required; the harness names the run
-GAS_CREDIT_USD_CENTS = 1000                  # U3 (Bear, 22 September 2026): "put $10 on our account every time"; accountabstraction.ts GAS_DEFAULT_TOP_UP_USD_CENTS
+GAS_CREDIT_USD_CENTS = 1000                  # U3 (Bear, 22 September 2026): "put $10 on our account every time"; accountabstraction.ts GAS_DEFAULT_TOP_UP_USD_CENTS — the size of one cure, made only on the review's GAS_SHORTFALL (Spec T26); Runner.gas_credit_for sizes a larger ceiling
 GAS_ACCOUNT_ROUTE = "/v1/gas/account"        # routes/gas.ts: the balance, read live from the platform; `account.sentence` is "Gas account: US$<available>"
 GAS_ACCOUNT_LABEL = "Gas account"            # accountabstraction.ts GAS_ACCOUNT_LABEL
 FUNDING_BALANCES_ROUTE = "/v1/workspace/funding-account/balances"  # routes/workspace.ts: the stablecoin the funding wallet holds, per chain, in dollars
@@ -383,6 +385,14 @@ NO_GAS_CREDIT_ROAD_SENTENCE = ("no gas credit road: the sandbox credits gas thro
                                "~/.aer360-harness/admin.env")
 TREASURY_SHORT_SENTENCE = "Harness Treasury holds %s; the run needs %s; fund %s on %s"
 FUND_TREASURY_SENTENCE = "fund Harness Treasury: %s on %s, then rerun"
+# Spec T26 (4 October 2026): gas is credited only when the review says the account is short; never on a standing order. The owner's ruling on
+# the estate run of 13:40 that day, which failed S7 on a credit nobody needed: "That is stupid. Why is that happening? It's certainly not my
+# rule. So, undo that now." The sentences this spec adds, word for word (SPEC.md §3.1 to §3.3).
+S7A_NOT_PROVABLE_PROBE = "S7a not provable this run"   # the finding's name under S7 and in the report's Findings (§3.2): never a fail, never a cause for a credit
+S7A_NOT_PROVABLE_SENTENCE = "Harness Holdings' gas account holds %s, and this set needs at most %s; the gate admitted the set, which is right"
+GAS_CURE_NEEDED_CLAUSE = "the review refused %s (%s), which a gas credit cures"   # §3.3: the refusal that needed the credit, said in S7's line before what stopped the cure (T14's sentence where no credential is filed)
+GAS_CREDIT_HOLLOW_SENTENCE = ("the review refused %s again after the credit: the platform said %s was credited %s and its gas account held %s available, and the review says "
+                              "the account holds %s — %r — so the platform did not credit what it said it did")   # §3.1: both figures, the platform's and the gate's
 
 
 def public_rpc_url(chain: str) -> Optional[str]:
