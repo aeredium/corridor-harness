@@ -29,7 +29,8 @@ THE STATIONS, A TO Z
   S5  The child wallet   GET /v1/account/agents/:id/wallet-record — provisioned, not a mock, the owner's
   S6  Buy gas            POST /v1/account/gas (the floor, then ten dollars), GET /v1/account/gas-account — read live
   S7  Connect Claude     /authorize, the consent's step three, /finish, /token — the per-connection credential
-  S8  The catalogue      MCP initialize, tools/list — the seventeen pinned tools, each by name (tables.py CATALOGUE, Spec T25)
+  S8  The catalogue      MCP initialize, tools/list — the fifteen pinned tools, each by name (tables.py CATALOGUE, Spec T25); a
+                         ROADS name listed to a paying agent is a fault (tables.py ROADS_NAMES, Spec T25b)
   S9  The agent          aerconnect_my_agent — the wallet UUID, the pact, the gas balance
   S10 The judgment       police.check_action — the trade within the mandate, a receipt
   S11 The trade          the agent's wallet funded by Harness Holdings through the estate's own road where it is short (Spec T23),
@@ -121,11 +122,11 @@ WHERE THE SPEC AND THE CODE PART COMPANY, each cited here and in the README (the
      puts it.
   3. S8. The spec's fourteen were the two connector tools, the eight Wallet tools the architecture of 2 October 2026 names
      and the four Police tools beside the assignment tools that architecture hides from a paying agent. The connector
-     publishes seventeen (read live on 3 October 2026): the Wallet's `get_crossing` (Spec 46) and the Police's two
-     assignment tools, which the relay lists under NOT THE ROAD FOR AN AER CONNECT AGENT. Since Spec T25 the pinned list
-     is tables.py's seventeen, each with the spec that added it, and S8 expects each by name; whether a paying agent's
-     catalogue should carry the two assignment tools is the owner's ruling, open since 2 October, and S8's note keeps
-     the question visible in every report until he gives it.
+     published seventeen on 3 October 2026 — the Wallet's `get_crossing` (Spec 46) and the Police's two assignment tools
+     among them — and on 4 October the owner ruled the two assignment tools out of a paying agent's catalogue ("Agreed.
+     This should not."; connector Spec C-CAT-1 carries it out). Since Spec T25b the pinned list is tables.py's fifteen,
+     each with the spec that added it: S8 expects each by name, fails as a fault where a ROADS name is listed (tables.py
+     ROADS_NAMES), and records a finding where a tool is listed that is neither pinned nor a ROADS name.
   4. S2. GET /v1/account states the account's signing group on no field — at 9e20d6c and at main on 4 October 2026
      (69b0754: customer, subscription, agents, allowance, package, connections, receipts; the only `signingGroup` the
      route file carries is the platform-audit page's). The group is CONNECTOR_SIGNING_GROUP, sent as assigned_groups at
@@ -136,11 +137,23 @@ A FAIL MEANS A FAULT (Spec T25, 4 October 2026). The harnesses are the gate for 
 so a station may fail only on a fault of the product: an expectation the harness holds that the product never promised is the
 harness's error. Seven Pathfinder runs of 3 October closed S2 and S8 as fail while the product was right — S2 on a field the
 account page has never carried, S8 on a count the catalogue had outgrown. Now S2 judges what the connector states (a group
-stated and wrong fails; none stated is a finding), S8 expects the catalogue by name against tables.py's pinned seventeen (a
-pinned tool missing fails; a tool not pinned is a finding naming it), and the closing table says why a station failed in one
-word — `fault` or `expectation` — where `expectation` may no longer occur: tests/test_a_fail_means_a_fault.py walks every
-station's failure paths and asserts each is a fault of the product, in the station's own words. A finding is listed in the
-table's findings column and in the report's findings section, so it is never lost and never pretends to be a fault.
+stated and wrong fails; none stated is a finding), S8 expects the catalogue by name against tables.py's pinned fifteen (a
+pinned tool missing fails; a ROADS name listed fails, Spec T25b; a tool that is neither is a finding naming it), and the
+closing table says why a station failed in one word — `fault` or `expectation` — where `expectation` may no longer occur:
+tests/test_a_fail_means_a_fault.py walks every station's failure paths and asserts each is a fault of the product, in the
+station's own words. A finding is listed in the table's findings column and in the report's findings section, so it is never
+lost and never pretends to be a fault.
+
+THE PINNED CATALOGUE IS THE FIFTEEN (Spec T25b, 4 October 2026). Asked whether a paying agent should be shown the two assignment
+tools, the owner ruled: "Agreed. This should not." Connector Spec C-CAT-1 carries it out: tools/list to an agent carries no
+ROADS name, and the relay's refusal of a call to one stays as it was. The pinned catalogue is the catalogue the product is ruled
+to publish, not the one it happened to publish on a given day (item 3 above says what it published on 3 October and what was
+ruled on 4 October): tables.py pins the fifteen by name; a ROADS name listed (tables.py ROADS_NAMES) fails S8 as a fault in the
+product's own words — "AER Connect 1.0.0 lists police.request_assignment and police.assignment_status to a paying agent; the
+owner ruled on 4 October 2026 that it should not (connector Spec C-CAT-1)" — and S8 emits no note about the assignment tools
+on a pass. Until C-CAT-1 ships on the connector a live run's S8 reads fail, because the connector lists two tools to a paying
+agent that the owner ruled it should not; that is the truth, and the harness says it. Once C-CAT-1 is live, S8 passes on the
+fifteen.
 
 THE HARNESS FUNDS ITS OWN AGENT (Spec T23, 2 October 2026; Bear: "I am not intervening in the harnessed dealings. It has to be done
 automatically. We already financed the gas. That's all there is."). The run of that evening stopped at S11 waiting for a person to send
@@ -265,7 +278,10 @@ NO_GROUP_FINDING = ("the account page states no signing group; the Wallet's door
                     "GET %s")
 UNPINNED_FINDING = ("tools/list carries %s, which tables.py does not pin: the harness has fallen behind the connector, not the connector behind "
                     "the harness; pin each in tables.py with the spec that added it")
-ASSIGNMENT_NOTE = "%s: listed to a paying agent — a product ruling the owner has not yet given (open since 2 October 2026)"
+# A ROADS NAME LISTED IS A FAULT (Spec T25b, 4 October 2026). Asked whether a paying agent should be shown the two assignment tools,
+# the owner ruled "Agreed. This should not."; connector Spec C-CAT-1 carries it out. Until it ships the connector lists them, and S8
+# says so in the product's own words: who lists what to whom, and the ruling it breaks.
+ROADS_LISTED_SENTENCE = "%s lists %s to a paying agent; the owner ruled on 4 October 2026 that it should not (connector Spec C-CAT-1)"
 
 GUARD_SENTENCE = ("%s is not a declared test ring (a test ring, the sandbox among them, is named with --test-ring), so the harness "
                   "refuses to %s there without --i-mean-it.")
@@ -293,9 +309,11 @@ NO_RESUME_SENTENCE = ("no agent of an earlier run stands to resume with (%s name
                       "which creates this run's own")
 
 # ---------------------------------------------------------------------------
-# The pinned catalogue (S8, Spec T25): the seventeen the connector publishes, pinned by name in tables.py with the spec that
-# added each — the connector's two, the Wallet's nine, the Police's six (no commit of MCP Police has ever registered a tool
-# called can_sign). S8 expects each by name: a pinned tool missing is a fault; a tool present but not pinned is a finding.
+# The pinned catalogue (S8, Spec T25; the fifteen since Spec T25b): the fifteen the connector is ruled to publish to a paying
+# agent, pinned by name in tables.py with the spec that added each — the connector's two, the Wallet's nine, the Police's four
+# (no commit of MCP Police has ever registered a tool called can_sign; its two assignment tools are ROADS names, ruled out of a
+# paying agent's catalogue on 4 October 2026). S8 expects each by name: a pinned tool missing is a fault; a ROADS name listed is
+# a fault (tables.py ROADS_NAMES); a tool present that is neither is a finding.
 # ---------------------------------------------------------------------------
 CATALOGUE: Tuple[str, ...] = T.CATALOGUE_NAMES
 
@@ -491,6 +509,14 @@ def lexicon_names_in(sentence: str, code: Optional[str] = None) -> List[str]:
         if match and all(name != seen for _, seen in found):
             found.append((match.start(), name))
     return [name for _, name in sorted(found)]
+
+
+def names_said(names: Sequence[str]) -> str:
+    """Names read aloud in a sentence: one as it is, two joined by and, more with commas and a final and."""
+    listed = list(names)
+    if len(listed) <= 1:
+        return "".join(listed)
+    return "%s and %s" % (", ".join(listed[:-1]), listed[-1])
 
 
 def named(sentence: str, code: Optional[str] = None) -> str:
@@ -2035,9 +2061,10 @@ class Pathfinder:
     def station_s8(self) -> Outcome:
         """
         The catalogue, expected by name (Spec T25): every tool tables.py pins must be in tools/list — one missing is a fault
-        of the product; a tool listed that is not pinned is a finding naming it, since the harness and not the connector has
-        fallen behind. The two assignment tools are noted on every report until the owner rules whether a paying agent's
-        catalogue should carry them.
+        of the product. A ROADS name listed to a paying agent is a fault of the product (Spec T25b: asked whether a paying
+        agent should be shown the two assignment tools, the owner ruled on 4 October 2026 "Agreed. This should not.", and
+        connector Spec C-CAT-1 carries it out). A tool listed that is neither pinned nor a ROADS name is a finding naming
+        it, since the harness and not the connector has fallen behind. S8 emits no note on a pass.
         """
         if self.facts.get("resume_refused") and not self.facts.get("agent_id"):
             raise StationStop(self.facts["resume_refused"], outcome=NOT_RUN)
@@ -2054,17 +2081,17 @@ class Pathfinder:
         tools = session.listed("S8")
         names = [str(t.get("name")) for t in tools if isinstance(t, dict)]
         missing = [n for n in CATALOGUE if n not in names]
-        unpinned = [n for n in names if n not in CATALOGUE]
+        roads = [n for n in T.ROADS_NAMES if n in names]
+        unpinned = [n for n in names if n not in CATALOGUE and n not in T.ROADS_NAMES]
         info = session.server_info or {}
         head = ("%s %s" % (info.get("name") or "the connector", info.get("version") or "")).strip()
         if missing:
             raise StationStop("%s lists %d tool(s), and the pinned catalogue of %d (tables.py) is not all there; missing: %s" % (
                 head, len(names), len(CATALOGUE), ", ".join(missing)), outcome=FAIL)
+        if roads:
+            raise StationStop(ROADS_LISTED_SENTENCE % (head, names_said(roads)), outcome=FAIL)
         if unpinned:
             self.finding(UNPINNED_FINDING % ", ".join(unpinned))
-        listed_assignment = [n for n in T.ASSIGNMENT_TOOLS if n in names]
-        if listed_assignment:
-            self.note(ASSIGNMENT_NOTE % " and ".join(listed_assignment))
         return Outcome("S8", PASS, "the catalogue: %s lists the %d pinned tools by name%s — %s" % (
             head, len(CATALOGUE), (", and %d the harness has not pinned (a finding)" % len(unpinned)) if unpinned else "", ", ".join(names)))
 
@@ -3136,8 +3163,9 @@ def dry_lines(base: str = DEFAULT_BASE, owner: str = DEFAULT_OWNER, store_dir: s
          % os.path.join(folder, "%s.json" % label))
     station("S8", "the catalogue: the %d pinned tools, each by name (tables.py)" % len(CATALOGUE))
     call("S8", "MCP initialize %s → expect 200: serverInfo and instructions" % _j({"protocolVersion": H.PROTOCOL_VERSION, "capabilities": {}, "clientInfo": {"name": H.CLIENT_NAME, "version": "1.0.0"}}))
-    call("S8", "MCP tools/list {} → expect each pinned tool present by name: %s; a pinned tool missing fails (a fault); a tool present but not pinned is a finding naming it; "
-         "note: \"%s\"" % (", ".join(CATALOGUE), ASSIGNMENT_NOTE % " and ".join(T.ASSIGNMENT_TOOLS)))
+    call("S8", "MCP tools/list {} → expect each pinned tool present by name: %s; a pinned tool missing fails (a fault); a ROADS name listed (%s) fails (a fault): "
+         "\"%s\"; a tool present that is neither pinned nor a ROADS name is a finding naming it" % (
+             ", ".join(CATALOGUE), ", ".join(T.ROADS_NAMES), ROADS_LISTED_SENTENCE % ("<the connector's name and version>", "<the ROADS names listed>")))
     station("S9", "the agent: the wallet UUID, the pact, the gas balance")
     call("S9", "MCP tools/call %s {} → expect wallet.id (a UUID, S3's), limits.pactId (S4's) and state active, gas_account US$<available>" % H.MY_AGENT_TOOL)
     station("S10", "the judgment: the trade within the mandate, a receipt")

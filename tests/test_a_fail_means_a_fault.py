@@ -8,9 +8,11 @@ fault of the product; an expectation the harness holds that the product never pr
   S2 judges what the connector states: the owner, the seat and the agents as before; a signing group stated on the page and
     other than the run expects fails S2 (a fault); none stated is a finding, never a fail, in the spec's words; --group names
     the group compared, on the command line and in the dry walk; a page the connector cannot answer fails in its own words.
-  S8 expects the catalogue the connector publishes, by name: tables.py pins the seventeen, each with the door that answers it
-    and the spec that added it; a pinned tool missing fails (a fault); a tool present but not pinned is a finding naming it;
-    the two assignment tools are noted on every report until the owner rules (tests/test_aerconnect_harness.py, TheCatalogue).
+  S8 expects the catalogue the connector is ruled to publish, by name: tables.py pins the fifteen (Spec T25b), each with the
+    door that answers it and the spec that added it; a pinned tool missing fails (a fault); a ROADS name listed to a paying
+    agent fails (a fault, in the product's own words: the owner ruled on 4 October 2026 that it should not, connector Spec
+    C-CAT-1); a tool present that is neither is a finding naming it; no note on a pass (tests/test_aerconnect_harness.py,
+    TheCatalogue). No file of the repository outside the CHANGELOG says the ruling is open.
   The closing table says why a station failed: a cause column, `fault` on every fail row and nothing on any other; a findings
     column and a Findings section, `none` where nothing was found.
   THE GUARD: every station's failure paths, each driven through the double, each a fault of the product in the station's own
@@ -20,6 +22,7 @@ fault of the product; an expectation the harness holds that the product never pr
 Standard library only, and no network: every road answers through corridor_harness.http_request, patched to the double.
 """
 import ast
+import codecs
 import contextlib
 import io
 import os
@@ -36,17 +39,24 @@ import corridor_harness as H  # noqa: E402
 import tables as T  # noqa: E402
 
 try:
-    from .pathfinder_double import ISSUER
+    from .pathfinder_double import ISSUER, tool_listing
     from .test_aerconnect_harness import FUNDING, PathfinderBase, pinned
+    from .test_the_harness_names_no_real_tester import tracked_files
 except ImportError:  # run as a top-level module by `unittest discover tests`
-    from pathfinder_double import ISSUER
+    from pathfinder_double import ISSUER, tool_listing
     from test_aerconnect_harness import FUNDING, PathfinderBase, pinned
+    from test_the_harness_names_no_real_tester import tracked_files
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HARNESS = os.path.join(ROOT, "aerconnect_harness.py")
 DRY_WALK = os.path.join(ROOT, "tests", "fixtures", "aerconnect-dry-walk.txt")
 GROUP_FINDING = P.NO_GROUP_FINDING % ("group-100", "/v1/account")
-ASSIGNMENT_NOTE = P.ASSIGNMENT_NOTE % "police.request_assignment and police.assignment_status"
+# The S8 fault of Spec T25b §2.2 as the double says it: who lists what to whom, and the ruling it breaks.
+ROADS_FAULT = P.ROADS_LISTED_SENTENCE % ("aer-connect double", "police.request_assignment and police.assignment_status")
+# The two phrases PR #25 carried about the ruling — that the owner had not given it, and the date it had been open since — rot13 so
+# this file does not carry them (as the no-real-tester test keeps its names; decode to read them). Neither may appear in any file of
+# the repository but CHANGELOG.md, which records what T25 said (Spec T25b §2.5).
+THE_OPEN_RULING_WORDS = tuple(codecs.decode(words, "rot13") for words in ("unf abg lrg tvira", "bcra fvapr 2 Bpgbore"))
 # The connector's own 500, in its own shape (apps/server/src/http.ts INTERNAL_ERROR): what a road it cannot answer says.
 INTERNAL_ERROR_SAID = "Something went wrong at our end. Nothing was changed."
 # The two lines of 3 October, as the seven reports carried them; neither may be said again.
@@ -111,11 +121,11 @@ class TheAccountPage(PathfinderBase):
 
 
 class TheCatalogueIsPinned(unittest.TestCase):
-    """tables.py pins the seventeen by name, each with the spec that added it (Spec T25 §2)."""
+    """tables.py pins the fifteen by name, each with the spec that added it (Spec T25 §2; the fifteen since Spec T25b §2.1)."""
 
-    def test_seventeen_names_each_with_a_door_what_it_does_and_where_it_was_read(self):
-        self.assertEqual(len(T.CATALOGUE), 17)
-        self.assertEqual(len(set(T.CATALOGUE_NAMES)), 17, "no name twice")
+    def test_fifteen_names_each_with_a_door_what_it_does_and_where_it_was_read(self):
+        self.assertEqual(len(T.CATALOGUE), 15)
+        self.assertEqual(len(set(T.CATALOGUE_NAMES)), 15, "no name twice")
         self.assertEqual(T.CATALOGUE_NAMES, P.CATALOGUE, "the harness's catalogue is tables.py's")
         for row in T.CATALOGUE:
             self.assertIn(row.door, ("connector", "wallet", "police"), row.name)
@@ -127,20 +137,26 @@ class TheCatalogueIsPinned(unittest.TestCase):
             self.assertTrue(row.source, row.name)
         self.assertEqual([r.door for r in T.CATALOGUE].count("connector"), 2)
         self.assertEqual([r.door for r in T.CATALOGUE].count("wallet"), 9)
-        self.assertEqual([r.door for r in T.CATALOGUE].count("police"), 6)
+        self.assertEqual([r.door for r in T.CATALOGUE].count("police"), 4)
 
-    def test_the_three_added_after_the_fourteen_name_the_spec_that_added_them(self):
+    def test_the_census_the_catalogue_is_exactly_fifteen_names_and_none_is_a_roads_name(self):
+        """Spec T25b §2.5: CATALOGUE has exactly fifteen names and none is in ROADS_NAMES; the ROADS are the relay's three."""
+        self.assertEqual(len(T.CATALOGUE_NAMES), 15)
+        self.assertEqual(T.ROADS_NAMES, ("police.request_assignment", "police.assignment_status", "police.police_assignment_status"))
+        self.assertEqual(set(T.ROADS_NAMES), {"police." + name for name in H.ROADS},
+                         "the relay's ROADS (knowledge.ts; corridor_harness.ROADS unprefixed) under the relay's police. prefix")
+        for name in T.ROADS_NAMES:
+            self.assertNotIn(name, T.CATALOGUE_NAMES, "%s was ruled out of a paying agent's catalogue on 4 October 2026" % name)
+            with self.assertRaises(KeyError):
+                T.tool(name)
+        self.assertFalse(hasattr(T, "ASSIGNMENT_TOOLS") or hasattr(T, "ASSIGNMENT_SOURCE"), "the constants that said the ruling was open are gone")
+        self.assertFalse(hasattr(P, "ASSIGNMENT_NOTE"), "the note is gone (Spec T25b §2.2)")
+
+    def test_get_crossing_names_the_spec_that_added_it(self):
         crossing = T.tool("wallet.get_crossing")
         self.assertIn("Spec 46", crossing.source)
         self.assertIn("13 September 2026", crossing.source)
         self.assertIn("internal/mcp/catalog.go", crossing.source)
-        self.assertEqual(T.ASSIGNMENT_TOOLS, ("police.request_assignment", "police.assignment_status"))
-        for name in T.ASSIGNMENT_TOOLS:
-            row = T.tool(name)
-            self.assertIn("step four", row.source)
-            self.assertIn("src/server.ts", row.source)
-            self.assertIn("NOT THE ROAD FOR AN AER CONNECT AGENT", row.source)
-            self.assertIn("open since 2 October 2026", row.source)
         self.assertIn("Spec 15", T.tool("aerconnect_my_agent").source)
         self.assertIn("Spec 22", T.tool("aerconnect_guide").source)
         self.assertIn("19 August 2026", T.tool("wallet.wallet_status").source)
@@ -152,8 +168,52 @@ class TheCatalogueIsPinned(unittest.TestCase):
         self.assertTrue(T.describe_tool("police.check_action").startswith("police.check_action — judges a stated action"))
         self.assertIn("(read from mcp-police src/server.ts", T.describe_tool("police.check_action"))
 
-    def test_the_fixture_is_the_pinned_seventeen_in_the_pinned_order(self):
+    def test_the_fixture_is_the_pinned_fifteen_in_the_pinned_order(self):
         self.assertEqual(tuple(pinned()), T.CATALOGUE_NAMES)
+        self.assertEqual(len(pinned()), 15)
+
+
+class TheCatalogueIsTheFifteen(PathfinderBase):
+    """Spec T25b §2.5: S8 on the fifteen with no note; a ROADS name listed, a fault in the product's words; an unpinned tool, a finding."""
+
+    def test_s8_passes_on_the_fifteen_with_no_note(self):
+        runner = self.walk()
+        s8 = runner.outcome_of("S8")
+        self.assertEqual((s8.outcome, s8.cause), (P.PASS, None))
+        self.assertEqual(s8.line, "the catalogue: aer-connect double lists the 15 pinned tools by name — %s" % ", ".join(T.CATALOGUE_NAMES))
+        self.assertNotIn("S8", runner.notes, "no note: the ruling was given on 4 October 2026")
+        self.assertNotIn("S8", runner.findings)
+        self.assertNotIn("Note:", runner.report().split("## S8 — The catalogue", 1)[1].split("## S9 — ", 1)[0])
+
+    def test_s8_fails_as_a_fault_in_the_products_words_where_the_double_lists_a_roads_name(self):
+        self.double.lists_roads = True
+        runner = self.walk()
+        s8 = runner.outcome_of("S8")
+        self.assertEqual((s8.outcome, s8.cause), (P.FAIL, P.FAULT))
+        self.assertEqual(s8.line, "the catalogue: %s" % ROADS_FAULT)
+        self.assertEqual(P.exit_code_of(runner.outcomes), 1, "a fault fails the run")
+        row = next(line for line in runner.report().splitlines() if line.startswith("| S8 The catalogue | "))
+        self.assertIn("| fail | fault | the catalogue: %s |" % ROADS_FAULT, row)
+        self.assertNotIn("S8", runner.notes)
+
+    def test_s8_records_a_finding_not_a_fail_where_the_double_lists_an_unpinned_tool_that_is_not_a_roads_name(self):
+        self.double.catalogue = pinned() + ["wallet.sweep_dust"]
+        runner = self.walk()
+        s8 = runner.outcome_of("S8")
+        self.assertEqual((s8.outcome, s8.cause), (P.PASS, None))
+        self.assertEqual(runner.findings["S8"], [P.UNPINNED_FINDING % "wallet.sweep_dust"])
+        self.assertEqual(P.exit_code_of(runner.outcomes), 0, "a finding is not a fail")
+
+    def test_the_double_lists_the_fifteen_by_default_and_the_two_assignment_tools_only_when_switched(self):
+        self.assertEqual(self.double.listed_names(), list(T.CATALOGUE_NAMES))
+        self.double.lists_roads = True
+        listed = self.double.listed_names()
+        self.assertEqual(len(listed), 17, "the connector as it stood on 3 October 2026, before Spec C-CAT-1")
+        after = listed.index("police.check_action") + 1
+        self.assertEqual(listed[after:after + 2], ["police.request_assignment", "police.assignment_status"], "after check_action, where the relay listed them")
+        self.assertEqual([n for n in listed if n not in T.CATALOGUE_NAMES], ["police.request_assignment", "police.assignment_status"])
+        for name in ("police.request_assignment", "police.assignment_status"):
+            self.assertTrue(tool_listing(name)["description"].startswith(H.NOT_THE_ROAD_SAID), "the road sentence rides in front, as the relay put it")
 
 
 class TheClosingTableSaysWhy(PathfinderBase):
@@ -182,7 +242,7 @@ class TheClosingTableSaysWhy(PathfinderBase):
         s2 = report.split("## S2 — The account", 1)[1].split("## S3 — ", 1)[0]
         self.assertIn("\nFinding: %s\n" % GROUP_FINDING, s2)
         s8 = report.split("## S8 — The catalogue", 1)[1].split("## S9 — ", 1)[0]
-        self.assertIn("\nNote: %s\n" % ASSIGNMENT_NOTE, s8)
+        self.assertNotIn("\nNote:", s8, "S8 emits no note on a pass (Spec T25b)")
         self.assertIn("\nFinding: %s\n" % (P.UNPINNED_FINDING % "wallet.sweep_dust"), s8)
         self.assertEqual(P.exit_code_of(runner.outcomes), 1, "S10's fail")
 
@@ -281,7 +341,29 @@ class TheGuardWalksEveryStationsFailurePaths(PathfinderBase):
     def test_s8_a_pinned_tool_missing_is_a_fault_naming_it(self):
         self.double.catalogue = [n for n in pinned() if n != "police.my_usage"]
         runner = self.walk()
-        self.assert_fault(runner, "S8", "lists 16 tool(s), and the pinned catalogue of 17 (tables.py) is not all there; missing: police.my_usage")
+        self.assert_fault(runner, "S8", "lists 14 tool(s), and the pinned catalogue of 15 (tables.py) is not all there; missing: police.my_usage")
+
+    def test_s8_a_roads_name_listed_to_a_paying_agent_is_a_fault_in_the_products_words(self):
+        """Spec T25b §2.2: the connector before C-CAT-1 lists the two assignment tools; the sentence names who lists what, and the ruling."""
+        self.double.lists_roads = True
+        runner = self.walk()
+        outcome = self.assert_fault(runner, "S8", ROADS_FAULT)
+        self.assertEqual(outcome.line, "the catalogue: %s" % ROADS_FAULT)
+        self.assertNotIn("S8", runner.findings, "a ROADS name listed is a fault, never a finding")
+        self.assertNotIn("S8", runner.notes, "and no note")
+        self.assertEqual(runner.outcome_of("S9").outcome, P.PASS, "the session S8 opened carries on")
+
+    def test_s8_one_roads_name_listed_is_named_alone(self):
+        self.double.catalogue = pinned() + ["police.police_assignment_status"]
+        runner = self.walk()
+        self.assert_fault(runner, "S8", P.ROADS_LISTED_SENTENCE % ("aer-connect double", "police.police_assignment_status"))
+        self.assertNotIn("S8", runner.findings, "the older spelling is a ROADS name too, never an unpinned finding")
+
+    def test_s8_a_pinned_tool_missing_is_said_before_a_roads_name_listed(self):
+        self.double.catalogue = [n for n in pinned() if n != "police.my_usage"]
+        self.double.lists_roads = True
+        runner = self.walk()
+        self.assert_fault(runner, "S8", "lists 16 tool(s), and the pinned catalogue of 15 (tables.py) is not all there; missing: police.my_usage")
 
     def test_s9_another_wallet_named_than_the_agents_is_a_fault(self):
         self.double.my_agent_wallet = "00000000-0000-4000-8000-000000000000"
@@ -363,6 +445,36 @@ class TheHarnessHasNoExpectationLeft(unittest.TestCase):
         self.assertFalse(hasattr(P, "CATALOGUE_SIZE"), "the count is gone; the names stay")
 
 
+class TheRulingWasGiven(unittest.TestCase):
+    """Spec T25b §2.3 and §2.5: the owner ruled on 4 October 2026, and no file of the repository outside CHANGELOG.md says otherwise."""
+
+    def test_no_file_outside_the_changelog_says_the_ruling_is_open(self):
+        offenders = []
+        for path in tracked_files():
+            if path == "CHANGELOG.md":
+                continue
+            with open(os.path.join(ROOT, path), "rb") as handle:
+                data = handle.read()
+            offenders.extend("%s says %r" % (path, words) for words in THE_OPEN_RULING_WORDS if words.encode("utf-8") in data)
+        self.assertEqual(offenders, [], "the ruling was given on 4 October 2026; no file may say it is pending")
+
+    def test_the_harness_and_the_walk_say_fifteen_and_carry_no_note_on_the_assignment_tools(self):
+        with open(HARNESS, encoding="utf-8") as handle:
+            source = handle.read()
+        with open(DRY_WALK, encoding="utf-8") as handle:
+            walk = handle.read()
+        for text in (source, walk):
+            for words in THE_OPEN_RULING_WORDS:
+                self.assertNotIn(words, text)
+            self.assertNotIn("seventeen pinned", text)
+        self.assertIn("the fifteen pinned tools", source)
+        self.assertEqual(source.count("seventeen"), 1, "the docstring says once what the connector published on 3 October (Spec T25b §2.3)")
+        self.assertIn("the 15 pinned tools", walk)
+        s8_tools_list = next(line for line in walk.splitlines() if line.startswith("S8 — MCP tools/list"))
+        self.assertNotIn("note:", s8_tools_list, "the walk prints no note on the assignment tools (Spec T25b)")
+        self.assertFalse(hasattr(P, "ASSIGNMENT_NOTE"))
+
+
 class TheDryWalkSaysTheNewWords(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
@@ -382,18 +494,24 @@ class TheDryWalkSaysTheNewWords(unittest.TestCase):
         self.assertIn("a signing group stated on signingGroup, signing_group, group, assignedGroups, assigned_groups, signingGroups compared with group-100 "
                       "(another group fails — a fault)", s2[1])
         self.assertIn('none stated → the finding "%s", and S2 passes' % GROUP_FINDING, s2[1])
-        self.assertEqual(s8[0], "S8 The catalogue — the catalogue: the 17 pinned tools, each by name (tables.py)")
-        self.assertIn("MCP tools/list {} → expect each pinned tool present by name: %s; a pinned tool missing fails (a fault); a tool present but not pinned is a "
-                      "finding naming it; note: \"%s\"" % (", ".join(T.CATALOGUE_NAMES), ASSIGNMENT_NOTE), s8[2])
+        self.assertEqual(s8[0], "S8 The catalogue — the catalogue: the 15 pinned tools, each by name (tables.py)")
+        self.assertIn("MCP tools/list {} → expect each pinned tool present by name: %s; a pinned tool missing fails (a fault); a ROADS name listed (%s) fails "
+                      "(a fault): \"%s\"; a tool present that is neither pinned nor a ROADS name is a finding naming it"
+                      % (", ".join(T.CATALOGUE_NAMES), ", ".join(T.ROADS_NAMES),
+                         P.ROADS_LISTED_SENTENCE % ("<the connector's name and version>", "<the ROADS names listed>")), s8[2])
+        for words in THE_OPEN_RULING_WORDS:
+            self.assertNotIn(words, "\n".join(lines))
 
     def test_the_frozen_walk_carries_them(self):
         with open(DRY_WALK, encoding="utf-8") as handle:
             walk = handle.read()
         self.assertIn("S2 The account — the account: the owner born once, the seat's standing; the signing group compared with group-100", walk)
-        self.assertIn("S8 The catalogue — the catalogue: the 17 pinned tools, each by name (tables.py)", walk)
+        self.assertIn("S8 The catalogue — the catalogue: the 15 pinned tools, each by name (tables.py)", walk)
         for name in T.CATALOGUE_NAMES:
             self.assertIn(name, walk)
-        self.assertIn(ASSIGNMENT_NOTE, walk)
+        self.assertIn(P.ROADS_LISTED_SENTENCE % ("<the connector's name and version>", "<the ROADS names listed>"), walk)
+        for words in THE_OPEN_RULING_WORDS:
+            self.assertNotIn(words, walk)
 
     def test_group_names_the_group_the_walk_compares_in_dry_lines_and_on_the_command_line(self):
         s2 = next(line for line in P.dry_lines(store_dir=self.tmp, group="group-3") if line.startswith("S2 The account"))

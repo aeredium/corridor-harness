@@ -12,7 +12,7 @@ What the spec asks the tests to prove, each below:
     and never touch the owner;
   the redaction: no passkey material, bearer or credential appears whole in the report;
   resume with --from S8;
-  the pinned catalogue (tables.py's seventeen, Spec T25) against a tools/list double returning them by name.
+  the pinned catalogue (tables.py's fifteen, Specs T25 and T25b) against a tools/list double returning them by name.
 (The lexicon mirror is tests/test_aerconnect_lexicon.py.)
 """
 import contextlib
@@ -270,7 +270,7 @@ class AWholeWalk(PathfinderBase):
             self.assertIn("## %s — %s" % (station, title), report)
         self.assertIn("## What the teardown removed", report)
         self.assertTrue(os.path.exists(os.path.join(os.path.dirname(path), "evidence.jsonl")))
-        self.assertIn("   - Expected: 200 with each of the 17 pinned tools present by name (tables.py CATALOGUE)", report)
+        self.assertIn("   - Expected: 200 with each of the 15 pinned tools present by name (tables.py CATALOGUE)", report)
 
     def test_main_runs_the_walk_from_the_command_line(self):
         code = P.main(["--base", ISSUER, "--test-ring", ISSUER, "--owner", "alpha", "--store", self.store, "--out", self.out,
@@ -562,32 +562,35 @@ class TheResume(PathfinderBase):
 
 
 class TheCatalogue(PathfinderBase):
-    def test_the_seventeen_against_a_tools_list_double_returning_them_by_name(self):
+    def test_the_fifteen_against_a_tools_list_double_returning_them_by_name(self):
         names = pinned()
-        self.assertEqual(len(names), 17)
+        self.assertEqual(len(names), 15)
         self.assertEqual(tuple(names), P.CATALOGUE)
         self.assertEqual(P.CATALOGUE, T.CATALOGUE_NAMES, "the pinned catalogue is tables.py's (Spec T25)")
         self.double.catalogue = names
         runner = self.walk()
         self.assertEqual(runner.outcome_of("S8").outcome, P.PASS)
-        self.assertEqual(self.line_of(runner, "S8"), "the catalogue: aer-connect double lists the 17 pinned tools by name — %s" % ", ".join(names))
+        self.assertEqual(self.line_of(runner, "S8"), "the catalogue: aer-connect double lists the 15 pinned tools by name — %s" % ", ".join(names))
         self.assertNotIn("S8", runner.findings, "every tool listed is pinned: nothing to find")
+        self.assertNotIn("S8", runner.notes, "no note on a pass (Spec T25b): the ruling was given on 4 October 2026")
 
-    def test_the_seventeen_are_two_connector_nine_wallet_and_six_police(self):
+    def test_the_fifteen_are_two_connector_nine_wallet_and_four_police(self):
         self.assertEqual([n for n in P.CATALOGUE if "." not in n], ["aerconnect_my_agent", "aerconnect_guide"])
         self.assertEqual(len([n for n in P.CATALOGUE if n.startswith("wallet.")]), 9)
         self.assertIn("wallet.get_crossing", P.CATALOGUE, "the Wallet's Spec 46 tool, published since 13 September 2026")
         self.assertEqual([n for n in P.CATALOGUE if n.startswith("police.")],
-                         ["police.list_roles", "police.describe_role", "police.check_action", "police.request_assignment", "police.assignment_status", "police.my_usage"],
-                         "the Police's six, in the order src/server.ts registers them")
+                         ["police.list_roles", "police.describe_role", "police.check_action", "police.my_usage"],
+                         "the Police's four, in the order src/server.ts registers them; its two assignment tools are ROADS names (Spec T25b)")
         self.assertNotIn("police.can_sign", P.CATALOGUE, "no commit of MCP Police registers can_sign; its judgment is check_action")
+        for name in T.ROADS_NAMES:
+            self.assertNotIn(name, P.CATALOGUE, "%s was ruled out of a paying agent's catalogue on 4 October 2026" % name)
 
     def test_a_pinned_tool_missing_fails_naming_it_as_a_fault(self):
         self.double.catalogue = [n for n in pinned() if n != "police.my_usage"]
         runner = self.walk()
         self.assertEqual(runner.outcome_of("S8").outcome, P.FAIL)
         self.assertEqual(runner.outcome_of("S8").cause, P.FAULT)
-        self.assertEqual(self.line_of(runner, "S8"), "the catalogue: aer-connect double lists 16 tool(s), and the pinned catalogue of 17 (tables.py) is not all there; "
+        self.assertEqual(self.line_of(runner, "S8"), "the catalogue: aer-connect double lists 14 tool(s), and the pinned catalogue of 15 (tables.py) is not all there; "
                                                      "missing: police.my_usage")
         self.assertEqual(runner.outcome_of("S9").outcome, P.PASS, "the session S8 opened carries on")
 
@@ -596,15 +599,22 @@ class TheCatalogue(PathfinderBase):
         self.double.catalogue = pinned() + ["wallet.sweep_dust"]
         runner = self.walk()
         self.assertEqual(runner.outcome_of("S8").outcome, P.PASS)
-        self.assertEqual(self.line_of(runner, "S8"), "the catalogue: aer-connect double lists the 17 pinned tools by name, and 1 the harness has not pinned (a finding) — %s"
+        self.assertEqual(self.line_of(runner, "S8"), "the catalogue: aer-connect double lists the 15 pinned tools by name, and 1 the harness has not pinned (a finding) — %s"
                          % ", ".join(pinned() + ["wallet.sweep_dust"]))
         self.assertEqual(runner.findings["S8"], [P.UNPINNED_FINDING % "wallet.sweep_dust"])
         self.assertEqual(P.exit_code_of(runner.outcomes), 0, "a finding is not a fail")
 
-    def test_s8_notes_the_two_assignment_tools_until_the_owner_rules(self):
+    def test_a_roads_name_listed_to_a_paying_agent_fails_s8_as_a_fault_in_the_products_words(self):
+        """Spec T25b §2.2: the connector as it stands before C-CAT-1 ships lists the two assignment tools; the owner ruled it should not."""
+        self.double.lists_roads = True
         runner = self.walk()
-        self.assertEqual(runner.notes["S8"], [P.ASSIGNMENT_NOTE % "police.request_assignment and police.assignment_status"])
-        self.assertIn("listed to a paying agent — a product ruling the owner has not yet given", runner.report().split("## S8 — The catalogue", 1)[1].split("## S9", 1)[0])
+        self.assertEqual(runner.outcome_of("S8").outcome, P.FAIL)
+        self.assertEqual(runner.outcome_of("S8").cause, P.FAULT)
+        self.assertEqual(self.line_of(runner, "S8"), "the catalogue: aer-connect double lists police.request_assignment and police.assignment_status to a paying agent; "
+                                                     "the owner ruled on 4 October 2026 that it should not (connector Spec C-CAT-1)")
+        self.assertNotIn("S8", runner.findings, "a ROADS name is a fault, not a finding")
+        self.assertNotIn("S8", runner.notes)
+        self.assertEqual(runner.outcome_of("S9").outcome, P.PASS, "the session S8 opened carries on")
 
     def test_a_catalogue_that_answers_with_an_error_is_quoted_and_named(self):
         """The empty catalogue that speaks its cause (AAOI AT1): quoted, named, never a fault of the harness's."""

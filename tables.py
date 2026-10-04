@@ -14,8 +14,10 @@ Documents:
   Guide   — "AER Connect Owner's Guide, version 1.1, 13 September 2026".
 
 Since Spec T25 (4 October 2026) this file also pins THE CATALOGUE: every tool AER Connect's
-tools/list publishes to a paying agent, by name, with the source it was read from and the
-spec that added it (below, after the figures). Pathfinder's S8 expects each by name.
+tools/list is ruled to publish to a paying agent — the fifteen, since Spec T25b of the same day —
+by name, with the source it was read from and the spec that added it (below, after the figures),
+and THE ROADS: the three assignment-tool names the owner ruled out of a paying agent's catalogue
+on 4 October 2026. Pathfinder's S8 expects each pinned tool by name and fails on a ROADS name.
 """
 from __future__ import annotations
 
@@ -132,17 +134,20 @@ DECIMALS = {"USDC": 6, "USDT": 6, "PYUSD": 6, "EURC": 6, "WETH": 18, "ETH": 18}
 
 
 # ---------------------------------------------------------------------------
-# THE PINNED CATALOGUE (Spec T25, 4 October 2026): every tool AER Connect's tools/list
-# publishes to a paying agent, pinned by name with where it was read and the spec — or the
-# commit, where it predates the numbered specs — that added it. Pathfinder's S8 expects each
-# by name: a pinned tool missing from the live catalogue is a fault of the product; a tool the
-# catalogue carries that is not pinned here is a finding naming it (the harness has fallen
-# behind the connector, not the connector behind the harness), and is pinned here with its
-# spec. Seven runs of 3 October 2026 failed S8 on a count of fourteen the catalogue had
-# outgrown; the count is gone and the names stay. The spelling is the relay's: the connector's
-# own two unprefixed, then each door's tools under its prefix (aer-connector
-# apps/server/src/services/mcprelay.ts, prefixedName), as the catalogue of 3 October 2026
-# listed them; within each door, the order its own source registers them in.
+# THE PINNED CATALOGUE (Spec T25, 4 October 2026; the fifteen since Spec T25b, the same day): every
+# tool AER Connect's tools/list is ruled to publish to a paying agent, pinned by name with where it
+# was read and the spec — or the commit, where it predates the numbered specs — that added it. The
+# pinned catalogue is the catalogue the product is ruled to publish, not the one it happened to
+# publish on a given day. Pathfinder's S8 expects each by name: a pinned tool missing from the live
+# catalogue is a fault of the product; a ROADS name present (ROADS_NAMES, below) is a fault of the
+# product; a tool the catalogue carries that is neither is a finding naming it (the harness has
+# fallen behind the connector, not the connector behind the harness), and is pinned here with its
+# spec. Seven runs of 3 October 2026 failed S8 on a count of fourteen the catalogue had outgrown;
+# the count is gone and the names stay. The connector published seventeen on 3 October 2026, and
+# the two assignment tools were ruled out of a paying agent's catalogue on 4 October (ROADS_NAMES).
+# The spelling is the relay's: the connector's own two unprefixed, then each door's tools under its
+# prefix (aer-connector apps/server/src/services/mcprelay.ts, prefixedName), as the catalogue of
+# 3 October 2026 listed them; within each door, the order its own source registers them in.
 # ---------------------------------------------------------------------------
 class PinnedTool(NamedTuple):
     """One pinned tool: its name as tools/list spells it, the door that answers it, what it does, and where it was read."""
@@ -157,10 +162,6 @@ class PinnedTool(NamedTuple):
 WALLET_DOORWAY = ("stablepro-agent-server internal/mcp/catalog.go; published with the MCP doorway on 19 August 2026 (a17533d, before the "
                   "numbered specs); one of the eight the architecture of 2 October 2026 names")
 POLICE_STEP = "mcp-police src/server.ts; registered at step %s of MCP Police (18 August 2026, before 1.0.0)"
-ASSIGNMENT_SOURCE = ("mcp-police src/server.ts; registered at step four of MCP Police, the application desk (18 August 2026, before 1.0.0); the relay "
-                     "lists it under NOT THE ROAD FOR AN AER CONNECT AGENT (aer-connector packages/shared/src/knowledge.ts 'not-your-road', Spec 22 §6); "
-                     "read in the live catalogue of 3 October 2026; whether a paying agent's catalogue should carry it is the owner's ruling, open since "
-                     "2 October 2026")
 
 CATALOGUE: Tuple[PinnedTool, ...] = (
     # --- the connector's own, first in the list (services/mcprelay.ts myAgentListing and guideListing) ---
@@ -184,14 +185,16 @@ CATALOGUE: Tuple[PinnedTool, ...] = (
     PinnedTool("police.list_roles", "police", "lists the agent role templates", POLICE_STEP % "one, the read-only skeleton"),
     PinnedTool("police.describe_role", "police", "describes one role template in full (role_id)", POLICE_STEP % "one, the read-only skeleton"),
     PinnedTool("police.check_action", "police", "judges a stated action: allow, deny or hold, with a receipt (amounts in cents)", POLICE_STEP % "two, the verdict tool"),
-    PinnedTool("police.request_assignment", "police", "proposes an Agent Pact — the operator road for AER 360 estates, not an AER Connect agent's",
-               ASSIGNMENT_SOURCE),
-    PinnedTool("police.assignment_status", "police", "reads one Agent Pact's state (pact_id) — the operator road", ASSIGNMENT_SOURCE),
     PinnedTool("police.my_usage", "police", "the operator's own metered use", POLICE_STEP % "five, metering and the 1.0.0 deploy"),
 )
 CATALOGUE_NAMES: Tuple[str, ...] = tuple(t.name for t in CATALOGUE)
-# The two whose place in a paying agent's catalogue is the owner's open ruling (2 October 2026): S8 notes them on every report until he rules.
-ASSIGNMENT_TOOLS: Tuple[str, ...] = ("police.request_assignment", "police.assignment_status")
+# THE ROADS (the relay's own word: aer-connector packages/shared/src/knowledge.ts, ROADS — the same three names corridor_harness.ROADS
+# carries unprefixed): the Police tools that propose or track an assignment, the operator road for an AER 360 estate, under the
+# relay's police. prefix. Asked on 4 October 2026 whether a paying agent should be shown the two assignment tools, the owner ruled:
+# "Agreed. This should not." Connector Spec C-CAT-1 (the-agents-catalogue-lists-the-agents-road, aer-connector) carries it out:
+# tools/list to an agent no longer carries any ROADS name, and the relay's refusal of a call to one stays as it was. A ROADS name
+# present in the live catalogue is therefore a fault of the product, and Pathfinder's S8 fails on it by name (Spec T25b).
+ROADS_NAMES: Tuple[str, ...] = ("police.request_assignment", "police.assignment_status", "police.police_assignment_status")
 
 
 def address(key: str) -> str:
