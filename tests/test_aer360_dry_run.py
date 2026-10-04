@@ -21,7 +21,10 @@ signatures and the second press, the trail, the read after, the page and the wor
 the payee on a real chain: S6 gains the payee.env read, S7 the same read where S6 did not make it (a run resumed at S7) and the runs register
 read before the one-off, so the line can say whether Spec 69's hold is provable; every address of a payee or the one-off is the placeholder
 `<OWNER_PAYEE_ADDRESS from ~/.aer360-harness/payee.env>` — the printer never reads the file, and no address of the owner's is in the fixture —
-and the book's figures are the one-dollar book's (231 → 234 lines).
+and the book's figures are the one-dollar book's (231 → 234 lines). Spec T26 made the gas credit a cure for the review's GAS_SHORTFALL and
+nothing else: the admin.env line moves to where the credential is read — only where a review refuses — the Treasury's standing credit, Holdings'
+standing credit after S7a and the Treasury's where-not-credited line go, and one conditional cure line per workspace stands where the cure is made
+(234 → 233 lines).
 """
 import contextlib
 import io
@@ -154,7 +157,12 @@ class DryRunTest(unittest.TestCase):
         self.assertIn("0.49 (USDC): expected to proceeds to approval; the one-dollar book (Spec T24): 0.49 USDC to the owner's wallet, under the US$10.00 hold (O2), so the band asks no second hand; under the tiers: within the holder's own figure (US$2.00), one signature — the holder's", submits[3])
         self.assertIn("approvalsRequired 1 where the shortfall is at or above the Treasury's US$10.00 hold or Holdings' address is new to it (Spec 69 on the Treasury's own charter), else approved with approvalsRequired 0 — on this book the shortfall is at most US$1.00", submits[0])
         self.assertEqual(len([l for l in s7 if "/execute {}" in l]), 4, "every approved run is executed by its author")
-        self.assertEqual(len([l for l in s7 if "gas-account/credits" in l]), 3, "the Treasury's credit, Holdings' credit, and the Treasury's where it was not credited before")
+        self.assertEqual(len([l for l in s7 if "gas-account/credits" in l]), 2, "Spec T26: the Treasury's cure and Holdings', each only where a review refused GAS_SHORTFALL; no standing credit")
+        self.assertTrue(all("— only where" in l and "refuse" in l for l in s7 if "gas-account/credits" in l), "every credit line is conditional on a refusal")
+        self.assertFalse(any("only where Harness Holdings' USDC is below" in l for l in s7 if "gas-account/credits" in l), "the Treasury's standing credit is gone")
+        self.assertFalse(any("where the Treasury was not credited above" in l for l in s7), "and so is the Treasury's where-not-credited line")
+        self.assertTrue(any(l.startswith("S7 — [file] ~/.aer360-harness/admin.env — only where a review refuses GAS_SHORTFALL") and "the file is not read and nothing is said of it" in l for l in s7), s7)
+        self.assertTrue(any("S7a not provable this run: Harness Holdings' gas account holds US$<available>, and this set needs at most US$<ceiling>; the gate admitted the set, which is right" in l for l in s7))
         self.assertEqual(len([l for l in s7 if T.public_rpc_url(T.PAYEE_CHAIN) in l]), 6, "each payee's balance before and after, on the chain")
         self.assertEqual(len([l for l in s7 if T.GAS_ACCOUNT_ROUTE in l]), 3, "both gas accounts before, and the money-after line")
         self.assertTrue(any(T.NO_GAS_CREDIT_ROAD_SENTENCE in l for l in s7))
@@ -195,13 +203,16 @@ class DryRunTest(unittest.TestCase):
         """Spec T8: --dry unchanged in its calls. The fixture is the dry run at main after PR #5, its expectations cut off at the arrow."""
         with open(FROZEN_CALLS, "r", encoding="utf-8") as handle:
             frozen = handle.read().splitlines()
-        self.assertEqual(len(frozen), 234, "Spec T14 rewrote S7 (159 → 193); Spec T18 adds S7's conditional register read for a run resumed at S7 (193 → 194); Spec T19 adds S5's head — the ceremonies read and the conditional finish — and S14 (194 → 231); "
-                                            "Spec T24 adds S6's payee.env read, S7's conditional one, and the runs register read before the one-off (231 → 234)")
+        self.assertEqual(len(frozen), 233, "Spec T14 rewrote S7 (159 → 193); Spec T18 adds S7's conditional register read for a run resumed at S7 (193 → 194); Spec T19 adds S5's head — the ceremonies read and the conditional finish — and S14 (194 → 231); "
+                                            "Spec T24 adds S6's payee.env read, S7's conditional one, and the runs register read before the one-off (231 → 234); "
+                                            "Spec T26 drops the three standing credit lines and prints one conditional cure per workspace, the admin.env line moved to where it is read (234 → 233)")
         self.assertEqual(calls_of(H.dry_lines()), frozen)
         # Spec T24: no address of the owner's, and no derived address of a payee or the one-off, is in the fixture — the placeholder stands in for the file the printer never reads
         self.assertEqual(len([l for l in frozen if T.OWNER_PAYEE_PLACEHOLDER in l]), 7, "the two payees, the set of three's one-off, and the one-off's balance read before, review, creation and balance read after")
         self.assertEqual([l for l in frozen if l.startswith("S6 — [file]")], ["S6 — [file] ~/.aer360-harness/payee.env"])
-        self.assertEqual([l for l in frozen if l.startswith("S7 — [file]")], ["S7 — [file] ~/.aer360-harness/admin.env", "S7 — [file] ~/.aer360-harness/payee.env — only where S6 did not read it (a run resumed at S7)"])
+        self.assertEqual([l for l in frozen if l.startswith("S7 — [file]")], ["S7 — [file] ~/.aer360-harness/payee.env — only where S6 did not read it (a run resumed at S7)",
+                                                                                "S7 — [file] ~/.aer360-harness/admin.env — only where a review refuses GAS_SHORTFALL (Spec T26 §3.3: read when a credit is about to be made)"],
+                         "Spec T26: the credential is read where a credit is about to be made, after the Treasury's review and before its cure")
         self.assertEqual(len([l for l in frozen if l.startswith("S7 — ") and l.startswith("S7 — GET /v1/sets (as Cora Clerk)")]), 3, "S7a's two and the one-off's one")
         for key in list(T.PAYEES[0].values()) and [p["key"] for p in T.PAYEES] + list(T.UNLISTED_KEYS):
             self.assertFalse(any(T.address(key) in l for l in frozen), key)
@@ -216,7 +227,7 @@ class DryRunTest(unittest.TestCase):
         self.assertEqual(len([l for l in frozen if l.startswith("S10 — ") and "Spec 92 fields" in l]), 1)
         self.assertEqual(len([l for l in frozen if l.startswith("S6 — ") and "/approve" in l]), 6, "three roster pressers per payee")
         # Spec T14: S7's new calls, cut at the arrow
-        self.assertEqual(len([l for l in frozen if l.startswith("S7 — ") and "gas-account/credits" in l]), 3)
+        self.assertEqual(len([l for l in frozen if l.startswith("S7 — ") and "gas-account/credits" in l]), 2, "Spec T26: one conditional cure per workspace")
         self.assertEqual(len([l for l in frozen if l.startswith("S7 — ") and "/execute {}" in l]), 4)
         self.assertEqual(len([l for l in frozen if l.startswith("S7 — ") and "/v1/export/audit" in l]), 2, "the Treasury's trail and Holdings'")
         self.assertEqual(len([l for l in frozen if l.startswith("S7 — ") and T.public_rpc_url(T.PAYEE_CHAIN) in l]), 6)

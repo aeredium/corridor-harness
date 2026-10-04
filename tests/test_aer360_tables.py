@@ -185,8 +185,8 @@ class TheLawOfTheRealChain(unittest.TestCase):
         rows = pays_to(runner)
         holdings_rows = [(ref, d) for ref, d in rows if ref.startswith("HH-")]
         treasury_rows = [(ref, d) for ref, d in rows if ref.startswith("HT-")]
-        self.assertEqual(len(holdings_rows), 9, "S7a's three, and each payment's review and creation")
-        self.assertEqual(len(treasury_rows), 2, "the Treasury's review and creation")
+        self.assertEqual(len(holdings_rows), 10, "S7a's three; P1's review twice — refused for want of gas, cured, asked again (Spec T26) — and its creation; P2's and P3's review and creation")
+        self.assertEqual(len(treasury_rows), 3, "the Treasury's review — refused for want of gas, cured, asked again (Spec T26) — and its creation")
         self.assertEqual(len(rows), len(holdings_rows) + len(treasury_rows))
         for ref, destination in holdings_rows:
             address = double.addresses[destination[len("<payee "):-1]]["address"] if destination.startswith("<payee ") else destination

@@ -920,7 +920,7 @@ class TheLastRunColumn(unittest.TestCase):
             report = handle.read()
         self.assertIn("| Station | Outcome | Last run | Line |", report)
         self.assertIn("|---|---|---|---|", report)
-        table = report.split("## The closing table", 1)[1].split("Findings under S10 and S11", 1)[0]
+        table = report.split("## The closing table", 1)[1].split("Findings in this run", 1)[0]
         rows = {line.split(" ", 2)[1]: line for line in table.splitlines() if re.match(r"^\| S\d+ ", line)}
         self.assertEqual(len(rows), len(H.STATIONS))
         self.assertIn("| S1 Enrol | pass | last run pass | ", rows["S1"])
