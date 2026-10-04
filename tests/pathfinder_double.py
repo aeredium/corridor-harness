@@ -1,7 +1,8 @@
 """
 A double of the connector as Pathfinder walks it (Spec H-PATHFINDER): the T21 double of the auth, authorize, consent, token
 and MCP roads (tests/consent_double.py, its passkey ceremonies verified for real), with the owner's account roads added
-from aeredium/aer-connector at 9e20d6c (apps/server/src/routes/account.ts), the MCP door's fourteen tools with the inputSchemas
+from aeredium/aer-connector at 9e20d6c (apps/server/src/routes/account.ts), the MCP door's seventeen tools (tables.py's pinned
+catalogue, Spec T25) with the inputSchemas
 their own sources declare (MCP Police src/server.ts at c2af71c; the MCP Wallet internal/mcp/catalog.go at 125f788), and
 Arbitrum One's JSON-RPC for the reader (the handleOps receipt with its UserOperationEvent and Transfer logs; Chainlink's
 ETH/USD feed answering latestRoundData).
@@ -140,7 +141,9 @@ def schema(required, *names):
     return {"type": "object", "required": list(required), "properties": {name: {"type": "string"} for name in names}}
 
 
-# The fourteen tools, with the inputSchemas their sources declare (the double's own copy; the harness reads what tools/list hands it).
+# The seventeen tools (tables.py CATALOGUE, Spec T25), with the inputSchemas their sources declare (the double's own copy; the harness reads what
+# tools/list hands it): the Wallet's get_crossing (internal/mcp/catalog.go, Spec 46: GET /v1/agent/transactions/{ticket_id}/crossing) and the Police's
+# two assignment tools (src/server.ts, step four: the application desk), which the relay lists under NOT THE ROAD FOR AN AER CONNECT AGENT.
 TOOL_SCHEMAS = {
     "aerconnect_my_agent": {"type": "object", "properties": {}},
     "aerconnect_guide": schema((), "question"),
@@ -156,6 +159,7 @@ TOOL_SCHEMAS = {
                                         "contract_address", "method_selector", "to_asset", "to_chain"),
     "wallet.ticket_status": schema(("ticket_id",), "ticket_id"),
     "wallet.my_usage": {"type": "object", "properties": {}},
+    "wallet.get_crossing": schema(("ticket_id",), "ticket_id"),
     "police.list_roles": {"type": "object", "properties": {}},
     "police.describe_role": schema(("role_id",), "role_id"),
     "police.check_action": schema(("role_id", "amount_usd_cents"), "role_id", "action_kind", "chain", "to_chain", "asset_symbol", "venue", "to_asset",
@@ -163,13 +167,24 @@ TOOL_SCHEMAS = {
                                   "counterparty_address", "contract_address", "method_selector", "spent_today_usd_cents", "transactions_today",
                                   "slippage_bps", "price_deviation_bps", "simulation_passed", "oracle_check_passed", "amount", "amount_usd", "amount_dollars"),
     "police.my_usage": {"type": "object", "properties": {}},
+    "police.request_assignment": schema(("role_template_id", "wallet_id", "agent_id", "valid_from", "valid_until", "approval_threshold_usd_cents"),
+                                        "role_template_id", "wallet_id", "agent_id", "valid_from", "valid_until", "approval_threshold_usd_cents",
+                                        "approval_period_threshold_usd_cents", "approval_period", "tightenings", "pact_id",
+                                        "amount", "amount_usd", "approval_threshold_usd", "approval_period_threshold_usd"),
+    "police.assignment_status": schema(("pact_id",), "pact_id"),
 }
 for _name in ("amount", "amount_usd", "amount_dollars"):
     TOOL_SCHEMAS["police.check_action"]["properties"][_name]["description"] = "NOT ACCEPTED. Present only so an amount sent in dollars is refused rather than silently ignored."
+for _name in ("amount", "amount_usd", "approval_threshold_usd", "approval_period_threshold_usd"):
+    TOOL_SCHEMAS["police.request_assignment"]["properties"][_name]["description"] = "NOT ACCEPTED. Present only so an amount sent in dollars is refused rather than silently ignored."
 
 
 def tool_listing(name):
-    return {"name": name, "title": name, "description": "%s (the double)" % name, "inputSchema": TOOL_SCHEMAS.get(name, {"type": "object", "properties": {}}),
+    # The relay puts the road sentence in front of a tool that is not an AER Connect agent's (mcprelay.ts toolDescription, knowledge.ts ROADS).
+    description = "%s (the double)" % name
+    if name in T.ASSIGNMENT_TOOLS:
+        description = "%s %s" % (H.NOT_THE_ROAD_SAID, description)
+    return {"name": name, "title": name, "description": description, "inputSchema": TOOL_SCHEMAS.get(name, {"type": "object", "properties": {}}),
             "annotations": {"title": name}}
 
 
@@ -180,7 +195,7 @@ class PathfinderDouble(ConnectorDouble):
                  fee_bps=T.FEE_BPS, fee_to=None, fee_leg=True, lose_press_answer=False, rpc_error_on=None, rpc_error_times=None, actual_gas_factor=1,
                  event_for_another_hash=False, account_funding=None, my_agent_wallet=None, rpc_host=RPC_HOST, **kwargs):
         """
-        `catalogue` the names tools/list answers (default the fourteen); `account_group` a group GET /v1/account states under
+        `catalogue` the names tools/list answers (default the seventeen tables.py pins); `account_group` a group GET /v1/account states under
         customer.signingGroup (None: it states none, as the connector at 9e20d6c does); `door_key` False is a deployment with
         no AAP_GAS_DOOR_KEY; `credit_on_checkout` cents the test ring credits when a checkout opens; `gas_cents` the gas
         account once the platform account exists; `wallet_usdc` what a new child wallet holds at birth (nothing, as a real one);
@@ -545,7 +560,7 @@ class PathfinderDouble(ConnectorDouble):
         return {"wallet_id": agent["walletId"], "address": agent["walletAddress"], "chain": agent["walletChain"], "has_agent": True,
                 "has_policy": True, "operational": True, "signing_group": "group-100"}
 
-    # -- the MCP door: the connector's two tools, the Wallet's eight, the Police's four ---------------------------------
+    # -- the MCP door: the connector's two tools, the Wallet's nine, the Police's six (tables.py CATALOGUE) ----------------
     def mcp(self, headers, payload):
         bearer = next((v for k, v in headers.items() if k.lower() == "authorization"), "").replace("Bearer ", "")
         held = self.access_tokens.get(bearer)

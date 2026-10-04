@@ -12,10 +12,14 @@ Documents:
   Series  — "AER Connect Corridor Acceptance Test Series before Sale, version 1.0,
             13 September 2026" (a verbatim copy rides in tests/fixtures/series-1.0.md).
   Guide   — "AER Connect Owner's Guide, version 1.1, 13 September 2026".
+
+Since Spec T25 (4 October 2026) this file also pins THE CATALOGUE: every tool AER Connect's
+tools/list publishes to a paying agent, by name, with the source it was read from and the
+spec that added it (below, after the figures). Pathfinder's S8 expects each by name.
 """
 from __future__ import annotations
 
-from typing import Dict, List, NamedTuple, Optional
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 
 class Pinned(NamedTuple):
@@ -127,6 +131,69 @@ CHAINS = ("arbitrum", "base", "ethereum")
 DECIMALS = {"USDC": 6, "USDT": 6, "PYUSD": 6, "EURC": 6, "WETH": 18, "ETH": 18}
 
 
+# ---------------------------------------------------------------------------
+# THE PINNED CATALOGUE (Spec T25, 4 October 2026): every tool AER Connect's tools/list
+# publishes to a paying agent, pinned by name with where it was read and the spec — or the
+# commit, where it predates the numbered specs — that added it. Pathfinder's S8 expects each
+# by name: a pinned tool missing from the live catalogue is a fault of the product; a tool the
+# catalogue carries that is not pinned here is a finding naming it (the harness has fallen
+# behind the connector, not the connector behind the harness), and is pinned here with its
+# spec. Seven runs of 3 October 2026 failed S8 on a count of fourteen the catalogue had
+# outgrown; the count is gone and the names stay. The spelling is the relay's: the connector's
+# own two unprefixed, then each door's tools under its prefix (aer-connector
+# apps/server/src/services/mcprelay.ts, prefixedName), as the catalogue of 3 October 2026
+# listed them; within each door, the order its own source registers them in.
+# ---------------------------------------------------------------------------
+class PinnedTool(NamedTuple):
+    """One pinned tool: its name as tools/list spells it, the door that answers it, what it does, and where it was read."""
+
+    name: str
+    door: str  # connector, wallet or police
+    what: str
+    source: str
+
+
+# The Wallet's eight the architecture of 2 October 2026 names were published together with the MCP doorway, before the numbered specs.
+WALLET_DOORWAY = ("stablepro-agent-server internal/mcp/catalog.go; published with the MCP doorway on 19 August 2026 (a17533d, before the "
+                  "numbered specs); one of the eight the architecture of 2 October 2026 names")
+POLICE_STEP = "mcp-police src/server.ts; registered at step %s of MCP Police (18 August 2026, before 1.0.0)"
+ASSIGNMENT_SOURCE = ("mcp-police src/server.ts; registered at step four of MCP Police, the application desk (18 August 2026, before 1.0.0); the relay "
+                     "lists it under NOT THE ROAD FOR AN AER CONNECT AGENT (aer-connector packages/shared/src/knowledge.ts 'not-your-road', Spec 22 §6); "
+                     "read in the live catalogue of 3 October 2026; whether a paying agent's catalogue should carry it is the owner's ruling, open since "
+                     "2 October 2026")
+
+CATALOGUE: Tuple[PinnedTool, ...] = (
+    # --- the connector's own, first in the list (services/mcprelay.ts myAgentListing and guideListing) ---
+    PinnedTool("aerconnect_my_agent", "connector", "the agent this connection holds: its wallet UUID, its pact, the owner's gas account",
+               "aer-connector apps/server/src/services/mcprelay.ts; added by Spec 15 (7 September 2026: Claude is told whose agent it holds)"),
+    PinnedTool("aerconnect_guide", "connector", "the Owner's Guide, answered from the connector's own written rulings",
+               "aer-connector apps/server/src/services/mcprelay.ts; added by Spec 22 (9 September 2026: the connector knows the answers)"),
+    # --- the Wallet door, the hands (internal/mcp/catalog.go) ---
+    PinnedTool("wallet.wallet_status", "wallet", "the wallet's state: its address, chain, rails, policy and signing group", WALLET_DOORWAY),
+    PinnedTool("wallet.mint_wallet", "wallet", "mints an agent's child wallet against the owner's funding address", WALLET_DOORWAY),
+    PinnedTool("wallet.get_address", "wallet", "the wallet's address", WALLET_DOORWAY),
+    PinnedTool("wallet.get_balances", "wallet", "the wallet's balances, read from the chain", WALLET_DOORWAY),
+    PinnedTool("wallet.build_transaction", "wallet", "builds a single-use ticket for an action the Police judged", WALLET_DOORWAY),
+    PinnedTool("wallet.submit_transaction", "wallet", "submits a built ticket: the operation, sponsored by the paymaster", WALLET_DOORWAY),
+    PinnedTool("wallet.get_crossing", "wallet", "asks whether a stablecoin crossing has arrived, and finishes it if it has (ticket_id)",
+               "stablepro-agent-server internal/mcp/catalog.go (GET /v1/agent/transactions/{ticket_id}/crossing); added by Spec 46 (13 September 2026: "
+               "stablecoins cross by the issuer's own road — Circle's CCTP, Tether's USDT0); read in the live catalogue of 3 October 2026"),
+    PinnedTool("wallet.ticket_status", "wallet", "one ticket's state and fate", WALLET_DOORWAY),
+    PinnedTool("wallet.my_usage", "wallet", "the agent's own metered use", WALLET_DOORWAY),
+    # --- the Police door, the judge and its reads (src/server.ts) ---
+    PinnedTool("police.list_roles", "police", "lists the agent role templates", POLICE_STEP % "one, the read-only skeleton"),
+    PinnedTool("police.describe_role", "police", "describes one role template in full (role_id)", POLICE_STEP % "one, the read-only skeleton"),
+    PinnedTool("police.check_action", "police", "judges a stated action: allow, deny or hold, with a receipt (amounts in cents)", POLICE_STEP % "two, the verdict tool"),
+    PinnedTool("police.request_assignment", "police", "proposes an Agent Pact — the operator road for AER 360 estates, not an AER Connect agent's",
+               ASSIGNMENT_SOURCE),
+    PinnedTool("police.assignment_status", "police", "reads one Agent Pact's state (pact_id) — the operator road", ASSIGNMENT_SOURCE),
+    PinnedTool("police.my_usage", "police", "the operator's own metered use", POLICE_STEP % "five, metering and the 1.0.0 deploy"),
+)
+CATALOGUE_NAMES: Tuple[str, ...] = tuple(t.name for t in CATALOGUE)
+# The two whose place in a paying agent's catalogue is the owner's open ruling (2 October 2026): S8 notes them on every report until he rules.
+ASSIGNMENT_TOOLS: Tuple[str, ...] = ("police.request_assignment", "police.assignment_status")
+
+
 def address(key: str) -> str:
     """The pinned bytes for a table key. A key that is not pinned is a bug, and it throws."""
     if key not in PINNED:
@@ -150,6 +217,20 @@ def is_pinned(addr: Optional[str]) -> bool:
         return False
     low = addr.lower()
     return any(row.address.lower() == low for row in PINNED.values())
+
+
+def tool(name: str) -> PinnedTool:
+    """The pinned tool of that name. A name that is not pinned is a bug in the caller, and it throws."""
+    for row in CATALOGUE:
+        if row.name == name:
+            return row
+    raise KeyError("no pinned tool called %s" % name)
+
+
+def describe_tool(name: str) -> str:
+    """One line for a report: the tool, what it is, and where it was read."""
+    row = tool(name)
+    return "%s — %s (read from %s)" % (row.name, row.what, row.source)
 
 
 # ---------------------------------------------------------------------------
