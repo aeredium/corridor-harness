@@ -1,7 +1,9 @@
 """
 A double of the connector as Pathfinder walks it (Spec H-PATHFINDER): the T21 double of the auth, authorize, consent, token
 and MCP roads (tests/consent_double.py, its passkey ceremonies verified for real), with the owner's account roads added
-from aeredium/aer-connector at 9e20d6c (apps/server/src/routes/account.ts), the MCP door's fourteen tools with the inputSchemas
+from aeredium/aer-connector at 9e20d6c (apps/server/src/routes/account.ts), the MCP door's fifteen tools (tables.py's pinned
+catalogue, Spec T25; the fifteen since Spec T25b, and with `lists_roads` the two assignment tools as well, as the connector
+listed them before Spec C-CAT-1) with the inputSchemas
 their own sources declare (MCP Police src/server.ts at c2af71c; the MCP Wallet internal/mcp/catalog.go at 125f788), and
 Arbitrum One's JSON-RPC for the reader (the handleOps receipt with its UserOperationEvent and Transfer logs; Chainlink's
 ETH/USD feed answering latestRoundData).
@@ -140,7 +142,10 @@ def schema(required, *names):
     return {"type": "object", "required": list(required), "properties": {name: {"type": "string"} for name in names}}
 
 
-# The fourteen tools, with the inputSchemas their sources declare (the double's own copy; the harness reads what tools/list hands it).
+# The fifteen tools (tables.py CATALOGUE, Spec T25b), with the inputSchemas their sources declare (the double's own copy; the harness reads what
+# tools/list hands it), the Wallet's get_crossing among them (internal/mcp/catalog.go, Spec 46: GET /v1/agent/transactions/{ticket_id}/crossing);
+# and the Police's two assignment tools (src/server.ts, step four: the application desk) — ROADS names (tables.py ROADS_NAMES), which the relay
+# listed under NOT THE ROAD FOR AN AER CONNECT AGENT until Spec C-CAT-1, and this double lists only with `lists_roads`.
 TOOL_SCHEMAS = {
     "aerconnect_my_agent": {"type": "object", "properties": {}},
     "aerconnect_guide": schema((), "question"),
@@ -156,6 +161,7 @@ TOOL_SCHEMAS = {
                                         "contract_address", "method_selector", "to_asset", "to_chain"),
     "wallet.ticket_status": schema(("ticket_id",), "ticket_id"),
     "wallet.my_usage": {"type": "object", "properties": {}},
+    "wallet.get_crossing": schema(("ticket_id",), "ticket_id"),
     "police.list_roles": {"type": "object", "properties": {}},
     "police.describe_role": schema(("role_id",), "role_id"),
     "police.check_action": schema(("role_id", "amount_usd_cents"), "role_id", "action_kind", "chain", "to_chain", "asset_symbol", "venue", "to_asset",
@@ -163,13 +169,29 @@ TOOL_SCHEMAS = {
                                   "counterparty_address", "contract_address", "method_selector", "spent_today_usd_cents", "transactions_today",
                                   "slippage_bps", "price_deviation_bps", "simulation_passed", "oracle_check_passed", "amount", "amount_usd", "amount_dollars"),
     "police.my_usage": {"type": "object", "properties": {}},
+    "police.request_assignment": schema(("role_template_id", "wallet_id", "agent_id", "valid_from", "valid_until", "approval_threshold_usd_cents"),
+                                        "role_template_id", "wallet_id", "agent_id", "valid_from", "valid_until", "approval_threshold_usd_cents",
+                                        "approval_period_threshold_usd_cents", "approval_period", "tightenings", "pact_id",
+                                        "amount", "amount_usd", "approval_threshold_usd", "approval_period_threshold_usd"),
+    "police.assignment_status": schema(("pact_id",), "pact_id"),
 }
 for _name in ("amount", "amount_usd", "amount_dollars"):
     TOOL_SCHEMAS["police.check_action"]["properties"][_name]["description"] = "NOT ACCEPTED. Present only so an amount sent in dollars is refused rather than silently ignored."
+for _name in ("amount", "amount_usd", "approval_threshold_usd", "approval_period_threshold_usd"):
+    TOOL_SCHEMAS["police.request_assignment"]["properties"][_name]["description"] = "NOT ACCEPTED. Present only so an amount sent in dollars is refused rather than silently ignored."
+
+# The two ROADS names the connector listed to a paying agent on 3 October 2026, after police.check_action as the relay composed the list (the
+# third ROADS name, police.police_assignment_status, is an older spelling the relay knows and the Police door never registered). Spec C-CAT-1
+# removes them from tools/list; `lists_roads` makes this double the connector as it stands before C-CAT-1 ships, so the fault can be driven.
+ROADS_LISTED_BEFORE_C_CAT_1 = ("police.request_assignment", "police.assignment_status")
 
 
 def tool_listing(name):
-    return {"name": name, "title": name, "description": "%s (the double)" % name, "inputSchema": TOOL_SCHEMAS.get(name, {"type": "object", "properties": {}}),
+    # The relay put the road sentence in front of a tool that is not an AER Connect agent's (mcprelay.ts toolDescription, knowledge.ts ROADS).
+    description = "%s (the double)" % name
+    if name in T.ROADS_NAMES:
+        description = "%s %s" % (H.NOT_THE_ROAD_SAID, description)
+    return {"name": name, "title": name, "description": description, "inputSchema": TOOL_SCHEMAS.get(name, {"type": "object", "properties": {}}),
             "annotations": {"title": name}}
 
 
@@ -178,9 +200,11 @@ class PathfinderDouble(ConnectorDouble):
                  wallet_usdc=0, estate_chain=None, wallet_address=None, lands_later=0, delegate_first=True, police_verdict="allow", price_usd=PRICE_USD,
                  funds_left=False, margin_bps=P.MARGIN_BPS, gas_price_wei=GAS_PRICE_WEI, interrupt_on=None, receipt_lag=0,
                  fee_bps=T.FEE_BPS, fee_to=None, fee_leg=True, lose_press_answer=False, rpc_error_on=None, rpc_error_times=None, actual_gas_factor=1,
-                 event_for_another_hash=False, account_funding=None, my_agent_wallet=None, rpc_host=RPC_HOST, **kwargs):
+                 event_for_another_hash=False, account_funding=None, my_agent_wallet=None, rpc_host=RPC_HOST, lists_roads=False, **kwargs):
         """
-        `catalogue` the names tools/list answers (default the fourteen); `account_group` a group GET /v1/account states under
+        `catalogue` the names tools/list answers (default the fifteen tables.py pins; `lists_roads` adds the two assignment tools after
+        police.check_action, where the relay listed them before Spec C-CAT-1 — the connector as it stands before C-CAT-1 ships);
+        `account_group` a group GET /v1/account states under
         customer.signingGroup (None: it states none, as the connector at 9e20d6c does); `door_key` False is a deployment with
         no AAP_GAS_DOOR_KEY; `credit_on_checkout` cents the test ring credits when a checkout opens; `gas_cents` the gas
         account once the platform account exists; `wallet_usdc` what a new child wallet holds at birth (nothing, as a real one);
@@ -204,6 +228,7 @@ class PathfinderDouble(ConnectorDouble):
         """
         super().__init__(seated=seated, **kwargs)
         self.catalogue = list(catalogue) if catalogue is not None else list(P.CATALOGUE)
+        self.lists_roads = lists_roads
         self.account_group = account_group
         self.door_key = door_key
         self.credit_on_checkout = credit_on_checkout
@@ -545,7 +570,7 @@ class PathfinderDouble(ConnectorDouble):
         return {"wallet_id": agent["walletId"], "address": agent["walletAddress"], "chain": agent["walletChain"], "has_agent": True,
                 "has_policy": True, "operational": True, "signing_group": "group-100"}
 
-    # -- the MCP door: the connector's two tools, the Wallet's eight, the Police's four ---------------------------------
+    # -- the MCP door: the connector's two tools, the Wallet's nine, the Police's six (tables.py CATALOGUE) ----------------
     def mcp(self, headers, payload):
         bearer = next((v for k, v in headers.items() if k.lower() == "authorization"), "").replace("Bearer ", "")
         held = self.access_tokens.get(bearer)
@@ -564,7 +589,7 @@ class PathfinderDouble(ConnectorDouble):
             return 200, {"jsonrpc": "2.0", "id": rpc_id, "result": {"protocolVersion": H.PROTOCOL_VERSION, "capabilities": {"tools": {}},
                                                                      "serverInfo": {"name": "aer-connect", "version": "double"}, "instructions": "AER Connect."}}, {}
         if method == "tools/list":
-            return 200, {"jsonrpc": "2.0", "id": rpc_id, "result": {"tools": [tool_listing(n) for n in self.catalogue]}}, {}
+            return 200, {"jsonrpc": "2.0", "id": rpc_id, "result": {"tools": [tool_listing(n) for n in self.listed_names()]}}, {}
         if method != "tools/call":
             return 200, {"jsonrpc": "2.0", "id": rpc_id, "error": {"code": -32601, "message": "method not found"}}, {}
         name = (payload.get("params") or {}).get("name")
@@ -579,6 +604,14 @@ class PathfinderDouble(ConnectorDouble):
         if handler is None:
             return self.tool_json(rpc_id, {"tool": name, "said": "answered by the double"})
         return handler(rpc_id, agent, connection, args)
+
+    def listed_names(self):
+        """The names tools/list answers: the catalogue, and with `lists_roads` the two assignment tools after police.check_action, where the relay listed them before Spec C-CAT-1."""
+        names = list(self.catalogue)
+        if self.lists_roads:
+            at = names.index("police.check_action") + 1 if "police.check_action" in names else len(names)
+            names[at:at] = [n for n in ROADS_LISTED_BEFORE_C_CAT_1 if n not in names]
+        return names
 
     @staticmethod
     def tool_json(rpc_id, data, error=False):

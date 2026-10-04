@@ -264,6 +264,25 @@
         }
       },
       {
+        "name": "wallet.get_crossing",
+        "title": "wallet.get_crossing",
+        "description": "wallet.get_crossing (the double)",
+        "inputSchema": {
+          "type": "object",
+          "required": [
+            "ticket_id"
+          ],
+          "properties": {
+            "ticket_id": {
+              "type": "string"
+            }
+          }
+        },
+        "annotations": {
+          "title": "wallet.get_crossing"
+        }
+      },
+      {
         "name": "wallet.ticket_status",
         "title": "wallet.ticket_status",
         "description": "wallet.ticket_status (the double)",

@@ -21,14 +21,16 @@ Two laws, as the other harnesses keep them:
 
 THE STATIONS, A TO Z
   S1  Sign up            POST /v1/auth/signup/options, /verify — born once; a stored passkey is signed in with
-  S2  The account        GET /v1/account — the owner born once, the seat's standing, the assigned group group-100
+  S2  The account        GET /v1/account — the owner born once, the seat's standing; the signing group compared where the page
+                         states one, a finding where it states none (Spec T25)
   S3  Create agent       GET /v1/account/agents/new, the step-up, POST /v1/account/agents — trader.v1, this run's own agent
   S4  Recall the policy  POST /v1/account/agents/:id/policy — the policy S3 was born with, recalled and re-filed as an edit;
                          the pact keeps its id, the agent and its token are not touched (the law of 2 October 2026)
   S5  The child wallet   GET /v1/account/agents/:id/wallet-record — provisioned, not a mock, the owner's
   S6  Buy gas            POST /v1/account/gas (the floor, then ten dollars), GET /v1/account/gas-account — read live
   S7  Connect Claude     /authorize, the consent's step three, /finish, /token — the per-connection credential
-  S8  The catalogue      MCP initialize, tools/list — the fourteen tools
+  S8  The catalogue      MCP initialize, tools/list — the fifteen pinned tools, each by name (tables.py CATALOGUE, Spec T25); a
+                         ROADS name listed to a paying agent is a fault (tables.py ROADS_NAMES, Spec T25b)
   S9  The agent          aerconnect_my_agent — the wallet UUID, the pact, the gas balance
   S10 The judgment       police.check_action — the trade within the mandate, a receipt
   S11 The trade          the agent's wallet funded by Harness Holdings through the estate's own road where it is short (Spec T23),
@@ -118,12 +120,40 @@ WHERE THE SPEC AND THE CODE PART COMPANY, each cited here and in the README (the
      {agentId}` (Spec 35), and S7 presses only that, for this run's agent as the stage lists it, stopping where the stage
      lists no such agent; the step-up the spec asks for is made once, at S3's press, where the ruling of 8 September 2026
      puts it.
-  3. S8. The fourteen are the two connector tools, the eight Wallet tools the architecture of 2 October 2026 names, and
-     the four Police tools its own source registers beside the assignment tools the architecture says are hidden from a
-     paying agent. The Wallet's source also registers `get_crossing` (Spec 46), and the relay at 9e20d6c lists the
-     assignment tools under their not-the-road description; where the live catalogue carries them, S8 names each.
-  4. S2. GET /v1/account at 9e20d6c states the account's signing group on no field (the group is
-     CONNECTOR_SIGNING_GROUP, named at the account's birth); S2 reads every field that could carry it and says so.
+  3. S8. The spec's fourteen were the two connector tools, the eight Wallet tools the architecture of 2 October 2026 names
+     and the four Police tools beside the assignment tools that architecture hides from a paying agent. The connector
+     published seventeen on 3 October 2026 — the Wallet's `get_crossing` (Spec 46) and the Police's two assignment tools
+     among them — and on 4 October the owner ruled the two assignment tools out of a paying agent's catalogue ("Agreed.
+     This should not."; connector Spec C-CAT-1 carries it out). Since Spec T25b the pinned list is tables.py's fifteen,
+     each with the spec that added it: S8 expects each by name, fails as a fault where a ROADS name is listed (tables.py
+     ROADS_NAMES), and records a finding where a tool is listed that is neither pinned nor a ROADS name.
+  4. S2. GET /v1/account states the account's signing group on no field — at 9e20d6c and at main on 4 October 2026
+     (69b0754: customer, subscription, agents, allowance, package, connections, receipts; the only `signingGroup` the
+     route file carries is the platform-audit page's). The group is CONNECTOR_SIGNING_GROUP, sent as assigned_groups at
+     the account's birth. Since Spec T25 S2 compares the group where the page states one and records a finding where it
+     states none, never a fail: the absence is a product gap worth a connector spec, not a fault.
+
+A FAIL MEANS A FAULT (Spec T25, 4 October 2026). The harnesses are the gate for re-onboarding "only if the harness is 100%",
+so a station may fail only on a fault of the product: an expectation the harness holds that the product never promised is the
+harness's error. Seven Pathfinder runs of 3 October closed S2 and S8 as fail while the product was right — S2 on a field the
+account page has never carried, S8 on a count the catalogue had outgrown. Now S2 judges what the connector states (a group
+stated and wrong fails; none stated is a finding), S8 expects the catalogue by name against tables.py's pinned fifteen (a
+pinned tool missing fails; a ROADS name listed fails, Spec T25b; a tool that is neither is a finding naming it), and the
+closing table says why a station failed in one word — `fault` or `expectation` — where `expectation` may no longer occur:
+tests/test_a_fail_means_a_fault.py walks every station's failure paths and asserts each is a fault of the product, in the
+station's own words. A finding is listed in the table's findings column and in the report's findings section, so it is never
+lost and never pretends to be a fault.
+
+THE PINNED CATALOGUE IS THE FIFTEEN (Spec T25b, 4 October 2026). Asked whether a paying agent should be shown the two assignment
+tools, the owner ruled: "Agreed. This should not." Connector Spec C-CAT-1 carries it out: tools/list to an agent carries no
+ROADS name, and the relay's refusal of a call to one stays as it was. The pinned catalogue is the catalogue the product is ruled
+to publish, not the one it happened to publish on a given day (item 3 above says what it published on 3 October and what was
+ruled on 4 October): tables.py pins the fifteen by name; a ROADS name listed (tables.py ROADS_NAMES) fails S8 as a fault in the
+product's own words — "AER Connect 1.0.0 lists police.request_assignment and police.assignment_status to a paying agent; the
+owner ruled on 4 October 2026 that it should not (connector Spec C-CAT-1)" — and S8 emits no note about the assignment tools
+on a pass. Until C-CAT-1 ships on the connector a live run's S8 reads fail, because the connector lists two tools to a paying
+agent that the owner ruled it should not; that is the truth, and the harness says it. Once C-CAT-1 is live, S8 passes on the
+fifteen.
 
 THE HARNESS FUNDS ITS OWN AGENT (Spec T23, 2 October 2026; Bear: "I am not intervening in the harnessed dealings. It has to be done
 automatically. We already financed the gas. That's all there is."). The run of that evening stopped at S11 waiting for a person to send
@@ -184,7 +214,7 @@ ESTATE_BASE = E.DEFAULT_BASE
 ESTATE_STORE_DIR = C.AER360_STORE_DIR
 RUNS_DIR = H.RUNS_DIR  # the report and the evidence go to a folder of their own here, never into the checkout
 DEFAULT_OWNER = "pathfinder"  # harness+pathfinder@aeredium.io
-EXPECTED_GROUP = "group-100"  # S2: the production signing group (the Group 100 brief of 27 September 2026)
+EXPECTED_GROUP = "group-100"  # S2: the signing group the run expects where the page states one (the Group 100 brief of 27 September 2026); --group names another
 ROLE = "trader"
 ROLE_ID = S.ROLE_IDS[ROLE]  # trader.v1
 AGENT_NAME = "%s-trader-%s"  # <owner>-trader-<run id>: the per-run agent, and its consent label
@@ -232,6 +262,26 @@ STOPPED = "stopped"  # the station met something it could not get past by itself
 GUARDED_OUT = "refused by the guard"
 NOT_RUN = "not run"  # a station before it did not deliver what it needs; the sentence names which
 SKIPPED = "skipped"  # passed over by --from
+# WHY A STATION FAILED, IN ONE WORD (Spec T25). A fail's cause is `fault`: the product did, said or refused something, and the
+# station's line carries its words. `expectation` — the harness expected what the product never promised — is the harness's own
+# error and may no longer occur: tests/test_a_fail_means_a_fault.py walks every station's failure paths and forbids it. The word
+# rides in the closing table's cause column; no other outcome has one.
+FAULT = "fault"
+EXPECTATION = "expectation"
+CAUSES = (FAULT, EXPECTATION)
+CAUSE_LEGEND = ("A fail's cause is one word (Spec T25): *fault* — the product did, said or refused something, and the line carries its words; "
+                "*expectation* — the harness expected what the product never promised, which may no longer occur, and the tests keep it so. A finding "
+                "is not a fault: something read that the owner should know, listed in the findings column and under Findings so it is never lost.")
+# A FINDING IS NOT A FAULT (Spec T25; the estate harness's Spec T8): something read that the owner should know, listed in the closing
+# table's findings column and the report's findings section, so it is never lost and never pretends to be a fail.
+NO_GROUP_FINDING = ("the account page states no signing group; the Wallet's door and the platform name %s; a connector spec should state it on "
+                    "GET %s")
+UNPINNED_FINDING = ("tools/list carries %s, which tables.py does not pin: the harness has fallen behind the connector, not the connector behind "
+                    "the harness; pin each in tables.py with the spec that added it")
+# A ROADS NAME LISTED IS A FAULT (Spec T25b, 4 October 2026). Asked whether a paying agent should be shown the two assignment tools,
+# the owner ruled "Agreed. This should not."; connector Spec C-CAT-1 carries it out. Until it ships the connector lists them, and S8
+# says so in the product's own words: who lists what to whom, and the ruling it breaks.
+ROADS_LISTED_SENTENCE = "%s lists %s to a paying agent; the owner ruled on 4 October 2026 that it should not (connector Spec C-CAT-1)"
 
 GUARD_SENTENCE = ("%s is not a declared test ring (a test ring, the sandbox among them, is named with --test-ring), so the harness "
                   "refuses to %s there without --i-mean-it.")
@@ -259,19 +309,13 @@ NO_RESUME_SENTENCE = ("no agent of an earlier run stands to resume with (%s name
                       "which creates this run's own")
 
 # ---------------------------------------------------------------------------
-# The fourteen tools (S8): the connector's two, the Wallet's eight, the Police's four.
+# The pinned catalogue (S8, Spec T25; the fifteen since Spec T25b): the fifteen the connector is ruled to publish to a paying
+# agent, pinned by name in tables.py with the spec that added each — the connector's two, the Wallet's nine, the Police's four
+# (no commit of MCP Police has ever registered a tool called can_sign; its two assignment tools are ROADS names, ruled out of a
+# paying agent's catalogue on 4 October 2026). S8 expects each by name: a pinned tool missing is a fault; a ROADS name listed is
+# a fault (tables.py ROADS_NAMES); a tool present that is neither is a finding.
 # ---------------------------------------------------------------------------
-CATALOGUE: Tuple[str, ...] = (
-    # the connector's own, first in the list (services/mcprelay.ts myAgentListing and guideListing)
-    "aerconnect_my_agent", "aerconnect_guide",
-    # the Wallet door, the hands: the eight the architecture of 2 October 2026 names, each in internal/mcp/catalog.go
-    "wallet.wallet_status", "wallet.mint_wallet", "wallet.get_address", "wallet.get_balances",
-    "wallet.build_transaction", "wallet.submit_transaction", "wallet.ticket_status", "wallet.my_usage",
-    # the Police door, the judge and its reads: the four src/server.ts registers beside the two assignment tools, which
-    # the architecture hides from a paying agent; no commit of MCP Police has ever registered a tool called can_sign
-    "police.list_roles", "police.describe_role", "police.check_action", "police.my_usage",
-)
-CATALOGUE_SIZE = 14
+CATALOGUE: Tuple[str, ...] = T.CATALOGUE_NAMES
 
 # ---------------------------------------------------------------------------
 # The trade (S10 to S12): one real swap on Arbitrum One, where the group-100 paymaster lives.
@@ -465,6 +509,14 @@ def lexicon_names_in(sentence: str, code: Optional[str] = None) -> List[str]:
         if match and all(name != seen for _, seen in found):
             found.append((match.start(), name))
     return [name for _, name in sorted(found)]
+
+
+def names_said(names: Sequence[str]) -> str:
+    """Names read aloud in a sentence: one as it is, two joined by and, more with commas and a final and."""
+    listed = list(names)
+    if len(listed) <= 1:
+        return "".join(listed)
+    return "%s and %s" % (", ".join(listed[:-1]), listed[-1])
 
 
 def named(sentence: str, code: Optional[str] = None) -> str:
@@ -718,7 +770,8 @@ def lexicon_drift(theirs: Dict[str, str], ours: Optional[Dict[str, str]] = None)
 # Small readers.
 # ---------------------------------------------------------------------------
 UUID_FORM = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
-GROUP_KEYS = ("assignedGroups", "assigned_groups", "signingGroup", "signing_group", "signingGroups", "group")
+# The fields a signing group goes by on an account page: the three Spec T25 names first, then the platform's own spellings.
+GROUP_KEYS = ("signingGroup", "signing_group", "group", "assignedGroups", "assigned_groups", "signingGroups")
 
 
 def normal_base(base: str) -> str:
@@ -952,20 +1005,36 @@ def spl_transfers_in(transaction: Dict[str, Any]) -> List[Dict[str, Any]]:
     return moves
 
 
-class StationStop(Exception):
-    """A station stops here, with its own sentence and its own outcome word; the run goes on to what does not need it."""
+def cause_of(outcome: str, cause: Optional[str] = None) -> Optional[str]:
+    """A fail's cause word (Spec T25): fault unless the site says otherwise, and a word outside CAUSES is a bug; no other outcome has one."""
+    if outcome != FAIL:
+        return None
+    if cause is None:
+        return FAULT
+    if cause not in CAUSES:
+        raise ValueError("a fail's cause is one of %s, not %r" % (", ".join(CAUSES), cause))
+    return cause
 
-    def __init__(self, sentence: str, outcome: str = STOPPED):
+
+class StationStop(Exception):
+    """
+    A station stops here, with its own sentence and its own outcome word; the run goes on to what does not need it. A fail
+    carries its cause (Spec T25): fault, unless the site says otherwise.
+    """
+
+    def __init__(self, sentence: str, outcome: str = STOPPED, cause: Optional[str] = None):
         super().__init__(sentence)
         self.sentence = sentence
         self.outcome = outcome
+        self.cause = cause_of(outcome, cause)
 
 
 class Outcome:
-    def __init__(self, station: str, outcome: str, line: str):
+    def __init__(self, station: str, outcome: str, line: str, cause: Optional[str] = None):
         self.station = station
         self.outcome = outcome
         self.line = line
+        self.cause = cause_of(outcome, cause)  # a fail's one-word why, for the closing table's cause column; None for every other outcome
 
 
 # ---------------------------------------------------------------------------
@@ -1204,9 +1273,11 @@ class Pathfinder:
                  clock: Callable[[], float] = time.monotonic, openssl: str = C.PK.OPENSSL,
                  started_at: Optional[_dt.datetime] = None, interval: float = TRADE_POLL_SECONDS,
                  deadline: float = TRADE_DEADLINE_SECONDS, dry: bool = False, estate_base: str = ESTATE_BASE,
-                 estate_store: str = ESTATE_STORE_DIR, estate_transport: Optional[E.Transport] = None, estate_admin_env: Optional[str] = None):
+                 estate_store: str = ESTATE_STORE_DIR, estate_transport: Optional[E.Transport] = None, estate_admin_env: Optional[str] = None,
+                 expected_group: str = EXPECTED_GROUP):
         self.base = base.rstrip("/")
         self.owner = owner
+        self.expected_group = expected_group  # S2 (Spec T25): the signing group compared where the page states one (--group; default group-100)
         self.store_dir = os.path.expanduser(store_dir)
         self.folder_dir = os.path.join(self.store_dir, owner)
         self.start_at = start_at
@@ -1232,6 +1303,7 @@ class Pathfinder:
         self.secrets: List[str] = []
         self.steps: Dict[str, List[Dict[str, Any]]] = {}
         self.notes: Dict[str, List[str]] = {}
+        self.findings: Dict[str, List[str]] = {}  # Spec T25: per station, what was read that the owner should know; never a fail
         self.outcomes: List[Outcome] = []
         self.current = "S1"
         self.expectations: Dict[str, str] = {}
@@ -1255,6 +1327,11 @@ class Pathfinder:
     def note(self, text: str) -> None:
         self.notes.setdefault(self.current, []).append(text)
         self.say("  %s note: %s" % (self.current, text))
+
+    def finding(self, text: str) -> None:
+        """A finding (Spec T25): read, said, listed in the closing table's findings column and the report's findings section; never a fail."""
+        self.findings.setdefault(self.current, []).append(text)
+        self.say("  %s finding: %s" % (self.current, text))
 
     def expect(self, default: str, **by_route: str) -> None:
         """What the next calls are expected to answer: by route where the station knows each, else the default."""
@@ -1472,10 +1549,10 @@ class Pathfinder:
         try:
             return method()
         except StationStop as stop:
-            return Outcome(station, stop.outcome, "%s: %s" % (title.lower(), stop.sentence))
+            return Outcome(station, stop.outcome, "%s: %s" % (title.lower(), stop.sentence), cause=stop.cause)
         except C.ConsentStop as stop:
             mapped = self.consent_stop(stop)
-            return Outcome(station, mapped.outcome, "%s: %s" % (title.lower(), mapped.sentence))
+            return Outcome(station, mapped.outcome, "%s: %s" % (title.lower(), mapped.sentence), cause=mapped.cause)
         except H.Unreachable as err:
             return Outcome(station, FAIL, "%s: unreachable: %s; nothing was judged, and a retry may reach it" % (title.lower(), err))
         except ChainRefused as err:
@@ -1579,9 +1656,14 @@ class Pathfinder:
 
     # -- S2 The account -------------------------------------------------------------------------------------
     def station_s2(self) -> Outcome:
+        """
+        The account page, judged on what the connector states (Spec T25): the owner born once, the seat, the agents; and the
+        signing group only where the page states one (GROUP_KEYS) — stated and other than the run expects, a fault; stated
+        nowhere, a finding, since the connector has never carried it there and never promised to.
+        """
         self.need(self.signed_in, NO_SESSION)
-        self.expect("200 with the customer (the id customer.json names), the subscription's standing, the agents, the connections, "
-                    "and the account's assigned signing group %s" % EXPECTED_GROUP)
+        self.expect("200 with the customer (the id customer.json names), the subscription's standing, the agents, the connections; the "
+                    "signing group compared with %s where the page states one (%s), a finding where it states none" % (self.expected_group, ", ".join(GROUP_KEYS)))
         answer, view = self.call("GET", ACCOUNT_ROUTE)
         if answer.status != 200 or not isinstance(view, dict):
             raise self.refused("the account", "GET " + ACCOUNT_ROUTE, answer, view)
@@ -1599,12 +1681,11 @@ class Pathfinder:
             self.note(C.seat_sentence(stored_id, standing))
         groups = groups_in({k: v for k, v in view.items() if k != "agents"})
         if not groups:
-            raise StationStop("%s; GET %s states no assigned signing group on any field, so %s could not be read on this road (the "
-                              "connector names the group at the account's birth, from CONNECTOR_SIGNING_GROUP)" % (words, ACCOUNT_ROUTE, EXPECTED_GROUP),
-                              outcome=FAIL)
-        if EXPECTED_GROUP not in groups or len(groups) != 1:
-            raise StationStop("%s; the account is assigned %s, and %s was expected" % (words, ", ".join(groups), EXPECTED_GROUP), outcome=FAIL)
-        return Outcome("S2", PASS, "the account: %s; assigned group %s" % (words, EXPECTED_GROUP))
+            self.finding(NO_GROUP_FINDING % (self.expected_group, ACCOUNT_ROUTE))
+            return Outcome("S2", PASS, "the account: %s; the page states no signing group — a finding, not a fault" % words)
+        if self.expected_group not in groups or len(groups) != 1:
+            raise StationStop("%s; the account is assigned %s, and %s was expected" % (words, ", ".join(groups), self.expected_group), outcome=FAIL)
+        return Outcome("S2", PASS, "the account: %s; assigned group %s" % (words, self.expected_group))
 
     # -- S3 Create agent ------------------------------------------------------------------------------------
     def station_s3(self) -> Outcome:
@@ -1978,12 +2059,19 @@ class Pathfinder:
 
     # -- S8 The catalogue -----------------------------------------------------------------------------------
     def station_s8(self) -> Outcome:
+        """
+        The catalogue, expected by name (Spec T25): every tool tables.py pins must be in tools/list — one missing is a fault
+        of the product. A ROADS name listed to a paying agent is a fault of the product (Spec T25b: asked whether a paying
+        agent should be shown the two assignment tools, the owner ruled on 4 October 2026 "Agreed. This should not.", and
+        connector Spec C-CAT-1 carries it out). A tool listed that is neither pinned nor a ROADS name is a finding naming
+        it, since the harness and not the connector has fallen behind. S8 emits no note on a pass.
+        """
         if self.facts.get("resume_refused") and not self.facts.get("agent_id"):
             raise StationStop(self.facts["resume_refused"], outcome=NOT_RUN)
         self.need(self.facts.get("connected"), NO_CONNECTION)
         self.expect("", **{"MCP initialize": "200 with the server's name, version and instructions",
                            "MCP notifications/initialized": "202, a notification",
-                           "MCP tools/list": "200 with the fourteen tools: %s" % ", ".join(CATALOGUE)})
+                           "MCP tools/list": "200 with each of the %d pinned tools present by name (tables.py CATALOGUE): %s" % (len(CATALOGUE), ", ".join(CATALOGUE))})
         session = OwnerMcp(self.oauth, self.label, self.record, self.base + H.MCP_PATH, self.secrets)
         answer = session.initialize("S8")
         if answer.is_error or not answer.result:
@@ -1993,14 +2081,19 @@ class Pathfinder:
         tools = session.listed("S8")
         names = [str(t.get("name")) for t in tools if isinstance(t, dict)]
         missing = [n for n in CATALOGUE if n not in names]
-        extra = [n for n in names if n not in CATALOGUE]
+        roads = [n for n in T.ROADS_NAMES if n in names]
+        unpinned = [n for n in names if n not in CATALOGUE and n not in T.ROADS_NAMES]
         info = session.server_info or {}
-        head = "%s %s" % (info.get("name") or "the connector", info.get("version") or "")
-        if missing or extra or len(names) != CATALOGUE_SIZE:
-            raise StationStop("%s lists %d tool(s), and the fourteen were expected%s%s" % (
-                head.strip(), len(names), ("; missing: %s" % ", ".join(missing)) if missing else "", ("; not expected: %s" % ", ".join(extra)) if extra else ""),
-                outcome=FAIL)
-        return Outcome("S8", PASS, "the catalogue: %s lists the fourteen tools — %s" % (head.strip(), ", ".join(names)))
+        head = ("%s %s" % (info.get("name") or "the connector", info.get("version") or "")).strip()
+        if missing:
+            raise StationStop("%s lists %d tool(s), and the pinned catalogue of %d (tables.py) is not all there; missing: %s" % (
+                head, len(names), len(CATALOGUE), ", ".join(missing)), outcome=FAIL)
+        if roads:
+            raise StationStop(ROADS_LISTED_SENTENCE % (head, names_said(roads)), outcome=FAIL)
+        if unpinned:
+            self.finding(UNPINNED_FINDING % ", ".join(unpinned))
+        return Outcome("S8", PASS, "the catalogue: %s lists the %d pinned tools by name%s — %s" % (
+            head, len(CATALOGUE), (", and %d the harness has not pinned (a finding)" % len(unpinned)) if unpinned else "", ", ".join(names)))
 
     # -- S9 The agent ---------------------------------------------------------------------------------------
     def station_s9(self) -> Outcome:
@@ -2886,11 +2979,22 @@ class Pathfinder:
         lines.append("")
         lines.append("## The closing table")
         lines.append("")
-        lines.append("| Station | Outcome | Line |")
-        lines.append("|---|---|---|")
+        lines.append("| Station | Outcome | Cause | Line | Findings |")
+        lines.append("|---|---|---|---|---|")
         for outcome in self.outcomes:
-            cells = ["%s %s" % (outcome.station, TITLES.get(outcome.station, "")), outcome.outcome, outcome.line]
+            cells = ["%s %s" % (outcome.station, TITLES.get(outcome.station, "")), outcome.outcome, outcome.cause or "", outcome.line,
+                     "; ".join(self.findings.get(outcome.station, []))]
             lines.append("| " + " | ".join(c.replace("|", "\\|").replace("\n", " ") for c in cells) + " |")
+        lines.append("")
+        lines.append(CAUSE_LEGEND)
+        lines.append("")
+        lines.append("## Findings")
+        lines.append("")
+        found = [(station, title, text) for station, title in STATIONS for text in self.findings.get(station, [])]
+        for station, title, text in found:
+            lines.append("- %s %s — %s" % (station, title, text))
+        if not found:
+            lines.append("- none: no station read anything the owner should know beyond its own line")
         lines.append("")
         lines.append("## What the teardown removed")
         lines.append("")
@@ -2909,6 +3013,9 @@ class Pathfinder:
             for note in self.notes.get(station, []):
                 lines.append("")
                 lines.append("Note: %s" % note)
+            for text in self.findings.get(station, []):
+                lines.append("")
+                lines.append("Finding: %s" % text)
             steps = self.steps.get(station, [])
             if steps:
                 lines.append("")
@@ -2972,7 +3079,7 @@ def _j(value: Any) -> str:
 
 def dry_lines(base: str = DEFAULT_BASE, owner: str = DEFAULT_OWNER, store_dir: str = STORE_DIR, start_at: Optional[str] = None,
               i_mean_it: bool = False, test_rings: Sequence[str] = (), funding_wallet: Optional[str] = None, estate_base: str = ESTATE_BASE,
-              estate_store: str = ESTATE_STORE_DIR) -> List[str]:
+              estate_store: str = ESTATE_STORE_DIR, group: str = EXPECTED_GROUP) -> List[str]:
     """Every station and every call the harness would make, in order. Nothing is sent and nothing is written."""
     if not C.TESTER_NAME.match(owner):
         raise C.ConsentStop(C.TESTER_NAME_SENTENCE % (owner, C.HARNESS_EMAIL % "<owner>"))
@@ -3021,8 +3128,9 @@ def dry_lines(base: str = DEFAULT_BASE, owner: str = DEFAULT_OWNER, store_dir: s
         call("S1", "POST %s %s → expect 200: the customer and a csrfToken, the session cookie; customer.json written mode 600" % (
             C.SIGNUP_VERIFY, _j({"displayName": C.HARNESS_DISPLAY_NAME % owner, "email": C.HARNESS_EMAIL % owner, "country": C.HARNESS_COUNTRY,
                                  "handle": "<handle>", "nonce": "<nonce>", "issuedAtMs": "<issuedAtMs>", "response": "<RegistrationResponseJSON>"})))
-    station("S2", "the account: the owner born once, the seat's standing, the assigned group %s" % EXPECTED_GROUP)
-    call("S2", "GET %s → expect 200: customer.id = customer.json's, subscription.standing paid, the assigned signing group %s" % (ACCOUNT_ROUTE, EXPECTED_GROUP))
+    station("S2", "the account: the owner born once, the seat's standing; the signing group compared with %s where the page states one, a finding where it states none" % group)
+    call("S2", "GET %s → expect 200: customer.id = customer.json's, subscription.standing paid; a signing group stated on %s compared with %s (another group fails — a fault); "
+         "none stated → the finding \"%s\", and S2 passes" % (ACCOUNT_ROUTE, ", ".join(GROUP_KEYS), group, NO_GROUP_FINDING % (group, ACCOUNT_ROUTE)))
     station("S3", "this run's own agent, %s (%s), with a fresh passkey" % (label, ROLE_ID))
     call("S3", "GET %s → expect 200: customer.fundingWallet.address, the funding root the connector registered at the owner's first agent and keeps since "
          "(connector Spec 8: registered once) — sent as fundingAddress for an owner that already has one; for an owner the connector lists none for, [file] "
@@ -3053,9 +3161,11 @@ def dry_lines(base: str = DEFAULT_BASE, owner: str = DEFAULT_OWNER, store_dir: s
          % _j({"agentId": "<agent id>"}))
     call("S7", "POST /token grant_type=authorization_code&code=<code>&code_verifier=<verifier>&redirect_uri=… → expect 200: access and refresh tokens, stored at %s mode 600"
          % os.path.join(folder, "%s.json" % label))
-    station("S8", "the catalogue: the fourteen tools")
+    station("S8", "the catalogue: the %d pinned tools, each by name (tables.py)" % len(CATALOGUE))
     call("S8", "MCP initialize %s → expect 200: serverInfo and instructions" % _j({"protocolVersion": H.PROTOCOL_VERSION, "capabilities": {}, "clientInfo": {"name": H.CLIENT_NAME, "version": "1.0.0"}}))
-    call("S8", "MCP tools/list {} → expect exactly: %s" % ", ".join(CATALOGUE))
+    call("S8", "MCP tools/list {} → expect each pinned tool present by name: %s; a pinned tool missing fails (a fault); a ROADS name listed (%s) fails (a fault): "
+         "\"%s\"; a tool present that is neither pinned nor a ROADS name is a finding naming it" % (
+             ", ".join(CATALOGUE), ", ".join(T.ROADS_NAMES), ROADS_LISTED_SENTENCE % ("<the connector's name and version>", "<the ROADS names listed>")))
     station("S9", "the agent: the wallet UUID, the pact, the gas balance")
     call("S9", "MCP tools/call %s {} → expect wallet.id (a UUID, S3's), limits.pactId (S4's) and state active, gas_account US$<available>" % H.MY_AGENT_TOOL)
     station("S10", "the judgment: the trade within the mandate, a receipt")
@@ -3124,6 +3234,9 @@ def main(argv: Optional[Sequence[str]] = None, **inject: Any) -> int:
     parser = argparse.ArgumentParser(description="Pathfinder, the AER Connect owner harness: the script is the owner and walks A to Z to a trade (Spec H-PATHFINDER).")
     parser.add_argument("--base", default=DEFAULT_BASE, help="the connector's base URL (default %s, the sandbox)" % DEFAULT_BASE)
     parser.add_argument("--owner", default=DEFAULT_OWNER, help="the owner's name, born once as harness+<name>@aeredium.io (default %s)" % DEFAULT_OWNER)
+    parser.add_argument("--group", default=EXPECTED_GROUP, metavar="GROUP",
+                        help="the signing group S2 expects where GET /v1/account states one (default %s, the production group; a sandbox run names its own); "
+                             "a group stated and different fails S2, none stated is a finding" % EXPECTED_GROUP)
     parser.add_argument("--dry", action="store_true", help="print every station and every call, without connecting")
     parser.add_argument("--from", dest="start_at", help="resume at a station, for example S8, with the owner's stored passkey and the standing run's agent")
     parser.add_argument("--i-mean-it", dest="i_mean_it", action="store_true", help="let the state-creating stations run on a base that is not a declared test ring")
@@ -3146,7 +3259,8 @@ def main(argv: Optional[Sequence[str]] = None, **inject: Any) -> int:
         parser.error("--from takes a station: %s" % ", ".join(STATION_IDS))
     if args.dry:
         try:
-            lines = dry_lines(args.base, args.owner, args.store, args.start_at, args.i_mean_it, args.test_rings, args.funding_wallet, args.estate_base, args.estate_store)
+            lines = dry_lines(args.base, args.owner, args.store, args.start_at, args.i_mean_it, args.test_rings, args.funding_wallet, args.estate_base, args.estate_store,
+                              args.group)
         except C.ConsentStop as stop:
             print(stop.sentence)
             return 2
@@ -3161,6 +3275,7 @@ def main(argv: Optional[Sequence[str]] = None, **inject: Any) -> int:
         inject.setdefault("deadline", args.funds_wait)
         inject.setdefault("estate_base", args.estate_base)
         inject.setdefault("estate_store", args.estate_store)
+        inject.setdefault("expected_group", args.group)
         runner = Pathfinder(args.base, args.owner, args.store, args.out, args.start_at, args.i_mean_it, args.test_rings,
                             args.funding_wallet, args.rpc, **inject)
     except C.ConsentStop as stop:
