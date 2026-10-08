@@ -382,12 +382,74 @@ class EstateHarnessReadmeTest(unittest.TestCase):
             self.assertIn(words, paragraph, words)
 
 
+    def test_it_says_the_founder_confirms_a_repeat_since_spec_t28(self):
+        title = "**The founder confirms a repeat: S7 acknowledges the estate's duplicate screen as a founder would, and only then (Spec T28, 8 October 2026).**"
+        self.assertIn(title, self.section)
+        self.assertLess(self.section.index("Spec T27, 8 October 2026"), self.section.index("Spec T28, 8 October 2026"))
+        self.assertLess(self.section.index("Spec T28, 8 October 2026"), self.section.index("**Running it.**"))
+        paragraph = self.section.split(title, 1)[1].split("**Running it.**", 1)[0]
+        for words in ("*DUPLICATE_UNACKNOWLEDGED: This looks like a payment that has already been made recently. Confirm it is intentional to continue.*",
+                      "`apps/server/src/services/setgates.ts`, `duplicateScreen`", "`coalesce(invoiceRef, '')`", "`DUPLICATE_WINDOW_DAYS` (7, `config.ts`)",
+                      "the previous run was 4 October, four days earlier", "*§6 calls this an acknowledged warning, not a block*", "*the accountant said yes to it*",
+                      "`apps/web/src/screens/PaymentEntry.tsx`", "*I have checked the possible repeat above and want to continue*",
+                      "*\"What do you think if we fix the harness to answer yes when the question is asked, and let's see whether that fixes the problem, because that would be the easiest fix of them all?\"*",
+                      "*The bound.*", "the Treasury's, S7a's set of three, and each of P1, P2 and P3", "`acknowledgeable` list beside it", "`repeat_within_bound`",
+                      "the harness never acknowledges what it cannot bound", "*Within the bound, the founder's press.*", "before any gas is credited",
+                      "*acknowledged by the author*", "the creation's own screen is judged the same way before the run is submitted",
+                      "leaves the run a draft, never submitted", "the creation carries no yes",
+                      "*the estate's duplicate screen named Northwind Supplies 0.50 USDC under HH-0001 as paid on <previouslySentAt> (run <id>); this run's founder confirmed it, as a founder would (Spec T28)*",
+                      "`remember_runs`", "*not named*", "writes no note", "a payment not made has no note", "*Outside the bound, a finding.*",
+                      "*P1: a duplicate within this run, never acknowledged (Spec T28)*", "*P1: a duplicate the harness cannot bound, never acknowledged (Spec T28)*",
+                      "the row reviewed repeats no payment this run created", "(`.limit(1)`, in no order)", "both kept by NTP",
+                      "keeps in S7's line what the screen named and that the founder confirmed it", "*What the second review costs.*", "five minutes on",
+                      "S7a's second review is the spec's (§3.1) and feeds no creation; it is kept, and said here", "the Treasury's printed before its credential and its cure",
+                      "a run's `createdAt` keeps its milliseconds", "on both workspaces alike",
+                      "the references stay HH-0001 to HH-0003, as a client's repeat payments do", "A run resumed at S7 is a run of its own",
+                      "*No question mark for a number.*", "*the estate asked ? signature(s)*", "*no run was created*",
+                      "*only where the review's duplicate screen names a payment of an earlier run (previouslySentAt before this run began); a duplicate within this run is a finding, never acknowledged*",
+                      "*<true only where the second review above was made, else false>*", "235 → 240 lines", "*The double learned the screen.*",
+                      "*no matching payment in the last 7 days*", "`age_runs(days)`", "`confirm_repeats`", "its code is unchanged",
+                      "a Pathfinder run resumed at S4 to S10 funds the same agent again under the same reference (`PF-<run id>`)", "its resume test now says so",
+                      "the owner's to rule",
+                      "each naming the run of 4 October", "S10 reconciles the money to the cent", "The spec's tests (a), (b), (d) and (e) were red on main",
+                      "pass on both, as they must"):
+            self.assertIn(words, paragraph, words)
+
+
 class ChangelogTest(unittest.TestCase):
-    def test_the_changelog_records_spec_t27_first_and_names_every_change(self):
+    def test_the_changelog_records_spec_t28_first_and_names_every_change(self):
+        text = read("CHANGELOG.md")
+        title = "## Spec T28 — The founder confirms a repeat: S7 acknowledges the estate's duplicate screen as a founder would, and only then (8 October 2026)"
+        self.assertIn(title, text)
+        self.assertEqual(text.index("## "), text.index(title), "the newest entry first")
+        t27 = "## Spec T27 — The answer book learns catalog version 15"
+        self.assertLess(text.index(title), text.index(t27))
+        entry = text.split(title, 1)[1].split(t27, 1)[0]
+        # §6, the CHANGELOG line, word for word
+        self.assertIn("Spec T28 (8 October 2026): the founder confirms a repeat — S7 acknowledges the estate's duplicate screen (DUPLICATE_UNACKNOWLEDGED, acknowledgeable since §6) "
+                      "only where the warning names a payment of an earlier run, reviews again, creates with the acknowledgement and says so in the report; a duplicate within the run "
+                      "is a finding. Before: the one-dollar book repeats the same three invoices to the owner's wallet every run, and the first run within seven days of the last "
+                      "(8 October) created no payment.", entry)
+        for words in ("What do you think if we fix the harness to answer yes when the question is asked, and let's see whether that fixes the problem, because that would be the easiest fix of them all?",
+                      "only to a warning that names a payment of an EARLIER run", "*DUPLICATE_UNACKNOWLEDGED: This looks like a payment that has already been made recently. Confirm it is intentional to continue.*",
+                      "*the estate asked ? signature(s)*", "`setgates.ts`, `duplicateScreen`", "`DUPLICATE_WINDOW_DAYS` (7, `config.ts`)", "`PaymentEntry.tsx`", "b523cbf",
+                      "`DUPLICATE_GATE`", "`DUPLICATE_UNACKNOWLEDGED_SENTENCE`", "`DUPLICATE_ACKNOWLEDGED_EVIDENCE`", "`REPEAT_BOUND_WORDS`", "`REPEAT_CONFIRMED_NOTE`",
+                      "`REPEAT_WITHIN_RUN_PROBE`", "`NO_RUN_CREATED`", "`instant_of`", "`repeat_within_bound`", "`duplicate_gate_words`", "`answer_the_duplicate_screen`",
+                      "`pay(confirm_repeats=…)`", "`treasury_pays_the_shortfall(confirm_repeats=…)`", "`prove_the_gas_refusal`", "`repeat_failure`", "`remember_runs`", "`run_of`",
+                      "*the estate's duplicate screen named Northwind Supplies 0.50 USDC under HH-0001 as paid on <previouslySentAt> (run <id>); this run's founder confirmed it, as a founder would (Spec T28)*",
+                      "*no run was created*", "`tests/fixtures/aer360-dry-calls.txt` regenerated", "235 → 240 lines", '"<true only where the second review above was made, else false>"',
+                      "`tests/test_aer360_double.py`", "`age_runs(days)`", "`tests/test_the_founder_confirms_a_repeat.py`", "`tests/test_aer360_readme.py`",
+                      "AAOI, before the code", "**Auditor**", "**Attacker**", "**Optimiser**", "**Implementer**", "five minutes", "a run resumed at S7 is a run of its own",
+                      "**Where the spec and the code part company**", "*not named: instruction <id> is in no runs register this run read*",
+                      "Not touched, as the fence requires", "`aerconnect_harness.py`", "No secret.",
+                      "`REPEAT_UNBOUNDED_PROBE`", "`review_the_run`", "`note_the_repeats_confirmed`", "`repeats_said`", "`_run_stamp`", "**The review of the code**",
+                      "a Pathfinder run resumed at S4 to S10 funds the same agent again under the same reference (`PF-<run id>`)", "32 of the new file's 35"):
+            self.assertIn(words, entry, words)
+
+    def test_the_changelog_records_spec_t27_and_names_every_change(self):
         text = read("CHANGELOG.md")
         title = "## Spec T27 — The answer book learns catalog version 15: the company ceiling (C2) and the daily total (C3) (8 October 2026)"
         self.assertIn(title, text)
-        self.assertEqual(text.index("## "), text.index(title), "the newest entry first")
         t26 = "## Spec T26 — Gas is credited only when the review says the account is short"
         self.assertLess(text.index(title), text.index(t26))
         entry = text.split(title, 1)[1].split(t26, 1)[0]

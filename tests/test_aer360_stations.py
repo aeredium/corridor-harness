@@ -487,6 +487,8 @@ class ResumedAndSecondRuns(unittest.TestCase):
 
     def test_a_run_resumed_at_s6_signs_everybody_in_with_the_stored_passkeys(self):
         said = []
+        # Spec T28: the first run's payments stand in the estate's runs register, within its seven days, so this run meets the duplicate screen
+        earlier = {s["instructions"][0]["invoiceRef"]: s for s in self.double.sets.values()}
         runner = runner_on(self.double, self.tmp, start_at="S6", said=said)
         outcomes = {o.station: o for o in runner.run()}
         for station in ("S1", "S2", "S3", "S4", "S5"):
@@ -501,7 +503,9 @@ class ResumedAndSecondRuns(unittest.TestCase):
         self.assertIsNone(runner.facts.get("unlisted_key"), "no derived unlisted destination is chosen on a real chain")
         self.assertEqual(runner.facts["one_off"]["paid_before"], True)
         self.assertIn("P2 (0.01 USDC to %s, the owner's wallet, expected to wait where the destination is new (Spec 69)): the one-off destination is the owner's wallet, already paid by this estate, "
-                      "so Spec 69's hold is not provable this run; submitted: status approved, approvalsRequired 0" % OWNER_WALLET_FOR_TESTS, outcomes["S7"].line)
+                      "so Spec 69's hold is not provable this run; the duplicate screen named Unlisted destination 0.01 USDC under HH-0002, paid on %s (run %s); the founder confirmed it, "
+                      "as a founder would, and the review asked again passed it: 1 possible duplicate(s), acknowledged by the author (Spec T28); submitted: status approved, approvalsRequired 0" % (
+                          OWNER_WALLET_FOR_TESTS, earlier["HH-0002"]["createdAt"], earlier["HH-0002"]["id"]), outcomes["S7"].line)
         self.assertIn("the Treasury founder signed in with the stored passkey", outcomes["S7"].line, "Spec T14: the Treasury born by the first run is signed in on the rerun")
         self.assertEqual([c.route for c in runner.calls if c.station == "S7" and "/onboarding/interviews" in c.route], [], "the Treasury's charter stands; its interviews are not walked again")
         self.assertTrue(any("no read-back recorded for the policy interview" in n for n in runner.notes["S10"]))
@@ -514,7 +518,7 @@ class ResumedAndSecondRuns(unittest.TestCase):
         self.assertIn("(the answer book's C19 is \"No — only wallets held by people or companies\")", venue["expected"])
         # and S7's tiers are read from the book, no account charter having been compiled in this run (the Treasury's review and S7a's carry no tiers)
         reviews = [s for s in runner.evidence["S7"] if s["route"].endswith("/sets/review") and "(figures from" in s["expected"]]
-        self.assertEqual(len(reviews), 3)
+        self.assertEqual(len(reviews), 6, "each payment's review, and its second review with the founder's acknowledgement of the first run's payment (Spec T28)")
         self.assertTrue(all("(figures from the answer book)" in s["expected"] for s in reviews), [s["expected"] for s in reviews])
 
     def test_a_second_full_run_signs_in_rather_than_enrolling_and_amends_the_charter(self):

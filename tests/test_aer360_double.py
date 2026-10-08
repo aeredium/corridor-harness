@@ -293,10 +293,30 @@ from the code and not from memory, because the estate went live at version 15 th
 
 and the dial moves: the default `catalog_version` is 15, the estate as it stands since 8 October 2026; `catalog_version=14` is the estate
 of the runs before it, which serves neither question and is answered as before; below 14 the seven of Spec 92 go too.
+
+Spec T28 (8 October 2026) taught the double the estate's fifth creation gate, which it had always passed — the way the harness reached
+a live run with no hand for it: "no matching payment in the last 7 days", whatever the register held. Read from AERAccounts main (b523cbf):
+
+  services/setgates.ts, duplicateScreen             a payment of this workspace's runs not rejected, created within DUPLICATE_WINDOW_DAYS
+  (config.ts DUPLICATE_WINDOW_DAYS, 7)               (7), to the same address (case folded), on the same chain, in the same asset, for the same
+                                                     amount, under the same invoice reference (coalesce(invoiceRef, '')) refuses
+                                                     DUPLICATE_UNACKNOWLEDGED, acknowledgeable, its detail naming payee, address, amountMinor,
+                                                     invoiceRef, previousInstructionId and previouslySentAt (the earlier run's createdAt);
+                                                     acknowledged, the gate passes with the warning kept and the evidence "<n> possible
+                                                     duplicate(s), acknowledged by the author"; the payload's `acknowledgeable` lists every
+                                                     acknowledgeable refusal of every gate; the screen runs after the gas gate, as the estate's does
+  services/payoutsets.ts, createSet; http.ts         a creation whose gate did not pass is refused with it, 422, in refusals.ts' sentence
+
+and one helper, `age_runs(days)`: time passing, every run of the workspace created that many days earlier, so a later run meets the screen
+as the live estate met the run of 4 October on 8 October; and two dials for the roads on which the acknowledgement is not taken —
+`acknowledgement_ignored=True`, a screen that does not read duplicatesAcknowledged, and `acknowledged_review_refused=True`, the review made
+with it refused NOT_AUTHENTICATED — both workspaces alike, one estate. A run's createdAt keeps its milliseconds (`_run_stamp`), as
+toISOString writes it, so a payment made in a run's first second is never read as one made before the run began.
 """
 from __future__ import annotations
 
 import base64
+import calendar
 import hashlib
 import hmac
 import json
@@ -344,6 +364,8 @@ STATUS = {
     "WRITE_IN_PROGRESS": 409, "CEREMONY_NOT_LISTED": 404, "CEREMONY_CLOSED": 409, "CHARTER_WRITE_UNFINISHED": 409,
     # Spec 104 (accountabstraction.ts paymentUnpricedRefusal): the platform answered and refused a quote, 502; did not answer, or answered a fault, 503
     "PAYMENT_UNPRICED": 502, "PAYMENT_PRICING_UNAVAILABLE": 503,
+    # setgates.ts duplicateScreen (http.ts): the creation's refusal where the author did not acknowledge the repeat (Spec T28)
+    "DUPLICATE_UNACKNOWLEDGED": 422,
 }
 MESSAGES = {
     "NOT_AUTHENTICATED": "You are not signed in.",
@@ -402,7 +424,10 @@ MESSAGES = {
     # Spec 104: every raise composes its own — "This payment could not be priced: <the platform's sentence>." — these stand where none was composed
     "PAYMENT_UNPRICED": "This payment could not be priced: the access platform refused the quote. The answer will be the same until what it named is resolved.",
     "PAYMENT_PRICING_UNAVAILABLE": "This payment could not be priced: the access platform could not be asked. Nothing was sent.",
+    # refusals.ts REFUSAL_MESSAGES (Spec T28): the duplicate screen's warning, the same at the review and at the creation
+    "DUPLICATE_UNACKNOWLEDGED": "This looks like a payment that has already been made recently. Confirm it is intentional to continue.",
 }
+DUPLICATE_WINDOW_DAYS = 7  # config.ts DUPLICATE_WINDOW_DAYS, the estate's default
 ESTATE_KEY_CURE = ("If you meant a different estate, sign out and choose that estate’s key when your device offers the picker — "
                    "each key is labelled with its estate’s name.")
 SANDBOX_SENTENCE = ('This estate opens in the Sandbox: your transactions execute on the AEREDIUM test network, where the value carried is valueless, '
@@ -1242,7 +1267,8 @@ class EstateDouble:
                  actual_gas_usd_cents: int = ACTUAL_GAS_USD_CENTS, gas_refusal_names_other_figures: bool = False, review_refuses_but_pays: bool = False,
                  before_spec_106: bool = False, recorded_chains: Optional[Sequence[str]] = None,
                  before_spec_109: Optional[bool] = None, list_ceremony_lapses: int = 0, second_account_refused: Optional[str] = None,
-                 refuses_payee_addresses: Sequence[str] = (), settle_after_reads: int = 0):
+                 refuses_payee_addresses: Sequence[str] = (), settle_after_reads: int = 0, acknowledgement_ignored: bool = False,
+                 acknowledged_review_refused: bool = False):
         self.currency_spoken_as_code = currency_spoken_as_code  # False: main's default arm (JSON); True: Spec 88's code
         # Spec T23's dials. `refuses_payee_addresses`: addresses the payee door refuses whatever the charter says, under the stand-in
         # refusal Spec T8's `refuses_venue_contract=True` uses (ADDRESS_PROPOSAL_REFUSED, 422, the stipulation sentence) — an estate that
@@ -1251,6 +1277,11 @@ class EstateDouble:
         # chain taking its time — so a harness that waits for its own money is proved to wait, and to stop at its bound.
         self.refuses_payee_addresses = tuple(a.lower() for a in refuses_payee_addresses)
         self.settle_after_reads = settle_after_reads
+        # Spec T28's dials, the two roads on which the founder's acknowledgement is not taken. `acknowledgement_ignored`: an estate whose duplicate screen
+        # does not read duplicatesAcknowledged — the gate stays unpassed, "<n> possible duplicate(s) need acknowledgement", as before the field existed.
+        # `acknowledged_review_refused`: the review made with the acknowledgement is refused NOT_AUTHENTICATED, 401 — the session gone between the two presses.
+        self.acknowledgement_ignored = acknowledgement_ignored
+        self.acknowledged_review_refused = acknowledged_review_refused
         # Spec T19's dials (AER 360 Spec 109). `before_spec_109`: the estate before it — the platform's 409 on the list's creation leaves the compile as a
         # failed write (CHARTER_WRITE_UNFINISHED, the platform's sentence in the cause), and the ceremonies door and the sign roads are not there.
         # `list_ceremony_lapses`: the next list ceremonies born lapse at birth (the platform's clock is past their expires_at). `second_account_refused`:
@@ -1388,7 +1419,8 @@ class EstateDouble:
                                          currency_spoken_as_code=currency_spoken_as_code, faucet=self.faucet, rpc=self.rpc, platform=self.platform, chain=self.chain,
                                          treasury=False, is_treasury=True, aap_account_id=TREASURY_ACCOUNT_ID, secret=self.secret, account_email=T.TREASURY["email"],
                                          initial_usdc_cents=treasury_usdc_cents if treasury_funding_wallet == "born" else 0,  # Bear funds an address he has seen: a wallet that stood
-                                         initial_gas_cents=treasury_gas_cents,
+                                         initial_gas_cents=treasury_gas_cents, acknowledgement_ignored=acknowledgement_ignored,
+                                         acknowledged_review_refused=acknowledged_review_refused,  # Spec T28: one estate, the same screen for both workspaces
                                          quote_ceiling_usd_cents=quote_ceiling_usd_cents, actual_gas_usd_cents=actual_gas_usd_cents, before_spec_106=before_spec_106)
         if funding_wallet == "born":
             self.birth_funding_wallet(None, "account_creation_interview")
@@ -3825,7 +3857,9 @@ class EstateDouble:
             existing = next((s for s in self.sets.values() if s["idempotencyKey"] == body["idempotencyKey"]), None)
             if existing:
                 return 200, {"set": self.set_view(existing, caller), "alreadyExisted": True, "review": existing["review"]}
-        review = self.review(caller, charter, rows, body.get("duplicatesAcknowledged") is True)
+        if self.acknowledged_review_refused and not create and body.get("duplicatesAcknowledged") is True:
+            raise Refusal("NOT_AUTHENTICATED")
+        review = self.review(caller, charter, rows, body.get("duplicatesAcknowledged") is True and not self.acknowledgement_ignored)
         if not create:
             if self.review_refuses_but_pays and not review["payload"]["acceptable"]:
                 self.pay_behind_the_review(caller, review)  # a double that lies: "Nothing was sent", and money moved
@@ -3837,7 +3871,7 @@ class EstateDouble:
         set_row = {"id": "set-" + secrets.token_hex(6), "reference": "S-" + body["reference"], "realm": "sandbox", "idempotencyKey": body["idempotencyKey"], "status": "draft",
                    "sourceAccount": self.source_account, "authorCredentialId": caller["credentialId"], "setDigest": "0x" + secrets.token_hex(32),
                    "aggregateBaseMinor": str(review["aggregateUsd"]), "aggregateUsdMinor": str(review["aggregateUsd"]), "approvalsRequired": review["approvalsRequired"],
-                   "bandThresholdBaseMinor": str(review["threshold"]), "createdAt": self._now_iso(), "submittedAt": None, "approvedAt": None, "executedAt": None,
+                   "bandThresholdBaseMinor": str(review["threshold"]), "createdAt": self._run_stamp(), "submittedAt": None, "approvedAt": None, "executedAt": None,
                    "instructions": [], "review": review["payload"]}
         for r in review["resolved"]:
             set_row["instructions"].append({"id": "ins-" + secrets.token_hex(6), "setId": set_row["id"], "sequence": r["index"], "payeeId": r["payeeId"], "payeeName": r["payeeName"],
@@ -3930,7 +3964,7 @@ class EstateDouble:
             {"gate": "pricing", "passed": not pricing_refusals and bool(resolved), "refusals": pricing_refusals, "evidence": "priced from double"},
             {"gate": "quota", "passed": True, "refusals": [], "evidence": "this plan has no monthly signature ceiling"},
             self.gas_account_preflight(resolved),
-            {"gate": "duplicate_screen", "passed": True, "refusals": [], "evidence": "no matching payment in the last 7 days"},
+            self.duplicate_screen(resolved, acknowledged),  # after the gas gate, as the estate evaluates it: a repeat never hides a row from the quotes
         ]
         payload = {"rows": [{"index": o["index"], "payeeName": o["payeeName"], "chain": o["chain"], "address": o["address"], "isOneOff": o["isOneOff"], "asset": o["asset"],
                              "amountMinor": str(o["amountMinor"]), "value": {"asset": o["asset"], "assetDecimals": 6, "amountAssetMinor": str(o["amountMinor"]), "baseCurrency": "USD", "baseDecimals": 2,
@@ -3941,8 +3975,57 @@ class EstateDouble:
                                  "amountBaseMinor": str(aggregate), "amountUsdMinor": str(aggregate), "rate": {"source": "double", "observedAt": self._now_iso(), "rateE8": "100000000"}, "kind": "entry", "valuationId": "", "occurredAt": self._now_iso()},
                    "approval": {"approvalsRequired": approvals_required, "approvalsGiven": 0, "bandThresholdBaseMinor": str(threshold), "aggregateBaseMinor": str(aggregate),
                                 "eligibleApproverCredentialIds": list(self.second_approvers), "approvedByCredentialIds": [], "submitterCredentialId": caller["credentialId"]},
-                   "acceptable": bool(resolved) and all(g["passed"] for g in gates), "acknowledgeable": []}
+                   "acceptable": bool(resolved) and all(g["passed"] for g in gates),
+                   "acknowledgeable": [r for g in gates for r in g["refusals"] if r.get("acknowledgeable") is True]}
         return {"payload": payload, "resolved": [o for o in resolved], "aggregateUsd": aggregate, "threshold": threshold, "approvalsRequired": approvals_required}
+
+    def duplicate_screen(self, resolved: List[Dict[str, Any]], acknowledged: bool) -> Dict[str, Any]:
+        """
+        THE FIFTH GATE (setgates.ts duplicateScreen; Spec T28): each row with an address against this workspace's runs not rejected, created within
+        DUPLICATE_WINDOW_DAYS — the same address (case folded), chain, asset and amount, under the same invoice reference (a missing one matches a
+        missing one) — refused DUPLICATE_UNACKNOWLEDGED, acknowledgeable, naming the earlier instruction and when its run was created. Acknowledged,
+        the gate passes and the warnings stay on it: "the accountant said yes to it".
+        """
+        since = time.time() - DUPLICATE_WINDOW_DAYS * 24 * 60 * 60
+        refusals: List[Dict[str, Any]] = []
+        for o in resolved:
+            if not o["address"]:
+                continue
+            hit = next(((s, i) for s in self.sets.values() if self._epoch(s["createdAt"]) >= since for i in s["instructions"]
+                        if str(i["address"]).lower() == str(o["address"]).lower() and i["chain"] == o["chain"] and i["asset"] == o["asset"]
+                        and int(i["amountMinor"]) == o["amountMinor"] and (i["invoiceRef"] or "") == (o["invoiceRef"] or "") and i["status"] != "rejected"), None)
+            if hit is None:
+                continue
+            run, instruction = hit
+            ref = {"code": "DUPLICATE_UNACKNOWLEDGED", "message": MESSAGES["DUPLICATE_UNACKNOWLEDGED"], "rowIndex": o["index"], "acknowledgeable": True,
+                   "detail": {"payee": o["payeeName"], "address": o["address"], "amountMinor": str(o["amountMinor"]), "invoiceRef": o["invoiceRef"] or "",
+                              "previousInstructionId": instruction["id"], "previouslySentAt": run["createdAt"], "windowDays": str(DUPLICATE_WINDOW_DAYS)},
+                   "provenance": {"source": "payout_instructions", "reference": instruction["id"]}}
+            o["refusals"].append(ref)
+            refusals.append(ref)
+        if refusals and acknowledged:
+            return {"gate": "duplicate_screen", "passed": True, "refusals": refusals, "evidence": "%d possible duplicate(s), acknowledged by the author" % len(refusals)}
+        return {"gate": "duplicate_screen", "passed": not refusals, "refusals": refusals,
+                "evidence": ("no matching payment in the last %d days" % DUPLICATE_WINDOW_DAYS) if not refusals else "%d possible duplicate(s) need acknowledgement" % len(refusals)}
+
+    @staticmethod
+    def _run_stamp(epoch: Optional[float] = None) -> str:
+        """A run's createdAt as the estate writes it (Date.toISOString, payout_sets.created_at): UTC, milliseconds kept — the screen's previouslySentAt."""
+        epoch = time.time() if epoch is None else epoch
+        return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(epoch)) + ".%03dZ" % (int(epoch * 1000) % 1000)
+
+    @staticmethod
+    def _epoch(iso: str) -> float:
+        """The double's own instants (`_iso`, `_run_stamp`: UTC, the milliseconds where they are written) back to seconds since the epoch."""
+        text = str(iso)
+        fraction = text[20:23] if len(text) > 23 and text[19] == "." else "0"
+        return float(calendar.timegm(time.strptime(text[:19], "%Y-%m-%dT%H:%M:%S"))) + int(fraction) / 1000.0
+
+    def age_runs(self, days: float) -> None:
+        """Time passing (Spec T28): every run of this workspace — and of the Treasury's beside it — created `days` earlier, its approvals and trail untouched."""
+        for double in (self, self.treasury) if self.treasury is not None else (self,):
+            for row in double.sets.values():
+                row["createdAt"] = double._run_stamp(double._epoch(row["createdAt"]) - days * 24 * 60 * 60)
 
     def gas_account_preflight(self, resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
@@ -3999,7 +4082,7 @@ class EstateDouble:
         set_row = {"id": "set-" + secrets.token_hex(6), "reference": "S-behind the review", "realm": "sandbox", "idempotencyKey": "behind-" + secrets.token_hex(4), "status": "settled",
                    "sourceAccount": self.source_account, "authorCredentialId": caller["credentialId"], "setDigest": "0x" + secrets.token_hex(32),
                    "aggregateBaseMinor": str(review["aggregateUsd"]), "aggregateUsdMinor": str(review["aggregateUsd"]), "approvalsRequired": 0, "bandThresholdBaseMinor": "0",
-                   "createdAt": self._now_iso(), "submittedAt": self._now_iso(), "approvedAt": self._now_iso(), "executedAt": self._now_iso(), "instructions": [], "review": review["payload"]}
+                   "createdAt": self._run_stamp(), "submittedAt": self._now_iso(), "approvedAt": self._now_iso(), "executedAt": self._now_iso(), "instructions": [], "review": review["payload"]}
         for r in rows:
             try:
                 self.chain.transfer(self.source_account, r["address"], r["amountMinor"])
