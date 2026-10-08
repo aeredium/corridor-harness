@@ -272,6 +272,27 @@ lose_transfers=True)` (a payee whose balance does not rise), `PlatformDouble(deb
 and `treasury_gas_cents` are the gas the two accounts hold before the run (an earlier run's credit on the ledger; the sandbox held US$99.71 and
 US$119.95 on 4 October 2026), and `PlatformDouble(credit_is_hollow=True)` is a platform whose admin road says it credited and whose ledger holds
 nothing of it, so a second GAS_SHORTFALL after the credit can be driven.
+
+Spec T27 (8 October 2026) taught the double AER 360 Spec AER360-115 (aeredium/AERAccounts PR #137, merge commit b523cbf, catalog version 15), read
+from the code and not from memory, because the estate went live at version 15 that day and the book had never been asked its two questions:
+
+  services/questioncatalog.ts                        C2, the company ceiling, and C3, the daily total, served after C9 and before C10 from
+                                                     tests/fixtures/aer360-version-15-added.json (their part, prompt, note — CEILING_NOTE —
+                                                     and `required`), to an interview begun under version 15 or later; what an interview is
+                                                     served is read off its OWN catalog version (`seedCatalog` never rewrites a version's
+                                                     rows), so a version-14 draft in flight is never asked the two
+  services/onboarding.ts, validateValue              on C2 and C3 of such an interview a blank is refused in CHARTER_CEILINGS_REQUIRED's
+  (isCeilingQuestion)                                words and a zero as CEILING_ZERO_REFUSED, ANSWER_INVALID, before it is committed
+  services/onboarding.ts, readback;                  directly after each answer above zero, the synthetic line saying what it becomes —
+  services/charterceilings.ts, ceilingReadBackSentence  C2_WRITTEN "What the company ceiling becomes", C3_WRITTEN "What the daily total becomes"
+                                                     — in whole US dollars rounded up, with STANDING_CEILING_KEPT after it where another
+                                                     Policy Interview of the workspace stands written (earlierPolicyStandsWritten)
+  services/onboardingcompiler.ts                     the policy charter's `amountsUsdCents.denyCeiling` (C2) and `dailyTotal` (C3), and from
+  (assertCeilingAnswered)                            version 15 CHARTER_INCOMPLETE in CHARTER_CEILINGS_REFUSED_AT_COMPILE's words, walked back to
+                                                     the page, where either is unanswered or zero
+
+and the dial moves: the default `catalog_version` is 15, the estate as it stands since 8 October 2026; `catalog_version=14` is the estate
+of the runs before it, which serves neither question and is answered as before; below 14 the seven of Spec 92 go too.
 """
 from __future__ import annotations
 
@@ -532,8 +553,20 @@ def load_v14_added() -> Dict[str, Dict[str, Any]]:
 
 
 V14_ADDED = load_v14_added()
+VERSION_15_FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "aer360-version-15-added.json")
+
+
+def load_v15_added() -> Dict[str, Dict[str, Any]]:
+    """id → {questionId, part, kind, prompt, note, required} for the two questions catalog version 15 added (Spec AER360-115; Spec T27), as the catalog defines them."""
+    with open(VERSION_15_FIXTURE, "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    return {q["questionId"]: q for questions in data["added"].values() for q in questions}
+
+
+V15_ADDED = load_v15_added()
 PROMPTS: Dict[str, Dict[str, Any]] = dict(V11)
 PROMPTS.update(V14_ADDED)
+PROMPTS.update(V15_ADDED)
 LEVELS_BENEATH = set(A.LEVELS_BENEATH)
 # packages/shared/src/venues.ts (Spec 92): the engine's closed venue table, row for row and in its order, and the venues' published names.
 VENUE_CONTRACTS = (
@@ -572,6 +605,44 @@ TIER_QUORUM_STANDS_ASIDE = ("Under this wallet’s signing tiers, how many signa
                             "first, two up to the second, three above it. This number sizes the roster that approves a new payee for this account, and "
                             "AER 360’s own approval inbox for a payment a clerk enters.")
 TIERS_FROM_CATALOG_VERSION = 14  # questioncatalog.ts TIERS_FROM_CATALOG_VERSION
+# Spec T27 — the company's two ceilings (AER 360 Spec AER360-115, aeredium/AERAccounts b523cbf), word for word and re-stated from the estate's
+# code, never borrowed from the harness's expectation: packages/shared/src/explain.ts (CHARTER_CEILINGS_REQUIRED, CEILING_ZERO_REFUSED,
+# CHARTER_CEILINGS_REFUSED_AT_COMPILE) and services/charterceilings.ts (ceilingWrittenSentence, STANDING_CEILING_KEPT, ceilingReadBackSentence).
+CEILINGS_FROM_CATALOG_VERSION = 15  # questioncatalog.ts CEILINGS_FROM_CATALOG_VERSION
+CEILING_QUESTION_IDS = {"perPayment": "C2", "perDay": "C3"}  # questioncatalog.ts CEILING_QUESTION_IDS
+CHARTER_CEILINGS_REQUIRED = ("The company ceiling (C2) and the daily total (C3) must each be a figure above zero: the signing platform refuses every "
+                             "payment on an account whose ceilings are not set.")
+CEILING_ZERO_REFUSED = "This estate does not accept a zero here. %s Write the figure itself." % CHARTER_CEILINGS_REQUIRED
+CHARTER_CEILINGS_REFUSED_AT_COMPILE = ("This estate refused to compile the charter before the signing platform could refuse its payments. "
+                                       "%s Answer both, each with a figure above zero." % CHARTER_CEILINGS_REQUIRED)
+STANDING_CEILING_KEPT = ("Where such a limit already stands above zero, this write leaves it as it stands: changing a limit that stands is a change of "
+                         "the company’s rules, which your change quorum (C12) must agree to, and this estate has no road for that change yet.")
+
+
+def figure_above_zero(cents: Any) -> bool:
+    """A whole number of cents above zero, as `/^\\d+$/.test(c) && BigInt(c) > 0n` reads one."""
+    return isinstance(cents, str) and re.fullmatch(r"[0-9]+", cents) is not None and int(cents) > 0
+
+
+def ceiling_written_sentence(which: str, cents: str) -> str:
+    """`ceilingWrittenSentence`: the figure in whole US dollars rounded up (`dollarsCeilingOf`), grouped as en-US groups it, and the rounding said."""
+    figure = "US${:,}".format((int(cents) + 99) // 100)
+    rounded = ("" if int(cents) % 100 == 0 else
+               " That is your figure rounded up to the next whole dollar, because the platform holds whole dollars, so the ceiling is never smaller than yours.")
+    if which == "perPayment":
+        return ("Written to the signing platform as the per-payment limit of every signing entry this estate draws up on its own account: %s.%s "
+                "No single payment above it is approved, on any network." % (figure, rounded))
+    return "Written to the signing platform as the daily limit of the same entries: %s.%s No payment that takes a day’s total above it is approved." % (figure, rounded)
+
+
+def ceiling_read_back_sentence(which: str, cents: str, partner_cents: Any, amending: bool = False) -> str:
+    """`ceilingReadBackSentence`: beside a partner above zero the figure (and, amending, STANDING_CEILING_KEPT); otherwise that nothing is written and why."""
+    if figure_above_zero(partner_cents):
+        written = ceiling_written_sentence(which, cents)
+        return "%s %s" % (written, STANDING_CEILING_KEPT) if amending else written
+    partner = "the daily total (C3)" if which == "perPayment" else "the company ceiling (C2)"
+    return ("Not written to the signing platform while %s is not answered above zero: the platform refuses every payment while either limit of a "
+            "signing entry stands at zero, so this estate writes the two together or not at all." % partner)
 
 
 def tiers_need_three_people(figure: str, named: int) -> str:
@@ -1156,7 +1227,7 @@ class EstateDouble:
     """The estate, in memory. Strict as the code; every answer is the code's own shape."""
 
     def __init__(self, base: str = BASE, funding_wallet: str = "press",
-                 company: str = A.ESTATE["company"], catalog_version: int = 14, currency_spoken_as_code: bool = False,
+                 company: str = A.ESTATE["company"], catalog_version: int = 15, currency_spoken_as_code: bool = False,
                  refuses_venue_contract: Optional[bool] = None, invite_seconds: float = 0.0, clock: Optional[Clock] = None,
                  pending_approval_says_why: bool = True, whitelist_roster: Optional[Sequence[str]] = None, platform_never_activates: bool = False,
                  before_spec_91: bool = False, seat_completes_on_redemption: bool = True, second_authorship_entry: bool = False,
@@ -1742,13 +1813,26 @@ class EstateDouble:
         return 200, self.session_view(session)
 
     # -- the interviews --------------------------------------------------------------------------------
-    def catalog(self, interview_type: str) -> List[A.Question]:
-        """The book's catalog; an estate before version 14 (Spec T11) leaves out the seven Spec 92 added."""
+    def catalog(self, interview_type: str, version: Optional[int] = None) -> List[A.Question]:
+        """
+        The book's catalog as an interview begun under `version` is served it — the estate's own version where none is named. What an
+        interview is asked is read off ITS catalog version (questioncatalog.ts: `seedCatalog` writes rows keyed by version and never rewrites
+        one): before version 15 it is never asked the two Spec AER360-115 added (Spec T27), before 14 not the seven of Spec 92 (Spec T11).
+        """
+        version = self.catalog_version if version is None else version
         questions = list(A.CATALOGS[interview_type])
-        if self.catalog_version < 14:
+        if version < CEILINGS_FROM_CATALOG_VERSION:
+            questions = [q for q in questions if q.id not in set(A.ADDED_IN_V15[interview_type])]
+        if version < 14:
             added = set(A.ADDED_IN_V14[interview_type])
             questions = [q for q in questions if q.id not in added]
         return questions
+
+    @staticmethod
+    def is_ceiling_question(iv: Dict[str, Any], q: A.Question) -> bool:
+        """`isCeilingQuestion`: C2 or C3 of a Policy Interview begun under the version that made them compulsory, read off the interview's own version."""
+        return (iv["interviewType"] == "policy" and (iv.get("catalogVersion") or 0) >= CEILINGS_FROM_CATALOG_VERSION
+                and q.id in CEILING_QUESTION_IDS.values())
 
     def latest(self, interview_id: str) -> Dict[str, Dict[str, Any]]:
         out: Dict[str, Dict[str, Any]] = {}
@@ -1790,7 +1874,7 @@ class EstateDouble:
         return 200, {"interview": {"id": iv["id"], "state": page["state"]}, "page": page}
 
     def page(self, iv: Dict[str, Any], serve_truth: bool) -> Dict[str, Any]:
-        catalog = self.catalog(iv["interviewType"])
+        catalog = self.catalog(iv["interviewType"], iv.get("catalogVersion"))
         latest = self.latest(iv["id"])
         visible = [q for q in catalog if self.visible(q, latest)]
         idx = next((i for i, q in enumerate(visible) if q.id not in latest), -1)
@@ -1895,7 +1979,7 @@ class EstateDouble:
             return list(OTHER_NETWORKS_BEFORE_SPEC_106)
         return list(q.options) if q.options else None
 
-    def validate_value(self, q: A.Question, value: Any) -> None:
+    def validate_value(self, q: A.Question, value: Any, ceiling: bool = False) -> None:
         def refuse(cause: str) -> None:
             raise Refusal("ANSWER_INVALID", detail={"questionId": q.id, "cause": cause})
         if not isinstance(value, dict):
@@ -1929,9 +2013,13 @@ class EstateDouble:
             cents = value.get("cents")
             if cents is None:
                 if q.required:
-                    refuse("this amount is mandatory and cannot be left empty")
+                    # SPEC AER360-115 (Spec T27): the company's two ceilings are not a blank field — an empty one is refused in the sentence that says why
+                    refuse(CHARTER_CEILINGS_REQUIRED if ceiling else "this amount is mandatory and cannot be left empty")
             elif not isinstance(cents, str) or not re.match(r"^\d+$", cents):
                 refuse("an amount is a whole number of cents")
+            elif ceiling and int(cents) == 0:
+                # A ZERO IS NOT A CEILING: refused at the page, before it is committed, in CEILING_ZERO_REFUSED's words
+                raise Refusal("ANSWER_INVALID", CEILING_ZERO_REFUSED, {"questionId": q.id, "cause": CHARTER_CEILINGS_REQUIRED})
         elif kind == "percent":
             percent = value.get("percent")
             if percent is None:
@@ -2038,7 +2126,7 @@ class EstateDouble:
         iv = self.load_interview(interview_id)
         if iv["state"] not in ("in_progress", "at_read_back"):
             raise Refusal("INTERVIEW_NOT_OPEN", detail={"state": iv["state"]})
-        q = next((c for c in self.catalog(iv["interviewType"]) if c.id == qid), None)
+        q = next((c for c in self.catalog(iv["interviewType"], iv.get("catalogVersion")) if c.id == qid), None)
         if q is None:
             raise Refusal("ANSWER_INVALID", detail={"questionId": qid, "cause": "no such question in this interview"})
         latest = self.latest(interview_id)
@@ -2048,7 +2136,7 @@ class EstateDouble:
             code = str(body["value"].get("text", "")).strip().upper()
             if code and code not in ("AUD", "EUR", "GBP", "USD"):
                 raise Refusal("ANSWER_INVALID", detail={"questionId": "A5", "cause": '"%s" is not one of the currencies AER 360 reports in.' % code}, provenance={"source": "supported_currencies"})
-        self.validate_value(q, body["value"])
+        self.validate_value(q, body["value"], ceiling=self.is_ceiling_question(iv, q))
         # stored as jsonb stores it (db/onboardingschema.ts `value: jsonb('value')`): keys shortest first, then in byte order
         stored = A.as_the_estate_stores(body["value"])
         # a quorum may never exceed the roster that must meet it, judged before the answer is committed
@@ -2118,8 +2206,12 @@ class EstateDouble:
             raise tiers_refusal
         tiered = self.tiered(iv, latest)
         purpose = (latest.get("W1") or {}).get("value", {}).get("choice") if iv["interviewType"] == "wallet_account" else None
+        # AN ESTATE ANSWERING ITS POLICY INTERVIEW AGAIN (Spec AER360-115; earlierPolicyStandsWritten): another Policy Interview of this workspace
+        # stands written, so the ceilings' lines say a limit already standing is kept
+        amending = iv["interviewType"] == "policy" and any(
+            o["interviewType"] == "policy" and o["state"] == "written" and o["id"] != iv["id"] for o in self.interviews.values())
         lines = [{"questionId": "REALM", "prompt": "Where this estate opens", "spoken": SANDBOX_SENTENCE, "synthetic": True}]
-        for q in self.catalog(iv["interviewType"]):
+        for q in self.catalog(iv["interviewType"], iv.get("catalogVersion")):
             if not self.visible(q, latest) or q.id not in latest:
                 continue
             v = latest[q.id]["value"]
@@ -2170,6 +2262,15 @@ class EstateDouble:
             if q.id == "C19" and v.get("choice") == A.VENUE_NO:
                 lines.append({"questionId": "C19_DOOR", "prompt": "What happens to a venue’s contract entered as a payee",
                               "spoken": "You answered No: such an address will be refused when entered.", "synthetic": True})
+            # SPEC AER360-115 (Spec T27) — what each of the company's ceilings becomes, said beside an answer above zero, judged as the write
+            # judges it: on whichever version asked it, because the write writes it on all
+            if iv["interviewType"] == "policy" and q.id in CEILING_QUESTION_IDS.values() and figure_above_zero(v.get("cents")):
+                per_payment = q.id == CEILING_QUESTION_IDS["perPayment"]
+                partner = (latest.get(CEILING_QUESTION_IDS["perDay" if per_payment else "perPayment"]) or {}).get("value") or {}
+                lines.append({"questionId": "C2_WRITTEN" if per_payment else "C3_WRITTEN",
+                              "prompt": "What the company ceiling becomes" if per_payment else "What the daily total becomes",
+                              "spoken": ceiling_read_back_sentence("perPayment" if per_payment else "perDay", v["cents"], partner.get("cents"), amending),
+                              "synthetic": True})
             if q.id == "WO1" and v.get("choice") == A.HOLDER_PERSON and str((v.get("person") or {}).get("email") or "").strip():
                 person = v["person"]
                 name = str(person.get("name") or "").strip() or person["email"].strip()
@@ -2695,11 +2796,19 @@ class EstateDouble:
             third = wallet_people["thirdParty"]
             if not any(p["email"].lower() == third["email"].lower() for p in self.parse_roster(signers)):
                 signers = list(signers) + [self.roster_entry(" ".join(part for part in (third["name"], third["surname"]) if part), third["email"])]
-        deny = (cents("T1") if treasury else cents("AG2") if agent else None) if is_account else None
+        # Spec T27: a policy charter carries the company ceiling (C2) as denyCeiling and the daily total (C3) as dailyTotal, as every version that asked them
+        deny = (cents("T1") if treasury else cents("AG2") if agent else None) if is_account else cents(CEILING_QUESTION_IDS["perPayment"])
         hold = (cents("P3") if payroll else cents("O2")) if is_account else None
-        daily = (cents("AG3") if agent else (cents("O1") if cents("O1") is not None else cents("X2"))) if is_account else None
+        daily = (cents("AG3") if agent else (cents("O1") if cents("O1") is not None else cents("X2"))) if is_account else cents(CEILING_QUESTION_IDS["perDay"])
         if treasury and deny is None:
             raise Refusal("CHARTER_INCOMPLETE", detail={"cause": "the treasury ceiling is mandatory and was left empty"}, walkBackTo={"questionId": "T1"})
+        # SPEC AER360-115 (Spec T27) — THE COMPANY'S TWO CEILINGS ARE COMPULSORY, AND ABOVE ZERO, for a Policy Interview begun under catalog version 15
+        # or later (assertCeilingAnswered, C2 then C3): refused in CHARTER_CEILINGS_REFUSED_AT_COMPILE's words and walked back to the page that answers it
+        if not is_account and (catalog_version or 0) >= CEILINGS_FROM_CATALOG_VERSION:
+            for figure, qid in ((deny, CEILING_QUESTION_IDS["perPayment"]), (daily, CEILING_QUESTION_IDS["perDay"])):
+                if not figure_above_zero(figure):
+                    raise Refusal("CHARTER_INCOMPLETE", CHARTER_CEILINGS_REFUSED_AT_COMPILE,
+                                  {"cause": CHARTER_CEILINGS_REQUIRED, ("unanswered" if figure is None else "answeredZero"): qid}, walkBackTo={"questionId": qid})
         modes = {"Yes": "hold_non_listed", "List only": "allow_only", "Anyone, freely": "none", "No — the list only": "allow_only", "Pause anywhere new for approval": "hold_non_listed",
                  "Yes — always": "hold_non_listed", "Only above the usual approval band": "none"}
         destination = choice("X4") if trading else choice("T3") if treasury else choice("O3") if is_account else None
@@ -4540,12 +4649,13 @@ class TheDoubleTellsTheTruth(unittest.TestCase):
         with self.assertRaises(Refusal) as caught:
             self.double.compile_charter("wallet_account", latest, 14)
         self.assertEqual(caught.exception.detail["cause"], "the third party’s title must be one of CEO, CFO, COO; “Chair” is not one of them")
-        # an estate before version 14 never serves the seven, and compiles no holder and no tiers
+        # an estate before version 14 never serves the seven — nor, before version 15, the two of Spec AER360-115 (Spec T27) — and compiles no holder and no tiers
         older = EstateDouble(catalog_version=12)
         self.assertFalse(any(q.id in A.ADDED_IN_V14["wallet_account"] for q in older.catalog("wallet_account")))
         self.assertFalse(any(q.id in A.ADDED_IN_V14["policy"] for q in older.catalog("policy")))
+        self.assertFalse(any(q.id in A.ADDED_IN_V15["policy"] for q in older.catalog("policy")))
         self.assertEqual(len(older.catalog("wallet_account")), len(A.ACCOUNT_CATALOG) - 4)
-        self.assertEqual(len(older.catalog("policy")), len(A.POLICY_CATALOG) - 3)
+        self.assertEqual(len(older.catalog("policy")), len(A.POLICY_CATALOG) - 3 - 2)
         charter = older.compile_charter("wallet_account", {qid: row["value"] for qid, row in self.double.latest(iv).items() if qid not in ("WO1", "WO2", "WO3", "WO4")}, 12)
         self.assertNotIn("holder", charter)
         self.assertNotIn("signingTiers", charter)

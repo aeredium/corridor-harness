@@ -14,6 +14,12 @@ Spec T18 (24 September 2026): the book answers C9 with `Arbitrum One`, which AER
 the run of 21 September was recorded. The fixture keeps that night's pages as served and carries Spec 106's offer for C9 and X1
 in its `spec106` block; the pages are held to the book with that offer laid over the two questions, and the page of 21 September
 is kept as the estate before Spec 106, which S3 stops on.
+
+Spec T27 (8 October 2026): the book learns catalog version 15. A third fixture, tests/fixtures/aer360-version-15-added.json, holds
+the two pages AER 360 Spec AER360-115 added to the Policy Interview — C2, the company ceiling, and C3, the daily total — as
+questioncatalog.ts defines them at b523cbf; the record of 21 September is not touched. The book answers both in their kind, after C9
+and before C10, at US$100.00 and US$1,000.00 — the figures the once-run road of 8 October found every signing entry of the harness
+estates already carrying — never beneath the wallet's own figures (C2 at or above O2, C3 at or above O1), and states version 15.
 """
 import json
 import os
@@ -28,8 +34,11 @@ import aer360_tables as T  # noqa: E402
 
 FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "aer360-questioncatalog.v11.ts")
 SERVED = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "aer360-served-2026-09-21.json")
+VERSION_15 = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "aer360-version-15-added.json")
+ANSWER_BOOK = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "aer360_answers.py")
 THE_SEVEN = {("policy", "C11A"), ("policy", "C11C"), ("policy", "C19"), ("wallet_account", "WO1"), ("wallet_account", "WO2"),
              ("wallet_account", "WO3"), ("wallet_account", "WO4")}
+THE_TWO = {("policy", "C2"), ("policy", "C3")}  # Spec T27: what catalog version 15 added (Spec AER360-115)
 
 
 def served_fixture():
@@ -96,15 +105,17 @@ class TheBookCoversTheCatalog(unittest.TestCase):
             field = A.SHAPE_OF_KIND[kind]
             self.assertIn(field, book[qid], "the answer to %s (%s) carries no %r" % (qid, kind, field))
 
-    def test_the_book_answers_nothing_the_fixture_does_not_ask_save_the_seven_version_14_added(self):
+    def test_the_book_answers_nothing_the_fixture_does_not_ask_save_the_seven_of_version_14_and_the_two_of_version_15(self):
         asked = {(q[0], q[1]) for q in self.questions}
         extra = set()
         for interview_type, book in A.ANSWERS.items():
             for qid in book:
                 if (interview_type, qid) not in asked:
                     extra.add((interview_type, qid))
-        self.assertEqual(extra, THE_SEVEN, "the book answers nothing version 11 never asked, save the seven Spec 92 added (Spec T11)")
+        self.assertEqual(extra, THE_SEVEN | THE_TWO,
+                         "the book answers nothing version 11 never asked, save the seven Spec 92 added (Spec T11) and the two Spec AER360-115 added (Spec T27)")
         self.assertEqual({(t, q) for t, qs in A.ADDED_IN_V14.items() for q in qs}, THE_SEVEN)
+        self.assertEqual({(t, q) for t, qs in A.ADDED_IN_V15.items() for q in qs}, THE_TWO)
 
     def test_every_choice_is_one_the_live_catalog_offers(self):
         for interview_type, book in A.ANSWERS.items():
@@ -189,16 +200,23 @@ class TheBookIsTheSpecsEstate(unittest.TestCase):
         for entry in A.ACCOUNT_ANSWERS["WA1"]["entries"]:
             self.assertIn(entry["email"], census)
 
-    def test_the_walk_the_book_expects_of_a_version_14_estate(self):
-        """The run of 21 September served 23 policy pages and 17 account pages before WO1 was answered; WO3 opens behind a named holder, so 18."""
+    def test_the_walk_the_book_expects_of_a_version_15_estate(self):
+        """
+        Spec T27: a version-15 estate serves the book 25 policy pages — C2 and C3 after C9 and before C10, as the estate serves them — where a
+        version-14 estate served 23 (the run of 21 September served 23 policy pages and 17 account pages before WO1 was answered); the wallet
+        account's walk is unchanged at 18, WO3 opening behind a named holder.
+        """
         self.assertEqual([q.id for q in A.expected_walk("policy")],
-                         ["A1", "A4", "A5", "A8", "A9", "A11", "B1", "B2", "B3", "C9S", "C9", "C10", "C11", "C11A", "C15", "C19", "C18", "C12", "C12A", "D0", "R0", "R1", "G1"])
+                         ["A1", "A4", "A5", "A8", "A9", "A11", "B1", "B2", "B3", "C9S", "C9", "C2", "C3", "C10", "C11", "C11A", "C15", "C19", "C18", "C12", "C12A", "D0", "R0", "R1", "G1"])
         self.assertEqual([q.id for q in A.expected_walk("wallet_account")],
                          ["W0", "WN", "W1", "O1", "O2", "O3", "O4", "PN0", "PN1", "WQ", "WA1", "WA2", "WO1", "WO2", "WO3", "WO4", "WCW", "WG1"])
-        self.assertNotIn("C16", [q.id for q in A.expected_walk("policy")], "version 12 retired the pair, and version 14 never serves it")
+        self.assertNotIn("C16", [q.id for q in A.expected_walk("policy")], "version 12 retired the pair, and version 15 never serves it")
         self.assertNotIn("C11C", [q.id for q in A.expected_walk("policy")], "C11C is asked only behind C11A's third answer, which the book does not choose")
-        self.assertEqual(len(A.expected_walk("policy")), 23)
+        self.assertEqual(len(A.expected_walk("policy")), 25, "23 + 2")
         self.assertEqual(len(A.expected_walk("wallet_account")), 18)
+        # a version-14 estate serves the same walk less the two version 15 added, and the book answers it as before
+        self.assertEqual([q.id for q in A.expected_walk("policy") if q.id not in A.ADDED_IN_V15["policy"]],
+                         ["A1", "A4", "A5", "A8", "A9", "A11", "B1", "B2", "B3", "C9S", "C9", "C10", "C11", "C11A", "C15", "C19", "C18", "C12", "C12A", "D0", "R0", "R1", "G1"])
 
     def test_the_whitelist_roster_is_the_a8_census_and_its_quorum_is_c12(self):
         """Spec T9 §4: WHITELIST_ROSTER is the A8 census names and WHITELIST_QUORUM is the C12 answer, so the harness's expectation is the charter's."""
@@ -275,12 +293,11 @@ class TheBookAnswersCatalogVersion14(unittest.TestCase):
         self.assertEqual(self.data["catalog"]["addedInVersion14"], {"policy": ["C11A", "C11C", "C19"], "wallet_account": ["WO1", "WO2", "WO3", "WO4"]})
         self.assertEqual(len(self.pages), 27 + 5, "27 pages served, and the five of the seven the run never reached")
 
-    def test_the_book_states_the_version_it_answers(self):
-        self.assertEqual(A.CATALOG_VERSION_ANSWERED, 14)
-        self.assertEqual(A.CATALOG_VERSION_READ, 14)
-        self.assertIn("cf3be4a", A.CATALOG_SOURCE)
-        self.assertIn("CATALOG_VERSION = 14", A.CATALOG_SOURCE)
+    def test_the_book_keeps_the_record_of_the_seven_version_14_added(self):
+        """Spec T11 stated version 14 and the seven; Spec T27 states 15 (TheBookAnswersCatalogVersion15) and keeps ADDED_IN_V14 as the record of T11."""
         self.assertEqual(A.ADDED_IN_V14, {"policy": ("C11A", "C11C", "C19"), "wallet_account": ("WO1", "WO2", "WO3", "WO4")})
+        self.assertEqual(self.data["catalog"]["source"], "aeredium/AERAccounts apps/server/src/services/questioncatalog.ts at cf3be4a (Spec 92), CATALOG_VERSION = 14",
+                         "the record of 21 September names the catalog the book read that night")
 
     def test_every_question_the_estate_served_plus_the_seven_has_an_answer_of_its_kind_no_id_missing(self):
         for interview_type, page in self.pages:
@@ -401,6 +418,96 @@ class TheBookAnswersCatalogVersion14(unittest.TestCase):
         self.assertEqual(A.POLICY_ANSWERS["C19"], {"choice": "No — only wallets held by people or companies"})
         self.assertEqual(A.POLICY_ANSWERS["C19"]["choice"], A.VENUE_NO)
         self.assertEqual(page["options"], [A.VENUE_YES, A.VENUE_NO])
+
+
+class TheBookAnswersCatalogVersion15(unittest.TestCase):
+    """
+    Spec T27: the two pages catalog version 15 added, from tests/fixtures/aer360-version-15-added.json (questioncatalog.ts at b523cbf), are
+    answered in their kind and with the figures the harness estates' signing entries already carry; the book states version 15.
+    """
+
+    def setUp(self):
+        with open(VERSION_15, "r", encoding="utf-8") as handle:
+            self.data = json.load(handle)
+        self.pages = self.data["added"]["policy"]
+
+    def test_the_fixture_is_the_two_pages_as_the_catalog_defines_them(self):
+        self.assertEqual(self.data["catalog"]["version"], 15)
+        self.assertEqual(self.data["catalog"]["source"], A.CATALOG_SOURCE, "the book reads the catalog the fixture was copied from")
+        self.assertEqual(self.data["catalog"]["addedInVersion15"], {"policy": ["C2", "C3"], "wallet_account": []})
+        self.assertEqual((self.data["catalog"]["servedAfter"], self.data["catalog"]["servedBefore"]), ("C9", "C10"))
+        self.assertEqual(self.data["added"]["wallet_account"], [], "version 15 adds nothing to the wallet account's interview")
+        self.assertEqual([p["questionId"] for p in self.pages], ["C2", "C3"])
+        for page in self.pages:
+            self.assertEqual(list(page.keys()), ["questionId", "part", "kind", "prompt", "note", "required"], page["questionId"])
+            self.assertEqual((page["part"], page["kind"], page["required"]), ("Part C — The company’s rules", "money", True), page["questionId"])
+        self.assertEqual(self.pages[0]["prompt"], "Is there an amount so large that no one in this company should ever make a payment of it — no approval, no exception?")
+        self.assertEqual(self.pages[1]["prompt"], "How much is the maximum total of payments that can be made daily?")
+        # CEILING_NOTE: the blank field's discipline, then CHARTER_CEILINGS_REQUIRED and NOTHING_ALONE_IS_APPROVAL_NOT_ZERO (packages/shared/src/explain.ts)
+        note = ("A blank field — you enter the amount yourself; no amounts are suggested. Recorded in US dollars, the base; your display currency is shown "
+                "beside it as you type. The company ceiling (C2) and the daily total (C3) must each be a figure above zero: the signing platform refuses every "
+                "payment on an account whose ceilings are not set. If no payment should leave on one person’s word, say so with the approvers in the questions "
+                "that follow, never with a zero here.")
+        self.assertEqual([p["note"] for p in self.pages], [note, note])
+        # the record of 21 September is not touched: it neither asks nor adds the two
+        served = served_fixture()
+        self.assertEqual(served["catalog"]["version"], 14)
+        self.assertFalse(any(p["questionId"] in ("C2", "C3") for pages in list(served["served"].values()) + list(served["added"].values()) for p in pages))
+
+    def test_the_book_states_version_15(self):
+        self.assertEqual(A.CATALOG_VERSION_ANSWERED, 15)
+        self.assertEqual(A.CATALOG_VERSION_READ, 15)
+        self.assertIn("b523cbf", A.CATALOG_SOURCE, "the merge commit of AERAccounts PR #137")
+        self.assertIn("CATALOG_VERSION = 15", A.CATALOG_SOURCE)
+        self.assertEqual(A.ADDED_IN_V15, {"policy": ("C2", "C3"), "wallet_account": ()})
+        self.assertEqual(A.ADDED_IN_V14, {"policy": ("C11A", "C11C", "C19"), "wallet_account": ("WO1", "WO2", "WO3", "WO4")}, "the record of Spec T11 stands beside it")
+
+    def test_the_two_are_answered_in_their_kind_and_the_book_carries_their_prompts_byte_for_byte(self):
+        for page in self.pages:
+            qid = page["questionId"]
+            q = A.question("policy", qid)
+            self.assertEqual((q.kind, q.depends_on, q.options, q.required), ("money", None, None, True), qid)
+            self.assertEqual(A.kind_of("policy", qid), page["kind"])
+            self.assertEqual(set(A.POLICY_ANSWERS[qid].keys()), {A.SHAPE_OF_KIND["money"]}, "{cents}, as every money answer")
+            self.assertEqual(A.answer_for("policy", page), A.POLICY_ANSWERS[qid])
+        self.assertEqual(A.answer_for("policy", self.pages[0]), {"cents": "10000"})
+        self.assertEqual(A.answer_for("policy", self.pages[1]), {"cents": "100000"})
+        with open(ANSWER_BOOK, "r", encoding="utf-8") as handle:
+            book = handle.read()
+        for page in self.pages:
+            self.assertIn('%s "%s"' % (page["questionId"], page["prompt"]), book, "the comment beside the rows carries the catalog's prompt byte for byte")
+        self.assertIn("SPEC T27 (8 October 2026): THE BOOK LEARNS CATALOG VERSION 15", A.__doc__)
+
+    def test_the_policy_walk_places_the_two_after_c9_and_before_c10(self):
+        ids = [q.id for q in A.expected_walk("policy")]
+        self.assertEqual(ids[ids.index("C9S"):ids.index("C10") + 1], ["C9S", "C9", "C2", "C3", "C10"])
+        self.assertEqual(len(ids), 25)
+        self.assertEqual(len(A.expected_walk("wallet_account")), 18, "the wallet account's walk is unchanged")
+        catalog_ids = [q.id for q in A.POLICY_CATALOG]
+        self.assertEqual(catalog_ids[catalog_ids.index("C9") + 1:catalog_ids.index("C10")], ["C2", "C3"])
+
+    def test_the_company_ceilings_are_never_beneath_the_wallets_own_figures(self):
+        """Spec T27 §2, the Attacker: the book cannot answer the company's ceilings beneath its own wallet's figures."""
+        cents = lambda book, qid: int(book[qid]["cents"])  # noqa: E731
+        self.assertGreaterEqual(cents(A.POLICY_ANSWERS, "C2"), cents(A.ACCOUNT_ANSWERS, "O2"), "the company ceiling (C2) at or above the account's hold (O2)")
+        self.assertGreaterEqual(cents(A.POLICY_ANSWERS, "C3"), cents(A.ACCOUNT_ANSWERS, "O1"), "the daily total (C3) at or above the account's day (O1)")
+        self.assertGreater(cents(A.POLICY_ANSWERS, "C3"), cents(A.ACCOUNT_ANSWERS, "O1"), "a company's daily total is above a wallet's day")
+        self.assertGreaterEqual(cents(A.POLICY_ANSWERS, "C2"), int(A.MONEY["holder_alone_cents"]), "and above the holder's own figure (WO3)")
+        for payment in A.PAYMENTS_ON_A_REAL_CHAIN:
+            self.assertLess(int(payment.amount_minor) // 10000, cents(A.POLICY_ANSWERS, "C2"), "%s is far under C2 (Spec T24's one dollar)" % payment.key)
+
+    def test_the_two_figures_are_the_ones_the_harness_estates_entries_already_carry(self):
+        self.assertEqual((A.POLICY_ANSWERS["C2"], A.POLICY_ANSWERS["C3"]), ({"cents": "10000"}, {"cents": "100000"}),
+                         "US$100 per payment and US$1,000 per day: on 1 October 2026 the operator set every signing entry of Harness Holdings and Harness "
+                         "Treasury to 100 and 1,000 by the platform road, and the once-run road of 8 October reported both estates `already` at those "
+                         "figures — the book's charter and the estates' entries agree, so the write of a re-answered interview fills nothing")
+        self.assertEqual(A.MONEY["company_ceiling_cents"], "10000")
+        self.assertEqual(A.MONEY["daily_total_cents"], "100000")
+        self.assertEqual(A.POLICY_ANSWERS["C2"]["cents"], A.MONEY["company_ceiling_cents"])
+        self.assertEqual(A.POLICY_ANSWERS["C3"]["cents"], A.MONEY["daily_total_cents"])
+        # whole dollars, so the platform's rounding up (dollarsCeilingOf) changes nothing: the read-back says US$100 and US$1,000, no rounding clause
+        self.assertEqual(int(A.MONEY["company_ceiling_cents"]) % 100, 0)
+        self.assertEqual(int(A.MONEY["daily_total_cents"]) % 100, 0)
 
 
 class AnswerForAServedPage(unittest.TestCase):

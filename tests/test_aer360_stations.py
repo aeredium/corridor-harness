@@ -14,6 +14,10 @@ Spec T11 (21 September 2026): the double is the estate at AER 360 Spec 92, catal
 23 questions and S5 18, the book answering the seven Spec 92 added; S3 reports the book's version beside
 what the estate served; S10 reads the new law back and raises nothing new; S11's venue probe meets the payee
 door's refusal by name, PAYEE_IS_VENUE_CONTRACT, and raises no finding; S7 says what the tiers would do.
+
+Spec T27 (8 October 2026): the double is the estate at AER 360 Spec AER360-115, catalog version 15, so S3 walks 25 questions — C2 and C3
+between C9 and C10, answered US$100.00 and US$1,000.00 — and states version 15 beside what the estate served; the charter carries the two
+ceilings and S10 reads the two lines the read-back says them in, raising nothing new on a fresh estate.
 """
 import json
 import os
@@ -80,15 +84,17 @@ class TheFoundersRoad(unittest.TestCase):
     def test_s3_answers_every_question_the_estate_serves_and_compiles_the_charter(self):
         o = self.outcomes["S3"]
         self.assertEqual(o.outcome, H.PASS, o.line)
-        self.assertIn("policy interview: 23 questions answered", o.line, "Spec T11: C11A and C19 among them")
+        self.assertIn("policy interview: 25 questions answered", o.line, "Spec T11: C11A and C19 among them; Spec T27: C2 and C3")
         self.assertIn("charter compiled (Harness Holdings Pty Ltd; quorum 1", o.line)
         self.assertIn("journey stage 2 of 7", o.line)
-        # Spec T11 §5: the book's version beside the estate's, which the estate does not state
-        self.assertIn("; the answer book answers catalog version 14, and the estate served 23 question(s), every one known to the book (%s)" % H.ESTATE_STATES_NO_CATALOG_VERSION, o.line)
+        # Spec T11 §5: the book's version beside the estate's, which the estate does not state; Spec T27: both 15, so the sentence names one
+        self.assertIn("; the answer book answers catalog version 15, and the estate served 25 question(s), every one known to the book (%s)" % H.ESTATE_STATES_NO_CATALOG_VERSION, o.line)
         given = [q for q, _, _, _ in self.runner.facts["answers"]["policy"]]
         self.assertEqual(given, [q.id for q in A.expected_walk("policy")], "the estate served the questions the book expected, in order")
         self.assertIn("C11A", given)
         self.assertIn("C19", given)
+        self.assertEqual(given[given.index("C9") + 1:given.index("C10")], ["C2", "C3"], "Spec T27: the company's ceilings after the networks and before the approvers")
+        self.assertEqual({k: self.runner.facts["charter"]["policy"]["amountsUsdCents"][k] for k in ("denyCeiling", "dailyTotal")}, {"denyCeiling": "10000", "dailyTotal": "100000"})
         self.assertNotIn("C11C", given, "asked only behind C11A's third answer")
         charter = self.runner.facts["charter"]["policy"]
         self.assertEqual(charter["payeeApproval"], {"answer": "change_approvers", "roster": ["%s <%s>" % (A.PEOPLE[k].name, A.PEOPLE[k].email) for k in A.CENSUS_ORDER],

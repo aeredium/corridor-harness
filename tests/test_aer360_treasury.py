@@ -573,7 +573,8 @@ class TheBirthRunStopsWithTheFundSentence(unittest.TestCase):
         self.assertEqual(sentence, "fund Harness Treasury: %s on arbitrum, then rerun" % address)
         self.assertTrue(o.line.endswith("%s (the three payments need US$1.00 and Harness Holdings holds US$0.00; the Treasury holds US$0.00); nothing was sent" % sentence), o.line)
         self.assertIn("payments: %s — " % H.TREASURY_NOT_FUNDED, o.line, "the summary line names the scenario and the missing prerequisite")
-        self.assertIn("the interviews walked from the book with the Treasury's own name, approver and account approvers (23 and 18 questions)", o.line)
+        # Spec T27: the Treasury's Policy Interview is asked C2 and C3 at catalog version 15 and the book answers them, so 25 where it was 23
+        self.assertIn("the interviews walked from the book with the Treasury's own name, approver and account approvers (25 and 18 questions)", o.line)
         self.assertIn("funding wallet: %s on double-stack-1, key %s (born by this run's press)" % (address, double.treasury.custody_key_id), o.line)
         self.assertTrue(any(n.startswith("%s — the estate's own words: Fund this account with USDC on arbitrum. Gas is bought separately, below." % sentence) for n in runner.notes["S7"]), runner.notes["S7"])
         self.assertEqual(double.platform.requests, [], "nothing credited")

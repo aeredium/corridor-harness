@@ -24,7 +24,9 @@ read before the one-off, so the line can say whether Spec 69's hold is provable;
 and the book's figures are the one-dollar book's (231 → 234 lines). Spec T26 made the gas credit a cure for the review's GAS_SHORTFALL and
 nothing else: the admin.env line moves to where the credential is read — only where a review refuses — the Treasury's standing credit, Holdings'
 standing credit after S7a and the Treasury's where-not-credited line go, and one conditional cure line per workspace stands where the cure is made
-(234 → 233 lines).
+(234 → 233 lines). Spec T27 added the two answers the book now gives that a version-15 estate serves — C2, the company ceiling, and C3, the daily
+total, under S3 between C9 and C10 — and nothing else moved in the calls; the S3 version sentence names 15, and the read-back's and the compile's
+expectations name the two ceiling lines and the two figures (233 → 235 lines).
 """
 import contextlib
 import io
@@ -97,7 +99,17 @@ class DryRunTest(unittest.TestCase):
         ids = [l.split('"questionId": "', 1)[1].split('"', 1)[0] for l in s3]
         self.assertEqual(ids[ids.index("C11") + 1], "C11A")
         self.assertEqual(ids[ids.index("C15") + 1], "C19")
-        self.assertIn("the answer book answers catalog version 14", [l for l in lines if l.startswith("S3 — POST /v1/onboarding/interviews {")][0])
+        # Spec T27: the two version 15 added, in the catalog's order between C9 and C10, at the figures the harness estates' entries already carry
+        self.assertEqual(ids[ids.index("C9") + 1:ids.index("C10")], ["C2", "C3"])
+        self.assertTrue(any('"questionId": "C2", "value": {"cents": "10000"}' in l for l in s3))
+        self.assertTrue(any('"questionId": "C3", "value": {"cents": "100000"}' in l for l in s3))
+        self.assertEqual(len(s3), 25)
+        self.assertIn("the answer book answers catalog version 15", [l for l in lines if l.startswith("S3 — POST /v1/onboarding/interviews {")][0])
+        readback = [l for l in lines if l.startswith("S3 — GET /v1/onboarding/interviews/<policy interview>/readback")][0]
+        self.assertIn("directly after C2 and C3 (catalog version 15) the lines C2_WRITTEN and C3_WRITTEN saying what each becomes — US$100 per payment and US$1,000 a day", readback)
+        self.assertIn("the standing limits kept where an earlier Policy Interview stands written (Spec T27; compared in S10)", readback)
+        compiled = [l for l in lines if l.startswith("S3 — POST /v1/onboarding/interviews/<policy interview>/compile")][0]
+        self.assertIn("amountsUsdCents.denyCeiling 10000 and dailyTotal 100000 from C2 and C3, compared in S10 (Spec T27)", compiled)
         self.assertIn(H.ESTATE_STATES_NO_CATALOG_VERSION, [l for l in lines if l.startswith("S3 — POST /v1/onboarding/interviews {")][0])
         s3_all = [l for l in lines if l.startswith("S3 — ")]
         order = [l.split(" — ", 1)[1].split(" ", 1)[1].split(" ")[0] for l in s3_all if "→" in l]
@@ -203,9 +215,16 @@ class DryRunTest(unittest.TestCase):
         """Spec T8: --dry unchanged in its calls. The fixture is the dry run at main after PR #5, its expectations cut off at the arrow."""
         with open(FROZEN_CALLS, "r", encoding="utf-8") as handle:
             frozen = handle.read().splitlines()
-        self.assertEqual(len(frozen), 233, "Spec T14 rewrote S7 (159 → 193); Spec T18 adds S7's conditional register read for a run resumed at S7 (193 → 194); Spec T19 adds S5's head — the ceremonies read and the conditional finish — and S14 (194 → 231); "
+        self.assertEqual(len(frozen), 235, "Spec T14 rewrote S7 (159 → 193); Spec T18 adds S7's conditional register read for a run resumed at S7 (193 → 194); Spec T19 adds S5's head — the ceremonies read and the conditional finish — and S14 (194 → 231); "
                                             "Spec T24 adds S6's payee.env read, S7's conditional one, and the runs register read before the one-off (231 → 234); "
-                                            "Spec T26 drops the three standing credit lines and prints one conditional cure per workspace, the admin.env line moved to where it is read (234 → 233)")
+                                            "Spec T26 drops the three standing credit lines and prints one conditional cure per workspace, the admin.env line moved to where it is read (234 → 233); "
+                                            "Spec T27 adds S3's answers to C2 and C3 between C9 and C10 (233 → 235)")
+        # Spec T27: the two new lines are S3's, in the catalog's order, and nothing else in the calls moved
+        ceilings = [i for i, l in enumerate(frozen) if '"questionId": "C2"' in l or '"questionId": "C3"' in l]
+        self.assertEqual([frozen[i] for i in ceilings], ['S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C2", "value": {"cents": "10000"}}',
+                                                         'S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C3", "value": {"cents": "100000"}}'])
+        self.assertIn('"questionId": "C9"', frozen[ceilings[0] - 1])
+        self.assertIn('"questionId": "C10"', frozen[ceilings[1] + 1])
         self.assertEqual(calls_of(H.dry_lines()), frozen)
         # Spec T24: no address of the owner's, and no derived address of a payee or the one-off, is in the fixture — the placeholder stands in for the file the printer never reads
         self.assertEqual(len([l for l in frozen if T.OWNER_PAYEE_PLACEHOLDER in l]), 7, "the two payees, the set of three's one-off, and the one-off's balance read before, review, creation and balance read after")

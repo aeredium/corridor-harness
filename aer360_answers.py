@@ -26,6 +26,31 @@ the estate that arrive written, at one dollar; the book writes the real figure. 
 refuses at the read-back where WO4 is not above WO3, and where WA1's people plus WO2's person are
 fewer than three (`tiersNeedThreePeople`).
 
+SPEC T27 (8 October 2026): THE BOOK LEARNS CATALOG VERSION 15. AER 360 Spec AER360-115 (aeredium/
+AERAccounts PR #137, merge commit b523cbf, live on production and demo the same day) asked the
+company's two ceilings again, which version 11 had retired: C2, "Is there an amount so large that no
+one in this company should ever make a payment of it — no approval, no exception?", and C3, "How much
+is the maximum total of payments that can be made daily?". Both are `money`, both required, served
+after C9 and before C10, refused at the page when blank or zero, and the charter does not compile
+without both — so the book's next S3 would have stopped at C2 with "the answer book has no answer for
+policy question C2". The book answers the two before a run stops rather than after (Spec T11's road,
+taken early) and states the version it answers, 15. C2 is US$100.00 ({cents: "10000"}) and C3
+US$1,000.00 ({cents: "100000"}): the figures every signing entry of Harness Holdings and Harness
+Treasury already carries — the operator set them by the platform road on 1 October 2026, and the
+once-run road of 8 October found both estates `already` at them — so the charter states a fact, not a
+preference, and the harness's expectation is the charter's and cannot drift from it unnoticed (the
+rule of Spec T9). At the write the estate converts the two figures to whole US dollars, rounded up,
+and writes them as max_amount_per_tx_usd and max_amount_per_day_usd onto every signing entry it drew
+up on its own account (`aer-accounts` and each "(author)" entry) where that limit stands at zero, and
+keeps a limit that already stands (services/charterceilings.ts): the write of a re-answered interview
+fills nothing and its read-back says the standing limits are kept; the write of a fresh estate fills
+`aer-accounts` and "Harriet (author)" with 100 and 1,000 and its read-back says they are written. The
+tests hold the two pages against tests/fixtures/aer360-version-15-added.json, the version-15 record
+beside the record of 21 September, and hold C2 at or above O2 and C3 at or above O1, so the book never
+answers the company's ceilings beneath its own wallet's figures. The one-dollar book (Spec T24) is
+untouched — every payment is at most US$0.50, under O2's hold, under WO3's figure and far under C2 —
+and nothing else in the book changes: no payment, no payee, no person, no hold, no tier.
+
 THE LAW OF THIS FILE. The harness never improvises an answer. A question the book does not know
 stops the run at that station with the question's id, prompt and kind printed word for word,
 because a moved catalog is a finding, not something to improvise around. A choice the served
@@ -120,14 +145,16 @@ from typing import Any, Dict, List, NamedTuple, Optional, Sequence
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import aer360_tables as T  # noqa: E402
 
-CATALOG_SOURCE = "aeredium/AERAccounts apps/server/src/services/questioncatalog.ts at cf3be4a (Spec 92), CATALOG_VERSION = 14"
-CATALOG_VERSION_READ = 14
-# THE VERSION THIS BOOK ANSWERS (Spec T11). S3 reports it beside what the estate serves; a question the estate serves that the
-# book does not know is reported with this figure in the sentence, so a moved catalog names the two versions it stands between.
-CATALOG_VERSION_ANSWERED = 14
+CATALOG_SOURCE = "aeredium/AERAccounts apps/server/src/services/questioncatalog.ts at b523cbf (Spec AER360-115, PR #137), CATALOG_VERSION = 15"
+CATALOG_VERSION_READ = 15
+# THE VERSION THIS BOOK ANSWERS (Spec T11; 15 since Spec T27). S3 reports it beside what the estate serves; a question the estate serves
+# that the book does not know is reported with this figure in the sentence, so a moved catalog names the two versions it stands between.
+CATALOG_VERSION_ANSWERED = 15
 RETIRED_IN_V12 = ("C16", "C16C")
 # The seven questions catalog version 14 added (Spec 92), by interview; a double standing in for an older estate leaves them out.
 ADDED_IN_V14 = {"policy": ("C11A", "C11C", "C19"), "wallet_account": ("WO1", "WO2", "WO3", "WO4")}
+# The two questions catalog version 15 added (Spec AER360-115; Spec T27): the company's ceilings, in the Policy Interview only.
+ADDED_IN_V15 = {"policy": ("C2", "C3"), "wallet_account": ()}
 
 # ---------------------------------------------------------------------------
 # The estate and its people.
@@ -210,6 +237,13 @@ MONEY = {
     # book writes the real figure: the holder alone up to 2.00, two signatures enough up to 10.00, three above it (Spec T14).
     "holder_alone_cents": "200",          # 2.00 — WO3: up to it the holder pays alone, with their own passkey
     "two_signatures_cents": "1000",       # 10.00 — WO4: up to it two signatures are enough; above it all three
+    # The company's two ceilings (Spec AER360-115, C2 and C3; Spec T27): the figures the harness estates' entries already carry.
+    "company_ceiling_cents": "10000",     # 100.00 — C2: on 1 October 2026 the operator set every signing entry of Harness Holdings and Harness
+                                          # Treasury to 100 per payment by the platform road (set_harness_entries_by_the_platform_road.sh), and
+                                          # the once-run road of 8 October reported both estates `already` at that figure
+    "daily_total_cents": "100000",        # 1,000.00 — C3: on 1 October 2026 the operator set every signing entry of Harness Holdings and Harness
+                                          # Treasury to 1,000 per day by the platform road (set_harness_entries_by_the_platform_road.sh), and
+                                          # the once-run road of 8 October reported both estates `already` at that figure
 }
 
 WALLET_ACCOUNT_NAME = "Operating account"
@@ -285,7 +319,7 @@ def payments_total_minor(book: Optional[Sequence[Payment]] = None) -> int:
 PAYMENTS: List[Payment] = payments()
 
 # ---------------------------------------------------------------------------
-# The catalog, as version 14 asks it: id, kind, the gate it hangs on, and its closed options.
+# The catalog, as version 15 asks it: id, kind, the gate it hangs on, and its closed options.
 # Order is the catalog's own; the interview serves questions in this order, skipping the gated.
 # ---------------------------------------------------------------------------
 class Question(NamedTuple):
@@ -347,6 +381,11 @@ POLICY_CATALOG: List[Question] = [
              ["Level 2 may see level 3", "Level 3 may see level 4 — the agents and their wallets"]),
     Question("C9S", "statement", None, None),
     Question("C9", "multi_choice", None, list(OTHER_NETWORKS)),
+    # version 15 (Spec AER360-115; Spec T27): the company's two ceilings, asked again after the networks and before the approvers —
+    #   C2 "Is there an amount so large that no one in this company should ever make a payment of it — no approval, no exception?"
+    #   C3 "How much is the maximum total of payments that can be made daily?"
+    Question("C2", "money", None, None, True),
+    Question("C3", "money", None, None, True),
     Question("C10", "single_choice", None, list(ONE_TO_FIVE), True),
     Question("C11", "roster_multi", None, None, True),
     # version 14 (Spec 92): who approves a new payee, and — behind the third answer only — the CFO or the CFO's delegate
@@ -466,6 +505,9 @@ POLICY_ANSWERS: Dict[str, Dict[str, Any]] = {
     "B4": {"choices": []},  # sight granted to no level beneath; not served while A9 is No
     "C9S": ACK,
     "C9": {"choices": [T.C9_NETWORK_CHOICE]},
+    # Spec T27: the company ceiling and the daily total — the figures every signing entry of the harness estates already carries
+    "C2": {"cents": MONEY["company_ceiling_cents"]},
+    "C3": {"cents": MONEY["daily_total_cents"]},
     "C10": {"choice": "1"},
     "C11": {"people": [PEOPLE[PAYMENT_APPROVER].email]},
     # Spec T11: a new payee is approved by the change approvers — the census at C12's count of two, the roster T10 asserts in S6
@@ -694,7 +736,7 @@ def _visible(q: Question, answers: Dict[str, Dict[str, Any]]) -> bool:
 
 
 def expected_walk(interview_type: str) -> List[Question]:
-    """The questions a version-14 estate serves for this book, in order."""
+    """The questions a version-15 estate serves for this book, in order (a version-14 estate serves the same less ADDED_IN_V15)."""
     answers = ANSWERS[interview_type]
     return [q for q in CATALOGS[interview_type] if _visible(q, answers)]
 
