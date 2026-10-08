@@ -310,7 +310,8 @@ a live run with no hand for it: "no matching payment in the last 7 days", whatev
 and one helper, `age_runs(days)`: time passing, every run of the workspace created that many days earlier, so a later run meets the screen
 as the live estate met the run of 4 October on 8 October; and two dials for the roads on which the acknowledgement is not taken —
 `acknowledgement_ignored=True`, a screen that does not read duplicatesAcknowledged, and `acknowledged_review_refused=True`, the review made
-with it refused NOT_AUTHENTICATED (Harness Holdings' workspace only).
+with it refused NOT_AUTHENTICATED — both workspaces alike, one estate. A run's createdAt keeps its milliseconds (`_run_stamp`), as
+toISOString writes it, so a payment made in a run's first second is never read as one made before the run began.
 """
 from __future__ import annotations
 
@@ -1418,7 +1419,8 @@ class EstateDouble:
                                          currency_spoken_as_code=currency_spoken_as_code, faucet=self.faucet, rpc=self.rpc, platform=self.platform, chain=self.chain,
                                          treasury=False, is_treasury=True, aap_account_id=TREASURY_ACCOUNT_ID, secret=self.secret, account_email=T.TREASURY["email"],
                                          initial_usdc_cents=treasury_usdc_cents if treasury_funding_wallet == "born" else 0,  # Bear funds an address he has seen: a wallet that stood
-                                         initial_gas_cents=treasury_gas_cents,
+                                         initial_gas_cents=treasury_gas_cents, acknowledgement_ignored=acknowledgement_ignored,
+                                         acknowledged_review_refused=acknowledged_review_refused,  # Spec T28: one estate, the same screen for both workspaces
                                          quote_ceiling_usd_cents=quote_ceiling_usd_cents, actual_gas_usd_cents=actual_gas_usd_cents, before_spec_106=before_spec_106)
         if funding_wallet == "born":
             self.birth_funding_wallet(None, "account_creation_interview")
@@ -3869,7 +3871,7 @@ class EstateDouble:
         set_row = {"id": "set-" + secrets.token_hex(6), "reference": "S-" + body["reference"], "realm": "sandbox", "idempotencyKey": body["idempotencyKey"], "status": "draft",
                    "sourceAccount": self.source_account, "authorCredentialId": caller["credentialId"], "setDigest": "0x" + secrets.token_hex(32),
                    "aggregateBaseMinor": str(review["aggregateUsd"]), "aggregateUsdMinor": str(review["aggregateUsd"]), "approvalsRequired": review["approvalsRequired"],
-                   "bandThresholdBaseMinor": str(review["threshold"]), "createdAt": self._now_iso(), "submittedAt": None, "approvedAt": None, "executedAt": None,
+                   "bandThresholdBaseMinor": str(review["threshold"]), "createdAt": self._run_stamp(), "submittedAt": None, "approvedAt": None, "executedAt": None,
                    "instructions": [], "review": review["payload"]}
         for r in review["resolved"]:
             set_row["instructions"].append({"id": "ins-" + secrets.token_hex(6), "setId": set_row["id"], "sequence": r["index"], "payeeId": r["payeeId"], "payeeName": r["payeeName"],
@@ -4007,15 +4009,23 @@ class EstateDouble:
                 "evidence": ("no matching payment in the last %d days" % DUPLICATE_WINDOW_DAYS) if not refusals else "%d possible duplicate(s) need acknowledgement" % len(refusals)}
 
     @staticmethod
+    def _run_stamp(epoch: Optional[float] = None) -> str:
+        """A run's createdAt as the estate writes it (Date.toISOString, payout_sets.created_at): UTC, milliseconds kept — the screen's previouslySentAt."""
+        epoch = time.time() if epoch is None else epoch
+        return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(epoch)) + ".%03dZ" % (int(epoch * 1000) % 1000)
+
+    @staticmethod
     def _epoch(iso: str) -> float:
-        """The double's own instants (`_iso`: second precision, UTC) back to seconds since the epoch."""
-        return float(calendar.timegm(time.strptime(str(iso)[:19], "%Y-%m-%dT%H:%M:%S")))
+        """The double's own instants (`_iso`, `_run_stamp`: UTC, the milliseconds where they are written) back to seconds since the epoch."""
+        text = str(iso)
+        fraction = text[20:23] if len(text) > 23 and text[19] == "." else "0"
+        return float(calendar.timegm(time.strptime(text[:19], "%Y-%m-%dT%H:%M:%S"))) + int(fraction) / 1000.0
 
     def age_runs(self, days: float) -> None:
         """Time passing (Spec T28): every run of this workspace — and of the Treasury's beside it — created `days` earlier, its approvals and trail untouched."""
         for double in (self, self.treasury) if self.treasury is not None else (self,):
             for row in double.sets.values():
-                row["createdAt"] = double._iso(double._epoch(row["createdAt"]) - days * 24 * 60 * 60)
+                row["createdAt"] = double._run_stamp(double._epoch(row["createdAt"]) - days * 24 * 60 * 60)
 
     def gas_account_preflight(self, resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
@@ -4072,7 +4082,7 @@ class EstateDouble:
         set_row = {"id": "set-" + secrets.token_hex(6), "reference": "S-behind the review", "realm": "sandbox", "idempotencyKey": "behind-" + secrets.token_hex(4), "status": "settled",
                    "sourceAccount": self.source_account, "authorCredentialId": caller["credentialId"], "setDigest": "0x" + secrets.token_hex(32),
                    "aggregateBaseMinor": str(review["aggregateUsd"]), "aggregateUsdMinor": str(review["aggregateUsd"]), "approvalsRequired": 0, "bandThresholdBaseMinor": "0",
-                   "createdAt": self._now_iso(), "submittedAt": self._now_iso(), "approvedAt": self._now_iso(), "executedAt": self._now_iso(), "instructions": [], "review": review["payload"]}
+                   "createdAt": self._run_stamp(), "submittedAt": self._now_iso(), "approvedAt": self._now_iso(), "executedAt": self._now_iso(), "instructions": [], "review": review["payload"]}
         for r in rows:
             try:
                 self.chain.transfer(self.source_account, r["address"], r["amountMinor"])

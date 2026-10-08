@@ -1105,6 +1105,14 @@ class AResumeFromEveryStation(PathfinderBase):
                 runner = self.walk(start_at=start)
                 self.assertEqual([o.station for o in runner.outcomes], P.STATION_IDS)
                 self.assertEqual(runner.outcome_of("S13").outcome, P.PASS, runner.line(runner.outcome_of("S13")))
+                if start in ("S4", "S5", "S6", "S7", "S8", "S9", "S10"):
+                    # Spec T28: the estate double screens repeats as the estate does. Resumed at S4 to S10, S11 funds the same agent again under the
+                    # same reference (PF-<run id>) inside seven days, and the estate refuses the creation in its own words — as the live estate always
+                    # has; the double used to let it through. Pathfinder confirms no repeat: outside T28's fence, and the owner's to rule.
+                    s11 = runner.outcome_of("S11")
+                    self.assertEqual(s11.outcome, P.FAIL, runner.line(s11))
+                    self.assertIn("refused at creation — DUPLICATE_UNACKNOWLEDGED: This looks like a payment that has already been made recently. "
+                                  "Confirm it is intentional to continue.", s11.line)
                 self.assertIn(first.facts["agent_id"], self.double.deleted, "the agent that run left standing is removed")
                 for outcome in runner.outcomes:
                     self.assertNotIn("a fault, not a judgment", outcome.line, runner.line(outcome))

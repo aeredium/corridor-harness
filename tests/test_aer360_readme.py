@@ -395,14 +395,22 @@ class EstateHarnessReadmeTest(unittest.TestCase):
                       "*\"What do you think if we fix the harness to answer yes when the question is asked, and let's see whether that fixes the problem, because that would be the easiest fix of them all?\"*",
                       "*The bound.*", "the Treasury's, S7a's set of three, and each of P1, P2 and P3", "`acknowledgeable` list beside it", "`repeat_within_bound`",
                       "the harness never acknowledges what it cannot bound", "*Within the bound, the founder's press.*", "before any gas is credited",
-                      "*acknowledged by the author*", "everything after creation is as before",
+                      "*acknowledged by the author*", "the creation's own screen is judged the same way before the run is submitted",
+                      "leaves the run a draft, never submitted", "the creation carries no yes",
                       "*the estate's duplicate screen named Northwind Supplies 0.50 USDC under HH-0001 as paid on <previouslySentAt> (run <id>); this run's founder confirmed it, as a founder would (Spec T28)*",
-                      "`remember_runs`", "*not named*", "noted once each", "*Outside the bound, a finding.*", "*P1: a duplicate within this run, never acknowledged (Spec T28)*",
+                      "`remember_runs`", "*not named*", "writes no note", "a payment not made has no note", "*Outside the bound, a finding.*",
+                      "*P1: a duplicate within this run, never acknowledged (Spec T28)*", "*P1: a duplicate the harness cannot bound, never acknowledged (Spec T28)*",
+                      "the row reviewed repeats no payment this run created", "(`.limit(1)`, in no order)", "both kept by NTP",
+                      "keeps in S7's line what the screen named and that the founder confirmed it", "*What the second review costs.*", "five minutes on",
+                      "S7a's second review is the spec's (§3.1) and feeds no creation; it is kept, and said here", "the Treasury's printed before its credential and its cure",
+                      "a run's `createdAt` keeps its milliseconds", "on both workspaces alike",
                       "the references stay HH-0001 to HH-0003, as a client's repeat payments do", "A run resumed at S7 is a run of its own",
                       "*No question mark for a number.*", "*the estate asked ? signature(s)*", "*no run was created*",
                       "*only where the review's duplicate screen names a payment of an earlier run (previouslySentAt before this run began); a duplicate within this run is a finding, never acknowledged*",
                       "*<true only where the second review above was made, else false>*", "235 → 240 lines", "*The double learned the screen.*",
-                      "*no matching payment in the last 7 days*", "`age_runs(days)`", "`confirm_repeats`", "its S11 is unchanged",
+                      "*no matching payment in the last 7 days*", "`age_runs(days)`", "`confirm_repeats`", "its code is unchanged",
+                      "a Pathfinder run resumed at S4 to S10 funds the same agent again under the same reference (`PF-<run id>`)", "its resume test now says so",
+                      "the owner's to rule",
                       "each naming the run of 4 October", "S10 reconciles the money to the cent", "The spec's tests (a), (b), (d) and (e) were red on main",
                       "pass on both, as they must"):
             self.assertIn(words, paragraph, words)
@@ -433,7 +441,9 @@ class ChangelogTest(unittest.TestCase):
                       "`tests/test_aer360_double.py`", "`age_runs(days)`", "`tests/test_the_founder_confirms_a_repeat.py`", "`tests/test_aer360_readme.py`",
                       "AAOI, before the code", "**Auditor**", "**Attacker**", "**Optimiser**", "**Implementer**", "five minutes", "a run resumed at S7 is a run of its own",
                       "**Where the spec and the code part company**", "*not named: instruction <id> is in no runs register this run read*",
-                      "Not touched, as the fence requires", "`aerconnect_harness.py`", "No secret."):
+                      "Not touched, as the fence requires", "`aerconnect_harness.py`", "No secret.",
+                      "`REPEAT_UNBOUNDED_PROBE`", "`review_the_run`", "`note_the_repeats_confirmed`", "`repeats_said`", "`_run_stamp`", "**The review of the code**",
+                      "a Pathfinder run resumed at S4 to S10 funds the same agent again under the same reference (`PF-<run id>`)", "32 of the new file's 35"):
             self.assertIn(words, entry, words)
 
     def test_the_changelog_records_spec_t27_and_names_every_change(self):

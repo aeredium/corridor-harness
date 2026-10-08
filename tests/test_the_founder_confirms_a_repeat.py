@@ -16,11 +16,13 @@ no second review, no creation, a finding in the estate's words, S7 fails; (c) no
 today; (d) the dry run's new lines and count; (e) the question-mark sentence is gone. Each was red on main.
 """
 import datetime as _dt
+import json
 import os
 import sys
 import tempfile
 import unittest
 import unittest.mock
+import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import aer360_answers as A  # noqa: E402
@@ -60,6 +62,25 @@ def note_for(payee, amount, reference, run):
     return H.REPEAT_CONFIRMED_NOTE % (payee, amount, reference, run["createdAt"], run["id"])
 
 
+def intercepting(double, rule):
+    """
+    A transport that lets `rule(method, path, body)` act first — to change the estate's register as another hand would, or to answer for it with
+    (status, payload) — and passes every other request to the double. The Treasury's runner is made from the runner's own transport, so it is wired too.
+    """
+    def transport(request):
+        body = json.loads(request.data.decode("utf-8")) if request.data else None
+        answered = rule(request.get_method(), urllib.parse.urlparse(request.full_url).path, body)
+        if answered is not None:
+            return answered[0], [("Content-Type", "application/json; charset=utf-8")], json.dumps(answered[1])
+        return double(request)
+    return transport
+
+
+def is_creation_of(method, path, body, reference):
+    pays = (body or {}).get("pays") or []
+    return method == "POST" and path == "/v1/sets" and len(pays) == 1 and pays[0].get("invoiceRef") == reference
+
+
 def confirmed_words(payee, amount, reference, run):
     return ("the duplicate screen named %s %s under %s, paid on %s (run %s); the founder confirmed it, as a founder would, and the review asked again passed it: "
             "1 possible duplicate(s), acknowledged by the author (Spec T28)" % (payee, amount, reference, run["createdAt"], run["id"]))
@@ -91,35 +112,51 @@ class TheBoundIsReadOffTheEstatesOwnWords(unittest.TestCase):
         self.assertEqual(H.instant_of(self.STARTED), _dt.datetime(2026, 10, 8, 6, 37, 0, 123000, tzinfo=utc))
         self.assertEqual(H.instant_of("2026-10-08T01:07:00-0530"), _dt.datetime(2026, 10, 8, 6, 37, 0, tzinfo=utc))
         self.assertEqual(H.instant_of(H.now_iso()).tzinfo is not None, True, "the harness's own stamp reads back")
-        for garbage in (None, "", "4 October", "2026-10-04", "2026-10-04T06:12:13", "2026-13-40T06:12:13Z", 1696400000):
-            self.assertIsNone(H.instant_of(garbage), garbage)
+        for garbage in (None, "", "4 October", "2026-10-04", "2026-10-04T06:12:13", "2026-13-40T06:12:13Z", 1696400000, "2026-10-04 06:12:13.456Z",
+                        "2026-10-04T06:12:13.000+24:00", "2026-10-04T06:12:13.000+23:60", "2026-10-04T06:12:13.000-99:99"):
+            self.assertIsNone(H.instant_of(garbage), garbage)  # an offset of a day or more is no instant, and never a crash in the middle of S7
 
     def test_a_payment_of_an_earlier_run_is_within_the_bound(self):
-        within, why = H.repeat_within_bound(self.warning(), self.STARTED, {})
-        self.assertTrue(within)
+        kind, why = H.repeat_within_bound(self.warning(), self.STARTED, {})
+        self.assertEqual(kind, H.REPEAT_EARLIER)
         self.assertEqual(why, "a payment of an earlier run: previouslySentAt 2026-10-04T06:12:13.456Z, before this run began (%s); instruction ins-4-october is not one this run created" % self.STARTED)
 
     def test_a_payment_made_after_the_run_began_is_outside_whatever_its_id(self):
-        within, why = H.repeat_within_bound(self.warning(sent_at="2026-10-08T06:37:00.124Z"), self.STARTED, {})
-        self.assertFalse(within)
+        kind, why = H.repeat_within_bound(self.warning(sent_at="2026-10-08T06:37:00.124Z"), self.STARTED, {})
+        self.assertEqual(kind, H.REPEAT_WITHIN_RUN)
         self.assertEqual(why, "previouslySentAt 2026-10-08T06:37:00.124Z is not before this run began (%s): the payment it names was made within this run" % self.STARTED)
-        self.assertFalse(H.repeat_within_bound(self.warning(sent_at="2026-10-08T06:37:00.123Z"), self.STARTED, {})[0], "the very instant the run began is not before it")
+        self.assertEqual(H.repeat_within_bound(self.warning(sent_at="2026-10-08T06:37:00.123Z"), self.STARTED, {})[0], H.REPEAT_WITHIN_RUN,
+                         "the very instant the run began is not before it")
 
     def test_an_instruction_this_run_created_is_outside_whatever_its_clock_says(self):
         """The estate's clock behind the Mac's would put this run's own payment before the run began; the ids catch it."""
-        within, why = H.repeat_within_bound(self.warning(previous="ins-mine"), self.STARTED, {"ins-mine": {"key": "P1", "set_id": "set-mine"}})
-        self.assertFalse(within)
+        kind, why = H.repeat_within_bound(self.warning(previous="ins-mine"), self.STARTED, {"ins-mine": {"key": "P1", "set_id": "set-mine"}})
+        self.assertEqual(kind, H.REPEAT_WITHIN_RUN)
         self.assertEqual(why, "instruction ins-mine is P1's, which this run created (run set-mine)")
+
+    def test_a_row_repeating_a_payment_this_run_created_is_outside_whichever_earlier_payment_the_estate_names(self):
+        """The screen names one match a row (`.limit(1)`): an earlier run's twin can stand in the warning while the row repeats this run's own payment."""
+        mine = {"ins-p1": {"key": "P1", "set_id": "set-p1", "address": OWNER, "chain": "arbitrum", "asset": "USDC", "amountMinor": "500000", "invoiceRef": "HH-0001"}}
+        row = {"payeeAddressId": "addr-contoso", "asset": "USDC", "chain": "arbitrum", "amountMinor": "500000", "invoiceRef": "HH-0001"}
+        kind, why = H.repeat_within_bound(self.warning(), self.STARTED, mine, row)
+        self.assertEqual(kind, H.REPEAT_WITHIN_RUN)
+        self.assertEqual(why, "this row repeats P1's payment, which this run created (instruction ins-p1, run set-p1) — the screen names ins-4-october, and its "
+                              "acknowledgement would cover this run's own payment too")
+        for differs in ({"amountMinor": "500001"}, {"invoiceRef": "HH-0003"}, {"address": "0x" + "1" * 40}):
+            other = {"ins-p1": dict(mine["ins-p1"], **differs)}
+            self.assertEqual(H.repeat_within_bound(self.warning(), self.STARTED, other, row)[0], H.REPEAT_EARLIER, differs)
+        self.assertEqual(H.repeat_within_bound(self.warning(), self.STARTED, {"ins-p1": dict(mine["ins-p1"], chain="base")}, row)[0], H.REPEAT_EARLIER, "another chain is another payment")
 
     def test_what_cannot_be_read_cannot_be_bounded(self):
         self.assertEqual(H.repeat_within_bound(self.warning(sent_at="yesterday"), self.STARTED, {}),
-                         (False, "previouslySentAt 'yesterday' is not a time the harness can read, so the repeat cannot be bounded"))
+                         (H.REPEAT_UNBOUNDED, "previouslySentAt 'yesterday' is not a time the harness can read, so the repeat cannot be bounded"))
         self.assertEqual(H.repeat_within_bound(self.warning(previous=""), self.STARTED, {}),
-                         (False, "the warning names no previousInstructionId, so the repeat cannot be bounded"))
+                         (H.REPEAT_UNBOUNDED, "the warning names no previousInstructionId, so the repeat cannot be bounded"))
         bare = {"code": "DUPLICATE_UNACKNOWLEDGED", "message": SENTENCE}
-        self.assertEqual(H.repeat_within_bound(bare, self.STARTED, {})[0], False)
+        self.assertEqual(H.repeat_within_bound(bare, self.STARTED, {})[0], H.REPEAT_UNBOUNDED)
         self.assertEqual(H.repeat_within_bound(self.warning(), "not a time", {}),
-                         (False, "this run's start 'not a time' is not a time the harness can read, so the repeat cannot be bounded"))
+                         (H.REPEAT_UNBOUNDED, "this run's start 'not a time' is not a time the harness can read, so the repeat cannot be bounded"))
+        self.assertEqual(H.repeat_within_bound(self.warning(sent_at="2026-10-04T06:12:13.000+24:00"), self.STARTED, {})[0], H.REPEAT_UNBOUNDED)
 
     def test_the_amount_is_said_in_the_assets_own_decimals(self):
         self.assertEqual(H.asset_amount("500000", "USDC"), "0.50 USDC")
@@ -330,7 +367,7 @@ class ARepeatWithinThisRunIsAFindingNeverAcknowledged(unittest.TestCase):
         self.assertIn(SENTENCE, p1.came_back, "what came back, verbatim")
         self.assertIn("previousInstructionId not an instruction this run created", p1.expected)
         self.assertIn("P1 (0.50 USDC to %s, the owner's wallet, expected to proceeds to approval): paid to the register's Northwind Supplies on arbitrum, whitelisted; "
-                      "the duplicate screen named a payment this run cannot bound — DUPLICATE_UNACKNOWLEDGED: \"%s\"" % (OWNER, SENTENCE), o.line)
+                      "the duplicate screen named a payment of this run — DUPLICATE_UNACKNOWLEDGED: \"%s\"" % (OWNER, SENTENCE), o.line)
         self.assertIn("a finding, not acknowledged, and nothing was created (Spec T28); %s and the one-dollar book" % H.NO_RUN_CREATED, o.line)
         self.assertEqual([n for n in runner.notes["S7"] if n.endswith("(Spec T28)")], [], "nothing confirmed, nothing noted as confirmed")
         report = runner.report()
@@ -358,9 +395,120 @@ class ARepeatWithinThisRunIsAFindingNeverAcknowledged(unittest.TestCase):
         self.assertEqual(findings[0].said, 'DUPLICATE_UNACKNOWLEDGED: "%s" — Contoso Legal 0.49 USDC under HH-0001, previouslySentAt %s, previousInstructionId %s; '
                                            "instruction %s is P1's, which this run created (run %s); not acknowledged, and nothing was created" % (
                                                SENTENCE, double.sets[p1["set_id"]]["createdAt"], p1["instruction_id"], p1["instruction_id"], p1["set_id"]))
-        self.assertIn("P3 (0.49 USDC to %s, the owner's wallet, expected to proceeds to approval): the duplicate screen named a payment this run cannot bound" % OWNER, o.line)
+        self.assertIn("P3 (0.49 USDC to %s, the owner's wallet, expected to proceeds to approval): the duplicate screen named a payment of this run" % OWNER, o.line)
         self.assertIn("nothing was created (Spec T28); %s and" % H.NO_RUN_CREATED, o.line)
         self.assertEqual(double.chain.balance_of(OWNER), 500000, "P1's forty-nine cents and P2's cent; P3 never left")
+
+
+@unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
+class ARowRepeatingThisRunsOwnPaymentIsAFindingBehindAnEarlierTwin(unittest.TestCase):
+    """
+    The screen names one match a row (`.limit(1)`, no order): where an earlier run's identical payment is still in the window it can stand in the
+    warning for this run's own, and the estate's yes would cover both. The harness compares the row with what this run created, whatever is named.
+    """
+
+    def test_a_book_whose_p3_repeats_p1_is_stopped_at_p3_on_the_second_run_too(self):
+        book = [A.Payment("P1", "NORTHWIND_ETHEREUM", "Northwind Supplies", "0.49", "HH-0001", "proceeds to approval", "a test book"),
+                A.PAYMENTS_ON_A_REAL_CHAIN[1],
+                A.Payment("P3", "CONTOSO_ETHEREUM", "Contoso Legal", "0.49", "HH-0001", "proceeds to approval", "a test book: P1 again, under P1's reference")]
+        with unittest.mock.patch.object(A, "PAYMENTS_ON_A_REAL_CHAIN", book):
+            double = EstateDouble(holdings_gas_cents=9971, treasury_gas_cents=11995)
+            tmp = tempfile.mkdtemp()
+            first = runner_on(double, tmp, invite=double.mint_founder_link())
+            self.assertEqual({o.station: o for o in first.run()}["S7"].outcome, H.FAIL, "the first run stops P3 by the id the screen names")
+            double.age_runs(4)
+            earlier_p1 = double.sets[first.facts["sets"]["P1"]["set_id"]]
+            runner = runner_on(double, tmp, start_at="S7")
+            o = {x.station: x for x in runner.run()}["S7"]
+        self.assertEqual(o.outcome, H.FAIL, o.line)
+        p1 = runner.facts["sets"]["P1"]
+        self.assertTrue(p1["landed"], "P1 repeats the earlier run's P1: confirmed and paid")
+        self.assertEqual(reviews_and_creations(runner, "HH-0001")[-1:], [("POST /v1/sets/review", False)], "P3: one review, never acknowledged, never created")
+        self.assertIsNone(runner.facts["sets"]["P3"]["set_id"])
+        finding = [f for f in runner.findings if f.probe == "P3: " + PROBE_WORDS]
+        self.assertEqual(len(finding), 1)
+        self.assertIn("— Contoso Legal 0.49 USDC under HH-0001, previouslySentAt %s, previousInstructionId %s; this row repeats P1's payment, which this run created "
+                      "(instruction %s, run %s) — the screen names %s, and its acknowledgement would cover this run's own payment too; not acknowledged, and nothing was created" % (
+                          earlier_p1["createdAt"], earlier_p1["instructions"][0]["id"], p1["instruction_id"], p1["set_id"], earlier_p1["instructions"][0]["id"]), finding[0].said)
+        self.assertEqual(double.chain.balance_of(OWNER), 1000000, "fifty cents a run — P1's forty-nine and P2's one — and never P3's forty-nine again within a run")
+
+
+@unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
+class TheCreationsOwnScreenIsJudgedBeforeTheRunIsSubmitted(unittest.TestCase):
+    """createSet runs the screen again with the body's yes, which covers whatever it finds; the 201's screen is judged, and a run it cannot bound stays a draft."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.double = EstateDouble()
+        cls.tmp = tempfile.mkdtemp()
+        runner_on(cls.double, cls.tmp, invite=cls.double.mint_founder_link()).run()
+        cls.double.age_runs(4)
+        cls.earlier = by_reference(cls.double)
+        cls.runner = runner_on(cls.double, cls.tmp, start_at="S7")
+        cls.intruder = {}
+
+        def rule(method, path, body):
+            if is_creation_of(method, path, body, "HH-0001") and not cls.intruder:
+                # another hand pays P1's twin between the founder's second review and the creation, and the screen happens to name it first
+                previous = cls.earlier["HH-0001"]["instructions"][0]
+                stamp = cls.double._run_stamp()
+                cls.intruder.update(id="set-intruder", reference="S-another hand", realm="sandbox", idempotencyKey="another-hand", status="settled",
+                                    sourceAccount=cls.double.source_account, authorCredentialId="cred-another-hand", setDigest="0x" + "0" * 64,
+                                    aggregateBaseMinor="50", aggregateUsdMinor="50", approvalsRequired=0, bandThresholdBaseMinor="0", createdAt=stamp,
+                                    submittedAt=stamp, approvedAt=stamp, executedAt=stamp, review=None,
+                                    instructions=[dict(previous, id="ins-intruder", setId="set-intruder", status="confirmed")])
+                cls.double.sets = {"set-intruder": cls.intruder, **cls.double.sets}
+                cls.double.approvals["set-intruder"] = []
+            return None
+
+        cls.runner.transport = intercepting(cls.double, rule)
+        cls.outcomes = {o.station: o for o in cls.runner.run()}
+        cls.line = cls.outcomes["S7"].line
+
+    def test_the_run_the_yes_would_have_covered_stays_a_draft_and_is_a_finding(self):
+        self.assertEqual(self.outcomes["S7"].outcome, H.FAIL, self.line)
+        p1 = self.runner.facts["sets"]["P1"]
+        self.assertIsNotNone(p1["set_id"])
+        self.assertEqual((p1["submitted"], p1["executed"], p1["landed"]), (None, None, False), "never submitted, never executed")
+        self.assertEqual(self.double.sets[p1["set_id"]]["status"], "draft")
+        self.assertEqual(reviews_and_creations(self.runner, "HH-0001"), [("POST /v1/sets/review", False), ("POST /v1/sets/review", True), ("POST /v1/sets", True)])
+        self.assertFalse(any(c.route == "POST /v1/sets/%s/submit" % p1["set_id"] for c in self.runner.calls))
+        finding = [f for f in self.runner.findings if f.probe == "P1: " + PROBE_WORDS]
+        self.assertEqual(len(finding), 1)
+        self.assertEqual(finding[0].route, "POST /v1/sets")
+        self.assertTrue(finding[0].said.endswith("previousInstructionId ins-intruder; previouslySentAt %s is not before this run began (%s): the payment it names was made within this run; "
+                                                 "the run %s was created with the acknowledgement and stands a draft, never submitted: nothing moved" % (
+                                                     self.intruder["createdAt"], self.runner.started_at, p1["set_id"])), finding[0].said)
+        self.assertIn("the run %s stands a draft, never submitted, so the estate named no count of signatures" % p1["set_id"], self.line)
+
+    def test_notes_are_written_for_the_payments_whose_creation_carried_the_yes_and_no_other(self):
+        notes = [n for n in self.runner.notes["S7"] if n.endswith("(Spec T28)")]
+        self.assertEqual(notes, [note_for("Unlisted destination", "0.01 USDC", "HH-0002", self.earlier["HH-0002"]),
+                                 note_for("Contoso Legal", "0.49 USDC", "HH-0003", self.earlier["HH-0003"])],
+                         "S7a confirmed three, P1's creation was stopped: two notes, P2's and P3's")
+        self.assertEqual(self.double.chain.balance_of(OWNER), 1500000, "the first run's dollar, and P2's and P3's fifty cents; P1's draft moved nothing")
+
+
+@unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
+class ARefusedCreationKeepsWhatTheScreenNamed(unittest.TestCase):
+    """A creation carrying the yes and refused all the same keeps, in S7's line, what the screen named and that the founder confirmed it — and writes no note."""
+
+    def test_the_line_is_never_the_8_october_sentence_alone(self):
+        double = EstateDouble()
+        tmp = tempfile.mkdtemp()
+        runner_on(double, tmp, invite=double.mint_founder_link()).run()
+        double.age_runs(4)
+        earlier = by_reference(double)
+        runner = runner_on(double, tmp, start_at="S7")
+        refusal = {"error": {"code": "DUPLICATE_UNACKNOWLEDGED", "message": SENTENCE, "acknowledgeable": True}}  # a createSet that does not read the yes
+        runner.transport = intercepting(double, lambda method, path, body: (422, refusal) if is_creation_of(method, path, body, "HH-0001") else None)
+        o = {x.station: x for x in runner.run()}["S7"]
+        self.assertEqual(o.outcome, H.FAIL, o.line)
+        self.assertIn("%s; refused at creation — DUPLICATE_UNACKNOWLEDGED: %s; %s and" % (
+            confirmed_words("Northwind Supplies", "0.50 USDC", "HH-0001", earlier["HH-0001"]), SENTENCE, H.NO_RUN_CREATED), o.line)
+        notes = [n for n in runner.notes["S7"] if n.endswith("(Spec T28)")]
+        self.assertFalse(any("HH-0001" in n for n in notes), "no note for a payment that was not made")
+        self.assertEqual(len(notes), 2)
 
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
@@ -452,6 +600,23 @@ class TheTreasuryIsReviewedTheSameWay(unittest.TestCase):
                       "the Treasury's register is not read by S7, and the note says so rather than guess a run")
         self.assertTrue(runner.facts["money"]["treasury"]["payment"]["landed"])
 
+    def test_a_screen_that_does_not_take_the_acknowledgement_leaves_the_treasurys_payment_uncreated_too(self):
+        double = EstateDouble(acknowledgement_ignored=True)  # one estate: the Treasury's workspace screens as Holdings' does
+        tmp = tempfile.mkdtemp()
+        runner_on(double, tmp, invite=double.mint_founder_link()).run()
+        double.age_runs(4)
+        runner = runner_on(double, tmp, start_at="S7")
+        earlier = next(s for s in double.treasury.sets.values() if s["instructions"][0]["invoiceRef"].startswith("HT-"))
+        earlier["instructions"][0]["invoiceRef"] = "HT-%s" % runner.run_stamp
+        o = {x.station: x for x in runner.run()}["S7"]
+        self.assertEqual(o.outcome, H.FAIL, o.line)
+        payment = runner.facts["money"]["treasury"]["payment"]
+        self.assertEqual((payment["set_id"], payment["landed"], payment["failure"]), (None, False, "the duplicate screen did not pass the acknowledgement"))
+        self.assertIn("Harness Treasury pays Harness Holdings (%s) the shortfall of US$1.00: the review asked again with the founder's acknowledgement did not pass the "
+                      "duplicate screen as the acknowledgement asks — duplicate_screen not passed — 1 possible duplicate(s) need acknowledgement; DUPLICATE_UNACKNOWLEDGED: "
+                      "\"%s\" — Harness Holdings Pty Ltd 1.00 USDC under HT-%s" % (double.source_account, SENTENCE, runner.run_stamp), o.line)
+        self.assertFalse(any(c.route == "POST /v1/sets" and (c.sent.get("pays") or [{}])[0].get("invoiceRef") == "HT-%s" % runner.run_stamp for c in runner.calls))
+
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
 class PathfindersRoadIsUnchanged(unittest.TestCase):
@@ -516,6 +681,11 @@ class TheDryRunSaysTheBound(unittest.TestCase):
         self.assertTrue(all(first < second for first, second in pairs), pairs)
         self.assertTrue(all(c > s for s, c in zip([seconds[0]] + seconds[2:], creations)), (seconds, creations))
         self.assertIn("S7a creates nothing", lines[seconds[1]])
+        # the Treasury's second review is made before any gas is credited, as pay makes it: the admin.env read and the cure follow it
+        admin = next(i for i, l in enumerate(lines) if l.startswith("S7 — [file] ~/.aer360-harness/admin.env"))
+        cure = next(i for i, l in enumerate(lines) if "gas-account/credits" in l and "the Treasury's aapAccountId" in l)
+        self.assertEqual((firsts[0] + 1, seconds[0] + 1, admin + 1), (seconds[0], admin, cure), "review, review again, then the credential and the cure")
+        self.assertIn("made before any gas is credited", lines[seconds[0]])
         self.assertTrue(lines[seconds[1] + 1].startswith("S7 — GET /v1/sets (as Cora Clerk) → expect no new run since S7a's review"), lines[seconds[1] + 1])
         self.assertEqual(len(H.dry_lines()), 240, "Spec T27's 235 and the five second reviews")
 
