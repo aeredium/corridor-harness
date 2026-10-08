@@ -130,7 +130,7 @@ class EstateHarnessReadmeTest(unittest.TestCase):
         self.assertIn("commit cf3be4a, `CATALOG_VERSION 14`", self.section)
         for words in ("*The people who may change these rules, at the number you set for a change*", "*No — only wallets held by people or companies*",
                       "*One person, named here*", "`{choice, person: {name, email}}`", "Harriet Founder, CEO", "2,000.00 (the holder alone)", "10,000.00 (two signatures enough)",
-                      "WA1 gains Ben beside Ada", "WQ stays at one", "`CATALOG_VERSION_ANSWERED = 14`", "the estate states no catalog version on the roads a browser walks",
+                      "WA1 gains Ben beside Ada", "WQ stays at one", "`CATALOG_VERSION_ANSWERED = 14` (15 since Spec T27, below)", "the estate states no catalog version on the roads a browser walks",
                       "`tests/fixtures/aer360-served-2026-09-21.json`", "`payeeApproval` is the change-approvers answer", "`payeeVenueContracts` is `refused`",
                       "`{held: by_person, name: Ben Signatory, email, title: Officer}`", "`signingTiers.holderAloneUpToCents` is `200000`", "`twoSignaturesUpToCents` `1000000`",
                       "never as the written *US$1 and 00 cents.*", "*You answered No: such an address will be refused when entered.*",
@@ -140,7 +140,9 @@ class EstateHarnessReadmeTest(unittest.TestCase):
                       "*two signatures (above US$2,000.00, up to US$10,000.00)*", "*three signatures (above US$10,000.00)*", "invents no source account",
                       "the frozen fixture is 141 lines", "`refuses_venue_contract=None` follows the charter", "`catalog_version=12` leaves the seven out"):
             self.assertIn(words, self.section, words)
-        self.assertIn("the catalog is version 14 since AER 360 Spec 92; see Spec T11 below", self.section)
+        # Spec T27: the living sentence tells the truth of today — version 15 — and keeps where version 14 came from
+        self.assertIn("the catalog is version 15 since AER 360 Spec AER360-115, see Spec T27 below; it was version 14 from AER 360 Spec 92, see Spec T11", self.section)
+        self.assertNotIn("the catalog is version 14 since AER 360 Spec 92", self.section)
         self.assertIn("since Spec T11 the probe reads the charter's answer to C19 at run time", self.section)
         self.assertIn("a finding only if refused", self.section, "Spec T8's sentence stands, for an estate whose C19 is Yes")
 
@@ -357,7 +359,57 @@ class EstateHarnessReadmeTest(unittest.TestCase):
         self.assertIn("the payee of every payment is the owner's own wallet, read from `payee.env` beside the passkeys (Spec T24", self.section)
 
 
+    def test_it_says_the_book_learned_catalog_version_15_since_spec_t27(self):
+        title = "**The answer book learns catalog version 15: the company ceiling (C2) and the daily total (C3) (Spec T27, 8 October 2026).**"
+        self.assertIn(title, self.section)
+        self.assertLess(self.section.index("Spec T26, 4 October 2026"), self.section.index("Spec T27, 8 October 2026"))
+        self.assertLess(self.section.index("Spec T27, 8 October 2026"), self.section.index("**Running it.**"))
+        paragraph = self.section.split(title, 1)[1].split("**Running it.**", 1)[0]
+        for words in ("*\"This needs to be done now. You want the estate to know the answer to those questions.\"*", "PR #137", "b523cbf", "`CATALOG_VERSION 15`",
+                      "*Is there an amount so large that no one in this company should ever make a payment of it — no approval, no exception?*",
+                      "*How much is the maximum total of payments that can be made daily?*", "after C9 and before C10", "refused at the page when blank or zero",
+                      "`max_amount_per_tx_usd`", "`max_amount_per_day_usd`", "*the answer book has no answer for policy question C2*",
+                      "*The figures are a fact, not a preference.*", "US$100.00 (`{\"cents\": \"10000\"}`)", "US$1,000.00 (`{\"cents\": \"100000\"}`)",
+                      "the once-run road of 8 October reported both estates `already` at those figures", "reads back *kept*", "reads back *written*",
+                      "C2 stands above O2's US$10.00 hold and C3 above O1's US$50.00 day", "every payment is at most US$0.50, far under C2",
+                      "`CATALOG_VERSION_ANSWERED = 15`", "`ADDED_IN_V15`", "the policy walk is 25 pages (23 + 2)", "*S3 names both versions where they differ.*",
+                      "*this Policy Interview asks neither C2 nor C3, which catalog version 15 added, so it stands at catalog version 14 and the book answered it as before*",
+                      "*S10 reads the two lines back.*", "`C2_WRITTEN`, *What the company ceiling becomes*", "`C3_WRITTEN`, *What the daily total becomes*",
+                      "`ceilingReadBackSentence`", "S2's journey (stage 1 done)", "a run resumed at S3 admits either form",
+                      "a figure other than US$100 and US$1,000", "`amountsUsdCents.denyCeiling` and `dailyTotal`", "233 → 235 lines",
+                      "`tests/fixtures/aer360-version-15-added.json`", "`CHARTER_CEILINGS_REQUIRED`", "`CEILING_ZERO_REFUSED`", "`catalog_version=14`",
+                      "the estate harness takes no such option"):
+            self.assertIn(words, paragraph, words)
+
+
 class ChangelogTest(unittest.TestCase):
+    def test_the_changelog_records_spec_t27_first_and_names_every_change(self):
+        text = read("CHANGELOG.md")
+        title = "## Spec T27 — The answer book learns catalog version 15: the company ceiling (C2) and the daily total (C3) (8 October 2026)"
+        self.assertIn(title, text)
+        self.assertEqual(text.index("## "), text.index(title), "the newest entry first")
+        t26 = "## Spec T26 — Gas is credited only when the review says the account is short"
+        self.assertLess(text.index(title), text.index(t26))
+        entry = text.split(title, 1)[1].split(t26, 1)[0]
+        # §6, the CHANGELOG line, word for word
+        self.assertIn("Spec T27 (8 October 2026): the answer book learns catalog version 15 — the company ceiling (C2) US$100.00 and the daily total (C3) US$1,000.00, "
+                      "the figures the harness estates' signing entries already carry — after AERAccounts Spec AER360-115 asked the two questions again and taught the "
+                      "write to put them on every signing entry the estate draws up. Before: the book answered version 14, and its next S3 would have stopped at C2.", entry)
+        for words in ("This needs to be done now. You want the estate to know the answer to those questions.", "PR #137", "b523cbf",
+                      "`aer360_answers.py`", "`CATALOG_SOURCE`", "`CATALOG_VERSION_READ = 15`", "`CATALOG_VERSION_ANSWERED = 15`", "`ADDED_IN_V14`",
+                      '`ADDED_IN_V15 = {"policy": ("C2", "C3"), "wallet_account": ()}`', '`Question("C2", "money", None, None, True)`', '`Question("C3", "money", None, None, True)`',
+                      "`company_ceiling_cents` `\"10000\"`", "`daily_total_cents` `\"100000\"`", "*SPEC T27 (8 October 2026): THE BOOK LEARNS CATALOG VERSION 15*",
+                      "`aer360_harness.py`, S3", "`version_15_words`", "`facts[\"interview_began\"]`", "`aer360_harness.py`, S10", "`audit_ceiling_lines`",
+                      "`ceiling_read_back_sentence`", "`STANDING_CEILING_KEPT`", "`Runner.earlier_policy_stood_written`", "`audit_charter` gains one expectation",
+                      "`amountsUsdCents.denyCeiling` `10000` and `dailyTotal` `100000`", "`tests/fixtures/aer360-dry-calls.txt` regenerated", "233 → 235 lines",
+                      "`tests/fixtures/aer360-version-15-added.json`", "`tests/fixtures/aer360-served-2026-09-21.json`", "`tests/test_aer360_double.py`",
+                      "`CHARTER_CEILINGS_REQUIRED`", "`CEILING_ZERO_REFUSED`", "`CHARTER_CEILINGS_REFUSED_AT_COMPILE`", "`isCeilingQuestion`", "`assertCeilingAnswered`",
+                      "`tests/test_aer360_answers.py`", "`tests/test_aer360_dry_run.py`", "`tests/test_the_book_learns_version_15.py`", "`tests/test_aer360_readme.py`",
+                      "save the seven of version 14 and the two of version 15", "C2 ≥ O2 and C3 ≥ O1",
+                      "AAOI, before the code", "**Auditor**", "**Attacker**", "**Optimiser**", "**Implementer**", "`earlierPolicyStandsWritten`", "`startInterview`",
+                      "**Where the spec and the code part company**", "`--i-mean-it`", "Not touched, as the fence requires", "No secret."):
+            self.assertIn(words, entry, words)
+
     def test_the_changelog_records_spec_t26_first_and_names_every_change(self):
         text = read("CHANGELOG.md")
         title = "## Spec T26 — Gas is credited only when the review says the account is short; never on a standing order (4 October 2026)"

@@ -15,6 +15,11 @@ fixture written from the compiler's types, each failing against the fixture of 2
 payeeApproval, no holder); the read-back's two written figures and C19's door line; and the venue probe
 follows the charter — refusal by name where it says refused, the acceptance of 20 September where it says
 accepted, a door that saves regardless the finding.
+
+Spec T27 (8 October 2026): the book walks catalog version 15, so the fixture read-back carries the estate's two lines after
+C2 and C3 (what the company ceiling and the daily total become, in ceilingReadBackSentence's "written" form — the fixture is a
+fresh estate, and its comparisons say so with amending=False) and the fixture charter the two figures as denyCeiling and
+dailyTotal; the charter of 21 September is held against the answers of the version-14 walk it was compiled from.
 """
 import copy
 import json
@@ -47,6 +52,16 @@ def fixture_answers(interview_type):
     return [(q.id, A.ANSWERS[interview_type][q.id], "prompt of %s" % q.id, q.kind) for q in A.expected_walk(interview_type)]
 
 
+# Spec T27: what the estate says each of the company's ceilings becomes on a fresh estate, word for word for the book's US$100 and US$1,000
+# (aeredium/AERAccounts b523cbf: services/onboarding.ts readback, services/charterceilings.ts ceilingReadBackSentence)
+CEILING_LINES_ON_A_FRESH_ESTATE = {
+    "C2": {"questionId": "C2_WRITTEN", "prompt": "What the company ceiling becomes", "synthetic": True,
+           "spoken": "Written to the signing platform as the per-payment limit of every signing entry this estate draws up on its own account: US$100. No single payment above it is approved, on any network."},
+    "C3": {"questionId": "C3_WRITTEN", "prompt": "What the daily total becomes", "synthetic": True,
+           "spoken": "Written to the signing platform as the daily limit of the same entries: US$1,000. No payment that takes a day’s total above it is approved."},
+}
+
+
 def fixture_readback(interview_type):
     lines = [{"questionId": "REALM", "prompt": "Where this estate opens", "spoken": "This estate opens in the Sandbox…", "synthetic": True}]
     for qid, value, prompt, kind in fixture_answers(interview_type):
@@ -54,6 +69,8 @@ def fixture_readback(interview_type):
         if qid == "C19" and value.get("choice") == A.VENUE_NO:
             # the estate's own line after a No (services/onboarding.ts, VENUE_DOOR_READBACK_QUESTION_ID)
             lines.append({"questionId": "C19_DOOR", "prompt": "What happens to a venue’s contract entered as a payee", "spoken": H.VENUE_DOOR_READBACK_SENTENCE, "synthetic": True})
+        if interview_type == "policy" and qid in CEILING_LINES_ON_A_FRESH_ESTATE:
+            lines.append(dict(CEILING_LINES_ON_A_FRESH_ESTATE[qid]))  # Spec T27: directly after the answer it speaks of
     return lines
 
 
@@ -77,12 +94,16 @@ def fixture_charter_of_21_september(interview_type):
 
 
 def fixture_charter(interview_type):
-    """A compiled charter that agrees with the book, in the shape onboardingcompiler.ts records at Spec 92 (compiler version 4): the fixture of 21 September plus Spec 92's fields."""
+    """
+    A compiled charter that agrees with the book, in the shape onboardingcompiler.ts records at Spec 92 (compiler version 4): the fixture of 21 September
+    plus Spec 92's fields — and, since Spec T27, the company's two ceilings the policy charter carries from C2 and C3 (Spec AER360-115).
+    """
     charter = fixture_charter_of_21_september(interview_type)
     if interview_type == "policy":
         # PayeeApproval, WalletHolder and SigningTiers as onboardingcompiler.ts types them
         charter["payeeApproval"] = {"answer": "change_approvers", "roster": list(CENSUS_ROSTER), "quorum": 2, "rosterQuestionId": "A8", "quorumQuestionId": "C12"}
         charter["payeeVenueContracts"] = "refused"
+        charter["amountsUsdCents"] = dict(charter["amountsUsdCents"], denyCeiling=A.MONEY["company_ceiling_cents"], dailyTotal=A.MONEY["daily_total_cents"])
         # Spec T18 / AER 360 Spec 106: the book answers C9 with Arbitrum One and the compiler writes the registry's id; the fixture of 21 September recorded ethereum
         charter["recordedChains"] = ["aeredium", T.PAYEE_CHAIN]
         return charter
@@ -137,7 +158,8 @@ class TheAuditorOnAFixture(unittest.TestCase):
         account = {q: v for q, v, _, _ in fixture_answers("wallet_account")}
         self.assertEqual(H.audit_charter("policy", fixture_charter("policy"), policy), [])
         self.assertEqual(H.audit_charter("wallet_account", fixture_charter("wallet_account"), account), [])
-        old_policy = H.audit_charter("policy", fixture_charter_of_21_september("policy"), policy)
+        # the charter of 21 September was compiled from a version-14 walk, which asked neither C2 nor C3 (Spec T27)
+        old_policy = H.audit_charter("policy", fixture_charter_of_21_september("policy"), {q: v for q, v in policy.items() if q not in A.ADDED_IN_V15["policy"]})
         # Spec T18: the charter of 21 September recorded ethereum, and the book has chosen Arbitrum One since — the auditor names it first
         self.assertEqual([f["probe"] for f in old_policy], ["charter (policy): the networks recorded (C9 plus Aeredium)",
                                                             "charter (policy): who approves a new payee (C11A: the answer, its roster and its quorum)",
@@ -218,19 +240,19 @@ class TheAuditorOnAFixture(unittest.TestCase):
         policy = fixture_answers("policy")
         lines = fixture_readback("policy")
         self.assertEqual(next(l["spoken"] for l in lines if l["questionId"] == "C19"), "No — only wallets held by people or companies")
-        self.assertEqual(H.audit_readback("policy", policy, lines), [])
+        self.assertEqual(H.audit_readback("policy", policy, lines, amending=False), [])
         without_door = [l for l in lines if l["questionId"] != "C19_DOOR"]
-        found = H.audit_readback("policy", policy, without_door)
+        found = H.audit_readback("policy", policy, without_door, amending=False)
         self.assertEqual([(f["probe"], f["expected"], f["said"]) for f in found], [
             ("read-back (policy) of C19: the door's sentence", "You answered No: such an address will be refused when entered.",
              "the read-back carries no line (C19_DOOR) saying what the payee door will do with a venue's contract")])
         moved = [dict(l, spoken="Such an address is accepted.") if l["questionId"] == "C19_DOOR" else l for l in lines]
-        found = H.audit_readback("policy", policy, moved)
+        found = H.audit_readback("policy", policy, moved, amending=False)
         self.assertEqual([f["said"] for f in found], ["the read-back's door line says 'Such an address is accepted.'"])
         # an estate whose C19 is Yes owes no door line
         yes = [(q, {"choice": A.VENUE_YES} if q == "C19" else v, p, k) for q, v, p, k in policy]
         yes_lines = [dict(l, spoken=A.VENUE_YES) if l["questionId"] == "C19" else l for l in without_door]
-        self.assertEqual(H.audit_readback("policy", yes, yes_lines), [])
+        self.assertEqual(H.audit_readback("policy", yes, yes_lines, amending=False), [])
 
     def test_the_venue_probes_expectation_follows_the_charter_fixture(self):
         """Spec T11: refusal when the charter fixture says refused, acceptance when it says accepted — or was never asked."""
@@ -259,24 +281,24 @@ class TheAuditorOnAFixture(unittest.TestCase):
 
     def test_the_read_back_that_agrees_raises_no_finding_and_one_moved_word_is_one_finding(self):
         for interview_type in A.INTERVIEW_TYPES:
-            self.assertEqual(H.audit_readback(interview_type, fixture_answers(interview_type), fixture_readback(interview_type)), [], interview_type)
+            self.assertEqual(H.audit_readback(interview_type, fixture_answers(interview_type), fixture_readback(interview_type), amending=False), [], interview_type)
         lines = fixture_readback("policy")
         c10 = next(l for l in lines if l["questionId"] == "C10")
         c10["spoken"] = "2"
-        findings = H.audit_readback("policy", fixture_answers("policy"), lines)
+        findings = H.audit_readback("policy", fixture_answers("policy"), lines, amending=False)
         self.assertEqual(len(findings), 1, findings)
         self.assertEqual(findings[0]["probe"], "read-back (policy) of C10")
         self.assertEqual(findings[0]["expected"], "1")
         self.assertEqual(findings[0]["said"], "the read-back says '2'")
         missing = [l for l in fixture_readback("policy") if l["questionId"] != "C18"]
-        self.assertEqual([f["said"] for f in H.audit_readback("policy", fixture_answers("policy"), missing)],
+        self.assertEqual([f["said"] for f in H.audit_readback("policy", fixture_answers("policy"), missing, amending=False)],
                          ["the read-back has no line for C18, which was answered"])
         # Spec T12 §0: a line the run did not answer but the book knows and agrees with is no finding (the resumed-interview cure)
         known_extra = fixture_readback("policy") + [{"questionId": "C16", "prompt": "…", "spoken": "24 hours"}]
-        self.assertEqual(H.audit_readback("policy", fixture_answers("policy"), known_extra), [], "C16 is in the book and its line agrees, so it is no finding")
+        self.assertEqual(H.audit_readback("policy", fixture_answers("policy"), known_extra, amending=False), [], "C16 is in the book and its line agrees, so it is no finding")
         # but a line for a question the book does not know is a finding, as before
         unknown_extra = fixture_readback("policy") + [{"questionId": "ZZ9", "prompt": "…", "spoken": "whatever"}]
-        found = H.audit_readback("policy", fixture_answers("policy"), unknown_extra)
+        found = H.audit_readback("policy", fixture_answers("policy"), unknown_extra, amending=False)
         self.assertEqual([f["probe"] for f in found], ["read-back (policy) of ZZ9"])
         self.assertIn("the book does not know", found[0]["said"])
 

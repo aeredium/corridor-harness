@@ -212,6 +212,22 @@ S7's line carries both gas balances before and after; S10's money note reconcile
 run less its gas debits equals the movement, to the cent. The two balances the sandbox accounts hold are left where they are: sandbox
 gas, spent by future runs at cents each.
 
+Spec T27 (8 October 2026, from the owner's ruling of that day — "This needs to be done now. You want the estate to know the answer to
+those questions." — after AER 360 Spec AER360-115, aeredium/AERAccounts PR #137, merge commit b523cbf, raised the Policy Interview to
+catalog version 15): the answer book learns catalog version 15. C2, the company ceiling, and C3, the daily total, are asked again after
+C9 and before C10, both money and both required, and the book answers them US$100.00 and US$1,000.00 — the figures every signing entry of
+Harness Holdings and Harness Treasury already carries — so S3 walks 25 pages where it walked 23 and states version 15. The estate states
+no catalog version, so S3 reads it off the interview's questions: where the Policy Interview asks neither C2 nor C3 — an interview begun
+under version 14 — the sentence names both versions and the book answers it as before (version_15_words). S10 reads the two lines version
+15 adds to the read-back (audit_ceiling_lines): C2_WRITTEN ("What the company ceiling becomes") directly after C2's line and C3_WRITTEN
+("What the daily total becomes") after C3's, in the sentence of services/charterceilings.ts ceilingReadBackSentence — "written" on a fresh
+estate, and with STANDING_CEILING_KEPT after it where an earlier Policy Interview of the estate stands written. Which of the two is read
+off what this run saw before S3 began, with no call of its own: S2's journey (stage 1 done) and the state the interview was begun in
+(earlier_policy_stood_written); a run that did not read the journey admits either form and says which the estate spoke. A line missing,
+standing elsewhere or saying anything else — a figure other than US$100 and US$1,000 among it — is a finding in the estate's words; and
+the compiled charter's amountsUsdCents.denyCeiling and dailyTotal are compared with C2 and C3 (10000 and 100000). Nothing else in the
+harness moves: no station, no call, no payment.
+
 Runs on the Mac's own Python 3.9.6 with the standard library only: urllib.request, http.cookiejar,
 json, hashlib, secrets, base64, struct, subprocess. The one binary it calls is /usr/bin/openssl,
 through aer360_passkey.py. Nothing to install; nothing is shipped to any box.
@@ -290,6 +306,25 @@ WRITTEN_DOLLAR_SPOKEN = "US$1 and 00 cents."
 # C19 answered No: the read-back's own line about the payee door (services/onboarding.ts, VENUE_DOOR_READBACK_QUESTION_ID).
 VENUE_DOOR_READBACK_QUESTION_ID = "C19_DOOR"
 VENUE_DOOR_READBACK_SENTENCE = "You answered No: such an address will be refused when entered."
+# Spec T27 — the company's two ceilings (AER 360 Spec AER360-115, catalog version 15, aeredium/AERAccounts b523cbf). A Policy Interview that asks
+# C2 and C3 reads back, directly after each, a line of its own saying what the figure becomes (services/onboarding.ts, readback:
+# CEILING_PER_PAYMENT_READBACK_QUESTION_ID and CEILING_PER_DAY_READBACK_QUESTION_ID, synthetic), in the sentence of services/charterceilings.ts,
+# ceilingReadBackSentence: the per-payment and daily limits of the estate's own signing entries, in whole US dollars rounded up (aapclient.ts,
+# dollarsCeilingOf), grouped as en-US groups them — and, where an earlier Policy Interview of the estate stands written (earlierPolicyStandsWritten),
+# that a limit already standing is kept.
+CEILING_QUESTION_IDS = {"perPayment": "C2", "perDay": "C3"}  # questioncatalog.ts CEILING_QUESTION_IDS
+CEILING_READBACK_LINES = {"perPayment": ("C2_WRITTEN", "What the company ceiling becomes"), "perDay": ("C3_WRITTEN", "What the daily total becomes")}
+CEILING_WRITTEN_SENTENCES = {  # charterceilings.ts ceilingWrittenSentence: the figure, then the rounding clause where the answer carried cents
+    "perPayment": ("Written to the signing platform as the per-payment limit of every signing entry this estate draws up on its own account: %s.%s "
+                   "No single payment above it is approved, on any network."),
+    "perDay": "Written to the signing platform as the daily limit of the same entries: %s.%s No payment that takes a day’s total above it is approved.",
+}
+CEILING_ROUNDED_UP = (" That is your figure rounded up to the next whole dollar, because the platform holds whole dollars, so the ceiling is never "
+                      "smaller than yours.")
+STANDING_CEILING_KEPT = ("Where such a limit already stands above zero, this write leaves it as it stands: changing a limit that stands is a change of "
+                         "the company’s rules, which your change quorum (C12) must agree to, and this estate has no road for that change yet.")
+CEILING_PARTNER_UNANSWERED = ("Not written to the signing platform while %s is not answered above zero: the platform refuses every payment while "
+                              "either limit of a signing entry stands at zero, so this estate writes the two together or not at all.")
 # Where an invitation's seconds go (Spec T8): routes/invites.ts mints the invitation, awaits the email's
 # dispatch (attemptDispatch), stamps the row, and only then answers 201. A fact to report, not a finding.
 INVITATION_SENDS_FIRST = "the invitation road sends the email before it answers, which is where its four seconds go"
@@ -526,6 +561,27 @@ def recorded_networks_difference(recorded: Any) -> Optional[str]:
     if missing:
         parts.append("%s %s expected and not recorded" % (", ".join(missing), "is" if len(missing) == 1 else "are"))
     return "the charter records the networks %s, not %s: %s" % (got, expected, "; ".join(parts))
+
+
+def version_15_words(asked: Sequence[str]) -> str:
+    """
+    Spec T27 §4: what a Policy Interview's questions — those this run answered and those its read-back carries — say of its catalog version,
+    which the estate does not state (ESTATE_STATES_NO_CATALOG_VERSION). Nothing where it asks both of the two version 15 added (A.ADDED_IN_V15):
+    the book's version and the interview's agree, and S3's sentence stands as Spec T11 wrote it. Otherwise a clause naming the version its
+    questions show beside the book's — 14 where it asks a question version 14 added (A.ADDED_IN_V14), else a version before 14 — because an
+    interview begun under an earlier catalog is never asked C2 and C3 (questioncatalog.ts, seedCatalog never rewrites a version's rows) and the
+    book answers it as before.
+    """
+    added = list(A.ADDED_IN_V15["policy"])
+    present = [q for q in added if q in asked]
+    if len(present) == len(added):
+        return ""
+    if present:
+        return "; this Policy Interview asks %s and not %s, though catalog version 15 added both" % (
+            " and ".join(present), " and ".join(q for q in added if q not in present))
+    shown = "catalog version 14" if any(q in asked for q in A.ADDED_IN_V14["policy"]) else "a catalog version before 14"
+    return "; this Policy Interview asks neither %s, which catalog version 15 added, so it stands at %s and the book answered it as before" % (
+        " nor ".join(added), shown)
 
 
 def venue_law_of_the_book() -> str:
@@ -769,6 +825,7 @@ class Runner:
         self.facts: Dict[str, Any] = {
             "answers": {"policy": [], "wallet_account": []},  # (questionId, value, prompt, kind) as given
             "readback": {}, "charter": {}, "compile": {}, "interview": {}, "interview_state": {},
+            "interview_began": {},  # Spec T27: the state each interview stood in when begin handed it to this run
             "invites_minted": [], "invites_register": None, "seats": None,
             "brought_in_again": [], "seat_regrant": None,  # Spec T10: who was brought in again, and Ada's seat before and after
             "payees": [], "payees_register": None, "sets": {}, "sets_register": None,
@@ -1166,6 +1223,7 @@ class Runner:
         interview_id = str((started.json.get("interview") or {}).get("id") or (started.json.get("page") or {}).get("interviewId"))
         self.facts["interview"][interview_type] = interview_id
         page = started.json.get("page") or {}
+        self.facts["interview_began"][interview_type] = (started.json.get("interview") or {}).get("state") or page.get("state")
         answered = 0
         served: List[str] = []
         for _ in range(200):
@@ -1400,7 +1458,11 @@ class Runner:
             answered, len((self.facts["readback"].get("policy") or {}).get("lines") or []), charter.get("name"), charter.get("quorum"),
             charter.get("recordedChains"), charter.get("allowedChains"), current, view.get("stageCount"))
         # Spec T11: the book's catalog version beside the estate's — which the estate does not state, so what it served stands for it.
-        detail += "; %s, and the estate served %d question(s), every one known to the book (%s)" % (self.book_version_words(), answered, ESTATE_STATES_NO_CATALOG_VERSION)
+        # Spec T27 §4: where the interview asks neither of the two version 15 added, the sentence names both versions.
+        asked = [q for q, _, _, _ in self.facts["answers"]["policy"]] + [str(l.get("questionId")) for l in (self.facts["readback"].get("policy") or {}).get("lines") or []
+                                                                        if not l.get("synthetic")]
+        detail += "; %s, and the estate served %d question(s), every one known to the book%s (%s)" % (
+            self.book_version_words(), answered, version_15_words(asked), ESTATE_STATES_NO_CATALOG_VERSION)
         problems: List[str] = []
         # Spec T18 §2: the recorded networks are judged against exactly ['aeredium', PAYEE_CHAIN]; allowed is printed above, not judged
         difference = recorded_networks_difference(charter.get("recordedChains"))
@@ -3947,6 +4009,22 @@ class Runner:
         return Outcome("S9", OUT_OF_SCOPE, "the tour's answers as Claude would see them are out of scope: the harness is the founder, not Claude")
 
     # -- S10 The auditor ----------------------------------------------------------------
+    def earlier_policy_stood_written(self) -> Optional[bool]:
+        """
+        Spec T27: whether an earlier Policy Interview of this estate stood written when S3 read this run's read-back — the fact the read-back's
+        ceiling lines are said from (services/onboarding.ts, earlierPolicyStandsWritten), which the estate does not state. Read off what this run
+        saw before S3 began, with no call of its own: S2's journey, whose stage 1 is done where a policy interview stands compiled or written
+        (services/journey.ts, CHARTER_STATES). A workspace holds one interview of a type in flight, and begin hands a compiled one back to be
+        written, never read back (startInterview), so where S3 began an interview standing in_progress or at_read_back, stage 1 done means a
+        written one stood beside it. None where S2 did not read the journey in this run (a run resumed at S3), or S3 began an interview
+        standing past its read-back.
+        """
+        view = self.facts["journey"].get("S2")
+        if not isinstance(view, dict) or self.facts["interview_began"].get("policy") not in ("in_progress", "at_read_back"):
+            return None
+        stage = next((s for s in view.get("stages") or [] if isinstance(s, dict) and s.get("id") == JOURNEY_STAGE_IDS[0]), None)
+        return bool(stage.get("done")) if stage is not None else None
+
     def station_s10(self) -> Outcome:
         before = len(self.findings)
         founder = self.people[A.FOUNDER]
@@ -3957,7 +4035,8 @@ class Runner:
             lines = (readback or {}).get("lines") or []
             line_ids = [str(l.get("questionId")) for l in lines if not l.get("synthetic")]
             if readback:
-                for f in audit_readback(interview_type, answers, lines):
+                amending = self.earlier_policy_stood_written() if interview_type == "policy" else None
+                for f in audit_readback(interview_type, answers, lines, amending):
                     if f.get("not_compared"):
                         self.note("S10", "%s: %s" % (f["probe"], f["said"]))
                     else:
@@ -4965,7 +5044,81 @@ def readback_disagreements(probe: str, kind: str, value: Dict[str, Any], expecte
     return [{"probe": probe, "sent": value, "expected": expected, "said": "the read-back says %r" % said}]
 
 
-def audit_readback(interview_type: str, answers: Sequence[Tuple[str, Dict[str, Any], str, str]], lines: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def ceiling_read_back_sentence(which: str, cents: str, partner_cents: Any, amending: bool) -> str:
+    """
+    Spec T27: `ceilingReadBackSentence` (services/charterceilings.ts at b523cbf), word for word — what the read-back says a ceiling becomes. Beside a
+    partner answered above zero, `ceilingWrittenSentence`: the figure the platform will hold, in whole US dollars rounded UP from the cents
+    (`dollarsCeilingOf`) and grouped as `toLocaleString('en-US')` groups it, with the rounding clause where the answer carried cents — and, where an
+    earlier Policy Interview of the estate stands written (`amending`), STANDING_CEILING_KEPT after it. Beside a partner not answered above zero,
+    that nothing is written and why: the estate writes the two together or not at all.
+    """
+    def above_zero(value: Any) -> bool:
+        return isinstance(value, str) and re.fullmatch(r"[0-9]+", value) is not None and int(value) > 0
+
+    if above_zero(partner_cents):
+        written = CEILING_WRITTEN_SENTENCES[which] % ("US${:,}".format((int(cents) + 99) // 100), "" if int(cents) % 100 == 0 else CEILING_ROUNDED_UP)
+        return "%s %s" % (written, STANDING_CEILING_KEPT) if amending else written
+    partner = ("the daily total (%s)" % CEILING_QUESTION_IDS["perDay"]) if which == "perPayment" else ("the company ceiling (%s)" % CEILING_QUESTION_IDS["perPayment"])
+    return CEILING_PARTNER_UNANSWERED % partner
+
+
+def audit_ceiling_lines(run_answered: Dict[str, Tuple[Dict[str, Any], str, str]], book: Dict[str, Dict[str, Any]], lines: Sequence[Dict[str, Any]],
+                        amending: Optional[bool]) -> List[Dict[str, Any]]:
+    """
+    Spec T27 §3.2: a Policy Interview served at catalog version 15 — C2 or C3 among this run's answers or the read-back's lines — reads back, directly
+    after each of the two, the line saying what it becomes (CEILING_READBACK_LINES), in `ceilingReadBackSentence`'s words: the "written" form on a
+    fresh estate, the "kept" form where an earlier Policy Interview of the estate stands written (`amending`). A line missing, standing elsewhere,
+    under another prompt, or saying anything else — a figure other than the book's US$100 and US$1,000 among it — is a finding carrying the
+    estate's words. Where `amending` is None (this run did not see how the estate stood before S3), either form is admitted and the one the estate
+    spoke is recorded as not compared (not_compared=True), which S10 writes as a note. An interview of catalog version 14 or before asks neither
+    question and is answered as before: nothing here.
+    """
+    findings: List[Dict[str, Any]] = []
+    asked = {str(l.get("questionId")) for l in lines if not l.get("synthetic")} | set(run_answered)
+    if not any(q in asked for q in A.ADDED_IN_V15["policy"]):
+        return findings
+    ids = [str(l.get("questionId")) for l in lines]
+    value_of = lambda qid: run_answered[qid][0] if qid in run_answered else book.get(qid)  # noqa: E731
+    for which, (line_id, prompt) in CEILING_READBACK_LINES.items():
+        qid = CEILING_QUESTION_IDS[which]
+        value = value_of(qid)
+        cents = (value or {}).get("cents")
+        if not (isinstance(cents, str) and re.fullmatch(r"[0-9]+", cents) and int(cents) > 0):
+            continue  # only a figure above zero becomes a limit (readback's own condition); a blank or a zero speaks for itself on its own line
+        partner_cents = (value_of(CEILING_QUESTION_IDS["perDay" if which == "perPayment" else "perPayment"]) or {}).get("cents")
+        forms = ([ceiling_read_back_sentence(which, cents, partner_cents, amending)] if amending is not None
+                 else [ceiling_read_back_sentence(which, cents, partner_cents, False), ceiling_read_back_sentence(which, cents, partner_cents, True)])
+        expected = forms[0] if len(forms) == 1 else "%s — or, where an earlier Policy Interview stands written, %s" % (forms[0], forms[1])
+        probe = "read-back (policy) of %s: %s" % (qid, prompt[0].lower() + prompt[1:])
+        if line_id not in ids:
+            findings.append({"probe": probe, "sent": value, "expected": expected,
+                             "said": "the read-back carries no line (%s) saying %s" % (line_id, prompt[0].lower() + prompt[1:])})
+            continue
+        at = ids.index(line_id)
+        line = lines[at]
+        said = str(line.get("spoken"))
+        if said not in forms:
+            other = ceiling_read_back_sentence(which, cents, partner_cents, not amending) if amending is not None else None
+            why = ("" if said != other else " — the %s form, though S2 found %s" % (
+                "written" if amending else "kept",
+                "an earlier Policy Interview standing written (the journey's stage 1 done before S3)" if amending
+                else "no earlier Policy Interview standing written (the journey's stage 1 not done before S3)"))
+            findings.append({"probe": probe, "sent": value, "expected": expected, "said": "the read-back's %s line says %r%s" % (line_id, said, why)})
+        elif amending is None:
+            findings.append({"probe": probe, "sent": value, "expected": None, "not_compared": True,
+                             "said": "the estate spoke the %s form (%s); this run did not read the journey before S3 began the interview, so whether an "
+                                     "earlier Policy Interview stood written is not known here and the form was not judged" % (
+                                         "kept" if said == forms[1] else "written", line_id)})
+        if str(line.get("prompt")) != prompt:
+            findings.append({"probe": probe + " (the prompt)", "sent": None, "expected": prompt, "said": "the read-back's %s line is headed %r" % (line_id, line.get("prompt"))})
+        if qid in ids and at != ids.index(qid) + 1:
+            findings.append({"probe": probe + " (where it stands)", "sent": None, "expected": "the line directly after %s's" % qid,
+                             "said": "the read-back's %s line stands at line %d and %s's at line %d" % (line_id, at + 1, qid, ids.index(qid) + 1)})
+    return findings
+
+
+def audit_readback(interview_type: str, answers: Sequence[Tuple[str, Dict[str, Any], str, str]], lines: Sequence[Dict[str, Any]],
+                   amending: Optional[bool] = None) -> List[Dict[str, Any]]:
     """
     The read-back compared by content, line by line (Spec T8), with the expectation for every line the estate
     speaks taken from the book (A.ANSWERS) for every question the read-back carries, whether or not this run
@@ -4974,7 +5127,9 @@ def audit_readback(interview_type: str, answers: Sequence[Tuple[str, Dict[str, A
     finding. So a line this run answered is rendered from what it sent (and its prompt is checked); a line only the
     book knows is rendered from the book; a line the book does not know is a finding as before. An answer of a kind
     with no rendering is not compared (not_compared=True), which S10 records as a note. The provenance count — how
-    many lines came from this run and how many from the book — is written by S10, which holds the counts.
+    many lines came from this run and how many from the book — is written by S10, which holds the counts. Spec T27:
+    a Policy Interview served at catalog version 15 is held to the two ceiling lines as well (`audit_ceiling_lines`),
+    `amending` saying whether an earlier Policy Interview of the estate stood written (None where it is not known).
     """
     findings: List[Dict[str, Any]] = []
     book = A.ANSWERS.get(interview_type, {})
@@ -5017,6 +5172,9 @@ def audit_readback(interview_type: str, answers: Sequence[Tuple[str, Dict[str, A
                              "said": "the read-back carries no line (%s) saying what the payee door will do with a venue's contract" % VENUE_DOOR_READBACK_QUESTION_ID})
         elif str(door.get("spoken")) != VENUE_DOOR_READBACK_SENTENCE:
             findings.append({"probe": probe, "sent": c19, "expected": VENUE_DOOR_READBACK_SENTENCE, "said": "the read-back's door line says %r" % door.get("spoken")})
+    # Spec T27: the company's two ceilings, where the Policy Interview asks them (catalog version 15), each with the line saying what it becomes
+    if interview_type == "policy":
+        findings.extend(audit_ceiling_lines(run_answered, book, lines, amending))
     return findings
 
 
@@ -5094,6 +5252,10 @@ def audit_charter(interview_type: str, charter: Dict[str, Any], answers: Dict[st
         c19 = choice("C19")
         if c19 is not None:
             expect("may a payee be a venue's contract (C19)", "refused" if c19 == A.VENUE_NO else "accepted", charter.get("payeeVenueContracts"), c19)
+        # Spec T27 — the company's two ceilings (C2, C3; catalog version 15), as the compiler carries them: amountsUsdCents.denyCeiling and dailyTotal, in cents
+        if "C2" in answers or "C3" in answers:
+            expect("the company ceiling (C2) and the daily total (C3), in cents", {"denyCeiling": cents("C2"), "dailyTotal": cents("C3")},
+                   {"denyCeiling": amounts.get("denyCeiling"), "dailyTotal": amounts.get("dailyTotal")}, {"C2": cents("C2"), "C3": cents("C3")})
     else:
         expect("the name (WN)", text("WN"), charter.get("name"), text("WN"))
         expect("the purpose (W1)", choice("W1"), charter.get("purpose"), choice("W1"))
@@ -5718,10 +5880,13 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
                 _j({"questionId": q.id, "value": A.POLICY_ANSWERS[q.id]}), q.kind, T.C9_NETWORK_CHOICE, SPEC_106_NOT_LIVE % ([o for o in A.OTHER_NETWORKS if o != T.C9_NETWORK_CHOICE],), NETWORKS_QUESTION_ID))
             continue
         line("S3", "POST /v1/onboarding/interviews/<policy interview>/answers %s → expect 200: the next page (%s)" % (_j({"questionId": q.id, "value": A.POLICY_ANSWERS[q.id]}), q.kind))
-    line("S3", "GET /v1/onboarding/interviews/<policy interview>/readback → expect the charter in plain sentences, the sandbox realm first")
+    ceilings = {which: "US${:,}".format((int(A.POLICY_ANSWERS[qid]["cents"]) + 99) // 100) for which, qid in CEILING_QUESTION_IDS.items()}
+    line("S3", "GET /v1/onboarding/interviews/<policy interview>/readback → expect the charter in plain sentences, the sandbox realm first; directly after C2 and C3 (catalog version 15) the lines %s and %s saying what each becomes — %s per payment and %s a day written to the signing platform as the limits of the estate's own signing entries, the standing limits kept where an earlier Policy Interview stands written (Spec T27; compared in S10)" % (
+        CEILING_READBACK_LINES["perPayment"][0], CEILING_READBACK_LINES["perDay"][0], ceilings["perPayment"], ceilings["perDay"]))
     line("S3", "POST /v1/onboarding/interviews/<policy interview>/confirm/options {} → expect the digest-bound challenge, issuedAtMs, digest")
     line("S3", "POST /v1/onboarding/interviews/<policy interview>/confirm %s → expect 200: state confirmed" % _j({"issuedAtMs": "<issuedAtMs>", "response": "<assertion by the founder's passkey over the challenge>"}))
-    line("S3", "POST /v1/onboarding/interviews/<policy interview>/compile {} → expect 200: charter (name, quorum 1, signers, recordedChains exactly %s — judged, naming any difference (Spec T18 §2); allowedChains aeredium-testnet, printed and not judged), receipt, seat" % (expected_recorded_networks(),))
+    line("S3", "POST /v1/onboarding/interviews/<policy interview>/compile {} → expect 200: charter (name, quorum 1, signers, recordedChains exactly %s — judged, naming any difference (Spec T18 §2); allowedChains aeredium-testnet, printed and not judged; amountsUsdCents.denyCeiling %s and dailyTotal %s from C2 and C3, compared in S10 (Spec T27)), receipt, seat" % (
+        expected_recorded_networks(), A.POLICY_ANSWERS["C2"]["cents"], A.POLICY_ANSWERS["C3"]["cents"]))
     line("S3", "GET /v1/onboarding/charter → expect standsWritten true")
     line("S3", "GET /v1/journey → expect currentStage 2 of %d" % JOURNEY_STAGE_COUNT)
     # S4 — Spec T10: every person is brought in on their own credential

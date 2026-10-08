@@ -1,0 +1,38 @@
+{
+  "what": "The two questions AER 360 catalog version 15 added to the Policy Interview (Spec AER360-115, AERAccounts PR #137, merged and live 8 October 2026): C2, the company ceiling, and C3, the daily total, as questioncatalog.ts defines them at the merge commit b523cbf, copied byte for byte (Spec T27). Both money, both required, served after C9 and before C10; a blank or a zero is refused at the page, and the charter does not compile without both. The pages of 21 September 2026 stay in aer360-served-2026-09-21.json, the record of that night, untouched.",
+  "catalog": {
+    "version": 15,
+    "source": "aeredium/AERAccounts apps/server/src/services/questioncatalog.ts at b523cbf (Spec AER360-115, PR #137), CATALOG_VERSION = 15",
+    "ceilingsFromCatalogVersion": 15,
+    "addedInVersion15": {
+      "policy": [
+        "C2",
+        "C3"
+      ],
+      "wallet_account": []
+    },
+    "servedAfter": "C9",
+    "servedBefore": "C10"
+  },
+  "added": {
+    "policy": [
+      {
+        "questionId": "C2",
+        "part": "Part C — The company’s rules",
+        "kind": "money",
+        "prompt": "Is there an amount so large that no one in this company should ever make a payment of it — no approval, no exception?",
+        "note": "A blank field — you enter the amount yourself; no amounts are suggested. Recorded in US dollars, the base; your display currency is shown beside it as you type. The company ceiling (C2) and the daily total (C3) must each be a figure above zero: the signing platform refuses every payment on an account whose ceilings are not set. If no payment should leave on one person’s word, say so with the approvers in the questions that follow, never with a zero here.",
+        "required": true
+      },
+      {
+        "questionId": "C3",
+        "part": "Part C — The company’s rules",
+        "kind": "money",
+        "prompt": "How much is the maximum total of payments that can be made daily?",
+        "note": "A blank field — you enter the amount yourself; no amounts are suggested. Recorded in US dollars, the base; your display currency is shown beside it as you type. The company ceiling (C2) and the daily total (C3) must each be a figure above zero: the signing platform refuses every payment on an account whose ceilings are not set. If no payment should leave on one person’s word, say so with the approvers in the questions that follow, never with a zero here.",
+        "required": true
+      }
+    ],
+    "wallet_account": []
+  }
+}
