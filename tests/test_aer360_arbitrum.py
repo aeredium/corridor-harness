@@ -153,7 +153,7 @@ class TheChainIsOneWordInOnePlace(unittest.TestCase):
         self.assertIn("S7 resolves Northwind Supplies to addr-base — the register's Northwind Supplies on base, whitelisted (the register also holds Northwind Supplies on arbitrum, ethereum: left alone, never paid)", evidence)
         self.assertIn("S7's note: fund Harness Treasury: <address> on base, then rerun", evidence)
         self.assertIn("the Treasury sentence: Harness Treasury holds US$<x>; the run needs US$<y>; fund <address> on base", evidence)
-        self.assertIn("S7's 9 payment rows name the chain ['base']", evidence, "the Treasury's review and creation, S7a's review, and the three payments' reviews and creations")
+        self.assertIn("S7's 14 payment rows name the chain ['base']", evidence, "the Treasury's review, second review and creation, S7a's review and second review, and the three payments' reviews, second reviews and creations (Spec T28 adds the five second reviews)")
         self.assertTrue(any(l.startswith("S11's venue probe: POST /v1/payees ") and '"chain": "base"' in l for l in evidence), evidence)
         self.assertFalse(any("arbitrum" in l for l in evidence if not l.startswith("S3 on") and "left alone" not in l), evidence)
         # and with the word back in its place, the same roads name arbitrum
@@ -388,13 +388,18 @@ class TheRegisterDouble(unittest.TestCase):
         first_northwind = first.facts["payees"][0]["address_id"]
         self.assertEqual(second.facts["payee_resolution"]["P1"],
                          "the register's Northwind Supplies on arbitrum, whitelisted (the register also holds Northwind Supplies on ethereum: left alone, never paid)")
-        self.assertIn("P1 (0.50 USDC to %s, the owner's wallet, expected to proceeds to approval): paid to the register's Northwind Supplies on arbitrum, whitelisted (the register also holds Northwind Supplies on ethereum: left alone, never paid); submitted:" % PAYEE, o.line)
+        # Spec T28: the first run's P1 stands in the estate's runs register within its seven days; the founder confirms the repeat before it is created
+        earlier = double.sets[first.facts["sets"]["P1"]["set_id"]]
+        self.assertIn("P1 (0.50 USDC to %s, the owner's wallet, expected to proceeds to approval): paid to the register's Northwind Supplies on arbitrum, whitelisted (the register also holds Northwind Supplies on ethereum: left alone, never paid); "
+                      "the duplicate screen named Northwind Supplies 0.50 USDC under HH-0001, paid on %s (run %s); the founder confirmed it, as a founder would, and the review asked again passed it: "
+                      "1 possible duplicate(s), acknowledged by the author (Spec T28); submitted:" % (PAYEE, earlier["createdAt"], earlier["id"]), o.line)
         paid_ids = [b["pays"][0]["payeeAddressId"] for b in self.sets_bodies(second) if "payeeAddressId" in b["pays"][0]]
         self.assertIn(first_northwind, paid_ids, "the first run's whitelisted record on arbitrum")
         self.assertNotIn(on_ethereum["id"], paid_ids)
         self.assertEqual({double.addresses[i]["chain"] for i in paid_ids}, {"arbitrum"})
-        self.assertEqual(len(H.dry_lines()), 235, "the conditional register read is one dry line under S7 (193 → 194); Spec T19 adds S5's head and S14 (194 → 231); Spec T24 adds the payee.env reads and the one-off's register read (231 → 234); "
-                                                   "Spec T26 drops the three standing gas credits for two conditional cures (234 → 233); Spec T27 adds S3's answers to C2 and C3 (233 → 235)")
+        self.assertEqual(len(H.dry_lines()), 240, "the conditional register read is one dry line under S7 (193 → 194); Spec T19 adds S5's head and S14 (194 → 231); Spec T24 adds the payee.env reads and the one-off's register read (231 → 234); "
+                                                   "Spec T26 drops the three standing gas credits for two conditional cures (234 → 233); Spec T27 adds S3's answers to C2 and C3 (233 → 235); "
+                                                   "Spec T28 adds S7's five conditional second reviews, each with the founder's acknowledgement (235 → 240)")
 
     def test_a_register_holding_the_payee_on_ethereum_only_at_s7_sends_nothing_for_it_and_says_so(self):
         """A run resumed at S7 on an estate whose register holds Northwind on ethereum only: P1 is not sent, and the line says which record was never paid."""

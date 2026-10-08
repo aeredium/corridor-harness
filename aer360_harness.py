@@ -228,6 +228,24 @@ standing elsewhere or saying anything else — a figure other than US$100 and US
 the compiled charter's amountsUsdCents.denyCeiling and dailyTotal are compared with C2 and C3 (10000 and 100000). Nothing else in the
 harness moves: no station, no call, no payment.
 
+Spec T28 (8 October 2026, on the owner's ruling of that day — "What do you think if we fix the harness to answer yes when the question
+is asked, and let's see whether that fixes the problem, because that would be the easiest fix of them all?" — agreed with one bound, so
+the yes is never blind): the founder confirms a repeat. The first run after Spec T27 met the estate's fifth creation gate, the duplicate
+screen (setgates.ts duplicateScreen): the one-dollar book pays the same three invoices to the owner's wallet on every run, the screen
+matches a payment to the same address, chain and asset, for the same amount, under the same reference, made within seven days
+(config.ts DUPLICATE_WINDOW_DAYS), and the run of 4 October lay four days back — so every creation was refused DUPLICATE_UNACKNOWLEDGED,
+"This looks like a payment that has already been made recently. Confirm it is intentional to continue.", and nothing moved. The refusal
+is acknowledgeable, and the screen a founder uses carries the press (PaymentEntry.tsx). So after every review S7 makes — the Treasury's,
+S7a's set of three, and each of P1, P2 and P3 — the duplicate screen is read beside the review's acknowledgeable list, and each warning
+is judged (answer_the_duplicate_screen, repeat_within_bound): within the bound where its previouslySentAt is before this run began and
+its previousInstructionId is not an instruction this run created. All within, the review is made again with duplicatesAcknowledged true
+— before any gas is credited — its gate must pass with evidence ending "acknowledged by the author", and the run is created with the
+acknowledgement (S7a creates nothing); one note per warning confirmed says which earlier run the estate remembered (read off the runs
+registers S7 already reads) and that this run's founder confirmed it. Any outside is a finding in the estate's words with its detail:
+nothing acknowledged, nothing created, and S7 fails naming it; a refused second review, or one whose gate does not pass, creates nothing.
+S7's line says "no run was created" where none was, never "the estate asked ? signature(s)". Pathfinder's S11, which shares the payment
+road, leaves the confirmation off and is unchanged.
+
 Runs on the Mac's own Python 3.9.6 with the standard library only: urllib.request, http.cookiejar,
 json, hashlib, secrets, base64, struct, subprocess. The one binary it calls is /usr/bin/openssl,
 through aer360_passkey.py. Nothing to install; nothing is shipped to any box.
@@ -386,6 +404,25 @@ FOUNDER_NOT_ENROLLED = "the founder not enrolled here"     # S1: no passkey stor
 NO_FOUNDER_SESSION = "no founder session"                  # every station after S1 that needs the founder signed in
 SPEC_106_NOT_LIVE_PREREQUISITE = "AER 360 Spec 106 not live"  # S3's precondition (Spec T18 §4), checked before anything is amended
 SPEC_109_NOT_LIVE_PREREQUISITE = "AER 360 Spec 109 not live"  # S14's first line: the estate has no door onto the writes that wait
+# Spec T28 (8 October 2026, on the owner's ruling of that day, agreed with one bound so the yes is never blind): the estate's fifth creation gate,
+# the duplicate screen, as AERAccounts main has it (b523cbf). services/setgates.ts duplicateScreen refuses DUPLICATE_UNACKNOWLEDGED, acknowledgeable,
+# for a payment to the same address, on the same chain, in the same asset, for the same amount, under the same invoice reference
+# (coalesce(invoiceRef, '')), in any run of the workspace not rejected and created within DUPLICATE_WINDOW_DAYS (config.ts: 7); its detail names
+# payee, address, amountMinor, invoiceRef, previousInstructionId and previouslySentAt — the earlier RUN's createdAt. Acknowledged
+# (ReviewInput.duplicatesAcknowledged) the gate passes, the warning stays on the run, and the evidence reads "<n> possible duplicate(s), acknowledged
+# by the author"; unacknowledged, a creation is refused with it (services/payoutsets.ts createSet throws the first blocking refusal; http.ts: 422).
+# The screen a founder uses carries the press (apps/web/src/screens/PaymentEntry.tsx: the box, Check again, then Submit this run, each sending
+# duplicatesAcknowledged). The harness says yes only to a warning naming a payment of an EARLIER run; any other is a finding.
+DUPLICATE_GATE = "duplicate_screen"                    # setgates.ts: the fifth gate's name in the review payload
+DUPLICATE_UNACKNOWLEDGED = "DUPLICATE_UNACKNOWLEDGED"  # refusals.ts: acknowledgeable at the review; the creation's refusal, 422, where it was not acknowledged
+DUPLICATE_UNACKNOWLEDGED_SENTENCE = "This looks like a payment that has already been made recently. Confirm it is intentional to continue."  # refusals.ts REFUSAL_MESSAGES
+DUPLICATE_ACKNOWLEDGED_EVIDENCE = "acknowledged by the author"  # how the gate's evidence ends once the author said yes (setgates.ts)
+REPEAT_BOUND_WORDS = ("only where the review's duplicate screen names a payment of an earlier run (previouslySentAt before this run began); "
+                      "a duplicate within this run is a finding, never acknowledged")  # SPEC.md §3.3: what each second review's dry line says
+REPEAT_CONFIRMED_NOTE = "the estate's duplicate screen named %s %s under %s as paid on %s (run %s); this run's founder confirmed it, as a founder would (Spec T28)"
+REPEAT_WITHIN_RUN_PROBE = "%s: a duplicate within this run, never acknowledged (Spec T28)"  # the finding's name; %s is the payment's key, or S7a
+NO_RUN_CREATED = "no run was created"  # SPEC.md §3.2: S7's line where the estate created no run, never "the estate asked ? signature(s)"
+ISO_INSTANT = re.compile(r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:?\d{2})$")
 
 STATIONS: List[Tuple[str, str]] = [
     ("S1", "Enrol"), ("S2", "Journey"), ("S3", "Policy Interview"), ("S4", "People"),
@@ -616,6 +653,101 @@ def under_the_tiers(amount: str, holder_alone_cents: Optional[str], two_signatur
 
 
 # ---------------------------------------------------------------------------
+# The duplicate screen, read and bounded (Spec T28): pure functions over a review's payload, so a recorded answer can prove them.
+# ---------------------------------------------------------------------------
+def instant_of(text: Any) -> Optional[_dt.datetime]:
+    """
+    An instant as the estate writes one (Date.toISOString: 2026-10-04T06:12:13.456Z) or as the harness stamps its own start (now_iso:
+    2026-10-08T14:37:00.123+08:00), as an aware datetime; None for anything else, which the bound never reads as a time.
+    """
+    found = ISO_INSTANT.match(str(text or "").strip())
+    if not found:
+        return None
+    year, month, day, hour, minute, second, fraction, zone = found.groups()
+    if zone == "Z":
+        tz = _dt.timezone.utc
+    else:
+        digits = zone[1:].replace(":", "")
+        offset = _dt.timedelta(hours=int(digits[:2]), minutes=int(digits[2:]))
+        tz = _dt.timezone(offset if zone[0] == "+" else -offset)
+    try:
+        return _dt.datetime(int(year), int(month), int(day), int(hour), int(minute), int(second), int((fraction or "0")[:6].ljust(6, "0")), tzinfo=tz)
+    except ValueError:
+        return None
+
+
+def duplicate_gate_of(payload: Any) -> Optional[Dict[str, Any]]:
+    """The review's fifth gate, the duplicate screen (setgates.ts: `duplicate_screen`), or None where the payload carries none."""
+    gates = payload.get("gates") if isinstance(payload, dict) else None
+    return next((g for g in (gates or []) if isinstance(g, dict) and g.get("gate") == DUPLICATE_GATE), None)
+
+
+def repeat_warnings(payload: Any) -> List[Dict[str, Any]]:
+    """The duplicate screen's DUPLICATE_UNACKNOWLEDGED refusals, in the order the gate lists them — kept on the gate once acknowledged, as the estate keeps them."""
+    gate = duplicate_gate_of(payload) or {}
+    return [r for r in (gate.get("refusals") or []) if isinstance(r, dict) and r.get("code") == DUPLICATE_UNACKNOWLEDGED]
+
+
+def asset_amount(minor: Any, asset: str) -> str:
+    """Minor units in the asset's own decimals, as the book writes an amount: 500000 of USDC → "0.50 USDC"; a figure that is not an integer is said as it came."""
+    text = str(minor if minor is not None else "")
+    if not INTEGER_TEXT.match(text) or text.startswith("-"):
+        return "%s (minor units) of %s" % (text or "an amount the estate did not state", asset)
+    decimals = T.ASSET_DECIMALS.get(asset, 0)
+    whole, fraction = divmod(int(text), 10 ** decimals)
+    digits = str(fraction).rjust(decimals, "0").rstrip("0").ljust(min(2, decimals), "0") if decimals else ""
+    return "%d%s %s" % (whole, ("." + digits) if digits else "", asset)
+
+
+def repeat_within_bound(warning: Dict[str, Any], started_at: str, created: Dict[str, Dict[str, Any]]) -> Tuple[bool, str]:
+    """
+    Spec T28 §3.1: whether the estate's warning names a payment of an EARLIER run — its previouslySentAt a time before this run began, and its
+    previousInstructionId not among the instructions this run created (`created`, id → the payment's key and run) — with the words for why or why
+    not. Both must hold: the clock alone would admit this run's own payment where the estate's clock runs behind the Mac's, and the ids alone would
+    admit a payment somebody else made while this run was going. A warning that states neither fact readably is outside the bound: the harness
+    never acknowledges what it cannot bound (§4).
+    """
+    detail = warning.get("detail") if isinstance(warning.get("detail"), dict) else {}
+    sent_at, previous = detail.get("previouslySentAt"), detail.get("previousInstructionId")
+    when, began = instant_of(sent_at), instant_of(started_at)
+    if not previous:
+        return False, "the warning names no previousInstructionId, so the repeat cannot be bounded"
+    if str(previous) in created:
+        mine = created[str(previous)]
+        return False, "instruction %s is %s's, which this run created (run %s)" % (previous, mine.get("key"), mine.get("set_id"))
+    if when is None:
+        return False, "previouslySentAt %r is not a time the harness can read, so the repeat cannot be bounded" % (sent_at,)
+    if began is None:
+        return False, "this run's start %r is not a time the harness can read, so the repeat cannot be bounded" % (started_at,)
+    if when >= began:
+        return False, "previouslySentAt %s is not before this run began (%s): the payment it names was made within this run" % (sent_at, started_at)
+    return True, "a payment of an earlier run: previouslySentAt %s, before this run began (%s); instruction %s is not one this run created" % (sent_at, started_at, previous)
+
+
+def repeat_words(warning: Dict[str, Any], asset: str) -> str:
+    """The estate's warning with its detail, its sentence word for word (§4: quoted whether acknowledged or not)."""
+    detail = warning.get("detail") if isinstance(warning.get("detail"), dict) else {}
+    return "%s: \"%s\" — %s %s under %s, previouslySentAt %s, previousInstructionId %s" % (
+        warning.get("code"), warning.get("message"), detail.get("payee") or "a payee the estate did not name", asset_amount(detail.get("amountMinor"), asset),
+        detail.get("invoiceRef") or "no reference", detail.get("previouslySentAt"), detail.get("previousInstructionId"))
+
+
+def duplicate_gate_words(payload: Any, asset: str) -> str:
+    """
+    The duplicate screen as the review answered it, with the review's acknowledgeable list read beside it (§3.1): passed or not, its evidence,
+    each warning in the estate's words, and what the review says may be acknowledged.
+    """
+    gate = duplicate_gate_of(payload)
+    if gate is None:
+        return "the review carries no %s gate" % DUPLICATE_GATE
+    listed = [r for r in ((payload or {}).get("acknowledgeable") or []) if isinstance(r, dict)]
+    warnings = repeat_warnings(payload)
+    return "%s %s — %s%s; acknowledgeable: %s" % (
+        DUPLICATE_GATE, "passed" if gate.get("passed") is True else "not passed", gate.get("evidence") or "no evidence stated",
+        "".join("; %s" % repeat_words(w, asset) for w in warnings), ("%d (%s)" % (len(listed), ", ".join(str(r.get("code")) for r in listed))) if listed else "none")
+
+
+# ---------------------------------------------------------------------------
 # HTTP through urllib, with a cookie jar per person, every call recorded.
 # ---------------------------------------------------------------------------
 class Answer:
@@ -843,6 +975,9 @@ class Runner:
             # Spec T24: the owner's wallet as payee.env names it (read once; the problem in words where the file is absent or malformed), and
             # what S7 found of the one-off destination in the runs register before paying it
             "owner_payee": None, "owner_payee_problem": None, "owner_payee_read": False, "one_off": None,
+            # Spec T28: every duplicate warning judged against the bound; the instructions this run created (id → the payment's key and run); each
+            # instruction's run as the runs registers this run read name it; and the note written for each warning the founder confirmed, by its instruction
+            "repeats": [], "instructions_created": {}, "runs_seen": {}, "repeats_confirmed": {},
             # Spec T19: the writes that wait — the ceremonies as GET /v1/onboarding/ceremonies last answered them, what the pre-S5 finish
             # did, and S14's own record (the interview, the 202, the reads, the signatures, the finish, the trail rows)
             "ceremonies": None, "finished_before_s5": [], "awaiting": None,
@@ -2982,6 +3117,7 @@ class Runner:
         """
         register = self.request(clerk, "GET", "/v1/sets", None, "S7")
         self.step("S7", register, "the runs register, read for the destinations this estate has paid before", "answered" if register.ok else register.sentence(), None, clerk.name)
+        self.remember_runs(register.json)
         paid: set = set()
         if isinstance(register.json, dict):
             for row in register.json.get("sets") or []:
@@ -3100,6 +3236,7 @@ class Runner:
         self.step(station, register, "the runs register, read for whether this estate has ever paid the owner's wallet %s on %s — any instruction not rejected, to any payee "
                   "(setgates.ts, isDestinationNew) — so the line says whether Spec 69's hold is provable this run (Spec T24 §2)" % (address, T.PAYEE_CHAIN),
                   "answered" if register.ok else register.sentence(), None, clerk.name)
+        self.remember_runs(register.json)
         paid: List[str] = []
         if register.ok and isinstance(register.json, dict):
             for row in register.json.get("sets") or []:
@@ -3440,9 +3577,12 @@ class Runner:
         a finding under S7, never a fail and never a cause for a credit (Spec T26 §3.2: "S7a not provable this run: Harness Holdings' gas
         account holds US$X, and this set needs at most US$Y; the gate admitted the set, which is right" — the estate did right; the
         refusal cannot be met this run). A refusal naming other figures, a refusal for another cause, or a payment that left fails S7
-        naming it.
+        naming it. Spec T28: the review's duplicate screen is read and each warning judged, as at every review S7 makes; where all name
+        payments of an earlier run the set is reviewed again with the founder's acknowledgement and the gate must pass — S7a is judged on
+        the first review, and creates nothing either way — and a warning outside the bound is a finding that fails S7 (`repeat_failure`).
         """
-        record: Dict[str, Any] = {"verdict": "not proved", "available": None, "ceiling": None, "sentence": None, "said": None, "left": None, "detail": None}
+        record: Dict[str, Any] = {"verdict": "not proved", "available": None, "ceiling": None, "sentence": None, "said": None, "left": None, "detail": None,
+                                  "repeats": None, "repeat_failure": None}
         self.facts["s7a"] = record
         available = gas.get("availableUsdCents") if isinstance(gas, dict) else None
         if not isinstance(available, int) or isinstance(available, bool):
@@ -3451,6 +3591,7 @@ class Runner:
         record["available"] = available
         register = self.request(clerk, "GET", "/v1/sets", None, "S7")
         self.step("S7", register, "the runs register before S7a's review, so a run the review created would be seen", "answered" if register.ok else register.sentence(), None, clerk.name)
+        self.remember_runs(register.json)
         before_ids = {str(s.get("id")) for s in ((register.json or {}).get("sets") or [])} if isinstance(register.json, dict) else set()
         body = {"pays": rows, "duplicatesAcknowledged": False}
         review = self.request(clerk, "POST", "/v1/sets/review", body, "S7")
@@ -3465,7 +3606,8 @@ class Runner:
         gate = next((g for g in gates if g.get("gate") == T.GAS_GATE), None)
         refusals = [r for r in ((gate or {}).get("refusals") or []) if isinstance(r, dict)]
         shortfall = next((r for r in refusals if r.get("code") == T.GAS_SHORTFALL), None)
-        others = [r for g in gates for r in (g.get("refusals") or []) if isinstance(r, dict) and r.get("code") != T.GAS_SHORTFALL]
+        # the duplicate screen's warnings are judged below (Spec T28); a refusal of any other code is noted as before
+        others = [r for g in gates for r in (g.get("refusals") or []) if isinstance(r, dict) and r.get("code") not in (T.GAS_SHORTFALL, DUPLICATE_UNACKNOWLEDGED)]
         if gate is None:
             result = "the review carries no %s gate (gates: %s)" % (T.GAS_GATE, ", ".join(str(g.get("gate")) for g in gates) or "none")
             record.update(verdict="failed", said="S7a failed: " + result)
@@ -3499,9 +3641,25 @@ class Runner:
                     shortfall.get("message"), T.format_usd_cents(available), detail.get("availableUsdCents"), detail.get("ceilingUsdCents")))
         if others and record["verdict"] != "failed":
             self.note("S7", "S7a: the review carried refusals beside the gas gate's: %s" % "; ".join("%s: %s" % (r.get("code"), r.get("message")) for r in others))
+        if repeat_warnings(payload) or payload.get("acknowledgeable"):
+            result = "%s; %s" % (result, duplicate_gate_words(payload, T.PAYMENT_ASSET))  # the gate and the acknowledgeable list beside it (Spec T28 §3.1)
         self.step("S7", review, expected, result, body, clerk.name)
+        # Spec T28: the duplicate screen judged; every warning of an earlier run, the set reviewed again with the founder's acknowledgement
+        screen = self.answer_the_duplicate_screen(review, body, "S7a", "S7", False)
+        if screen["verdict"] == "acknowledge":
+            again_body = dict(body, duplicatesAcknowledged=True)
+            again = self.request(clerk, "POST", "/v1/sets/review", again_body, "S7")
+            again_result = "answered; %s" % duplicate_gate_words(again.json, T.PAYMENT_ASSET) if again.ok and isinstance(again.json, dict) else again.sentence()
+            self.step("S7", again, "S7a's set reviewed again with duplicatesAcknowledged true, as the founder's screen sends it (PaymentEntry.tsx) — the duplicate screen (%s) "
+                      "passed, its evidence ending \"%s\", every warning still naming a payment of an earlier run; the gas gate's answer stands as S7a judged it, and "
+                      "nothing is created (Spec T28)" % (DUPLICATE_GATE, DUPLICATE_ACKNOWLEDGED_EVIDENCE), again_result, again_body, clerk.name)
+            screen = self.answer_the_duplicate_screen(again, again_body, "S7a", "S7", True)
+        record["repeats"] = screen
+        if screen["verdict"] in ("outside", "refused", "not passed"):
+            record["repeat_failure"] = screen["words"]
         register_after = self.request(clerk, "GET", "/v1/sets", None, "S7")
         self.step("S7", register_after, "the runs register after S7a's review: no new run (nothing was sent)", "answered" if register_after.ok else register_after.sentence(), None, clerk.name)
+        self.remember_runs(register_after.json)
         after_ids = {str(s.get("id")) for s in ((register_after.json or {}).get("sets") or [])} if isinstance(register_after.json, dict) else set()
         new_ids = sorted(after_ids - before_ids)
         usdc_after, usdc_words, _ = self.read_usdc_balance(self, clerk, "S7", "Harness Holdings")
@@ -3516,12 +3674,15 @@ class Runner:
         elif record["verdict"] == "proved":
             record["said"] += "; nothing left (no new run in the register; Holdings' %s unchanged at %s)" % (
                 T.PAYMENT_ASSET, T.usdc_dollars(usdc_after) if usdc_after is not None else "a figure the estate could not say")
+        if screen["words"]:
+            record["said"] = "%s; %s" % (record["said"], screen["words"])
         return record
 
     # -- one payment through the estate's own road, judged on money that moved (Spec 104 §2; Spec T14 §4) --------------------------
     def pay(self, runner: "Runner", author: Person, key: str, row: Dict[str, Any], amount_minor: int, payee_address: str, signers: Sequence[Person],
             expect_words: str, read_payee_balance: Callable[[], Tuple[Optional[int], str]], station: str = "S7",
-            cure: Optional[Callable[[Dict[str, Any]], bool]] = None, more_gas: Optional[Callable[[Optional[int]], bool]] = None) -> Dict[str, Any]:
+            cure: Optional[Callable[[Dict[str, Any]], bool]] = None, more_gas: Optional[Callable[[Optional[int]], bool]] = None,
+            confirm_repeats: bool = False) -> Dict[str, Any]:
         """
         The review; the run created and submitted; the signers pressing in the spec's order while the run waits, until the estate reports
         it approved (each refusal in the estate's words, never retried; `cure` may mend one refusal once and ask for the same press again —
@@ -3531,21 +3692,48 @@ class Runner:
         refuses GAS_SHORTFALL, and the review is asked again — the one road a gas credit takes (Spec T26 §2); a credit that could not be
         made fails the station naming the refusal that needed it (§3.3), and a second GAS_SHORTFALL after the credit fails it naming both
         figures, the platform not having credited what it said it did (§3.1). The trail's row is read afterwards by `judge_landing`.
+        `confirm_repeats` (Spec T28, S7's payments and the Treasury's; Pathfinder's S11 leaves it off) reads the duplicate screen after each
+        review (`answer_the_duplicate_screen`): where every warning names a payment of an earlier run the review is made again with
+        duplicatesAcknowledged true — read before any credit, so a payment that will not be made is never credited for — its gate must pass,
+        and the run is created with the acknowledgement; a warning outside the bound, a refused second review or a gate that does not pass
+        creates nothing, and the payment's line says so.
         """
         record: Dict[str, Any] = {"key": key, "amount_minor": amount_minor, "payee": payee_address, "set_id": None, "instruction_id": None, "review": None, "created": None,
                                   "refusal": None, "submitted": None, "approvals_required": None, "approvals": [], "executed": None, "view": None, "status": None,
                                   "set_status": None, "tx_hash": None, "failure_reason": None, "gas_value": None, "user_op_hash": None, "gas_debit_cents": None,
                                   "gas_debit": None, "balance_before": None, "balance_after": None, "before_words": None, "after_words": None, "landed": False,
-                                  "said": None, "failure": None, "spoken": []}
+                                  "said": None, "failure": None, "spoken": [], "repeats": None}
         before, before_words = read_payee_balance()
         record.update(balance_before=before, before_words=before_words)
         review_body = {"pays": [row], "duplicatesAcknowledged": False}
         cured: Optional[Dict[str, Any]] = None  # the one credit made for this payment's GAS_SHORTFALL (Spec T26 §2: once per refusal)
-        for _ in range(2):  # the review, and the review again after a cure
+        for _ in range(3):  # the review; again with the founder's acknowledgement (Spec T28) or after a cure; once more where the acknowledged review is short of gas
+            acknowledging = review_body["duplicatesAcknowledged"] is True
             review = runner.request(author, "POST", "/v1/sets/review", review_body, station)
-            runner.step(station, review, "the gates' review of the run before anything is created — the gas gate reading the gas account and one dry quote (Spec 104 §4); %s" % expect_words,
-                        "answered" if review.ok else review.sentence(), review_body, author.name)
+            result = "answered" if review.ok else review.sentence()
+            if confirm_repeats and review.ok and isinstance(review.json, dict) and (repeat_warnings(review.json) or review.json.get("acknowledgeable")):
+                result = "answered; %s" % duplicate_gate_words(review.json, T.PAYMENT_ASSET)  # the gate and the acknowledgeable list, the warnings word for word (§3.1, §4)
+            runner.step(station, review, ("the review asked again with duplicatesAcknowledged true, as the founder's screen sends it (PaymentEntry.tsx) — the duplicate screen "
+                                          "(%s) passed, its evidence ending \"%s\", every warning still naming a payment of an earlier run; then the run is created with the "
+                                          "acknowledgement (Spec T28); %s" % (DUPLICATE_GATE, DUPLICATE_ACKNOWLEDGED_EVIDENCE, expect_words)) if acknowledging else
+                        "the gates' review of the run before anything is created — the gas gate reading the gas account and one dry quote (Spec 104 §4); %s" % expect_words,
+                        result, review_body, author.name)
             record["review"] = review.json if review.ok else review.sentence()
+            if confirm_repeats:
+                screen = self.answer_the_duplicate_screen(review, review_body, key, station, acknowledging)
+                record["repeats"] = screen
+                if screen["verdict"] in ("outside", "refused", "not passed"):
+                    # Spec T28 §3.1, §4: nothing is created — the line carries what the estate said and why the harness did not say yes
+                    record.update(failure={"outside": "a duplicate within this run, not acknowledged", "refused": "the second review was refused",
+                                           "not passed": "the duplicate screen did not pass the acknowledgement"}[screen["verdict"]],
+                                  said="; ".join(record["spoken"] + [screen["words"]]))
+                    return record
+                if screen["verdict"] == "acknowledge":
+                    # the founder's acknowledgement before any cure: no gas is credited for a payment the screen has not yet let through
+                    review_body = dict(review_body, duplicatesAcknowledged=True)
+                    continue
+                if screen["verdict"] == "confirmed" and screen["words"] not in record["spoken"]:
+                    record["spoken"].append(screen["words"])  # said once, where a cure asks the acknowledged review again
             shortfall = self.gas_shortfall_of(review)
             if shortfall is None or more_gas is None:
                 break
@@ -3572,10 +3760,17 @@ class Runner:
             record["spoken"].append("the review refused %s (%s); gas credited and the review asked again" % (T.GAS_SHORTFALL, shortfall.get("message")))
             if cured.get("said"):
                 record["spoken"].append(cured["said"])
+        if review_body["duplicatesAcknowledged"] is True and (record["repeats"] or {}).get("verdict") != "confirmed":
+            # never a creation that carries an acknowledgement the last review did not show the gate taking (Spec T28 §4)
+            record.update(failure="the duplicate screen did not pass the acknowledgement", said="; ".join(record["spoken"] + [
+                "the review made with the founder's acknowledgement did not show the duplicate screen passing it; nothing was created (Spec T28)"]))
+            return record
         create_body = dict(review_body)
         create_body.update({"idempotencyKey": "aer360-harness-%s-%s" % (self.run_stamp, key), "reference": "Harness payment %s" % key})
         created = runner.request(author, "POST", "/v1/sets", create_body, station)
-        runner.step(station, created, "201 with the run in draft and its review", "created" if created.ok else created.sentence(), create_body, author.name)
+        runner.step(station, created, "201 with the run in draft and its review%s" % (
+            "; duplicatesAcknowledged true, the repeat of an earlier run the founder confirmed (Spec T28)" if create_body["duplicatesAcknowledged"] is True else ""),
+                    "created" if created.ok else created.sentence(), create_body, author.name)
         if not created.ok or not isinstance(created.json, dict):
             record.update(refusal=created.sentence(), failure="refused at creation", said="refused at creation — %s" % created.sentence())
             return record
@@ -3585,6 +3780,10 @@ class Runner:
         record["set_id"] = set_id
         instructions = [i for i in (set_view.get("instructions") or []) if isinstance(i, dict)]
         record["instruction_id"] = str(instructions[0].get("id")) if instructions else None
+        for instruction in instructions:  # Spec T28: an instruction this run created is never a repeat the founder confirms
+            if instruction.get("id"):
+                self.facts["instructions_created"][str(instruction["id"])] = {"key": key, "set_id": set_id}
+                self.facts["runs_seen"][str(instruction["id"])] = set_id
         submitted = runner.request(author, "POST", "/v1/sets/%s/submit" % set_id, {}, station)
         runner.step(station, submitted, "status pending_approval with approvalsRequired, or approved where the estate asks no second hand; %s" % expect_words,
                     "answered" if submitted.ok else submitted.sentence(), {}, author.name)
@@ -3681,6 +3880,92 @@ class Runner:
                 self.sleep(LANDING_WAIT_SECONDS)
         return view
 
+    # -- the duplicate screen, answered as a founder answers it, and only then (Spec T28) -------------------------------------------------
+    def remember_runs(self, register: Any) -> None:
+        """
+        Each instruction's run, read off a runs register this run already read (GET /v1/sets: every run's view carries its instructions, each with
+        its id and setId) — so a note can say which earlier run the estate remembered, with no call of its own.
+        """
+        if not isinstance(register, dict):
+            return
+        for row in register.get("sets") or []:
+            for instruction in (row.get("instructions") or []) if isinstance(row, dict) else []:
+                if isinstance(instruction, dict) and instruction.get("id"):
+                    self.facts["runs_seen"][str(instruction["id"])] = str(instruction.get("setId") or row.get("id"))
+
+    def run_of(self, instruction_id: Any) -> str:
+        """The run an instruction belongs to, as a runs register this run read names it, or the words for one that never listed it."""
+        return self.facts["runs_seen"].get(str(instruction_id)) or "not named: instruction %s is in no runs register this run read" % instruction_id
+
+    def repeat_short_words(self, warning: Dict[str, Any], asset: str) -> str:
+        detail = warning.get("detail") if isinstance(warning.get("detail"), dict) else {}
+        return "%s %s under %s, paid on %s (run %s)" % (detail.get("payee") or "a payee the estate did not name", asset_amount(detail.get("amountMinor"), asset),
+                                                       detail.get("invoiceRef") or "no reference", detail.get("previouslySentAt"), self.run_of(detail.get("previousInstructionId")))
+
+    def answer_the_duplicate_screen(self, review: Answer, sent: Dict[str, Any], key: str, station: str, acknowledging: bool) -> Dict[str, Any]:
+        """
+        Spec T28 §3.1, after one review: the duplicate screen read and every DUPLICATE_UNACKNOWLEDGED refusal judged against the bound
+        (`repeat_within_bound`). Answers what the founder does next, as `verdict`:
+          none         the screen names nothing to acknowledge — as today
+          acknowledge  every warning names a payment of an earlier run: the review is made again with duplicatesAcknowledged true
+          confirmed    on the review made with the acknowledgement, the gate passed, its evidence ending "acknowledged by the author" (or the screen
+                       no longer names anything), and every warning is still within the bound: one note per warning confirmed, once a run
+          outside      a warning outside the bound: a finding in the estate's words with its detail, nothing acknowledged, nothing created
+          refused      the review made with the acknowledgement was refused: its words travel, and nothing is created
+          not passed   that review answered, and its gate did not pass as the acknowledgement asks: nothing is created
+        and `words`, what the estate said and what the founder did, for the payment's line.
+        """
+        out: Dict[str, Any] = {"verdict": "none", "words": "", "warnings": []}
+        payload = review.json if review.ok and isinstance(review.json, dict) else None
+        if payload is None:
+            if acknowledging:
+                out.update(verdict="refused", words="the review asked again with the founder's acknowledgement answered %s; nothing was created (Spec T28)" % review.sentence())
+            return out
+        pays = [p for p in (sent.get("pays") or []) if isinstance(p, dict)]
+        judged: List[Dict[str, Any]] = []
+        for warning in repeat_warnings(payload):
+            index = warning.get("rowIndex")
+            asset = str((pays[index] if isinstance(index, int) and 0 <= index < len(pays) else {}).get("asset") or T.PAYMENT_ASSET)
+            within, why = repeat_within_bound(warning, self.started_at, self.facts["instructions_created"])
+            judged.append({"warning": warning, "asset": asset, "within": within, "why": why})
+            self.facts["repeats"].append({"key": key, "acknowledging": acknowledging, "detail": warning.get("detail"), "message": warning.get("message"), "within": within, "why": why})
+        out["warnings"] = judged
+        outside = [j for j in judged if not j["within"]]
+        if outside:
+            expected = ("the duplicate screen silent, or naming only payments of an earlier run: previouslySentAt before this run began (%s) and "
+                        "previousInstructionId not an instruction this run created (Spec T28)" % self.started_at)
+            for j in outside:
+                self.finding(station, REPEAT_WITHIN_RUN_PROBE % key, sent, review, expected,
+                             "%s; %s; not acknowledged, and nothing was created" % (repeat_words(j["warning"], j["asset"]), j["why"]))
+            out.update(verdict="outside", words="the duplicate screen named a payment this run cannot bound — %s; a finding, not acknowledged, and nothing was created (Spec T28)" % (
+                "; ".join("%s (%s)" % (repeat_words(j["warning"], j["asset"]), j["why"]) for j in outside)))
+            return out
+        if not acknowledging:
+            if judged:
+                out["verdict"] = "acknowledge"
+            return out
+        gate = duplicate_gate_of(payload) or {}
+        if gate.get("passed") is not True or (judged and not str(gate.get("evidence") or "").endswith(DUPLICATE_ACKNOWLEDGED_EVIDENCE)):
+            out.update(verdict="not passed", words="the review asked again with the founder's acknowledgement did not pass the duplicate screen as the acknowledgement asks — %s; "
+                                                   "nothing was created (Spec T28)" % duplicate_gate_words(payload, T.PAYMENT_ASSET))
+            return out
+        for j in judged:
+            detail = j["warning"].get("detail") or {}
+            previous = str(detail.get("previousInstructionId"))
+            if previous not in self.facts["repeats_confirmed"]:
+                self.facts["repeats_confirmed"][previous] = REPEAT_CONFIRMED_NOTE % (
+                    detail.get("payee") or "a payee the estate did not name", asset_amount(detail.get("amountMinor"), j["asset"]), detail.get("invoiceRef") or "no reference",
+                    detail.get("previouslySentAt"), self.run_of(previous))
+                self.note(station, self.facts["repeats_confirmed"][previous])
+        if judged:
+            words = "the duplicate screen named %s; the founder confirmed %s, as a founder would, and the review asked again passed %s: %s (Spec T28)" % (
+                "; ".join(self.repeat_short_words(j["warning"], j["asset"]) for j in judged), "it" if len(judged) == 1 else "them", "it" if len(judged) == 1 else "them",
+                gate.get("evidence"))
+        else:
+            words = "the review asked again with the founder's acknowledgement found nothing left to confirm: %s (Spec T28)" % gate.get("evidence")
+        out.update(verdict="confirmed", words=words)
+        return out
+
     @staticmethod
     def gas_shortfall_of(review: Answer) -> Optional[Dict[str, Any]]:
         """The gas gate's GAS_SHORTFALL refusal in a review's payload, or None."""
@@ -3767,7 +4052,7 @@ class Runner:
         return record
 
     def treasury_pays_the_shortfall(self, t: "Runner", founder: Person, clerk: Person, shortfall: int, holdings_address: str,
-                                    admin: Union[None, Dict[str, str], Callable[[], Optional[Dict[str, str]]]]) -> Dict[str, Any]:
+                                    admin: Union[None, Dict[str, str], Callable[[], Optional[Dict[str, str]]]], confirm_repeats: bool = False) -> Dict[str, Any]:
         """
         Spec T14 §2: one payment of one set from Harness Treasury to Harness Holdings' address — a declared one-off of the shortfall —
         approved with the Treasury founder's passkey (the charter names her the payment approver; where the estate refuses her at the
@@ -3775,6 +4060,7 @@ class Runner:
         Holdings' balance is read before and after through the estate's own road, as the Treasury's payee. Spec T26 §2: where its review
         refuses GAS_SHORTFALL, the Treasury's gas account is credited once, sized by the refusal's ceiling, through `credit_gas` with
         `admin` — the credential, or the reader that opens admin.env then — and the review is asked again; nothing else credits it.
+        Spec T28: S7 passes `confirm_repeats`, so the Treasury's review is read for the duplicate screen as the three payments' are.
         """
         row = {"oneOff": {"chain": T.PAYEE_CHAIN, "address": holdings_address, "declared": True, "payeeName": A.ESTATE["company"]},
                "asset": T.PAYMENT_ASSET, "chain": T.PAYEE_CHAIN, "amountMinor": str(shortfall), "invoiceRef": "HT-%s" % self.run_stamp}
@@ -3792,7 +4078,8 @@ class Runner:
             return True
 
         record = self.pay(t, founder, "HT", row, shortfall, holdings_address, [founder], "the Treasury's founder approves with her passkey; the run lands and Harness Holdings' %s rises by %s" % (
-            T.PAYMENT_ASSET, T.usdc_dollars(shortfall)), lambda: self.read_usdc_balance(self, clerk, "S7", "Harness Holdings")[:2], cure=cure, more_gas=more_gas)
+            T.PAYMENT_ASSET, T.usdc_dollars(shortfall)), lambda: self.read_usdc_balance(self, clerk, "S7", "Harness Holdings")[:2], cure=cure, more_gas=more_gas,
+            confirm_repeats=confirm_repeats)
         trail = self.read_trail(t, founder, "S7", "the Treasury's trail: the %s row for its payment — userOpHash, the handleOps txHash, gasDebitUsdCents and gasDebit (Spec 104 §2, §5)" % T.INSTRUCTION_CONFIRMED)
         return self.judge_landing(record, trail)
 
@@ -3891,7 +4178,7 @@ class Runner:
                                                             treasury.get("address"), T.PAYEE_CHAIN)
                     raise StationStop("%s (the three payments need %s and Harness Holdings holds %s); nothing was sent" % (sentence, T.usdc_dollars(need), T.usdc_dollars(h_usdc)),
                                       prerequisite=TREASURY_SHORT)
-                record = self.treasury_pays_the_shortfall(t, t_founder, clerk, shortfall, funding["address"], read_admin)
+                record = self.treasury_pays_the_shortfall(t, t_founder, clerk, shortfall, funding["address"], read_admin, confirm_repeats=True)
                 money["treasury"]["payment"] = record
                 said.append("Harness Treasury pays Harness Holdings (%s) the shortfall of %s: %s" % (funding["address"], T.usdc_dollars(shortfall), record["said"]))
                 if record["landed"]:
@@ -3923,6 +4210,8 @@ class Runner:
         said.append(s7a["said"])
         if s7a["verdict"] == "failed":
             failures += 1
+        if s7a.get("repeat_failure"):
+            failures += 1  # Spec T28: a duplicate S7a's review named that this run cannot bound — a finding, and S7 fails naming it
         # 5. the three payments (§4), the signers pressing in the spec's order while a run waits; a review's GAS_SHORTFALL is cured with one
         # credit to Holdings' gas account, sized by that refusal's ceiling, and the review asked again (Spec T26 §2) — the one road a credit takes
         signers = [self.people[k] for k in SIGNERS_IN_ORDER]
@@ -3947,7 +4236,8 @@ class Runner:
             if one_off_words:
                 expect_words = "%s; %s" % (one_off_words, expect_words)
             record = self.pay(self, clerk, payment.key, row, int(payment.amount_minor), address, signers, expect_words,
-                              lambda address=address: self.read_token_balance("S7", clerk.name, T.PAYEE_CHAIN, token, address), more_gas=more_gas_for_holdings)
+                              lambda address=address: self.read_token_balance("S7", clerk.name, T.PAYEE_CHAIN, token, address), more_gas=more_gas_for_holdings,
+                              confirm_repeats=True)
             record.update(expect=payment.expect, tier_words=tier_words, amount=payment.amount, resolved=self.resolution_words(payment.key) if payment.payee_key else None,
                           payee_words=T.payee_words(), one_off_words=one_off_words or None)
             self.facts["sets"][payment.key] = record
@@ -3961,9 +4251,16 @@ class Runner:
             paid_words = ("paid to %s; " % resolved) if resolved and not resolved.startswith("this run's") else ""
             # Spec T24 §4: the line names where every cent went — the payee's address and whose wallet it is — and, for the one-off, what Spec 69 can prove
             one_off_words = ("%s; " % record["one_off_words"]) if record.get("one_off_words") else ""
-            said.append("%s (%s %s to %s, %s, expected to %s): %s%s%s; the estate asked %s signature(s) and %s; %s" % (
+            # Spec T28 §3.2: the count the estate asked, or what stood in its place — never a question mark for a number
+            if asked is not None:
+                asked_words = "the estate asked %s signature(s)" % asked
+            elif not record.get("set_id"):
+                asked_words = NO_RUN_CREATED
+            else:
+                asked_words = "the run %s was created and the estate named no count of signatures for it" % record["set_id"]
+            said.append("%s (%s %s to %s, %s, expected to %s): %s%s%s; %s and %s; %s" % (
                 record["key"], record["amount"], T.PAYMENT_ASSET, record["payee"], record.get("payee_words") or T.payee_words(), record["expect"], one_off_words, paid_words,
-                record["said"], asked if asked is not None else "?", self.road_words(record["key"]), record["tier_words"]))
+                record["said"], asked_words, self.road_words(record["key"]), record["tier_words"]))
             money["payments"].append({"key": record["key"], "amount_minor": record["amount_minor"], "landed": record["landed"], "gas_debit_cents": record.get("gas_debit_cents"),
                                       "user_op_hash": record.get("user_op_hash"), "tx_hash": record.get("tx_hash")})
             if not record["landed"]:
@@ -6006,8 +6303,11 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     line("S7", "GET %s (as %s) → expect Harness Treasury's gas account" % (T.GAS_ACCOUNT_ROUTE, treasurer))
     treasury_row = {"oneOff": {"chain": T.PAYEE_CHAIN, "address": "<Harness Holdings' funding wallet>", "declared": True, "payeeName": A.ESTATE["company"]},
                     "asset": T.PAYMENT_ASSET, "chain": T.PAYEE_CHAIN, "amountMinor": "<the shortfall in minor units>", "invoiceRef": "HT-<run>"}
-    line("S7", "POST /v1/sets/review %s (as %s) — only where Holdings is short → expect the gates' review; where the Treasury holds less than the shortfall S7 stops before it instead: \"%s\" and nothing is sent; a %s refusal credits the Treasury's gas once (the cure below) and asks again" % (
-        _j({"pays": [treasury_row], "duplicatesAcknowledged": False}), treasurer, T.TREASURY_SHORT_SENTENCE % ("US$<x>", "US$<y>", "<address>", T.PAYEE_CHAIN), T.GAS_SHORTFALL))
+    # Spec T28: after every review S7 makes, the duplicate screen is read and each warning judged; a second review, with the acknowledgement, only within the bound
+    repeat_judged = "the duplicate screen (%s) read and each %s judged: within the bound only where it names a payment of an earlier run (Spec T28)" % (DUPLICATE_GATE, DUPLICATE_UNACKNOWLEDGED)
+    acknowledged_or_not = "<true only where the second review above was made, else false>"
+    line("S7", "POST /v1/sets/review %s (as %s) — only where Holdings is short → expect the gates' review; where the Treasury holds less than the shortfall S7 stops before it instead: \"%s\" and nothing is sent; a %s refusal credits the Treasury's gas once (the cure below) and asks again; %s" % (
+        _j({"pays": [treasury_row], "duplicatesAcknowledged": False}), treasurer, T.TREASURY_SHORT_SENTENCE % ("US$<x>", "US$<y>", "<address>", T.PAYEE_CHAIN), T.GAS_SHORTFALL, repeat_judged))
     # Spec T26: the admin credential is read only when a credit is about to be made, and a credit is made only to cure a review's GAS_SHORTFALL
     line("S7", "[file] ~/.aer360-harness/%s — only where a review refuses %s (Spec T26 §3.3: read when a credit is about to be made) → %s and %s, the platform's admin credential Bear files, never printed; absent on a run that needs a credit, S7 fails naming the refusal and \"%s\"; on a run whose gas accounts cover its sets the file is not read and nothing is said of it" % (
         T.ADMIN_ENV_FILE, T.GAS_SHORTFALL, T.ADMIN_ENV_URL_KEY, T.ADMIN_ENV_KEY_KEY, T.NO_GAS_CREDIT_ROAD_SENTENCE))
@@ -6015,8 +6315,10 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
                           "idempotency_key": "aer360-harness-<run>-%s-gas-<n>" % T.TREASURY["client_id"]})
     line("S7", "POST <%s>%s %s (Authorization: Bearer <%s>, at the platform's admin road) — only where the Treasury's review refused %s → expect 201: the line and the balance (Spec 154 §1, audited gas.credited_by_admin), one credit per refusal sized by its ceiling (Spec T14 §3; Spec T26 §2), then the review again; a second %s after it fails S7 naming both figures; a refusal in the platform's words fails S7; never made on a standing order" % (
         T.ADMIN_ENV_URL_KEY, T.ADMIN_CREDIT_ROUTE % "<the Treasury's aapAccountId>", treasury_credit, T.ADMIN_ENV_KEY_KEY, T.GAS_SHORTFALL, T.GAS_SHORTFALL))
-    line("S7", "POST /v1/sets %s (as %s) → expect 201: the run in draft" % (
-        _j({"pays": [treasury_row], "duplicatesAcknowledged": False, "idempotencyKey": "aer360-harness-<run>-HT", "reference": "Harness payment HT"}), treasurer))
+    line("S7", "POST /v1/sets/review %s (as %s) — %s → expect the duplicate screen (%s) passed, its evidence ending \"%s\", every warning still naming a payment of an earlier run — the founder's press on PaymentEntry.tsx; a refusal, or a gate that does not pass, creates nothing and fails S7 in the estate's words (Spec T28)" % (
+        _j({"pays": [treasury_row], "duplicatesAcknowledged": True}), treasurer, REPEAT_BOUND_WORDS, DUPLICATE_GATE, DUPLICATE_ACKNOWLEDGED_EVIDENCE))
+    line("S7", "POST /v1/sets %s (as %s) → expect 201: the run in draft; duplicatesAcknowledged is true only where the duplicate screen named a payment of an earlier run and the second review saw its gate pass (Spec T28)" % (
+        _j({"pays": [treasury_row], "duplicatesAcknowledged": acknowledged_or_not, "idempotencyKey": "aer360-harness-<run>-HT", "reference": "Harness payment HT"}), treasurer))
     line("S7", "POST /v1/sets/<run HT>/submit {} → expect status pending_approval, approvalsRequired 1 where the shortfall is at or above the Treasury's %s hold or Holdings' address is new to it (Spec 69 on the Treasury's own charter), else approved with approvalsRequired 0 — on this book the shortfall is at most %s" % (
         usd(A.MONEY["per_payment_cents"]), need_dollars))
     line("S7", "POST /v1/approvals/<run HT>/challenge {} then /approve %s (as %s, the charter's one payment approver, with her passkey) → expect status approved, approvalsGiven 1 of 1; refused at the guard once, POST /v1/approver-seats/grant %s and the press again; a second refusal in the estate's words fails S7" % (
@@ -6037,8 +6339,10 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     line("S7", "GET /v1/payees (as %s) — only where S6 left no record of a payee (a run resumed at S7) → expect the register; each listed payee is resolved by (name, chain): its row on %s at the payee's address (%s), whitelisted before any other; a record on another chain is named and never paid (Spec T18 §2)" % (
         clerk.name, T.PAYEE_CHAIN, "the owner's own wallet, Spec T24" if real_chain else "its pinned address"))
     line("S7", "GET /v1/sets (as %s) → the runs register before S7a's review, so a run the review created would be seen" % clerk.name)
-    line("S7", "POST /v1/sets/review %s (as %s) — S7a, with Harness Holdings' gas account below the set's ceiling → expect the gas gate (%s) refusing %s in U3's sentence with the figures the harness read: \"Your gas account holds US$<available>. This set needs at most US$<ceiling> of gas. Nothing was sent. Buy gas below.\" (Spec 104 §4); a gate that admits the set because the account covers the ceiling is a finding, not a fail, and never a cause for a credit: \"%s: %s\" (Spec T26 §3.2); a refusal naming other figures, or a payment that left, fails S7" % (
-        _j({"pays": three, "duplicatesAcknowledged": False}), clerk.name, T.GAS_GATE, T.GAS_SHORTFALL, T.S7A_NOT_PROVABLE_PROBE, T.S7A_NOT_PROVABLE_SENTENCE % ("US$<available>", "US$<ceiling>")))
+    line("S7", "POST /v1/sets/review %s (as %s) — S7a, with Harness Holdings' gas account below the set's ceiling → expect the gas gate (%s) refusing %s in U3's sentence with the figures the harness read: \"Your gas account holds US$<available>. This set needs at most US$<ceiling> of gas. Nothing was sent. Buy gas below.\" (Spec 104 §4); a gate that admits the set because the account covers the ceiling is a finding, not a fail, and never a cause for a credit: \"%s: %s\" (Spec T26 §3.2); a refusal naming other figures, or a payment that left, fails S7; %s" % (
+        _j({"pays": three, "duplicatesAcknowledged": False}), clerk.name, T.GAS_GATE, T.GAS_SHORTFALL, T.S7A_NOT_PROVABLE_PROBE, T.S7A_NOT_PROVABLE_SENTENCE % ("US$<available>", "US$<ceiling>"), repeat_judged))
+    line("S7", "POST /v1/sets/review %s (as %s) — %s → expect the duplicate screen (%s) passed, its evidence ending \"%s\", every warning still naming a payment of an earlier run; the gas gate's answer stands as S7a judged it on the review above, and S7a creates nothing (Spec T28)" % (
+        _j({"pays": three, "duplicatesAcknowledged": True}), clerk.name, REPEAT_BOUND_WORDS, DUPLICATE_GATE, DUPLICATE_ACKNOWLEDGED_EVIDENCE))
     line("S7", "GET /v1/sets (as %s) → expect no new run since S7a's review; then GET %s → expect Harness Holdings' %s unchanged: nothing left" % (clerk.name, T.FUNDING_BALANCES_ROUTE, T.PAYMENT_ASSET))
     holdings_credit = _j({"amount_usd_cents": "<%d, or the next ten dollars above twice the refusal's ceiling>" % T.GAS_CREDIT_USD_CENTS, "reason": T.ADMIN_CREDIT_REASON % "<run>", "idempotency_key": "aer360-harness-<run>-%s-gas-<n>" % A.ESTATE["client_id"]})
     line("S7", "POST <%s>%s %s (Authorization: Bearer <%s>) — only where a payment's review below refuses %s: made at that review, before the run is created → expect 201: Harness Holdings' gas account credited, the balance in the platform's own figures, one credit per refusal sized by its ceiling (Spec T26 §2), then the review again; a second %s after it fails S7 naming both figures; a refusal in the platform's words fails S7; never made on a standing order" % (
@@ -6055,8 +6359,12 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
             # Spec T24 §2: before the one-off is paid, the runs register says whether Spec 69's hold is provable this run
             line("S7", "GET /v1/sets (as %s) → the runs register, read for whether this estate has ever paid the owner's wallet on %s — any instruction not rejected, to any payee (setgates.ts, isDestinationNew), and HH-0001 pays it moments before — so the line says \"%s\" (a pass with the words, not a failure) or \"%s\" (Spec T24 §2)" % (
                 clerk.name, T.PAYEE_CHAIN, T.ONE_OFF_ALREADY_PAID_SENTENCE, T.ONE_OFF_NEW_SENTENCE))
-        line("S7", "POST /v1/sets/review %s (as %s) → expect the gates' review; %s; a %s refusal credits Holdings' gas once (the cure above, sized by this refusal's ceiling) and asks again (Spec T26 §2)" % (_j({"pays": [row], "duplicatesAcknowledged": False}), clerk.name, tier_words, T.GAS_SHORTFALL))
-        line("S7", "POST /v1/sets %s (as %s) → expect 201: the run in draft" % (_j({"pays": [row], "duplicatesAcknowledged": False, "idempotencyKey": "aer360-harness-<run>-%s" % payment.key, "reference": "Harness payment %s" % payment.key}), clerk.name))
+        line("S7", "POST /v1/sets/review %s (as %s) → expect the gates' review; %s; a %s refusal credits Holdings' gas once (the cure above, sized by this refusal's ceiling) and asks again (Spec T26 §2); %s" % (
+            _j({"pays": [row], "duplicatesAcknowledged": False}), clerk.name, tier_words, T.GAS_SHORTFALL, repeat_judged))
+        line("S7", "POST /v1/sets/review %s (as %s) — %s → expect the duplicate screen (%s) passed, its evidence ending \"%s\", every warning still naming a payment of an earlier run — the founder's press on PaymentEntry.tsx — and one note per warning confirmed, naming the earlier run the estate remembered; read before any gas is credited, so a payment that will not be made is never credited for; a refusal, or a gate that does not pass, creates nothing and fails S7 in the estate's words (Spec T28)" % (
+            _j({"pays": [row], "duplicatesAcknowledged": True}), clerk.name, REPEAT_BOUND_WORDS, DUPLICATE_GATE, DUPLICATE_ACKNOWLEDGED_EVIDENCE))
+        line("S7", "POST /v1/sets %s (as %s) → expect 201: the run in draft; duplicatesAcknowledged is true only where the duplicate screen named a payment of an earlier run and the second review saw its gate pass (Spec T28)" % (
+            _j({"pays": [row], "duplicatesAcknowledged": acknowledged_or_not, "idempotencyKey": "aer360-harness-<run>-%s" % payment.key, "reference": "Harness payment %s" % payment.key}), clerk.name))
         line("S7", "POST /v1/sets/<run %s>/submit {} → expect status and approvalsRequired as the estate's band and destination rule decide; %s (%s): expected to %s; %s; %s" % (
             payment.key, payment.amount, T.PAYMENT_ASSET, payment.expect, Runner.road_words(payment.key), tier_words))
         line("S7", "POST /v1/approvals/<run %s>/challenge {} then /approve %s (as %s in turn while the run waits: the holder, the clerk, then the approver and the third party) → expect the estate's answer to each in its words — ROLE_NOT_GRANTED where it admits the approver standing alone — until status approved; a refusal is never retried" % (

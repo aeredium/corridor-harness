@@ -226,7 +226,11 @@ class TheFileAbsentOrMalformed(unittest.TestCase):
         self.assertEqual(len([n for n in second.notes["S7"] if n.startswith("the owner's wallet: %s on arbitrum, read from " % OWNER)]), 1, "S6 did not run, so S7 read the file")
         self.assertEqual(len([c for c in second.calls if c.station == "S7" and c.route == "GET /v1/payees"]), 1, "the register, read once (Spec T18 §2)")
         self.assertEqual(second.facts["payee_resolution"], {"P1": "the register's Northwind Supplies on arbitrum, whitelisted", "P3": "the register's Contoso Legal on arbitrum, whitelisted"})
-        self.assertIn("P1 (0.50 USDC to %s, the owner's wallet, expected to proceeds to approval): paid to the register's Northwind Supplies on arbitrum, whitelisted; submitted:" % OWNER, o.line)
+        # Spec T28: the first run's P1 stands in the estate's runs register within its seven days; the founder confirms the repeat before it is created
+        earlier = double.sets[first.facts["sets"]["P1"]["set_id"]]
+        self.assertIn("P1 (0.50 USDC to %s, the owner's wallet, expected to proceeds to approval): paid to the register's Northwind Supplies on arbitrum, whitelisted; the duplicate screen named "
+                      "Northwind Supplies 0.50 USDC under HH-0001, paid on %s (run %s); the founder confirmed it, as a founder would, and the review asked again passed it: 1 possible duplicate(s), "
+                      "acknowledged by the author (Spec T28); submitted:" % (OWNER, earlier["createdAt"], earlier["id"]), o.line)
         self.assertEqual(second.facts["one_off"]["paid_before"], True, "the first run paid the wallet")
         self.assertEqual(double.chain.balance_of(OWNER), 2000000, "two dollars over two runs, every cent to the owner's wallet")
         # the file is read once per run, whatever the number of payees and payments
@@ -267,7 +271,7 @@ class TheTestnetKeepsTheDerivedTable(unittest.TestCase):
         self.assertFalse(any(OWNER in l for l in lines), "the tests' owner wallet is not the printer's business either")
         addresses = set(re.findall(r"0x[0-9a-fA-F]{40}", "\n".join(lines)))
         self.assertEqual(addresses, {T.wrong_checksum(T.address("CHECKSUM_PROBE_ETHEREUM"))}, "the one address a dry line prints is S11's checksum probe, derived and refused on purpose")
-        self.assertEqual(len([l for l in lines if T.OWNER_PAYEE_PLACEHOLDER in l]), 7)
+        self.assertEqual(len([l for l in lines if T.OWNER_PAYEE_PLACEHOLDER in l]), 9, "Spec T28: S7a's and the one-off's second reviews carry the placeholder too")
         with unittest.mock.patch("builtins.open", side_effect=AssertionError("the printer opened a file")):
             H.dry_lines()
 
