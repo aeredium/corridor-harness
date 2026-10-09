@@ -417,11 +417,11 @@ class EstateHarnessReadmeTest(unittest.TestCase):
 
 
 class ChangelogTest(unittest.TestCase):
-    def test_the_changelog_records_spec_t28_first_and_names_every_change(self):
+    def test_the_changelog_records_spec_t28_and_names_every_change(self):
         text = read("CHANGELOG.md")
         title = "## Spec T28 — The founder confirms a repeat: S7 acknowledges the estate's duplicate screen as a founder would, and only then (8 October 2026)"
         self.assertIn(title, text)
-        self.assertEqual(text.index("## "), text.index(title), "the newest entry first")
+        self.assertLess(text.index("## Spec HRW-1 — Harness Real World"), text.index(title), "Spec HRW-1's entry above it, the newest")
         t27 = "## Spec T27 — The answer book learns catalog version 15"
         self.assertLess(text.index(title), text.index(t27))
         entry = text.split(title, 1)[1].split(t27, 1)[0]
