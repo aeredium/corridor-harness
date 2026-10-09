@@ -44,9 +44,9 @@ def now_ms() -> int:
     return int(time.time() * 1000)
 
 
-def card(title: Any, *children: Any, action: Any = None) -> El:
+def card(title: Any, *children: Any, action: Any = None, attrs: Optional[Dict[str, Any]] = None) -> El:
     """web/components/ui.tsx Card: section.card, its title an h2 in div.card-head."""
-    return h("section", h("div", h("h2", title), action, cls="card-head"), *children, cls="card")
+    return h("section", h("div", h("h2", title), action, cls="card-head"), *children, cls="card", attrs=attrs)
 
 
 def plain_card(*children: Any) -> El:
@@ -90,6 +90,9 @@ def pill(word: str) -> El:
 # The shell (web/App.tsx).
 # ======================================================================================================================
 class App:
+    # The shell's brand names the estate (App.tsx:356-359). False: a shell whose brand names nothing — the page the guard must not press on.
+    BRAND_NAMES_ESTATE = True
+
     def __init__(self, page: Any, path: str, query: str, fragment: str):
         self.page = page
         self.path = path
@@ -191,7 +194,7 @@ class App:
         rooms = [("Onboarding", "/onboarding"), ("Consolidation", "/"), ("Enter payments", "/entry"), ("Runs", "/runs"), ("Approver inbox", "/inbox"),
                  ("Payees", "/payees"), ("People", "/people"), ("Wallets", "/wallets")]
         sidebar = h("nav",
-                    h("div", hidden("Estate: "), workspace.get("name"), cls="brand"),
+                    h("div", hidden("Estate: "), workspace.get("name") if self.BRAND_NAMES_ESTATE else None, cls="brand"),
                     h("div", *[h("a", name, attrs={"href": route}, click=lambda route=route: self.navigate(route)) for name, route in rooms], cls="nav"),
                     h("div", h("p", "Signed in as"), h("p", self.session.get("displayName")),
                       h("p", ", ".join(roles) if roles else "no permissions", hidden(" — set by your organisation’s policy")), h("button", "Sign out", click=self.sign_out)),
@@ -1125,6 +1128,16 @@ class RunPage:
             self.refusal = err.refusal
         self.read()
 
+    def approvals(self, run: Dict[str, Any]) -> Optional[El]:
+        """Runs.tsx:354-360: a run waiting on approvals says how many are given, "in the Approver inbox" — plain words at b523cbf, a link where the inbox's cards carry an anchor."""
+        approval = run.get("approval") or {}
+        if run.get("status") != "pending_approval" or not approval.get("approvalsRequired"):
+            return None
+        where: Any = "the Approver inbox"
+        if Inbox.CARD_NAMES_ITS_RUN == "anchor":
+            where = h("a", "the Approver inbox", attrs={"href": "/inbox#run-%s" % run["id"]}, click=lambda: self.app.navigate("/inbox"))
+        return h("dl", h("dt", "Approvals"), h("dd", "%s of %s given, in " % (approval.get("approvalsGiven") or 0, approval.get("approvalsRequired")), where))
+
     def render(self) -> El:
         if not self.run:
             return h("div", h("p", h("a", "All runs", attrs={"href": "/runs"}, click=lambda: None)), h("h1", "Runs"), refusal_notice(self.refusal) if self.refusal else None)
@@ -1153,7 +1166,8 @@ class RunPage:
                  h("p", submitted_words(submitted), attrs={"role": "status", "aria-label": "Your submission"}) if submitted else None,
                  refusal_notice((self.arrived or {})["submitRefused"]) if (self.arrived or {}).get("submitRefused") else None,
                  refusal_notice(self.refusal) if self.refusal else None,
-                 card("Where it stands", h("p", pill(words), attrs={"role": "status", "aria-label": "Status of this run"}), h("div", *actions, cls="actions")),
+                 card("Where it stands", h("p", pill(words), attrs={"role": "status", "aria-label": "Status of this run"}),
+                      self.approvals(run), h("div", *actions, cls="actions")),
                  card("Payments", h("table", *rows)))
 
 
@@ -1161,6 +1175,11 @@ class RunPage:
 # web/screens/ApproverInbox.tsx.
 # ======================================================================================================================
 class Inbox:
+    # Whether a card names its run. None: as ApproverInbox.tsx renders it at b523cbf — no id, no data attribute, no link: the card names no run.
+    # "link": an estate whose card links to its run's page (/runs/<id>). "anchor": one whose card carries an anchor that the run's own page
+    # links to (/inbox#run-<id>, from "in the Approver inbox" on the run's page).
+    CARD_NAMES_ITS_RUN: Optional[str] = None
+
     def __init__(self, app: App):
         self.app = app
         self.sets: List[Dict[str, Any]] = []
@@ -1197,11 +1216,14 @@ class Inbox:
             for i in run["instructions"]:
                 rows.append(h("tr", h("td", i["payeeName"]), h("td", "%s…%s" % (i["address"][:6], i["address"][-4:])), h("td", i.get("invoiceRef") or "—"), h("td", "—")))
             approval = run.get("approval") or {}
+            names = self.CARD_NAMES_ITS_RUN
             children.append(card(run["reference"],
+                                 h("p", h("a", "Open this run", attrs={"href": "/runs/%s" % run["id"]}, click=lambda run=run: self.app.navigate("/runs/%s" % run["id"])))
+                                 if names == "link" else None,
                                  h("table", *rows),
                                  h("p", "%s of %s approval%s given." % (approval.get("approvalsGiven"), approval.get("approvalsRequired"), "" if approval.get("approvalsRequired") == 1 else "s")),
                                  h("div", h("button", "Approve with passkey", disabled=not run.get("mayApprove"), click=lambda run=run: self.approve(run)),
                                    h("button", "Send back for editing", click=lambda: None), cls="actions"),
                                  h("p", run["blockedSentence"], cls="hint") if not run.get("mayApprove") and run.get("blockedSentence") else None,
-                                 action=pill("Pending approval")))
+                                 action=pill("Pending approval"), attrs={"id": "run-%s" % run["id"]} if names == "anchor" else None))
         return h("div", *children)

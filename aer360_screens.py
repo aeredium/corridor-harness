@@ -67,6 +67,7 @@ CSS_READ_BACK_LINE = "dl > div"                    # web/screens/Onboarding.tsx:
 # ---------------------------------------------------------------------------
 # R1 — the invitation page (web/screens/Invite.tsx), outside the shell.
 # ---------------------------------------------------------------------------
+INVITE_ROUTE = "/invite"                           # web/App.tsx:242 — the invitation link owns its route absolutely (spec 64, count 1): no shell there
 ENROLMENT_CREATE_ACTION = "Create my key now"      # shared/enrolment.ts:63 — the one button, where the page's own request for a key did not finish
 INVITE_DEAD_HEADING = "This invitation could not be opened"  # web/screens/Invite.tsx:305 — then the estate's refusal (INVITE_INVALID, its cause in the detail)
 ENROLMENT_KEY_EXISTS = "Your key exists, and you are signed in."  # shared/enrolment.ts:109-110
@@ -85,7 +86,7 @@ def continue_label(estate: str) -> str:
 # ---------------------------------------------------------------------------
 # R2 — the sign-in page (web/screens/SignIn.tsx), and where a founder lands.
 # ---------------------------------------------------------------------------
-SIGN_IN_HEADING = "Sign in"                        # web/screens/SignIn.tsx:104
+SIGN_IN_HEADING = "Sign in"                        # web/screens/SignIn.tsx:104 — rendered for any URL with no session (web/App.tsx:298), no shell there
 SIGN_IN_BUTTON = "Sign in with passkey"            # web/screens/SignIn.tsx:121 (busy: "Waiting for your passkey…")
 LANDING_HEADING = "Consolidation"                  # web/screens/Aer360.tsx:138-141 — `/`; the landing law sends a new estate to its journey's route instead
 

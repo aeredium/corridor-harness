@@ -627,12 +627,12 @@ class StrangerReviewingEstate(W.ScreensEstate):
 
 
 class TheOwnersWallet(unittest.TestCase):
-    def test_a_review_naming_another_address_stops_before_submit_and_nothing_moves(self) -> None:
+    def test_a_review_naming_another_address_stops_the_run_before_submit_and_nothing_moves(self) -> None:
         s = Setting(estate=StrangerReviewingEstate())
         leg = s.walk()
-        self.assertEqual((outcomes(leg)["R7"], outcomes(leg)["R7b"]), (E.FAIL, E.FAIL))
-        self.assertIn("the review the page received names %s" % StrangerReviewingEstate.STRANGER, line_of(leg, "R7"))
-        self.assertIn("so 'Submit this run' was not pressed and nothing moved", line_of(leg, "R7"))
+        self.assertEqual((outcomes(leg)["R7"], outcomes(leg)["R7b"]), (E.FAIL, E.NOT_RUN))
+        self.assertIn(R.LITERAL_BOUND_ADDRESS % (StrangerReviewingEstate.STRANGER, D.OWNER_WALLET_FOR_TESTS, S.SUBMIT_RUN), line_of(leg, "R7"))
+        self.assertEqual([(f.probe, f.kind) for f in leg.findings if f.station == "R7"], [("the run stopped", R.SCREEN)])
         self.assertFalse(any(x.route == "POST /v1/sets" for x in leg.exchanges))
         self.assertEqual(s.estate.chain.balance_of(D.OWNER_WALLET_FOR_TESTS), 0)
         self.assertEqual(s.estate.chain.balance_of(StrangerReviewingEstate.STRANGER), 0)
@@ -649,16 +649,50 @@ class TheOwnersWallet(unittest.TestCase):
 
 
 class TheWaitingRun(unittest.TestCase):
-    def test_a_run_that_waits_is_approved_in_the_seated_approvers_inbox_and_executes_on_that_press(self) -> None:
-        s = Setting(estate=WaitingEstate())
+    """A run that waits for an approval is approved only on an inbox card that names it (the owner's second change of 9 October 2026)."""
+
+    def test_a_card_that_names_no_run_is_never_pressed_a_finding_and_r9_cancels_the_waiting_runs(self) -> None:
+        s = Setting(estate=WaitingEstate())  # the inbox as ApproverInbox.tsx renders it at b523cbf: no card names its run
         leg = s.walk()
+        self.assertEqual(outcomes(leg)["R7"], E.FAIL)
+        finding = next(f for f in leg.findings if f.probe == "R7: no card in the Approver inbox names this run")
+        self.assertEqual(finding.kind, R.SCREEN)
+        self.assertIn("Ada Approver's inbox lists 1 run(s) waiting — 1 naming no run, 0 naming another — and none names run %s" % leg.facts["runs"][0]["id"],
+                      finding.said)
+        self.assertIn("a card that names no run is never pressed", finding.said)
+        self.assertFalse(any(c["method"] == "POST" and c["path"].startswith("/v1/approvals/") for c in s.estate.calls))
+        self.assertEqual(s.estate.chain.balance_of(D.OWNER_WALLET_FOR_TESTS), 0)
+        self.assertEqual(outcomes(leg)["R9"], E.PASS, line_of(leg, "R9"))
+        self.assertTrue(all(s.estate.sets[r["id"]]["status"] == "cancelled" for r in leg.facts["runs"]))
+
+    def test_a_card_that_links_to_its_run_is_approved_and_the_run_executes_on_that_press(self) -> None:
+        with mock.patch.object(SC.Inbox, "CARD_NAMES_ITS_RUN", "link"):
+            s = Setting(estate=WaitingEstate())
+            leg = s.walk()
         self.assertEqual(outcomes(leg)["R7"], E.PASS, "\n".join(leg.said))
         self.assertIn("the page says \"Submitted: waiting for 1 approval.\"", line_of(leg, "R7"))
         self.assertIn("Ada Approver approved it in the Approver inbox", line_of(leg, "R7"))
         approvals = [x for x in leg.exchanges if x.route.startswith("POST /v1/approvals/") and x.route.endswith("/approve")]
         self.assertEqual([(x.station, x.who) for x in approvals], [("R7", "Ada Approver"), ("R7b", "Ada Approver")])
+        self.assertEqual([x.path.split("/")[3] for x in approvals], [r["id"] for r in leg.facts["runs"]])
         self.assertFalse(any(c["path"].endswith("/execute") for c in s.estate.calls))
         self.assertEqual(s.estate.chain.balance_of(D.OWNER_WALLET_FOR_TESTS), 1000000)
+
+    def test_the_card_the_runs_own_page_links_to_is_approved(self) -> None:
+        with mock.patch.object(SC.Inbox, "CARD_NAMES_ITS_RUN", "anchor"):
+            s = Setting(estate=WaitingEstate())
+            leg = s.walk()
+        self.assertEqual(outcomes(leg)["R7"], E.PASS, "\n".join(leg.said))
+        self.assertIn("Ada Approver approved it in the Approver inbox", line_of(leg, "R7"))
+
+    def test_a_card_that_names_another_run_is_never_pressed(self) -> None:
+        with mock.patch.object(SC.Inbox, "CARD_NAMES_ITS_RUN", "link"):
+            s = Setting(estate=DoubledInboxEstate())  # each run listed twice, the twin under another id
+            leg = s.walk()
+        self.assertEqual(outcomes(leg)["R7"], E.PASS, "\n".join(leg.said))
+        pressed = [c["path"] for c in s.estate.calls if c["method"] == "POST" and c["path"].startswith("/v1/approvals/")]
+        self.assertTrue(pressed)
+        self.assertFalse(any("-twin" in p for p in pressed))
 
 
 # ======================================================================================================================
@@ -845,7 +879,8 @@ class TheReviewOfTheCode(unittest.TestCase):
 
     def test_a_run_that_would_wait_is_not_submitted_where_no_approver_of_payments_is_here(self) -> None:
         s = Setting(estate=WaitingEstate())
-        first = s.walk()
+        with mock.patch.object(SC.Inbox, "CARD_NAMES_ITS_RUN", "link"):
+            first = s.walk()
         self.assertEqual(outcomes(first)["R7"], E.PASS, "\n".join(first.said))
         os.remove(os.path.join(first.store_dir, "ada.json"))
         s.estate.age_runs(1)
@@ -854,22 +889,10 @@ class TheReviewOfTheCode(unittest.TestCase):
         self.assertIn("this run would wait for 1 approval(s), and no approver the charter names at C11 (Ada Approver) has a session in this run", line_of(second, "R7"))
         self.assertFalse(any(x.route == "POST /v1/sets" for x in second.exchanges))
 
-    def test_two_runs_that_read_alike_in_the_inbox_are_a_finding_and_neither_is_approved_and_r9_cancels_the_waiting_runs(self) -> None:
-        s = Setting(estate=DoubledInboxEstate())
-        leg = s.walk()
-        self.assertEqual(outcomes(leg)["R7"], E.FAIL)
-        self.assertIn("R7: runs that read alike in the Approver inbox", probes(leg, "R7"))
-        self.assertTrue(any(c["path"] == "/v1/approvals/inbox" for c in s.estate.calls))  # Ada's inbox was read
-        self.assertFalse(any(c["method"] == "POST" and c["path"].startswith("/v1/approvals/") for c in s.estate.calls))  # and nothing in it pressed
-        self.assertEqual(s.estate.chain.balance_of(D.OWNER_WALLET_FOR_TESTS), 0)
-        runs = [r["id"] for r in leg.facts["runs"]]
-        self.assertEqual(outcomes(leg)["R9"], E.PASS, line_of(leg, "R9"))
-        self.assertIn("cancelled: %s pending_approval → cancelled (the page's Cancel), %s pending_approval → cancelled (the page's Cancel)" % tuple(runs),
-                      line_of(leg, "R9"))
-
     def test_a_refused_approval_leaves_the_run_waiting_and_r9_cancels_it(self) -> None:
-        s = Setting(estate=RefusingApprovalEstate())
-        leg = s.walk()
+        with mock.patch.object(SC.Inbox, "CARD_NAMES_ITS_RUN", "link"):
+            s = Setting(estate=RefusingApprovalEstate())
+            leg = s.walk()
         self.assertEqual(outcomes(leg)["R7"], E.FAIL)
         self.assertIn("Ada Approver's approval was refused", probes(leg, "R7"))
         self.assertTrue(all(s.estate.sets[r["id"]]["status"] == "cancelled" for r in leg.facts["runs"]))
@@ -955,6 +978,126 @@ class TheReviewOfTheCode(unittest.TestCase):
         stop = next(f for f in leg.findings if f.probe == "R7b stopped")
         self.assertEqual(stop.kind, R.REFUSED)
         self.assertIn("Submit this run created no run", stop.said)
+
+
+# ======================================================================================================================
+# The owner's three changes of 9 October 2026: the guard inside the shell, the inbox card that names its run, the literal bound.
+# ======================================================================================================================
+class TheGuardInsideTheShell(unittest.TestCase):
+    def visitor_on(self, render: Callable[[], Any], path: str) -> R.Visitor:
+        """The founder's context on a page of the test's own making: what the guard reads is what the page renders, at the path given."""
+        s = Setting()
+        leg = R.RealWorld(base=D.BASE, store_root=s.store, runs_root=os.path.join(s.tmp, "runs-g"), api_reports=s.tmp, driver=s.world.driver(),
+                          transport=s.estate, say=lambda t: None, time_scale=0.001, dry_folder=True)
+        leg.estate_name = A.ESTATE["company"]
+        leg.open_browser()
+        v = leg.visitor(A.FOUNDER)
+        v.page.app = mock.Mock(csrf=None, render=render)
+        v.page.url = s.estate.origin + path
+        return v
+
+    @staticmethod
+    def shell(brand: Any) -> Any:
+        return W.h("html", W.h("div", W.h("nav", W.h("div", SC.hidden("Estate: "), brand, cls="brand"), attrs={"aria-label": "Sections"}),
+                               W.h("main", W.h("h1", "Payees and counterparties"), W.h("button", "Add payee", click=lambda: None))))
+
+    def test_a_page_inside_the_shell_that_names_no_estate_stops_the_run(self) -> None:
+        v = self.visitor_on(lambda: self.shell(None), "/payees")
+        with self.assertRaises(R.RunStop) as stop:
+            v.guard()
+        self.assertEqual(stop.exception.prerequisite, R.WRONG_ESTATE)
+        self.assertEqual(stop.exception.sentence, R.NO_ESTATE_IN_THE_SHELL % "/payees")
+        with self.assertRaises(R.RunStop):
+            v.press("Add payee")
+
+    def test_a_page_inside_the_shell_that_names_the_harnesss_estate_passes(self) -> None:
+        v = self.visitor_on(lambda: self.shell(A.ESTATE["company"]), "/payees")
+        v.guard()
+
+    def test_only_the_sign_in_and_invitation_pages_may_name_no_estate(self) -> None:
+        sign_in = self.visitor_on(lambda: W.h("html", W.h("main", W.h("h1", S.SIGN_IN_HEADING))), "/")
+        sign_in.guard()
+        invitation = self.visitor_on(lambda: W.h("html", W.h("main", W.h("h1", "Harriet Founder, create your key"))), S.INVITE_ROUTE)
+        invitation.guard()
+        elsewhere = self.visitor_on(lambda: W.h("html", W.h("main", W.h("h1", "Loading…"))), "/entry")
+        with self.assertRaises(R.RunStop) as stop:
+            elsewhere.guard()
+        self.assertEqual(stop.exception.sentence, R.NOT_A_PAGE_WITHOUT_THE_SHELL % ("/entry", "Loading…"))
+
+    def test_a_walk_whose_shell_names_no_estate_stops_at_the_first_press_inside_it(self) -> None:
+        with mock.patch.object(SC.App, "BRAND_NAMES_ESTATE", False):
+            s = Setting()
+            leg = s.walk()
+        self.assertEqual(outcomes(leg)["R1"], E.FAIL)
+        self.assertIn(R.NO_ESTATE_IN_THE_SHELL % "/onboarding", line_of(leg, "R1"))
+        self.assertTrue(all(outcomes(leg)[st] == E.NOT_RUN for st in R.STATION_IDS[1:]))
+        self.assertEqual([(f.probe, f.kind) for f in leg.findings], [(R.WRONG_ESTATE, R.SCREEN)])
+
+
+def book_with(**amounts: str) -> Callable[[], List[A.Payment]]:
+    """The book in force with some payments' amounts changed (P1="1.50"): what a book changed past the one-dollar law would ask."""
+    book = A.payments
+    return lambda: [p._replace(amount=amounts[p.key]) if p.key in amounts else p for p in book()]
+
+
+class TheLiteralBound(unittest.TestCase):
+    def test_the_bound_is_a_literal_in_the_module_beside_the_books(self) -> None:
+        self.assertEqual(R.RUN_CEILING_CENTS, 100)
+        self.assertEqual(T.ONE_DOLLAR_MINOR, R.RUN_CEILING_CENTS * 10 ** (T.ASSET_DECIMALS[T.PAYMENT_ASSET] - 2))
+        source = read(os.path.join(ROOT, "aer360_real_world.py"))
+        self.assertIn("\nRUN_CEILING_CENTS = 100\n", source)
+
+    def test_a_press_above_one_dollar_is_never_submitted_and_the_run_stops(self) -> None:
+        with mock.patch.object(A, "payments", book_with(P1="1.50")):
+            s = Setting()
+            leg = s.walk()
+        self.assertEqual((outcomes(leg)["R7"], outcomes(leg)["R7b"]), (E.FAIL, E.NOT_RUN))
+        self.assertIn(R.LITERAL_BOUND_TOTAL % (151, 0, 100, S.SUBMIT_RUN), line_of(leg, "R7"))
+        self.assertEqual([(f.probe, f.kind) for f in leg.findings if f.station == "R7"], [("the run stopped", R.HARNESS)])
+        self.assertFalse(any(x.route == "POST /v1/sets" for x in leg.exchanges))
+        self.assertEqual(s.estate.chain.balance_of(D.OWNER_WALLET_FOR_TESTS), 0)
+
+    def test_the_two_presses_together_are_held_to_one_dollar(self) -> None:
+        with mock.patch.object(A, "payments", book_with(P1="0.60")):  # R7 pays 61 cents, so R7b's 49 would take the run to 110
+            s = Setting()
+            leg = s.walk()
+        self.assertEqual(outcomes(leg)["R7"], E.PASS, line_of(leg, "R7"))
+        self.assertEqual(leg.facts["submitted_cents"], 61)
+        self.assertEqual(outcomes(leg)["R7b"], E.FAIL)
+        self.assertIn(R.LITERAL_BOUND_TOTAL % (49, 61, 100, S.SUBMIT_RUN), line_of(leg, "R7b"))
+        self.assertEqual(len([x for x in leg.exchanges if x.route == "POST /v1/sets"]), 1)
+        self.assertEqual(s.estate.chain.balance_of(D.OWNER_WALLET_FOR_TESTS), 610000)
+
+    def test_the_book_as_it_stands_is_within_the_bound(self) -> None:
+        s = Setting()
+        leg = s.walk()
+        self.assertEqual([r["cents"] for r in leg.facts["runs"]], [51, 49])
+        self.assertEqual(leg.facts["submitted_cents"], R.RUN_CEILING_CENTS)
+
+
+class TheQueryRedacted(unittest.TestCase):
+    def test_a_routes_query_string_is_redacted_and_nothing_else(self) -> None:
+        self.assertEqual(R.redact_query("GET /v1/aer360/wallets?holder=0xabc&min=100"), "GET /v1/aer360/wallets?<redacted>")
+        self.assertEqual(R.redact_query("POST https://platform.test/v1/admin/accounts/a/policies?key=value"), "POST https://platform.test/v1/admin/accounts/a/policies?<redacted>")
+        self.assertEqual(R.redact_query("POST /v1/sets"), "POST /v1/sets")
+        self.assertEqual(R.redact_query("GET /v1/aer360/wallets?"), "GET /v1/aer360/wallets?")
+
+    def test_no_query_reaches_evidence_jsonl_or_the_report(self) -> None:
+        held = "0xfeedface0held0in0the0query"
+
+        def load(page: Any) -> None:
+            page.payload = page.app.get("/v1/aer360/wallets?holder=%s&min=100" % held)
+
+        with mock.patch.object(SC.Wallets, "load", load):
+            s = Setting()
+            leg = s.walk()
+        self.assertEqual(outcomes(leg)["R5"], E.PASS, line_of(leg, "R5"))
+        self.assertTrue(any(x.path == "/v1/aer360/wallets?holder=%s&min=100" % held for x in leg.exchanges))  # the page asked it so
+        routes = [e["route"] for e in evidence_of(leg) if e.get("route")]
+        self.assertIn("GET /v1/aer360/wallets?<redacted>", routes)
+        self.assertFalse(any("?" in r and not r.endswith("?<redacted>") and not r.endswith("?") for r in routes), routes)
+        self.assertNotIn(held, read(os.path.join(leg.folder.path, "evidence.jsonl")))
+        self.assertNotIn(held, read(leg.report_path))
 
 
 # ======================================================================================================================

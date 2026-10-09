@@ -34,6 +34,13 @@ THE LAWS IT KEEPS, the API leg's own:
   refusal's ceiling. A wallet short of the one-dollar book is never funded by the harness: the station stops naming the address, the
   chain and the figure, as Spec T14's birth run does, because funding a wallet is the owner's act. Nothing repeats on a clock.
 
+THE OWNER'S THREE CHANGES (9 October 2026). The guard: a page inside an estate's shell that names no estate stops the run, and only the
+sign-in and invitation pages, which have no shell, pass without a name. The inbox: a run waiting for an approval is approved only on a card
+that names a run this process created — carrying its id, or the card the run's own page links to — and a card that names no run is never
+pressed (at AERAccounts b523cbf none does: a finding, and R9 cancels the run). The literal bound: before every Submit this run, the rows the
+page will submit are held to the owner's wallet and to RUN_CEILING_CENTS — 100 cents, written here, for the whole run — beside the book's own
+ONE_DOLLAR_MINOR; and no route is recorded with its query string (redact_query).
+
 THE CUSTOMER SUPPORT HAT (Bear, 9 October 2026: "put yourself in the shoes of the customer"). Every station records the page's own
 "what to do next" — the notice, the control's label, the refusal — and R8 holds it against the Client Manual's words for each step this
 run walked, at every station that passed (aer360_screens.MANUAL_WORDS). A page that leaves a founder without a next step is a finding even
@@ -105,7 +112,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import aer360_answers as A  # noqa: E402  the book: the people, the answers, the payments
@@ -155,6 +162,7 @@ NAVIGATION_TIMEOUT_SECONDS = 60.0              # a page to load
 SETTLE_TIMEOUT_SECONDS = 10.0                  # the network to fall quiet after a load (Playwright's networkidle is a page load's state, never re-armed by a press)
 ENABLED_WAIT_SECONDS = 10.0                    # a control the page is about to enable (Submit this run once the review is acceptable) waited for before it is called disabled
 POLL_SECONDS = 0.25                            # between two readings of the page while it catches up with an answer it has received
+GUARD_WAIT_SECONDS = 10.0                      # a page still rendering, waited for before the guard calls it a page it cannot place
 RUN_READS_AT_MOST = 40                         # the run's page read again up to this many times while a payment is not terminal
 RUN_READ_WAIT_SECONDS = 5.0                    # between those reads — the page itself re-reads every 2 s while moving, every 10 s while waiting
 INTERVIEW_PAGES_AT_MOST = 80                   # the Policy Interview walked at most this many pages before the harness calls it a loop
@@ -185,8 +193,24 @@ NOTHING_COMPARED = "no station both legs ran to a judgment"
 EMAIL_NOT_RECORDED = "the founder's email not recorded"
 NOT_PINNED_ESTATE = ("the page names the estate %r, which is not one of the harness's own (%s); the harness presses nothing on anyone's estate "
                      "but its own, so the run stops here (Spec HRW-1 §2, the Attacker)")
+NO_ESTATE_IN_THE_SHELL = ("the page at %s stands inside an estate's shell and names no estate (the sidebar's brand is empty, or cannot be read), so the guard "
+                          "cannot tell whose estate it is; the harness presses nothing on a page it cannot place, so the run stops here (Spec HRW-1 §2, the Attacker)")
+NOT_A_PAGE_WITHOUT_THE_SHELL = ("the page at %s (its heading %r) shows no estate's shell and is neither the sign-in page nor the invitation page — the only "
+                                "pages that stand outside the shell, and so the only ones that may name no estate — so the guard cannot tell whose estate it is; "
+                                "the run stops here (Spec HRW-1 §2, the Attacker)")
 NOT_THIS_ESTATE = ("the page names the estate %r, and this run's estate is %r; the harness presses nothing on an estate it did not set out to walk, "
                    "so the run stops here (Spec HRW-1 §2, the Attacker)")
+# THE LITERAL BOUND (Spec HRW-1 §5: "It does not move more than one dollar in a run, and only to the owner's wallet"; the one-dollar law of 3 October
+# 2026), written here as a figure and never read from the book: before every Submit this run, the rows the page will submit — with what this run has
+# already submitted — come to at most this many cents of USDC, and every one is to the owner's wallet. The book's own bound, aer360_tables.ONE_DOLLAR_MINOR,
+# is held beside it; a book changed past a dollar meets this one first.
+RUN_CEILING_CENTS = 100
+LITERAL_BOUND_ADDRESS = ("the review the page received names %s, not the owner's wallet %s; this leg pays the owner's wallet alone (Spec HRW-1 §5, Spec T24), so "
+                         "%r was not pressed and the run stops here")
+LITERAL_BOUND_UNREADABLE = ("the review the page received carries a row this leg cannot bound (%s): it submits USDC alone, in whole minor units, so %r was not "
+                            "pressed and the run stops here")
+LITERAL_BOUND_TOTAL = ("the rows the page would submit come to %d cents and this run has already submitted %d: together above the %d cents this leg submits in a "
+                       "run at most (Spec HRW-1 §5, the one-dollar law), so %r was not pressed and the run stops here")
 FUND_THE_WALLET = ("fund wallet %s (%s) with %s of %s on %s — this run's book needs %s from here and the chain reads %s there — then rerun with --from %s; "
                    "the harness funds no wallet, because funding a wallet is the owner's act")
 
@@ -254,6 +278,18 @@ def refusal_words(body: Any) -> str:
     detail = refusal.get("detail") if isinstance(refusal.get("detail"), dict) else {}
     beside = [str(detail[k]) for k in ("platformSaid", "gatewaySaid", "cause") if detail.get(k)]
     return "%s: %s%s" % (refusal.get("code"), refusal.get("message"), "".join(" (%s)" % b for b in beside))
+
+
+QUERY_REDACTED = "?<redacted>"
+
+
+def redact_query(route: Any) -> str:
+    """
+    A route or an address as the evidence records it, its query string redacted (the owner's third change, 9 October 2026): a query can carry an
+    id, an address or a token, and the path alone names the road. Applied to route fields only, never to free text, where a question mark is a
+    question mark.
+    """
+    return re.sub(r"\?[^\s#]+", QUERY_REDACTED, str(route))
 
 
 def shown(name: Any) -> str:
@@ -531,7 +567,10 @@ class Visitor:
             return ""
 
     def estate_name(self) -> Optional[str]:
-        """The estate the shell names in its sidebar (App.tsx: `<span class="visually-hidden">Estate: </span>{workspace.name}`); None outside the shell."""
+        """
+        The estate the shell names in its sidebar (App.tsx: `<span class="visually-hidden">Estate: </span>{workspace.name}`): the name, or None
+        where the page has no such brand, where it cannot be read, or where it names nothing.
+        """
         locator = self.page.locator(S.CSS_ESTATE_NAME)
         try:
             if not locator.count():
@@ -539,17 +578,46 @@ class Visitor:
             text = " ".join(locator.first.inner_text().split())
         except self.leg.driver.error:
             return None
-        return text[len(S.ESTATE_PREFIX):].strip() if text.startswith(S.ESTATE_PREFIX) else text
+        prefix = S.ESTATE_PREFIX.strip()
+        name = text[len(prefix):].strip() if text.startswith(prefix) else text
+        return name or None
+
+    def in_the_shell(self) -> bool:
+        """Whether the page stands inside an estate's shell: the sidebar, nav[aria-label="Sections"] (App.tsx), is on it."""
+        try:
+            return self.page.get_by_role("navigation", name=S.SIDEBAR_NAME, exact=True).count() > 0
+        except self.leg.driver.error:
+            return False
+
+    def outside_the_shell_by_right(self) -> bool:
+        """The two pages that stand outside the shell, and so name no estate: the invitation page (its own route) and the sign-in page."""
+        return self.where() == S.INVITE_ROUTE or self.heading() == S.SIGN_IN_HEADING
 
     def guard(self, named: Optional[str] = None) -> None:
         """
-        THE WRONG-ESTATE GUARD (Spec HRW-1 §2, the Attacker), before every press: the estate the page names must be one of the harness's
-        own (aer360_tables.HARNESS_ESTATE_NAMES) and the one this run set out to walk; otherwise the run stops, nothing pressed. `named` is
-        an estate a control itself names (the invitation page's Continue to <estate>).
+        THE WRONG-ESTATE GUARD (Spec HRW-1 §2, the Attacker), before every press, fill and choice: the estate the page names must be one of the
+        harness's own (aer360_tables.HARNESS_ESTATE_NAMES) and the one this run set out to walk; otherwise the run stops, nothing pressed. A page
+        inside an estate's shell that names no estate stops the run too; only the two pages that stand outside the shell — the sign-in page and
+        the invitation page — may pass without a name, and any other page that names none stops it. `named` is an estate a control itself names
+        (the invitation page's Continue to <estate>).
         """
-        name = named if named is not None else self.estate_name()
-        if name is None:
+        if named is not None:
+            self.hold_to_the_estate(named)
             return
+        # a page still rendering is waited for, bounded: placed once it names an estate, or once it is one of the two pages outside the shell
+        self.poll(lambda: bool(self.estate_name()) or (not self.in_the_shell() and self.outside_the_shell_by_right()), GUARD_WAIT_SECONDS)
+        name = self.estate_name()
+        if name:
+            self.hold_to_the_estate(name)
+            return
+        if self.in_the_shell():
+            raise RunStop(NO_ESTATE_IN_THE_SHELL % self.where(), prerequisite=WRONG_ESTATE)
+        if self.outside_the_shell_by_right():
+            return
+        raise RunStop(NOT_A_PAGE_WITHOUT_THE_SHELL % (self.where(), self.heading()), prerequisite=WRONG_ESTATE)
+
+    def hold_to_the_estate(self, name: str) -> None:
+        """The estate a page or a control names, held to the harness's own and to the one this run set out to walk."""
         if not T.is_harness_estate(name):
             raise RunStop(NOT_PINNED_ESTATE % (name, ", ".join(T.HARNESS_ESTATE_NAMES)), prerequisite=WRONG_ESTATE)
         if self.leg.estate_name and name != self.leg.estate_name:
@@ -770,7 +838,7 @@ class RealWorld:
         self.not_used: set = set()  # the people whose stored credential is another estate's, said once
         self.refused_birth: Optional[str] = None  # a printout naming an estate not the harness's own: R1 stops the run on it, before any link is opened
         # what this run made and read, station by station — the report's summary and R8's comparison read these
-        self.facts: Dict[str, Any] = {"runs": [], "instructions_created": {}, "gas_credits": [], "owner_payee": None, "entries_before": None,
+        self.facts: Dict[str, Any] = {"runs": [], "instructions_created": {}, "gas_credits": [], "owner_payee": None, "entries_before": None, "submitted_cents": 0,
                                       "entries_after": None, "receipt_ceilings": None, "wallet": None, "payees": [], "chain": {}}
 
     # -- the records ------------------------------------------------------------------------------------------------------
@@ -782,7 +850,7 @@ class RealWorld:
         self.folder.record(**entry)
 
     def store_step(self, who: str, read: StoreRead, expected: str) -> None:
-        entry = {"station": self.current, "kind": "store", "who": who, "what": "GET %s" % read.path, "expected": expected,
+        entry = {"station": self.current, "kind": "store", "who": who, "what": "GET %s" % redact_query(read.path), "expected": expected,
                  "result": "answered" if read.ok else "%s (%s)" % (read.sentence(), kind_of(read.status, read.json)), "status": read.status,
                  "came_back": read.text if read.json is None else json.dumps(self.secrets.redact(read.json), ensure_ascii=False), "page": "", "screenshot": None}
         self.evidence.setdefault(self.current, []).append(entry)
@@ -801,10 +869,10 @@ class RealWorld:
 
     def finding(self, probe: str, said: str, kind: str, page: str = "", store: str = "", expected: str = "", route: str = "", fails: bool = True) -> Finding:
         found = Finding(self.current, probe, self.secrets.redact_text(said), kind, self.secrets.redact_text(page), self.secrets.redact_text(store),
-                        expected, route)
+                        expected, redact_query(route) if route else "")
         self.findings.append(found)
         self.folder.record(station=self.current, kind="finding", probe=probe, said=found.said, classified=kind, page=found.page, store=found.store,
-                           expected=expected, route=route)
+                           expected=expected, route=found.route)
         self.say(("%s — %s — %s: %s" % (self.current, FAIL, probe, found.said)) if fails else ("  %s finding: %s: %s" % (self.current, probe, found.said)))
         return found
 
@@ -833,7 +901,7 @@ class RealWorld:
         x = Exchange(self.current, v.name, method, path, status, red_sent, red_text, now_iso())
         x._json, x._parsed = (self.secrets.redact(parsed_answer) if parsed_answer is not None else None), True
         self.exchanges.append(x)
-        self.folder.record(station=self.current, kind="request", who=v.name, route=x.route, status=status, sent=red_sent, came_back=red_text)
+        self.folder.record(station=self.current, kind="request", who=v.name, route=redact_query(x.route), status=status, sent=red_sent, came_back=red_text)
 
     def answered(self, method: str, pattern: str, who: Optional[str] = None, since: int = 0) -> Optional[Exchange]:
         """The newest answer the browser received on a route since a point in the log, as the page received it."""
@@ -1093,9 +1161,9 @@ class RealWorld:
         except ValueError:
             parsed = None
         red = json.dumps(self.secrets.redact(parsed), ensure_ascii=False) if parsed is not None else self.secrets.redact_text(text)
-        self.folder.record(station=self.current, kind="outside", who=who, route="%s %s" % (method, url), status=status,
+        self.folder.record(station=self.current, kind="outside", who=who, route=redact_query("%s %s" % (method, url)), status=status,
                            sent=self.secrets.redact(body), came_back=red)
-        self.evidence.setdefault(self.current, []).append({"station": self.current, "kind": "outside", "who": who, "what": "%s %s" % (method, url),
+        self.evidence.setdefault(self.current, []).append({"station": self.current, "kind": "outside", "who": who, "what": redact_query("%s %s" % (method, url)),
                                                            "expected": "", "result": "HTTP %d" % status if status else "unreachable", "page": "",
                                                            "came_back": red, "screenshot": None})
         return status, parsed, text
@@ -2396,33 +2464,79 @@ class RealWorld:
         """The approvers of payments the charter names at C11, each with a session in this run, in the book's order."""
         return [v for v in (self.visitors.get(k) for k in self.payment_approvers()) if v is not None and not v.closed and v.session is not None]
 
+    @staticmethod
+    def runs_named_by(card: Any) -> Set[str]:
+        """The runs an inbox card names: its own id or data attribute (data-run-id, data-set-id), and every link of its to a run's page (/runs/<id>)."""
+        names: Set[str] = set()
+        for attribute in ("id", "data-run-id", "data-set-id"):
+            value = card.get_attribute(attribute)
+            if value:
+                names.add(str(value))
+        for link in card.get_by_role("link").all():
+            found = re.search(r"/runs/([^/?#]+)", str(link.get_attribute("href") or ""))
+            if found:
+                names.add(urllib.parse.unquote(found.group(1)))
+        return names
+
+    def marks_the_run_page_links_to(self, a: Visitor, run_id: str) -> Set[str]:
+        """
+        The inbox cards the run's own page links to (Runs.tsx says "in the Approver inbox"; a link of it to /inbox carrying a fragment, or a
+        run=, set= or card= query, names the card): the run's page read in the approver's own context.
+        """
+        a.goto(S.RUN_ROUTE % run_id)
+        a.appears(a.page.get_by_role("status", name=S.RUN_STATUS_NAME, exact=True))
+        marks: Set[str] = set()
+        for link in a.page.get_by_role("link").all():
+            parsed = urllib.parse.urlparse(str(link.get_attribute("href") or ""))
+            if parsed.path.rstrip("/") != S.INBOX_ROUTE:
+                continue
+            if parsed.fragment:
+                marks.add(urllib.parse.unquote(parsed.fragment))
+            query = urllib.parse.parse_qs(parsed.query)
+            for key in ("run", "set", "card"):
+                marks.update(query.get(key, []))
+        return marks
+
     def approve_in_the_inbox(self, run_id: str, invoices: Sequence[str]) -> List[str]:
         """
-        The run waits: each approver the charter names at C11, in the book's order, opens their Approver inbox and presses Approve with passkey
-        once, until the run is approved — only on the one card that carries every payment of this run. The card names no run, so where more
-        than one reads so (a run an earlier attempt left waiting), neither is pressed: a founder could not tell them apart either.
+        The run waits: each approver of payments the charter names at C11, in the book's order, opens their Approver inbox and presses Approve
+        with passkey once, until the run is approved — and only on a card that belongs to a run this process created: a card that carries the
+        run's id (its own id or data attribute, or a link of its to /runs/<id>), or the card the run's own page links to. A card that names no
+        run is never pressed: a finding, and the run left waiting, which R9 cancels. (At AERAccounts b523cbf neither the card nor the run's page
+        names a run, so a run that waits is not approved by this leg there.)
         """
         said: List[str] = []
+        ours = {str(r.get("id")) for r in self.facts["runs"]}
         for a in self.payment_approver_visitors()[:APPROVALS_AT_MOST]:
             state = self.founder().read(S.SET_ROUTE % run_id, "the run before %s's press" % a.name)
             status = str(((state.json or {}).get("set") or {}).get("status")) if state.ok and isinstance(state.json, dict) else ""
-            if status != "pending_approval":
+            if status != "pending_approval" or run_id not in ours:
                 break
+            marks = self.marks_the_run_page_links_to(a, run_id)
             a.goto(S.INBOX_ROUTE)
-            cards = a.page.locator(S.CSS_CARD)
-            for invoice in invoices:
-                cards = cards.filter(has_text=invoice)
-            a.appears(cards, SETTLE_TIMEOUT_SECONDS)
-            if not cards.count():
-                said.append("%s's Approver inbox lists no run carrying %s (%s)" % (a.name, ", ".join(invoices), json.dumps(a.main_text()[:200], ensure_ascii=False)))
-                continue
-            if cards.count() > 1:
-                self.finding("%s: runs that read alike in the Approver inbox" % self.current, "%s's inbox lists %d runs carrying %s, and none names its run, so this "
-                             "run (%s) cannot be told from the others; none was approved" % (a.name, cards.count(), ", ".join(invoices), run_id), SCREEN,
-                             page=" | ".join(cards.all_inner_texts())[:600], expected="one card for this run")
-                said.append("%s's inbox lists %d runs that read alike, so none was approved" % (a.name, cards.count()))
+            waiting = a.page.locator(S.CSS_CARD).filter(has=a.control(S.APPROVE_WITH_PASSKEY))
+            a.appears(waiting, SETTLE_TIMEOUT_SECONDS)
+            card = None
+            unnamed = 0
+            elsewhere = 0
+            for candidate in waiting.all():
+                names = self.runs_named_by(candidate)
+                if names & marks:
+                    names.add(run_id)  # the card the run's own page links to
+                if not names:
+                    unnamed += 1
+                elif run_id in names:
+                    card = candidate
+                    break
+                else:
+                    elsewhere += 1
+            if card is None:
+                self.finding("%s: no card in the Approver inbox names this run" % self.current, "%s's inbox lists %d run(s) waiting — %d naming no run, %d naming "
+                             "another — and none names run %s (%s), by its id or by a link from the run's own page; a card that names no run is never pressed, so "
+                             "nothing was approved" % (a.name, unnamed + elsewhere, unnamed, elsewhere, run_id, ", ".join(invoices)), SCREEN,
+                             page=" | ".join(waiting.all_inner_texts())[:600], expected="a card carrying this run's id, or the card the run's page links to")
+                said.append("%s's inbox names no card for run %s, so nothing was pressed" % (a.name, run_id))
                 break
-            card = cards.first
             button = a.control(S.APPROVE_WITH_PASSKEY, within=card)
             if not button.count() or not button.first.is_enabled():
                 said.append("%s may not approve it: %s" % (a.name, json.dumps(" | ".join(a.texts("status", within=card)) or a.text_of(card), ensure_ascii=False)))
@@ -2460,6 +2574,31 @@ class RealWorld:
         self.step("page", v.name, "the run's page", page=" | ".join(words))
         self.next_step("the run's page", " | ".join(w for w in words if w))
         return last, words
+
+    def hold_to_the_literal_bound(self, reviewed: List[Dict[str, Any]], owner: str, book: Sequence[A.Payment]) -> int:
+        """
+        THE LITERAL BOUND (RUN_CEILING_CENTS), held before every Submit this run on the rows the page will submit — the review it received: each to
+        the owner's wallet, in USDC, and together with what this run has already submitted at most RUN_CEILING_CENTS, and the book's
+        ONE_DOLLAR_MINOR beside it. Otherwise the whole run stops, nothing pressed: classified HARNESS where the book itself asks for more, SCREEN
+        where the page would submit other than the book. Answers the cents these rows come to.
+        """
+        if not reviewed:
+            raise RunStop(LITERAL_BOUND_UNREADABLE % ("the review carries no row", S.SUBMIT_RUN), kind=SCREEN)
+        cents = 0
+        for row in reviewed:
+            address, asset, minor = str(row.get("address") or ""), str(row.get("asset") or ""), str(row.get("amountMinor") or "")
+            if fold(address) != fold(owner):
+                raise RunStop(LITERAL_BOUND_ADDRESS % (address or "no address", owner, S.SUBMIT_RUN), kind=SCREEN)
+            if asset != T.PAYMENT_ASSET or not minor.isdigit():
+                raise RunStop(LITERAL_BOUND_UNREADABLE % (json.dumps({k: row.get(k) for k in ("asset", "amountMinor", "address")}, ensure_ascii=False),
+                                                          S.SUBMIT_RUN), kind=SCREEN)
+            cents += -(-int(minor) // 10 ** (T.ASSET_DECIMALS[asset] - 2))  # rounded up: a part of a cent counts as a cent
+        already = int(self.facts.get("submitted_cents") or 0)
+        minor_per_cent = 10 ** (T.ASSET_DECIMALS[T.PAYMENT_ASSET] - 2)
+        if already + cents > RUN_CEILING_CENTS or (already + cents) * minor_per_cent > T.ONE_DOLLAR_MINOR:
+            asked = sum(-(-int(p.amount_minor) // minor_per_cent) for p in book)
+            raise RunStop(LITERAL_BOUND_TOTAL % (cents, already, RUN_CEILING_CENTS, S.SUBMIT_RUN), kind=HARNESS if already + asked > RUN_CEILING_CENTS else SCREEN)
+        return cents
 
     def pay_from_the_screen(self, station: str) -> Outcome:
         v = self.founder()
@@ -2501,9 +2640,11 @@ class RealWorld:
             raise StationStop("the run cannot be submitted: the page says %s; the review %s (%s)" % (
                 json.dumps(page_words or v.text_of(v.card(S.REVIEW_CARD))[:300], ensure_ascii=False), review.sentence() if review and not review.ok else "is not acceptable",
                 kind_of(review.status, review.json) if review is not None and not review.ok else (ANSWERED_WITH_ERROR if review is not None else UNREACHABLE)))
-        # THE OWNER'S WALLET AND THE BOOK, held at the screen before the one press that moves money (Spec T24; Spec HRW-1 §5): every row of the
-        # review the page received is the owner's wallet, in this press's own amounts from the book, or Submit this run is not pressed
+        # THE OWNER'S WALLET AND THE BOOK, held at the screen before the one press that moves money (Spec T24; Spec HRW-1 §5): the literal bound
+        # first — every row the page will submit is to the owner's wallet, and with what this run has submitted they come to at most RUN_CEILING_CENTS —
+        # then the book's: every row in this press's own amounts from the book, or Submit this run is not pressed
         reviewed = [r for r in (review.json.get("rows") or []) if isinstance(r, dict)]
+        cents = self.hold_to_the_literal_bound(reviewed, owner, rows)
         strangers = sorted({str(r.get("address")) for r in reviewed if fold(r.get("address")) != fold(owner)})
         amounts = sorted(int(str(r.get("amountMinor") or "0")) if str(r.get("amountMinor") or "0").isdigit() else -1 for r in reviewed)
         if strangers or amounts != sorted(int(p.amount_minor) for p in rows):
@@ -2539,8 +2680,9 @@ class RealWorld:
                 self.facts["instructions_created"][str(i["id"])] = {"key": i.get("invoiceRef"), "set_id": run_id, **{k: i.get(k) for k in (
                     "address", "chain", "asset", "amountMinor", "invoiceRef")}}
         record = {"station": station, "id": run_id, "reference": run.get("reference"), "createdAt": run.get("createdAt"), "invoices": [p.invoice for p in rows],
-                  "total_minor": total}
+                  "total_minor": total, "cents": cents}
         self.facts["runs"].append(record)
+        self.facts["submitted_cents"] = int(self.facts.get("submitted_cents") or 0) + cents  # counted once the run exists, whether or not it is sent
         self.state.setdefault("runs", []).append({k: record[k] for k in ("station", "id", "reference", "createdAt")})
         if not v.appears(v.page.get_by_role("status", name=S.RUN_STATUS_NAME, exact=True), 60.0):
             raise StationStop("the press created run %s and the run's page did not open; the page reads %r at %s" % (run_id, v.heading(), v.where()))
@@ -2868,7 +3010,7 @@ class RealWorld:
         lines.append("| At | Station | Who | Route | Status |")
         lines.append("|---|---|---|---|---|")
         for x in self.exchanges:
-            lines.append("| %s | %s | %s | %s | %d |" % (x.at, x.station, x.who, x.route.replace("|", "\\|"), x.status))
+            lines.append("| %s | %s | %s | %s | %d |" % (x.at, x.station, x.who, redact_query(x.route).replace("|", "\\|"), x.status))
         return self.secrets.redact_text("\n".join(lines) + "\n")
 
     def summary_lines(self) -> List[str]:
