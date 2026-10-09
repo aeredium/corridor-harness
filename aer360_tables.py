@@ -536,3 +536,57 @@ def owner_payee_of(text: str, chain: Optional[str] = None) -> Tuple[Optional[str
     if filed_chain.lower() != wanted_chain.lower():
         return None, "%s is %r, not %s, the chain the payments are made on" % (OWNER_PAYEE_CHAIN_KEY, filed_chain, wanted_chain)
     return address, None
+
+
+# ---------------------------------------------------------------------------
+# HARNESS REAL WORLD — THE BROWSER LEG'S ESTATE AND ITS UNTIDY FIXTURES (Spec HRW-1, written 7 October 2026, revised 9 October 2026). The
+# browser leg (aer360_real_world.py) reads this file and the answer book as the API leg does, so the two legs cannot drift apart, and walks
+# them as a real client comes (§4): each fixture below is a real founder's habit or fault met in the first fortnight of Group 100, listed
+# beside the ruling or spec that made it a rule. Nothing here is an address of anyone's but the harness's own people and the owner's file.
+# ---------------------------------------------------------------------------
+# §2, the Attacker: the only estates the browser leg presses a control on. A page whose sidebar names another stops the run, nothing pressed.
+HARNESS_ESTATE_NAMES = ("Harness Holdings Pty Ltd", "Harness Treasury")
+
+
+def is_harness_estate(name: Any) -> bool:
+    """One of the harness's own estates by the name its page shows: Harness Holdings Pty Ltd, or the Treasury — whose workspace the birth script names
+    "Harness Treasury Pty Ltd", and which the API leg admits by its short name (TREASURY["short"])."""
+    text = str(name or "").strip()
+    return text in HARNESS_ESTATE_NAMES or text.startswith(HARNESS_ESTATE_NAMES[1] + " ")
+
+
+# §4: the charter's addresses as a client types them — capitals and surrounding spaces — for the two people whose addresses the spec writes out.
+# The estate folds what it compares and what it writes to the platform's roster (foldEmail: trimmed, lower-cased), so each is the same person as
+# its folded form. Every other person keeps the book's own address (aer360_answers.PEOPLE).
+REAL_WORLD_TYPED_ADDRESSES = {
+    "harriet": "Harriet.Founder@aeredium.io ",
+    "ada": " ADA.Approver@aeredium.io",
+}
+REAL_WORLD_BIRTH_EMAIL = "harriet.founder@aeredium.io"   # the birth's --email: the founder's address as the charter will fold it, so her seat is hers
+REAL_WORLD_NAME_NOT_ADDRESS = "ben"                       # §4: the approver whose display name is not his address — Ben Signatory, harness+ben@aeredium.io
+REAL_WORLD_TRAILING_SPACE_PAYEE = 1                       # §4: the second payee's address (PAYEES[1], Contoso Legal's) typed with a trailing space
+# Spec T24's one-dollar book between the founder's two presses of Submit this run (§4: "The founder presses Submit this run twice"): R7 enters
+# HH-0001 and HH-0002, R7b — a second, different run the same day under the same default reference — HH-0003. The two together are the book's
+# dollar and no more ("No more than $1."), every payment to the owner's wallet; a second run that repeated the first's rows would meet the
+# duplicate screen naming a payment of this very run, which Spec T28's bound never acknowledges.
+REAL_WORLD_FIRST_PRESS = ("P1", "P2")
+REAL_WORLD_SECOND_PRESS = ("P3",)
+
+UNTIDY_FIXTURES: List[Tuple[str, str]] = [
+    ("the estate is born by the CLI road the operator uses for clients, group100_invite.sh, never by a tidy fixture",
+     "Spec 113 (29 September 2026), the birth script; the AER 360 Onboarding Road 1.5, §2"),
+    ("the birth gives --email, and in one run deliberately does not: invite.mjs prints its one line, and the record script records the email",
+     "Spec AER360-SEAT-CASE §3.2 and §3.3 (live 7 October 2026); the Onboarding Road 1.5, §8a"),
+    ("the charter's addresses carry capitals and surrounding spaces (`Harriet.Founder@aeredium.io `, ` ADA.Approver@aeredium.io`)",
+     "the owner's ruling of 6 October 2026, \"It should make no difference either way\"; Specs AAP-SEAT-CASE and AER360-SEAT-CASE §3.1"),
+    ("one approver's display name is not their address (Ben Signatory, harness+ben@aeredium.io)",
+     "Spec AER360-SEAT-CASE §3.1: the seat is found by the folded address, and display_name keeps the charter's name as typed"),
+    ("the founder presses Submit this run twice in a day, under the same reference",
+     "Spec AER360-RUN-ROAD §3.1 and §3.2 (live 7 October 2026): the press submits, and the idempotency key is per attempt"),
+    ("one payee address is typed with a trailing space",
+     "the Client Manual, ch. 7 Step 1: \"AER 360 checks the address as you type\"; shared/payeeaddress.ts trims before it judges"),
+    ("the run's reference is left at its default",
+     "Spec AER360-RUN-ROAD §1: the key was `${reference || 'run'}-${today}`, and a founder's second run of the day was refused as a replay"),
+    ("the estate's signing entries are never set by hand: they stand at zero until the Policy Interview's write puts the charter's ceilings on them",
+     "the owner, 7 October 2026 (the fixture of 9 October); Spec AER360-115: the compile writes C2 and C3 onto aer-accounts and every (author) entry"),
+]
