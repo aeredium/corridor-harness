@@ -416,7 +416,49 @@ class EstateHarnessReadmeTest(unittest.TestCase):
             self.assertIn(words, paragraph, words)
 
 
+    def test_it_says_the_two_legs_walk_the_solana_road_since_spec_t29(self):
+        title = ("**The two legs walk the Solana road: a Solana wallet, a base58 payee, one SOL payment under a dollar to the owner's own Solana address, the curve belt "
+                 "and the holdings, and a closed road recorded by name (Spec T29 and HRW-2, 24 October 2026, amended 30 October 2026).**")
+        self.assertIn(title, self.section)
+        self.assertLess(self.section.index("Spec T28, 8 October 2026"), self.section.index(title))
+        self.assertLess(self.section.index(title), self.section.index("**Running it.**"))
+        paragraph = self.section.split(title, 1)[1].split("**Running it.**", 1)[0]
+        for words in ("AER 360 Spec AER360-SOL-114", "PR #143", "d369926", "*S5s Solana wallets*", "*S6s Solana payee*", "*S7s-1 SOL payment*", "*S7s-2 the curve belt*", "*S7s-3 Solana holdings*",
+                      "`POST /v1/workspace/wallets/options`", "`chain: \"solana\"`", "`packages/solana/src/address.ts`", "`~/.aer360-harness/<estate>/solana-wallets.json`",
+                      "`solanaUsdcAccount`", "*has not received USDC yet*", "`GET /v1/workspace/sandbox-allowance`", "`aer360_answers.SOLANA_PAYMENT_SOL`", "`--funds-wait`",
+                      "0.01 SOL reserve", "*waiting for the owner's SOL*", "`WALLET_CURVE_MISMATCH`", "`SOLANA_ROAD_CLOSED`", "*truth told, zero moved*",
+                      "*policy evaluation on party 0 rejected the request: denied*", "`group-100`", "`GET /v1/aer360/plan`", "*Where the spec and the code part company*",
+                      "the owner lowers the three where he writes the SOL figure", "240 → 281 lines", "`tests/fixtures/aer360-dry-calls.txt` regenerated",
+                      "`tests/test_the_harness_walks_the_solana_road.py`", "`packages/solana/src/address.test.ts`", "`solana_road`", "`solana_fault`", "`assigned_groups`",
+                      "python3 aer360_harness.py --out ~/Downloads/harness-runs"):
+            self.assertIn(words, paragraph, words)
+
+    def test_it_lists_funds_wait_among_the_options(self):
+        self.assertIn("`--funds-wait SECONDS`", self.section)
+        self.assertIn("`--from S5s`", self.section)
+
+
 class ChangelogTest(unittest.TestCase):
+    def test_the_changelog_records_spec_t29_and_hrw_2_and_names_every_change(self):
+        text = read("CHANGELOG.md")
+        title = "## Spec T29 and HRW-2 — The two legs of the estate harness learn the Solana road (24 October 2026, amended 30 October 2026)"
+        self.assertIn(title, text)
+        self.assertEqual(text.index("## "), text.index(title), "the newest entry first")
+        hrw1 = "## Spec HRW-1 — Harness Real World"
+        self.assertLess(text.index(title), text.index(hrw1))
+        entry = text.split(title, 1)[1].split(hrw1, 1)[0]
+        # §6, the CHANGELOG line, word for word
+        self.assertIn("Spec T29 and HRW-2: the two legs walk the Solana road, a Solana wallet, a base58 payee, one SOL payment under a dollar to the owner's own Solana address, "
+                      "the curve belt and the holdings, and record a closed road by name.", entry)
+        for words in ("`aer360_tables.py`", "`aer360_answers.py`", "`aer360_harness.py`", "`aer360_screens.py`", "`aer360_real_world.py`", "`tests/test_aer360_double.py`",
+                      "`tests/real_world_double.py`", "`tests/real_world_screens.py`", "`tests/test_the_harness_walks_the_solana_road.py`", "`tests/test_harness_real_world.py`",
+                      "`tests/test_aer360_dry_run.py`", "`tests/test_aer360_hats.py`", "`tests/test_aer360_readme.py`", "`tests/fixtures/aer360-dry-calls.txt` regenerated",
+                      "`FEE_RESERVE_LAMPORTS`", "`judge_solana_address`", "`SOLANA_PAYMENT_SOL = None`", "`preflight`", "`read_allowed_chains`", "`wait_for_sol`", "`judge_solana_landing`",
+                      "`file_a_cluster_refusal`", "`--funds-wait`", "240 → 281", "`SolanaChainDouble`", "`solana_road`", "`drive_solana_payment`", "`collect_approvals`",
+                      "`hold_the_solana_row_to_the_bound`", "`read_holdings_on_the_page`", "**Auditor**", "**Attacker**", "**Optimiser**", "**Implementer**", "**Customer Support**",
+                      "**Where the spec and the code part company**", "Not touched", "No secret.", "the owner's ruling of 29 October", "d369926", "PR #143"):
+            self.assertIn(words, entry, words)
+
     def test_the_changelog_records_spec_t28_and_names_every_change(self):
         text = read("CHANGELOG.md")
         title = "## Spec T28 — The founder confirms a repeat: S7 acknowledges the estate's duplicate screen as a founder would, and only then (8 October 2026)"

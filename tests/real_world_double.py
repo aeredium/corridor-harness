@@ -56,7 +56,7 @@ class NotAllowed(Exception):
 # ======================================================================================================================
 # The page's elements: a small accessibility tree, rebuilt from the screen's state on every query.
 # ======================================================================================================================
-IMPLICIT_ROLES = {"button": "button", "nav": "navigation", "main": "main", "select": "combobox", "tr": "row", "option": "option",
+IMPLICIT_ROLES = {"button": "button", "nav": "navigation", "main": "main", "select": "combobox", "tr": "row", "option": "option", "tbody": "rowgroup",
                   "h1": "heading", "h2": "heading", "h3": "heading", "table": "table", "ul": "list", "li": "listitem", "ol": "list", "form": "form"}
 
 
@@ -712,31 +712,10 @@ LIST_FIELDS = {
 
 class ScreensPlatform(D.PlatformDouble):
     """
-    The access platform, with the one read road the browser leg uses beside the admin credit road: GET /v1/admin/accounts/{id}/policies under the
-    admin key (internal/api/router.go AdminListPolicyEntries) — each signing entry with its two legacy limits, in whole dollars, zero until written.
+    The access platform as the screens meet it: the admin credit road and the read road of an account's entries (GET /v1/admin/accounts/{id}/policies under
+    the admin key, internal/api/router.go AdminListPolicyEntries — each signing entry with its two legacy limits, in whole dollars, zero until written, and
+    its allowed chains). Since Spec T29 the API leg's pre-flight reads the same road, so both live on the API double (D.PlatformDouble.list_policy_entries).
     """
-
-    def __init__(self, **kw: Any):
-        super().__init__(**kw)
-        self.entries: Dict[str, List[Dict[str, Any]]] = {}
-
-    def __call__(self, request: urllib.request.Request) -> Tuple[int, List[Tuple[str, str]], str]:
-        url = urllib.parse.urlparse(request.full_url)
-        m = re.match(r"^/v1/admin/accounts/([^/]+)/policies$", url.path)
-        if m and request.get_method() == "GET":
-            headers = {k.lower(): v for k, v in request.header_items()}
-            self.requests.append({"method": "GET", "path": url.path, "headers": headers, "body": ""})
-            if self.down:
-                raise D.H.Unreachable("GET %s could not be reached: [Errno 61] Connection refused" % request.full_url)
-            bearer = headers.get("authorization", "")[len("Bearer "):].strip() if headers.get("authorization", "").startswith("Bearer ") else ""
-            if not bearer:
-                return self._json(401, {"error": D.PLATFORM_ADMIN_MISSING})
-            if bearer != self.admin_key:
-                return self._json(401, {"error": D.PLATFORM_ADMIN_INVALID})
-            if m.group(1) not in self.accounts:
-                return self._json(404, {"error": D.PLATFORM_ACCOUNT_NOT_FOUND})
-            return self._json(200, {"policy_entries": [dict(e) for e in self.entries.get(m.group(1), [])]})
-        return super().__call__(request)
 
 
 class ScreensEstate(D.EstateDouble):
@@ -754,19 +733,18 @@ class ScreensEstate(D.EstateDouble):
         kw.setdefault("funding_wallet", "press")
         kw.setdefault("account_email", T.REAL_WORLD_BIRTH_EMAIL)
         kw.setdefault("platform", ScreensPlatform())
-        super().__init__(**kw)
+        # Spec T29: the press for a new wallet (with its network), the register, the plan's signing group and the pressed wallets' runs are the API double's now;
+        # what the owner funds a pressed EVM wallet with before R7 (Spec HRW-1: funding is the owner's act) travels to it as `new_wallet_usdc_cents`
+        super().__init__(new_wallet_usdc_cents=new_wallet_usdc_cents, assigned_groups=assigned_groups, **kw)
         self.founder_name = founder_name
         self.authorship_entry["name"] = "%s (author)" % founder_name   # group100_invite.sh: f"{first} (author)"
         self.credentials[self.founder_credential]["name"] = self.authorship_entry["name"]
-        self.new_wallet_usdc_cents = new_wallet_usdc_cents            # what the owner funds a new wallet with before R7 (Spec HRW-1: funding is the owner's act)
-        self.assigned_groups = list(assigned_groups)
-        self.pressed_wallets: Dict[str, Dict[str, Any]] = {}
-        self.wallet_challenges: Dict[str, Dict[str, Any]] = {}
+        # the entries at zero until the Policy Interview's write (Spec AER360-115); their allowed chains name solana, as an estate born after 23 October 2026 does
         self.platform.entries[self.aap_account_id] = [
             {"id": "pe-" + secrets.token_hex(4), "name": ESTATE_ENTRY, "access_type": "sign+audit", "active": True, "superseded_by": "",
-             "max_amount_per_tx_usd": 0, "max_amount_per_day_usd": 0},
+             "max_amount_per_tx_usd": 0, "max_amount_per_day_usd": 0, "allowed_chains": [T.PAYEE_CHAIN, T.SOLANA_CHAIN]},
             {"id": self.authorship_entry["id"], "name": self.authorship_entry["name"], "access_type": "sign+audit", "active": True, "superseded_by": "",
-             "max_amount_per_tx_usd": 0, "max_amount_per_day_usd": 0},
+             "max_amount_per_tx_usd": 0, "max_amount_per_day_usd": 0, "allowed_chains": [T.PAYEE_CHAIN, T.SOLANA_CHAIN]},
         ]
 
     # -- the birth script's road (group100_invite.sh, invite.mjs --email) --------------------------------------------------------------
@@ -853,20 +831,6 @@ class ScreensEstate(D.EstateDouble):
         if route in ("GET /v1/counterparties", "GET /v1/deposits"):
             self.require_caller(headers, "viewer")
             return 200, {route.rsplit("/", 1)[1]: []}
-        if route == "GET /v1/aer360/wallets":
-            self.require_caller(headers, "viewer")
-            return 200, {"answer": None, "absence": D.WALLETS_ABSENCE, "display": {"currency": "AUD", "rateE8": "150000000"}, "register": self.register()}
-        if route == "GET /v1/aer360/plan":
-            self.require_caller(headers, "viewer")
-            return 200, {"plan": "starter", "maxTokens": 10, "activeCredentials": len(self.credentials), "readAt": self._now_iso(), "absence": None,
-                         "signingGroup": {"accountId": self.aap_account_id, "assigned": list(self.assigned_groups),
-                                          "standing": "on_the_one_group" if self.assigned_groups == ["group-100"] else "elsewhere",
-                                          "sentence": PLAN_SENTENCE if self.assigned_groups == ["group-100"] else
-                                          "This estate's account stands on %s, not on group-100 alone." % ", ".join(self.assigned_groups)}}
-        if route == "POST /v1/workspace/wallets/options":
-            return self.wallet_options(headers, body)
-        if route == "POST /v1/workspace/wallets":
-            return self.wallet_press(headers, body)
         if route == "GET /v1/approvals/inbox":
             return self.inbox(headers)
         m = re.match(r"^/v1/sets/([^/]+)/cancel$", path)
@@ -877,82 +841,8 @@ class ScreensEstate(D.EstateDouble):
             return self.revoke_invite(headers, m.group(1))
         return super().dispatch(method, path, headers, body, set_cookie)
 
-    def register(self) -> Dict[str, Any]:
-        rows = []
-        if self.has_funding_wallet():
-            rows.append({"walletId": "wallet-funding", "walletNumber": "1", "name": "Funding wallet", "address": self.source_account, "funding": True,
-                         "chains": [T.PAYEE_CHAIN], "fundSentence": "Fund this account with USDC on %s. Gas is bought separately, below." % T.PAYEE_CHAIN,
-                         "level": 1, "beneficiary": None, "clientSeat": None, "clientInvitation": None, "keyed": False})
-        rows += [dict(w) for w in self.pressed_wallets.values()]
-        return {"walletCount": len(rows), "wallets": rows,
-                "levels": [{"level": 1, "name": "Level 1 — head office", "count": len(rows), "heldBaseMinor": None, "balancesSaid": None, "route": None}]}
-
-    def wallet_options(self, headers: Dict[str, str], body: Any) -> Tuple[int, Any]:
-        caller = self.require_caller(headers, "author", mutating=True)
-        if (body or {}).get("whose") != "estate":
-            raise D.Malformed("whose: the double presses this estate's own wallets only")
-        if not self.has_funding_wallet():
-            raise D.Refusal("WORKSPACE_NOT_PROVISIONED", D.NO_FUNDING_WALLET_SENTENCE, {"cause": D.NO_FUNDING_WALLET_REASON}, provenance={"source": "workspace"})
-        wallet_id = "wallet-" + secrets.token_hex(6)
-        issued = int(time.time() * 1000)
-        challenge = self.challenge("workspace.wallet", "wallet:%s:%s|%s" % (wallet_id, issued, caller["credentialId"]), issued)
-        self.wallet_challenges[wallet_id] = {"challenge": challenge, "issuedAtMs": issued, "credentialId": caller["credentialId"]}
-        own = [w for w, row in self.passkeys.items() if row["credentialId"] == caller["credentialId"]]
-        return 200, {"options": {"challenge": challenge, "rpId": self.rp_id, "timeout": 60000, "userVerification": "required",
-                                 "allowCredentials": [{"id": w, "type": "public-key", "transports": ["internal"]} for w in own]}, "issuedAtMs": issued, "walletId": wallet_id}
-
-    def wallet_press(self, headers: Dict[str, str], body: Any) -> Tuple[int, Any]:
-        caller = self.require_caller(headers, "author", mutating=True)
-        body = body or {}
-        pending = self.wallet_challenges.pop(str(body.get("walletId")), None)
-        if pending is None or pending["credentialId"] != caller["credentialId"] or body.get("issuedAtMs") != pending["issuedAtMs"]:
-            raise D.Refusal("STEP_UP_INVALID", detail={"cause": "no press of this wallet was opened by this credential"})
-        response = body.get("response") or {}
-        stored = self.passkeys.get(str(response.get("id")))
-        if not stored or stored["credentialId"] != caller["credentialId"]:
-            raise D.Refusal("STEP_UP_INVALID", detail={"cause": "the asserting passkey is not the pressing credential"})
-        try:
-            stored["signCount"] = PK.verify_assertion(response, pending["challenge"], self.origin, self.rp_id, stored["publicKey"], stored["signCount"])
-        except PK.PasskeyRefused as err:
-            raise D.Refusal("STEP_UP_INVALID", detail={"cause": str(err)[:200]})
-        number = str(2 + len(self.pressed_wallets))
-        address = T.derive_address("the screens' double's pressed wallet %s/%s" % (number, self.workspace["name"]))
-        wallet = {"walletId": body["walletId"], "walletNumber": number, "name": "Wallet %s" % number, "address": address, "funding": False, "chains": [T.PAYEE_CHAIN],
-                  "fundSentence": "Fund this account with USDC on %s. Gas is bought separately, below." % T.PAYEE_CHAIN, "level": 1, "beneficiary": None,
-                  "clientSeat": None, "clientInvitation": None, "keyed": True}
-        self.pressed_wallets[wallet["walletId"]] = wallet
-        if self.new_wallet_usdc_cents:
-            self.chain.credit(address, T.usdc_minor_of_cents(self.new_wallet_usdc_cents))  # the owner funds the wallet (the harness never does)
-        self.append_trail("wallet.registered", caller["credentialId"], {"walletId": wallet["walletId"], "address": address, "via": "press"})
-        return 200, {"born": True, "wallet": {k: wallet[k] for k in ("walletId", "walletNumber", "name", "address", "level", "beneficiary")}, "invitation": None}
-
-    # -- a run leaves the wallet it names (Spec 110a), and executes when its approvals land (Spec AER360-RUN-ROAD §3.3) ---------------------
-    def review_or_create(self, headers: Dict[str, str], body: Any, create: bool) -> Tuple[int, Any]:
-        body = dict(body or {})
-        wallet_id = body.pop("walletId", None)
-        wallet = None
-        if wallet_id:
-            wallet = self.pressed_wallets.get(str(wallet_id))
-            if wallet is None or not wallet["keyed"]:
-                raise D.Refusal("WALLET_NOT_FOUND", "No wallet of this estate's goes by that id.", {"walletId": str(wallet_id)}, provenance={"source": "wallets"})
-        funding = self.source_account
-        if wallet is not None:
-            self.source_account = wallet["address"]
-        try:
-            status, answer = super().review_or_create(headers, body, create)
-        finally:
-            self.source_account = funding
-        view = {k: wallet[k] for k in ("walletId", "walletNumber", "name", "level", "beneficiary", "address")} if wallet else None
-        if create and isinstance(answer, dict) and isinstance(answer.get("set"), dict):
-            row = self.sets[answer["set"]["id"]]
-            if wallet is not None and not answer.get("alreadyExisted"):
-                row["sourceAccount"] = wallet["address"]
-                answer["set"]["sourceAccount"] = wallet["address"]
-            answer["wallet"] = view
-        elif isinstance(answer, dict):
-            answer["wallet"] = view
-        return status, answer
-
+    # -- a run leaves the wallet it names (Spec 110a) — resolved, belted and sourced by the API double since Spec T29 — and executes when its approvals land
+    # (Spec AER360-RUN-ROAD §3.3) ---------------------------------------------------------------------------------------------------------------------
     def execute_on_approval(self, row: Dict[str, Any]) -> None:
         """Spec AER360-RUN-ROAD §3.3: the moment a run is approved the estate executes it under its author's credential, from the wallet it names."""
         author = {"credentialId": row["authorCredentialId"], "roles": self.roles_of(row["authorCredentialId"])}

@@ -943,7 +943,7 @@ class TheLastRunColumn(unittest.TestCase):
         self.assertIn("| Station | Outcome | Last run | Line |", report)
         self.assertIn("|---|---|---|---|", report)
         table = report.split("## The closing table", 1)[1].split("Findings in this run", 1)[0]
-        rows = {line.split(" ", 2)[1]: line for line in table.splitlines() if re.match(r"^\| S\d+ ", line)}
+        rows = {line.split(" ", 2)[1]: line for line in table.splitlines() if re.match(r"^\| S\d+\S* ", line)}  # S1 … S14, and the Solana stations S5s, S7s-1 (Spec T29)
         self.assertEqual(len(rows), len(H.STATIONS))
         self.assertIn("| S1 Enrol | pass | last run pass | ", rows["S1"])
         self.assertIn("| S9 The tour | out of scope | last run out of scope | ", rows["S9"])

@@ -27,6 +27,8 @@ import re
 from typing import Any, Dict, List
 
 SOURCE = "aeredium/AERAccounts main at b523cbf (Spec AER360-115, 8 October 2026)"
+# The Solana road's words (Spec HRW-2) are pinned from a later main: d369926 (Spec AER360-SOL-114, PR #143, 24 October 2026), the file and line beside each.
+SOLANA_SOURCE = "aeredium/AERAccounts main at d369926 (Spec AER360-SOL-114, PR #143, 24 October 2026)"
 
 # ---------------------------------------------------------------------------
 # The people the browser leg seats, and the estate's own words for its seats and entries.
@@ -49,6 +51,7 @@ APPROVER_SEATS_ROUTE = "/v1/approver-seats"        # server/routes/approverseats
 WALLETS_REGISTER_ROUTE = "/v1/aer360/wallets"      # server/routes/aer360.ts:308 — {register: {wallets: [{walletId, walletNumber, address, keyed, chains, level, …}]}}
 PLAN_ROUTE = "/v1/aer360/plan"                     # server/routes/aer360.ts:243 — {signingGroup: {accountId, assigned, standing, sentence}}, read live from the platform
 PAYEES_ROUTE_API = "/v1/payees"                    # server/routes/payees.ts:89 — {payees: [{displayName, addresses: [{id, chain, address, whitelistStatus}]}]}
+SETS_ROUTE_API = "/v1/sets"                        # server/routes/sets.ts — the runs register: {sets: [{id, reference, status, instructions: [{invoiceRef, …}]}]} (R7s-2 reads it for a run the belt must not have dialled)
 SET_ROUTE = "/v1/sets/%s"                          # server/routes/sets.ts:295 — {set: {status, approval, instructions: [{status, txHash, failureReason, …}], trail}}
 ADMIN_POLICIES_ROUTE = "/v1/admin/accounts/%s/policies"  # the platform's admin read of an account's entries (server/services/aapclient.ts:1087, listPolicyEntriesAsAdmin)
 
@@ -193,6 +196,15 @@ def fund_wallet_note(number: str) -> str:
     return "Fund wallet %s" % number
 
 
+# R5s — the network question the press asks first (Spec AER360-SOL-114 §3.3; web/screens/Wallets.tsx at d369926). A radio group, its legend the
+# question, two radios named by their labels; the Ethereum-family networks are the standing answer and Solana the other; the press carries
+# `chain: 'evm' | 'solana'` on both of its steps (createwallet.test.tsx:239-252). Nothing on the screen speaks of recovery, on either network.
+NETWORK_LEGEND = "Which network does the wallet stand on?"  # web/screens/Wallets.tsx:823
+EVM_NETWORK = "The Ethereum-family networks (EVM)"          # web/screens/Wallets.tsx:832
+SOLANA_NETWORK = "Solana"                                   # web/screens/Wallets.tsx:842
+RECOVERY_WORDS = re.compile(r"recover", re.IGNORECASE)      # the one word a Solana wallet's card and the wallet's routes must not say (the owner's ruling of 23 October 2026)
+
+
 # ---------------------------------------------------------------------------
 # R6 — Payees (web/screens/PayeeRegistry.tsx).
 # ---------------------------------------------------------------------------
@@ -207,6 +219,10 @@ SEND_FOR_APPROVAL = "Send for approval"            # web/screens/PayeeRegistry.t
 APPROVE = "Approve"                                # web/screens/PayeeRegistry.tsx:315 — likewise
 STATUS_WORDS = {"proposed": "Proposed", "pending_promotion": "Pending promotion", "whitelisted": "Whitelisted",
                 "rejected": "Rejected"}            # web/lib/format.ts:168-237 statusPill, titleCase of the register's word
+# R6s — beside a Solana address whose USDC token account does not stand, the room says so (web/screens/PayeeRegistry.tsx:284-288 at d369926:
+# `addr.solanaUsdcAccount === false`); null says nothing. The address field's own judgment refuses the three faults before anything is sent
+# (PayeeRegistry.tsx:209-213, shared/payeeaddress.ts payeeAddressRefusal), in the server's own sentences.
+HAS_NOT_RECEIVED_USDC = "has not received USDC yet"  # web/screens/PayeeRegistry.tsx:286
 
 # ---------------------------------------------------------------------------
 # R7 and R7b — Enter payments (web/screens/PaymentEntry.tsx), the run's page (web/screens/Runs.tsx), the Approver inbox (web/screens/ApproverInbox.tsx).
@@ -216,6 +232,8 @@ ENTRY_HEADING = "Enter payments"                   # web/screens/PaymentEntry.ts
 REFERENCE_LABEL = "Reference for this run"         # web/screens/PaymentEntry.tsx:391-405 — left empty, the run is created as "Payment run"
 DEFAULT_REFERENCE = "Payment run"                  # web/screens/PaymentEntry.tsx:320 — `reference || 'Payment run'` (a sandbox estate stores it marked "S-")
 PAY_FROM_LABEL = "Pay from"                        # web/screens/PaymentEntry.tsx:410-427 — options "This estate’s funding wallet" and sourceWalletLabel(w)
+FUNDING_WALLET_OPTION = "This estate’s funding wallet"  # web/screens/PaymentEntry.tsx:412 — the Pay from option for the funding wallet (R7s-2 pays a SOL row from it, to meet the belt)
+SANDBOX_ALLOWANCE_ROUTE_API = "/v1/workspace/sandbox-allowance"  # server/routes/workspace.ts:220 at d369926 — {realm, allowance: {allowanceUsdCents, spentUsdCents, leftUsdCents, said} | null}
 ADD_PAYMENT = "Add another payment"                # web/screens/PaymentEntry.tsx:592-597
 ONE_OFF_LABEL = "This is a one-off payment to an address that is not on our approved list"  # web/screens/PaymentEntry.tsx:436-445
 ONE_OFF_NAME_LABEL = "Who is being paid"           # web/screens/PaymentEntry.tsx:462-477
@@ -255,6 +273,38 @@ def payment_card(number: int) -> str:
 def payee_option(name: str, chain: str) -> str:
     """web/screens/PaymentEntry.tsx:483-500 — a listed payee in the Payee list: "{displayName} — {chain} — approved" once whitelisted."""
     return "%s — %s — approved" % (name, chain)
+
+
+# R7s-1 — the run's own page carries its trail (web/screens/Runs.tsx:478-493 at d369926; server/routes/views.ts runViews, trail: true): a card
+# titled Trail, an ordered list named "The trail of {reference}, oldest first", each item "<when> — <runTrailWords>: <said> · by <who> · <action>"
+# (shared/runs.ts TRAIL_WORDS: "Payment 1 is being signed", "Payment 1 was sent to its network", "Payment 1 landed", "Payment 1 failed").
+TRAIL_CARD = "Trail"                                        # web/screens/Runs.tsx:479
+
+
+def trail_list_label(reference: str) -> str:
+    """web/screens/Runs.tsx:483 — the trail list's accessible name: "The trail of {run.reference}, oldest first"."""
+    return "The trail of %s, oldest first" % reference
+
+
+TRAIL_WORDS = {"instruction.building": "is being built", "instruction.signing": "is being signed", "instruction.broadcasting": "was sent to its network",
+               "instruction.confirmed": "landed", "instruction.failed": "failed", "instruction.rejected": "was rejected"}  # shared/runs.ts:176-196, the payment's verbs
+
+# R7s-3 — the Consolidation page (web/screens/Aer360.tsx at d369926) is where a wallet's holdings are read per asset: "Re-read every wallet now"
+# (Aer360.tsx:252-254; busy: "Re-reading every wallet…") reads every wallet live (POST /v1/aer360/refresh); the section "Every wallet holder"
+# (Aer360.tsx:383) lists each holder as a disclosure button whose panel is the holder's ledger (web/components/Ledger.tsx:28-135): a table with
+# the columns Asset, Held and "In {currency}", one row group per wallet named "Wallet {n} · {name}" (aria-label), one row per asset held ("SOL",
+# hidden " on solana"; the native amount; the value) — or one muted row with the wallet's absence sentence, never a zero standing in for unknown.
+CONSOLIDATION_ROUTE = "/"
+REREAD_EVERY_WALLET = "Re-read every wallet now"            # web/screens/Aer360.tsx:253
+EVERY_WALLET_HOLDER_HEADING = "Every wallet holder"         # web/screens/Aer360.tsx:383
+REFRESH_ROUTE_API = "/v1/aer360/refresh"                    # server/routes/aer360.ts:659 — POST (author): {holdings: {taken, skipped: [{holder, wallet, asset, reason}]}, …}
+OVERVIEW_ROUTE_API = "/v1/aer360/overview"                  # server/routes/aer360.ts:197 — {holders: [{name, wallets: [{walletNumber, name, absence, holdings: [{asset, chain, amountMinor, assetDecimals}]}]}]}
+WALLET_NOT_READ_YET = "This wallet has not been read yet, so it shows no figure rather than a zero."  # server/services/consolidation.ts:1061, the row's absence
+
+
+def wallet_row_group(number: str, name: str) -> str:
+    """web/components/Ledger.tsx:95 — a wallet's row group in the holder's ledger: "Wallet {walletNumber} · {name}"."""
+    return "Wallet %s · %s" % (number, name)
 
 
 # ---------------------------------------------------------------------------
@@ -322,4 +372,37 @@ MANUAL_WORDS: Dict[str, List[Dict[str, Any]]] = {
                        "under this reference.\", with no next step",
              "quote": "IDEMPOTENCY_KEY_REUSED: A different payment run already carries this reference. Open it, or change the reference.",
              "control": None, "check": "none", "walked": ("POST", r"^/v1/sets$")}],
+    # Spec HRW-2: the Solana road's five, from the manual as the library carries it at d369926 (chapter 13 and the references; v8 of 20 September predates the road)
+    "R5s": [{"source": LIBRARY + "06-the-rooms-of-aer-360.md:109-113 (Spec 110a; not in v8) — the manual names the two questions; the screen asks the network first since Spec AER360-SOL-114",
+             "quote": "Creating a new wallet asks two things before your passkey: whose wallet it is, this estate's or a client's by name, and, for a "
+                      "client's, whether the client signs.", "control": None, "words": WHOSE_WALLET_LEGEND, "check": "said", "walked": ("POST", r"^/v1/workspace/wallets/options$")},
+            {"source": LIBRARY + "13-the-two-doors-to-the-chain.md:29 (Spec AER360-SOL-114; not in v8)",
+             "quote": "Where the estate pays on Solana, the same law holds on the estate's own two sources: the estate names two endpoints of its own, broadcasts each "
+                      "payment through the first and accepts its confirmation only when both have it, and reads the balance and the blockhash height from both before "
+                      "any value depends on them — one silent or two disagreeing is a stop, named, and the desk told.",
+             "control": None, "check": "none", "walked": ("POST", r"^/v1/workspace/wallets$")}],
+    "R6s": [{"source": LIBRARY + "07-making-a-payment-end-to-end.md:16-18; the same in v8, ch. 7 Step 1",
+             "quote": "Open the Payees room from the sidebar. Choose Add payee, enter their name, and paste their payment address. Pick the network the "
+                      "address belongs to.", "control": ADD_PAYEE, "check": "pressed", "walked": ("POST", r"^/v1/payees$")},
+            {"source": LIBRARY + "17-references.md:1291-1293 (Spec AER360-SOL-114; not in v8)",
+             "quote": "“SOLANA_TOKEN_ACCOUNT_ABSENT”: This payee has not received USDC yet, so there is no USDC account on Solana to pay into. Nothing was sent. The "
+                      "payee must receive USDC once before it can be paid here.", "control": None, "check": "none", "walked": ("GET", r"^/v1/payees$")}],
+    "R7s-1": [{"source": LIBRARY + "07-making-a-payment-end-to-end.md:60-62; the same in v8, ch. 7 Step 3",
+               "quote": "When the run is complete, submit it.", "control": "Submit", "check": "pressed", "walked": ("POST", r"^/v1/sets$")},
+              {"source": LIBRARY + "13-the-two-doors-to-the-chain.md:29 (Spec AER360-SOL-114; not in v8)",
+               "quote": "Where the estate pays on Solana, the same law holds on the estate's own two sources: the estate names two endpoints of its own, broadcasts each "
+                        "payment through the first and accepts its confirmation only when both have it, and reads the balance and the blockhash height from both before "
+                        "any value depends on them — one silent or two disagreeing is a stop, named, and the desk told.",
+               "control": None, "check": "none", "walked": ("POST", r"^/v1/sets$")},
+              {"source": LIBRARY + "17-references.md:1299-1301 (Spec AER360-SOL-114; not in v8)",
+               "quote": "“SOLANA_ROAD_CLOSED”: The Solana road is closed on this deployment, so nothing was read and nothing was sent. Send the words above to us and we "
+                        "will tell you what to do.", "control": None, "check": "none", "walked": ("POST", r"^/v1/sets/review$")}],
+    "R7s-2": [{"source": LIBRARY + "17-references.md:1286-1289 (Spec AER360-SOL-114; not in v8)",
+               "quote": "“WALLET_CURVE_MISMATCH”: This wallet’s key is not of the curve this payment’s network runs on — a wallet pays only on the network its key’s "
+                        "curve belongs to, and nothing was sent. Make the payment again from a wallet of that network.",
+               "control": None, "words": "This wallet’s key is not of the curve this payment’s network runs on", "check": "said", "walked": ("GET", r"^/v1/payees$")}],
+    "R7s-3": [{"source": LIBRARY + "13-the-two-doors-to-the-chain.md:27; the same in v8, ch. 13 Two sources, or a stop",
+               "quote": "Where AER 360 reads other chains, to settle a payment that arrives on Ethereum, Solana or another network, it reads two independent sources and "
+                        "accepts the answer only when both agree on the chain's own facts: the block, the receipt, the balance.",
+               "control": REREAD_EVERY_WALLET, "check": "pressed", "walked": ("POST", r"^/v1/aer360/refresh$")}],
 }
