@@ -1419,6 +1419,24 @@ class Runner:
         words.append(self.read_allowed_chains(station, account_id))
         return "; ".join(words)
 
+    def workspace_id(self) -> Optional[str]:
+        """
+        The workspace's own id, from what this run has read: the readiness the pre-flight read (Spec T29 §0a.4), else the workspace view — GET /v1/workspace
+        answers {workspace: {id, …}, sourceAccount, fundingWallet, …} and S1 keeps the session's inner shape, so both are read — else the founder's session.
+        """
+        preflight = self.facts.get("solana", {}).get("preflight") if isinstance(self.facts.get("solana"), dict) else None
+        if isinstance(preflight, dict) and preflight.get("workspace_id"):
+            return str(preflight["workspace_id"])
+        view = self.facts.get("workspace")
+        if isinstance(view, dict):
+            inner = view.get("workspace") if isinstance(view.get("workspace"), dict) else view
+            if inner.get("id"):
+                return str(inner["id"])
+        founder = self.people.get(A.FOUNDER)
+        session = getattr(founder, "session", None)
+        workspace = session.get("workspace") if isinstance(session, dict) else None
+        return str(workspace["id"]) if isinstance(workspace, dict) and workspace.get("id") else None
+
     def read_allowed_chains(self, station: str, account_id: Any) -> str:
         """
         The account's allowed chains (Spec T29 §0a.4). The estate's readiness reports none, and no estate route lists an account's entries to a founder's
@@ -5866,15 +5884,18 @@ class Runner:
             problems.append("the trail could not be read")
         elif finish["written"]:
             signers = [self.person_named(n) for n in finish["signed"]]
-            workspace_id = str(self.facts["workspace"].get("id")) if isinstance(self.facts.get("workspace"), dict) and self.facts["workspace"].get("id") else None
+            # the funding wallet's births alone are counted: by the workspace's id and the wallet's address, both the harness's own facts (Spec 110a, Spec T29)
+            workspace_id = self.workspace_id()
+            funding = self.facts.get("funding_wallet") if isinstance(self.facts.get("funding_wallet"), dict) else None
+            funding_address = str(funding["address"]) if funding and funding.get("address") else None
             for p in audit_the_finish(trail, interview_id, str(finish.get("pendingTxId")), [s.credential_id for s in signers if s is not None],
-                                      finisher.credential_id if finisher is not None else None, workspace_id=workspace_id):
+                                      finisher.credential_id if finisher is not None else None, workspace_id=workspace_id, funding_address=funding_address):
                 problems.append(p["said"])
                 self.finding("S14", p["probe"], None, None, p["expected"], p["said"])
             said.append("the trail: %d %s row(s) for the interview, %d %s, %d %s, %d %s; %d %s for the funding wallet (%d in all: a pressed wallet's stands under its own id, Spec 110a)" % (
                 len(rows_of(trail, T.INTERVIEW_WRITTEN, interview_id)), T.INTERVIEW_WRITTEN, len(rows_of(trail, T.CEREMONY_SIGNED, interview_id)), T.CEREMONY_SIGNED,
                 len(rows_of(trail, T.WRITE_AWAITING_APPROVALS, interview_id)), T.WRITE_AWAITING_APPROVALS, len(rows_of(trail, T.INTERVIEW_WRITE_FAILED, interview_id)), T.INTERVIEW_WRITE_FAILED,
-                len(funding_wallet_births(trail, workspace_id)), T.WALLET_BORN, len([r for r in trail if r.get("action") == T.WALLET_BORN])))
+                len(funding_wallet_births(trail, workspace_id, funding_address)), T.WALLET_BORN, len([r for r in trail if r.get("action") == T.WALLET_BORN])))
         answer, after = self.read_ceremonies("S14", founder, "the interview absent: no write waits once the count is met and the write finished")
         record["after"] = after
         if finish["written"] and after is not None and any(str(v.get("interviewId")) == interview_id for v in after):
@@ -6812,7 +6833,7 @@ def rows_of(trail: Sequence[Dict[str, Any]], action: str, interview_id: str) -> 
 
 
 def audit_the_finish(trail: Sequence[Dict[str, Any]], interview_id: str, pending_tx_id: str, signer_credentials: Sequence[Optional[str]],
-                     finisher_credential: Optional[str], workspace_id: Optional[str] = None) -> List[Dict[str, Any]]:
+                     finisher_credential: Optional[str], workspace_id: Optional[str] = None, funding_address: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Spec T19 §1, the finish as the estate records it (Spec 109, items 2 and 4): exactly one interview_written for the interview, its
     credentialId and detail.pressedBy the finisher's, naming the ceremony; one ceremony_signed per signature, in order, each the signer's
@@ -6848,15 +6869,30 @@ def audit_the_finish(trail: Sequence[Dict[str, Any]], interview_id: str, pending
     failed = rows_of(trail, T.INTERVIEW_WRITE_FAILED, interview_id)
     if failed:
         _problem(problems, "the trail's %s rows for the interview" % T.INTERVIEW_WRITE_FAILED, "none: a wait is not a failure (Spec 109, item 1)", "%d row(s): %s" % (len(failed), "; ".join(str(detail_of(r).get("cause")) for r in failed)))
-    born = funding_wallet_births(trail, workspace_id)
+    born = funding_wallet_births(trail, workspace_id, funding_address)
     if len(born) > 1:
         _problem(problems, "the trail's %s rows" % T.WALLET_BORN, "at most one for the funding wallet: it is born once, and a write that finds one answers alreadyHeld", "%d row(s)" % len(born))
     return problems
 
 
-def funding_wallet_births(trail: Sequence[Dict[str, Any]], workspace_id: Optional[str] = None) -> List[Dict[str, Any]]:
-    """The trail's wallet.born rows that are the funding wallet's — subject the workspace — and not a pressed wallet's, which stands under the wallet's own id (Spec 110a, Spec T29)."""
-    return [r for r in trail if r.get("action") == T.WALLET_BORN and (workspace_id is None or str(r.get("subject_id") or "") in ("", str(workspace_id)))]
+def funding_wallet_births(trail: Sequence[Dict[str, Any]], workspace_id: Optional[str] = None, funding_address: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    The trail's wallet.born rows that are the funding wallet's, and not a pressed wallet's (Spec 110a, Spec T29): the funding wallet's row stands under
+    the workspace's id (fundingwallet.ts birthFundingWallet, subjectId the workspace) and names the funding wallet's address in its detail; a pressed
+    wallet's stands under the wallet's own id (birthPressedWallet) and names that wallet's address. Either fact the caller knows excludes the pressed
+    wallets' rows; with neither known, every row counts, as before Spec T29.
+    """
+    def is_the_funding_wallets(row: Dict[str, Any]) -> bool:
+        subject = str(row.get("subject_id") or "")
+        detail = row.get("detail") if isinstance(row.get("detail"), dict) else {}
+        if workspace_id is not None and subject and subject != str(workspace_id):
+            return False
+        address = str(detail.get("address") or "")
+        if funding_address and address and address.lower() != str(funding_address).lower():
+            return False
+        return True
+
+    return [r for r in trail if r.get("action") == T.WALLET_BORN and is_the_funding_wallets(r)]
 
 def optimizer_measures(calls: Sequence[Call], served_twice: Dict[str, List[str]]) -> Dict[str, Any]:
     """S12: wall times, the slow, the ten slowest, the interviews' call counts, the largest answer, the 5xx retried."""

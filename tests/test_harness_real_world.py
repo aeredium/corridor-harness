@@ -306,7 +306,7 @@ class TheWalk(unittest.TestCase):
         self.assertEqual(line.count("Ben Signatory: whitelisted"), 2)
         self.assertIn("1 of 2 approvals recorded for this address.", line)
         self.assertEqual([p["status"] for p in self.leg.facts["payees"]], ["whitelisted", "whitelisted"])
-        typed = [x for x in self.leg.exchanges if x.route == "POST /v1/payees"]
+        typed = [x for x in self.leg.exchanges if x.route == "POST /v1/payees" and x.station == "R6"]  # R6's two; R6s adds the Solana payee at its own station (Spec HRW-2)
         self.assertEqual(len(typed), 2)
         self.assertEqual(typed[1].sent["addresses"][0]["address"], D.OWNER_WALLET_FOR_TESTS + " ")  # sent as typed; the estate trims it
         approvals = [x for x in self.leg.exchanges if x.route.endswith("/approve") and "/payees/" in x.route]
@@ -826,7 +826,9 @@ class TheTwoLegs(unittest.TestCase):
         leg = self.leg_with({"R6": E.FAILED_PREREQUISITE}, dict(ALL_PASS, S7=E.FAILED_PREREQUISITE))
         outcome = leg.station_r8()
         self.assertEqual(outcome.outcome, E.PASS, outcome.line)
-        self.assertIn("not compared: R6/S6 (FAILED — prerequisite, pass), R7/S7 (pass, FAILED — prerequisite), R7b/S7 (pass, FAILED — prerequisite)", outcome.line)
+        # the Solana five are absent from HRW-1's API report, so they are not compared either (Spec HRW-2)
+        self.assertIn("not compared: R5s/S5s (pass, absent), R6/S6 (FAILED — prerequisite, pass), R6s/S6s (pass, absent), R7/S7 (pass, FAILED — prerequisite), "
+                      "R7b/S7 (pass, FAILED — prerequisite), R7s-1/S7s-1 (pass, absent), R7s-2/S7s-2 (pass, absent), R7s-3/S7s-3 (pass, absent)", outcome.line)
         self.assertFalse(leg.findings)
 
     def test_nothing_compared_is_a_prerequisite_not_a_pass(self) -> None:

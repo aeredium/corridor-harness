@@ -287,7 +287,13 @@ class TheWriteWaitsAndTwoPeopleSign(unittest.TestCase):
         self.assertEqual(len([r for r in trail if r["action"] == T.WALLET_BORN and r.get("subject_id") == self.double.workspace["id"]]), 1,
                          "S5's press; the finish answered alreadyHeld (S5s's two Solana wallets stand under their own ids, Spec T29)")
         self.assertEqual(len([r for r in trail if r["action"] == T.WALLET_BORN]), 3, "the funding wallet's and the two Solana wallets'")
-        self.assertEqual(H.audit_the_finish(trail, interview_id, pending, [ada.credential_id, ben.credential_id], ben.credential_id), [])
+        self.assertEqual(H.audit_the_finish(trail, interview_id, pending, [ada.credential_id, ben.credential_id], ben.credential_id, workspace_id=self.double.workspace["id"]), [])
+        # the audit told the workspace's id, or the funding wallet's address, excludes the two Solana wallets' births; told neither, it counts every row as before Spec T29
+        self.assertEqual(H.audit_the_finish(trail, interview_id, pending, [ada.credential_id, ben.credential_id], ben.credential_id, funding_address=self.double.source_account), [])
+        self.assertEqual([p["probe"] for p in H.audit_the_finish(trail, interview_id, pending, [ada.credential_id, ben.credential_id], ben.credential_id)], ["the trail's %s rows" % T.WALLET_BORN])
+        self.assertEqual(len(H.funding_wallet_births(trail, self.double.workspace["id"])), 1)
+        self.assertEqual(len(H.funding_wallet_births(trail, None, self.double.source_account)), 1)
+        self.assertEqual(len(H.funding_wallet_births(trail)), 3)
 
     def test_the_calls_are_the_two_step_road_as_each_person_under_their_own_credential_and_never_retried(self):
         calls = [c for c in self.runner.calls if c.station == "S14"]
