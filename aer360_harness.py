@@ -3313,16 +3313,17 @@ class Runner:
 
     @staticmethod
     def same_name_elsewhere(register: Any, record: Dict[str, Any]) -> List[str]:
-        """The chains, each once and sorted, on which the register holds a payee of this name other than PAYEE_CHAIN (Spec T18 §2): earlier runs' rows."""
+        """The chains, each once and sorted, on which the register holds a payee of this name other than the record's own chain (PAYEE_CHAIN for S6's, solana for S6s's; Spec T18 §2): earlier runs' rows."""
         if not isinstance(register, dict):
             return []
+        own = str(record.get("chain") or T.PAYEE_CHAIN).lower()
         chains: set = set()
         for row in register.get("payees") or []:
             if str(row.get("displayName") or "") != record["name"]:
                 continue
             for addr in row.get("addresses") or []:
                 chain = str(addr.get("chain") or "").lower()
-                if chain and chain != T.PAYEE_CHAIN:
+                if chain and chain != own:
                     chains.add(chain)
         return sorted(chains)
 
@@ -3355,6 +3356,7 @@ class Runner:
         pressers = self.whitelist_pressers()
         if not pressers:
             return "no roster member has a session, so the whitelist was not pressed"
+        station = str(record.get("station") or "S6")  # Spec T29: the Solana payee's presses are S6s's, filed under S6s and never under S6
         quorum = A.WHITELIST_QUORUM
         required: Optional[int] = None  # the estate's own figure, read from the first answer that counted
         counted: List[str] = []
@@ -3367,8 +3369,8 @@ class Runner:
             if moved is not None:
                 expected += " — S4 moved %s's roster seat to their current credential %s (ceremony %s…), so SIGNATURE_NOT_COUNTED is a finding (Spec T15 §2)" % (
                     presser.name, last4(presser.credential_id), T.credential_short_form(moved["pendingTxId"]))
-            answer = self.request(presser, "POST", "/v1/payees/addresses/%s/approve" % record["address_id"], {}, "S6")
-            self.step("S6", answer, expected, "answered" if answer.ok else answer.sentence(), {}, presser.name)
+            answer = self.request(presser, "POST", "/v1/payees/addresses/%s/approve" % record["address_id"], {}, station)
+            self.step(station, answer, expected, "answered" if answer.ok else answer.sentence(), {}, presser.name)
             body = answer.json if answer.ok and isinstance(answer.json, dict) else None
             code = (answer.refusal or {}).get("code") if answer.refusal else None
             record["presses"].append({
@@ -3379,7 +3381,7 @@ class Runner:
             if body is None:
                 spoken.append("%s not counted (%s)" % (presser.name, answer.sentence()))
                 if code == SIGNATURE_NOT_COUNTED and moved is not None:
-                    self.finding("S6", "a press not counted after S4 moved the seat: %s for %s" % (presser.name, record["name"]), {}, answer, expected,
+                    self.finding(station, "a press not counted after S4 moved the seat: %s for %s" % (presser.name, record["name"]), {}, answer, expected,
                                  "not counted: %s — S4 had %s sign the move of %s's roster seat to %s (ceremony %s), and the estate reported it applied" % (
                                      answer.sentence(), names_in_words(moved.get("signers") or []) or "the census", presser.name, last4(presser.credential_id), moved["pendingTxId"]))
                 if outcome == "not answered":
@@ -3423,9 +3425,10 @@ class Runner:
         here, carrying the answer verbatim. A null may_still_approve is the estate's honest answer where the platform's roster could
         not be read, and is not a missing field.
         """
+        station = str(record.get("station") or "S6")  # Spec T29: the Solana payee's first approval is S6s's
         missing = [key for key in ("approvals", "may_still_approve", "sentence") if key not in body]
         if missing:
-            self.finding("S6", "a pending approval that did not say why (Spec 89): %s" % record["name"], {}, answer,
+            self.finding(station, "a pending approval that did not say why (Spec 89): %s" % record["name"], {}, answer,
                          "approvals {required, collected, remaining}, may_still_approve and sentence beside whitelistStatus pending_promotion (Spec 89)",
                          "the answer carried no %s" % " and no ".join(missing))
             return
@@ -3435,13 +3438,13 @@ class Runner:
         required = approvals.get("required") if isinstance(approvals, dict) else None
         collected = approvals.get("collected") if isinstance(approvals, dict) else None
         if isinstance(required, int) and isinstance(collected, int) and isinstance(names, list) and required > len(names) + collected:
-            self.finding("S6", "a quorum that exceeds its roster: %s" % record["name"], {}, answer,
+            self.finding(station, "a quorum that exceeds its roster: %s" % record["name"], {}, answer,
                          "approvals.required no greater than the names in may_still_approve plus approvals.collected",
                          "approvals.required is %d, may_still_approve names %d and approvals.collected is %d, so the count can never be met" % (required, len(names), collected))
         if isinstance(required, int) and isinstance(collected, int) and isinstance(sentence, str):
             opening = "%d of %d %s recorded for this address." % (collected, required, "approval" if required == 1 else "approvals")
             if not sentence.startswith(opening):
-                self.finding("S6", "a sentence that does not begin with its count (Spec 89): %s" % record["name"], {}, answer,
+                self.finding(station, "a sentence that does not begin with its count (Spec 89): %s" % record["name"], {}, answer,
                              'a sentence beginning "%s"' % opening, 'the sentence is "%s"' % sentence)
 
     @staticmethod
@@ -5863,14 +5866,15 @@ class Runner:
             problems.append("the trail could not be read")
         elif finish["written"]:
             signers = [self.person_named(n) for n in finish["signed"]]
+            workspace_id = str(self.facts["workspace"].get("id")) if isinstance(self.facts.get("workspace"), dict) and self.facts["workspace"].get("id") else None
             for p in audit_the_finish(trail, interview_id, str(finish.get("pendingTxId")), [s.credential_id for s in signers if s is not None],
-                                      finisher.credential_id if finisher is not None else None):
+                                      finisher.credential_id if finisher is not None else None, workspace_id=workspace_id):
                 problems.append(p["said"])
                 self.finding("S14", p["probe"], None, None, p["expected"], p["said"])
-            said.append("the trail: %d %s row(s) for the interview, %d %s, %d %s, %d %s; %d %s in all" % (
+            said.append("the trail: %d %s row(s) for the interview, %d %s, %d %s, %d %s; %d %s for the funding wallet (%d in all: a pressed wallet's stands under its own id, Spec 110a)" % (
                 len(rows_of(trail, T.INTERVIEW_WRITTEN, interview_id)), T.INTERVIEW_WRITTEN, len(rows_of(trail, T.CEREMONY_SIGNED, interview_id)), T.CEREMONY_SIGNED,
                 len(rows_of(trail, T.WRITE_AWAITING_APPROVALS, interview_id)), T.WRITE_AWAITING_APPROVALS, len(rows_of(trail, T.INTERVIEW_WRITE_FAILED, interview_id)), T.INTERVIEW_WRITE_FAILED,
-                len([r for r in trail if r.get("action") == T.WALLET_BORN]), T.WALLET_BORN))
+                len(funding_wallet_births(trail, workspace_id)), T.WALLET_BORN, len([r for r in trail if r.get("action") == T.WALLET_BORN])))
         answer, after = self.read_ceremonies("S14", founder, "the interview absent: no write waits once the count is met and the write finished")
         record["after"] = after
         if finish["written"] and after is not None and any(str(v.get("interviewId")) == interview_id for v in after):
@@ -6808,12 +6812,15 @@ def rows_of(trail: Sequence[Dict[str, Any]], action: str, interview_id: str) -> 
 
 
 def audit_the_finish(trail: Sequence[Dict[str, Any]], interview_id: str, pending_tx_id: str, signer_credentials: Sequence[Optional[str]],
-                     finisher_credential: Optional[str]) -> List[Dict[str, Any]]:
+                     finisher_credential: Optional[str], workspace_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Spec T19 §1, the finish as the estate records it (Spec 109, items 2 and 4): exactly one interview_written for the interview, its
     credentialId and detail.pressedBy the finisher's, naming the ceremony; one ceremony_signed per signature, in order, each the signer's
     own credential; a write_awaiting_approvals whose newest row names the ceremony that finished; no interview_write_failed; and no second
-    wallet.born on the trail — the funding wallet is born once.
+    wallet.born on the trail FOR THE FUNDING WALLET — it is born once, under the workspace's own id (fundingwallet.ts birthFundingWallet,
+    subjectId the workspace). A pressed wallet's birth (Spec 110a; a Solana wallet's, Spec T29) is a wallet.born of its own under the wallet's
+    id (birthPressedWallet, subjectId the walletId), and is not the funding wallet born again; where the workspace id is known those rows
+    are left out of the count.
     """
     problems: List[Dict[str, Any]] = []
     credential = lambda row: row.get("credential_id") if "credential_id" in row else row.get("credentialId")  # noqa: E731
@@ -6841,10 +6848,15 @@ def audit_the_finish(trail: Sequence[Dict[str, Any]], interview_id: str, pending
     failed = rows_of(trail, T.INTERVIEW_WRITE_FAILED, interview_id)
     if failed:
         _problem(problems, "the trail's %s rows for the interview" % T.INTERVIEW_WRITE_FAILED, "none: a wait is not a failure (Spec 109, item 1)", "%d row(s): %s" % (len(failed), "; ".join(str(detail_of(r).get("cause")) for r in failed)))
-    born = [r for r in trail if r.get("action") == T.WALLET_BORN]
+    born = funding_wallet_births(trail, workspace_id)
     if len(born) > 1:
-        _problem(problems, "the trail's %s rows" % T.WALLET_BORN, "at most one: the funding wallet is born once, and a write that finds one answers alreadyHeld", "%d row(s)" % len(born))
+        _problem(problems, "the trail's %s rows" % T.WALLET_BORN, "at most one for the funding wallet: it is born once, and a write that finds one answers alreadyHeld", "%d row(s)" % len(born))
     return problems
+
+
+def funding_wallet_births(trail: Sequence[Dict[str, Any]], workspace_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """The trail's wallet.born rows that are the funding wallet's — subject the workspace — and not a pressed wallet's, which stands under the wallet's own id (Spec 110a, Spec T29)."""
+    return [r for r in trail if r.get("action") == T.WALLET_BORN and (workspace_id is None or str(r.get("subject_id") or "") in ("", str(workspace_id)))]
 
 def optimizer_measures(calls: Sequence[Call], served_twice: Dict[str, List[str]]) -> Dict[str, Any]:
     """S12: wall times, the slow, the ten slowest, the interviews' call counts, the largest answer, the 5xx retried."""

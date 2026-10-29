@@ -1,7 +1,8 @@
 """
 Spec T29 and HRW-2 (24 October 2026, amended 30 October 2026): the two legs of the estate harness learn the Solana road. This file is the API
-leg's: the curve and the alphabet held to the estate's own vectors, and the five stations — S5s Solana wallets, S6s Solana payee, S7s-1 SOL
-payment, S7s-2 the curve belt, S7s-3 Solana holdings — walked on the estate double with the road open and closed, and every stop proved by name.
+leg's: the curve and the alphabet held to the estate's own vectors, and the five stations — S5s Solana wallet (the spec's name for the station
+that births the two), S6s Solana payee, S7s-1 SOL payment, S7s-2 the curve belt, S7s-3 Solana holdings — walked on the estate double with the
+road open and closed, and every stop proved by name.
 
 THE VECTORS (§5): the base58 known-answer table and the curve's deterministic probes are copied as data from aeredium/AERAccounts main at
 d369926, packages/solana/src/address.test.ts (Spec AER360-SOL-114 §3.10) — the public base58 vectors, sha256 probes `solana-curve-probe-<i>`,
@@ -382,7 +383,7 @@ class TheRoadIsOpen(unittest.TestCase):
         self.assertEqual([c.route for c in self.runner.calls if "rpc" in c.route.lower() and "solana" in c.route.lower()], [], "no Solana node of the harness's own is ever called")
 
     def test_the_report_carries_the_five_and_reads_back(self):
-        for station, title in (("S5s", "Solana wallets"), ("S6s", "Solana payee"), ("S7s-1", "SOL payment"), ("S7s-2", "The curve belt"), ("S7s-3", "Solana holdings")):
+        for station, title in (("S5s", "Solana wallet"), ("S6s", "Solana payee"), ("S7s-1", "SOL payment"), ("S7s-2", "The curve belt"), ("S7s-3", "Solana holdings")):
             self.assertIn("| %s %s | pass |" % (station, title), self.report)
             self.assertIn("## %s — %s" % (station, title), self.report)
         read = H.read_report(self.report_path)
@@ -391,19 +392,35 @@ class TheRoadIsOpen(unittest.TestCase):
         self.assertIn(self.wallets[0]["address"], self.report)
         self.assertNotIn("BEGIN EC PRIVATE KEY", self.report)
 
-    def test_a_run_resumed_at_s5s_takes_the_wallets_and_the_payee_on_and_pays_again_confirming_the_repeat(self):
-        said = []
-        runner = runner_on(self.double, self.tmp, start_at="S5s", said=said)
+
+@unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
+class TheRoadResumedAtS5s(unittest.TestCase):
+    """A run resumed at S5s on an estate whose Solana wallets and payee stand: taken on from the store and the register, pressed for again never; the SOL paid again, the repeat confirmed as T28 bounds it."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.double = EstateDouble()
+        cls.tmp = tempfile.mkdtemp()
         with the_solana_book():
-            outcomes = {o.station: o for o in runner.run()}
+            cls.first = runner_on(cls.double, cls.tmp, invite=cls.double.mint_founder_link())
+            cls.first_outcomes = {o.station: o for o in cls.first.run()}
+            cls.double.age_runs(1)  # a day passes; the first run's payments stand within the screen's seven days
+            cls.second = runner_on(cls.double, cls.tmp, start_at="S5s")
+            cls.outcomes = {o.station: o for o in cls.second.run()}
+        cls.wallets = solana_wallets_of(cls.double)
+
+    def test_the_wallets_and_the_payee_are_taken_on_and_the_sol_is_paid_again(self):
         for station in SOLANA_STATIONS:
-            self.assertEqual(outcomes[station].outcome, H.PASS, outcomes[station].line)
-        self.assertEqual(len(solana_wallets_of(self.double)), 2, "nothing pressed for again")
-        self.assertIn("taken on, not pressed for again", outcomes["S5s"].line)
-        self.assertEqual(calls_at(runner, "S5s", "POST %s" % T.WALLET_PRESS_ROUTE), [])
-        self.assertIn("%s stands whitelisted on solana at %s (an earlier run's); taken on, not made again" % (A.SOLANA_PAYEE_NAME, self.wallets[1]["address"]), outcomes["S6s"].line)
-        self.assertEqual(len(self.double.solana.transfers), 2, "the second run pays the owner's figure again, as the book says")
-        self.assertTrue(any("confirmed it, as a founder would (Spec T28)" in n for n in runner.notes["S7s-1"]), runner.notes["S7s-1"])
+            self.assertEqual(self.first_outcomes[station].outcome, H.PASS, self.first_outcomes[station].line)
+            self.assertEqual(self.outcomes[station].outcome, H.PASS, self.outcomes[station].line)
+        self.assertEqual(len(self.wallets), 2, "nothing pressed for again")
+        self.assertIn("taken on, not pressed for again", self.outcomes["S5s"].line)
+        self.assertEqual(calls_at(self.second, "S5s", "POST %s" % T.WALLET_PRESS_ROUTE), [])
+        self.assertIn("%s stands whitelisted on solana at %s (an earlier run's); taken on, not made again" % (A.SOLANA_PAYEE_NAME, self.wallets[1]["address"]), self.outcomes["S6s"].line)
+        self.assertEqual([(t["from"], t["to"], t["lamports"]) for t in self.double.solana.transfers], [(self.wallets[0]["address"], self.wallets[1]["address"], SOL_LAMPORTS)] * 2,
+                         "the second run pays the owner's figure again, as the book says")
+        self.assertTrue(any("confirmed it, as a founder would (Spec T28)" in n for n in self.second.notes["S7s-1"]), self.second.notes["S7s-1"])
+        self.assertEqual([w["walletId"] for w in self.second.facts["solana"]["wallets"]], [w["walletId"] for w in self.first.facts["solana"]["wallets"]], "the store's wallets, found again in the register")
 
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
@@ -519,7 +536,7 @@ class TheOwnersFigureAndTheDollar(unittest.TestCase):
         outcomes = {o.station: o for o in runner.run()}  # the book as the brief leaves it: SOLANA_PAYMENT_SOL is None
         wallets = solana_wallets_of(double)
         self.assertEqual(outcomes["S7s-1"].outcome, H.FAILED_PREREQUISITE, outcomes["S7s-1"].line)
-        self.assertEqual(outcomes["S7s-1"].line, "sol payment: %s" % T.SOLANA_AMOUNT_NOT_WRITTEN_SENTENCE)
+        self.assertEqual(outcomes["S7s-1"].line, "sol payment: %s — %s" % (H.SOLANA_AMOUNT_NOT_WRITTEN, T.SOLANA_AMOUNT_NOT_WRITTEN_SENTENCE))
         self.assertIn(T.SOLANA_FUNDS_LINE % (wallets[0]["address"], A.SOLANA_AMOUNT_PLACEHOLDER, "0.01 SOL"), runner.notes["S7s-1"])
         self.assertEqual(calls_at(runner, "S7s-1", "POST /v1/sets/review"), [])
         self.assertEqual(calls_at(runner, "S7s-1", "GET %s" % T.SANDBOX_ALLOWANCE_ROUTE)[0].status, 200, "the allowance is read first, never a constant")

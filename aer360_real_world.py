@@ -55,8 +55,8 @@ THE STATIONS carry the API leg's numbers so the two legs line up: R1 Enrol (S1),
 R5) resumes at a station, every person signed in with the credential stored for them, so a station can be re-run without rebirth.
 
 THE SOLANA ROAD (Spec T29 and HRW-2, written 24 October 2026, amended 30 October 2026): five stations beside the API leg's five, numbered so
-nothing moves — R5s Solana wallets (S5s), R6s Solana payee (S6s), R7s-1 SOL payment (S7s-1), R7s-2 The curve belt (S7s-2), R7s-3 Solana
-holdings (S7s-3). A founder presses Create a new wallet with the network Solana, twice (the first wallet pays, the second is its payee);
+nothing moves — R5s Solana wallet (S5s; the spec's name for the station that births the two), R6s Solana payee (S6s), R7s-1 SOL payment
+(S7s-1), R7s-2 The curve belt (S7s-2), R7s-3 Solana holdings (S7s-3). A founder presses Create a new wallet with the network Solana, twice (the first wallet pays, the second is its payee);
 adds the second wallet as a payee on solana — pasted with a trailing space — and meets the page's own judgment of a base58 address: the three
 faults, and a Solana address in an EVM payee's field, each refused at the page in the estate's sentence before anything is sent (the two
 untidy fixtures of HRW-2 §4); pays one SOL payment from the first wallet to the second, under the one-dollar total at the estate's own
@@ -153,7 +153,7 @@ USER_AGENT_NOTE = "Harness Real World (Spec HRW-1)"
 # The stations, with the API leg's numbers (Spec HRW-1 §3).
 # ---------------------------------------------------------------------------
 STATIONS: List[Tuple[str, str]] = [
-    ("R1", "Enrol"), ("R2", "Sign in"), ("R3", "Policy Interview"), ("R4", "People"), ("R5", "Wallet"), ("R5s", "Solana wallets"), ("R6", "Payees"),
+    ("R1", "Enrol"), ("R2", "Sign in"), ("R3", "Policy Interview"), ("R4", "People"), ("R5", "Wallet"), ("R5s", "Solana wallet"), ("R6", "Payees"),
     ("R6s", "Solana payee"), ("R7", "Payment"), ("R7b", "The second press"), ("R7s-1", "SOL payment"), ("R7s-2", "The curve belt"), ("R7s-3", "Solana holdings"),
     ("R8", "The two legs agree"), ("R9", "Teardown"),
 ]
@@ -3163,9 +3163,8 @@ class RealWorld:
         signal_words = T.usdc_signal_words(signal) if signal != "absent" else "the register view carries no solanaUsdcAccount field"
         said.append("solanaUsdcAccount %s — %s; the row reads %s" % (json.dumps(signal) if signal != "absent" else "absent from the view", signal_words, json.dumps(row_words, ensure_ascii=False)))
         self.next_step("the Payees room", row_words)
-        self.facts["solana_payee"] = {"name": name, "addressId": (record or {}).get("id"), "address": payee_address, "status": status}
+        self.facts["solana_payee"] = {"name": name, "addressId": (record or {}).get("id"), "address": payee_address, "status": status}  # beside R6's payees, never among them
         self.state["solana_payee"] = dict(self.facts["solana_payee"])
-        self.facts["payees"].append({"name": name, "addressId": (record or {}).get("id"), "status": status, "chain": T.SOLANA_CHAIN})
         failures += self.type_the_slips(v, payee_address, said)
         return Outcome("R6s", FAIL if failures else PASS, "; ".join(said))
 

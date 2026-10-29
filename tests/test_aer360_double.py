@@ -1489,7 +1489,7 @@ class EstateDouble:
         self.aap_account_id = aap_account_id or AAP_ACCOUNT_ID
         self.platform.accounts.add(self.aap_account_id)
         # Spec T29 §0a.4: the account's entries in force on the platform (its read road, GET /v1/admin/accounts/{id}/policies), each with its allowed chains — the
-        # estate's own entry and the founder's (author) entry, as the birth road draws them up; an estate born before 23 October 2026 carries no solana (Eitan Co.)
+        # estate's own entry and the founder's (author) entry, as the birth road draws them up; an estate born before 23 October 2026 carries no solana
         chains = [T.PAYEE_CHAIN] + ([T.SOLANA_CHAIN] if solana_allowed else [])
         self.platform.entries.setdefault(self.aap_account_id, [
             {"id": "pe-" + secrets.token_hex(4), "name": "aer-accounts", "access_type": "sign+audit", "active": True, "superseded_by": "", "allowed_chains": list(chains),
@@ -4876,6 +4876,15 @@ def the_testnet_book():
     (tests/test_aer360_tables.py) is proved on the unpatched code.
     """
     return unittest.mock.patch.object(A, "payments", lambda: list(A.PAYMENTS_ON_THE_TESTNET))
+
+
+def credit_posts(platform: PlatformDouble) -> List[Dict[str, Any]]:
+    """
+    The platform's admin credit road as it was asked: the POSTs alone. Since Spec T29 §0a.4 the API leg's pre-flight also READS the account's entries on the
+    platform's read road (GET /v1/admin/accounts/{id}/policies) under the same credential, and a read credits nothing — so a test that says "no gas was credited"
+    counts the credits, not every request the platform saw.
+    """
+    return [r for r in platform.requests if r["method"] == "POST"]
 
 
 def runner_on(double: EstateDouble, tmp: str, invite: Optional[str] = None, start_at: Optional[str] = None, said: Optional[List[str]] = None,

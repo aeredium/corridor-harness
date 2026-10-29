@@ -423,7 +423,7 @@ class EstateHarnessReadmeTest(unittest.TestCase):
         self.assertLess(self.section.index("Spec T28, 8 October 2026"), self.section.index(title))
         self.assertLess(self.section.index(title), self.section.index("**Running it.**"))
         paragraph = self.section.split(title, 1)[1].split("**Running it.**", 1)[0]
-        for words in ("AER 360 Spec AER360-SOL-114", "PR #143", "d369926", "*S5s Solana wallets*", "*S6s Solana payee*", "*S7s-1 SOL payment*", "*S7s-2 the curve belt*", "*S7s-3 Solana holdings*",
+        for words in ("AER 360 Spec AER360-SOL-114", "PR #143", "d369926", "*S5s Solana wallet*", "*S6s Solana payee*", "*S7s-1 SOL payment*", "*S7s-2 the curve belt*", "*S7s-3 Solana holdings*",
                       "`POST /v1/workspace/wallets/options`", "`chain: \"solana\"`", "`packages/solana/src/address.ts`", "`~/.aer360-harness/<estate>/solana-wallets.json`",
                       "`solanaUsdcAccount`", "*has not received USDC yet*", "`GET /v1/workspace/sandbox-allowance`", "`aer360_answers.SOLANA_PAYMENT_SOL`", "`--funds-wait`",
                       "0.01 SOL reserve", "*waiting for the owner's SOL*", "`WALLET_CURVE_MISMATCH`", "`SOLANA_ROAD_CLOSED`", "*truth told, zero moved*",

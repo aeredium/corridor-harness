@@ -48,7 +48,7 @@ def propose_payee(runner: Any, founder: Any, name: str, key: str, address: str, 
     addresses = row.get("addresses") or []
     address_id = str(addresses[0].get("id")) if addresses else None
     record: Dict[str, Any] = {"key": key, "name": name, "payee_id": row.get("id"), "address_id": address_id, "address": address, "chain": chain,
-                              "promoted": None, "approved": None, "presses": []}
+                              "promoted": None, "approved": None, "presses": [], "station": station}  # the station the presses and their findings are filed under (S6, or S6s since Spec T29)
     runner.facts["payees"].append(record)
     if not address_id:
         return record, "%s: created with no address id" % name, False

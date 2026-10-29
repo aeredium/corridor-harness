@@ -34,6 +34,8 @@ from tests import test_aer360_double as D  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ALL_PASS = {"S%d" % n: E.PASS for n in range(1, 8)}
+# Every station passing on the book as the brief leaves it: R7s-1 stops by name, since the SOL amount is the owner's figure and none is written (Spec T29 §0a.3)
+ALL_PASS_ON_THE_BOOK = dict({s: E.PASS for s in R.STATION_IDS}, **{"R7s-1": E.FAILED_PREREQUISITE})
 REPLAY_SENTENCE = "A different payment run already carries this reference. Open it, or change the reference."
 
 
@@ -130,8 +132,8 @@ class ReplayRefusingEstate(W.ScreensEstate):
 class WaitingEstate(W.ScreensEstate):
     """An estate whose runs each wait for one approval: the run stands pending in the Approver inbox until a seated approver presses."""
 
-    def review(self, caller, charter, rows, acknowledged):  # type: ignore[no-untyped-def]
-        out = super().review(caller, charter, rows, acknowledged)
+    def review(self, caller, charter, rows, acknowledged, source_address=None):  # type: ignore[no-untyped-def]
+        out = super().review(caller, charter, rows, acknowledged, source_address)
         out["approvalsRequired"] = max(1, out["approvalsRequired"])
         out["payload"]["approval"]["approvalsRequired"] = out["approvalsRequired"]
         return out
@@ -200,11 +202,9 @@ class TheWalk(unittest.TestCase):
 
     def test_every_station_passes_in_order(self) -> None:
         self.assertEqual([o.station for o in self.leg.outcomes], R.STATION_IDS)
-        expected = {s: E.PASS for s in R.STATION_IDS}
-        expected["R7s-1"] = E.FAILED_PREREQUISITE  # Spec T29 §0a.3: the book names no SOL amount until the owner writes his figure, so R7s-1 stops by name
-        self.assertEqual(outcomes(self.leg), expected, "\n".join(self.leg.said))
+        self.assertEqual(outcomes(self.leg), ALL_PASS_ON_THE_BOOK, "\n".join(self.leg.said))
         self.assertEqual(self.leg.findings, [])
-        self.assertIn("R7s-1 — %s — sol payment: %s" % (E.FAILED_PREREQUISITE, T.SOLANA_AMOUNT_NOT_WRITTEN_SENTENCE), self.leg.said)
+        self.assertIn("R7s-1 — %s — sol payment: %s — %s" % (E.FAILED_PREREQUISITE, R.SOLANA_AMOUNT_NOT_WRITTEN, T.SOLANA_AMOUNT_NOT_WRITTEN_SENTENCE), self.leg.said)
         wallets = self.leg.facts["solana_wallets"]
         self.assertIn(T.SOLANA_FUNDS_LINE % (wallets[0]["address"], A.SOLANA_AMOUNT_PLACEHOLDER, "0.01 SOL"), self.leg.notes["R7s-1"])
 
@@ -346,7 +346,8 @@ class TheWalk(unittest.TestCase):
     def test_r8_finds_the_two_legs_agree_and_holds_each_walked_step_against_the_manual(self) -> None:
         line = line_of(self.leg, "R8")
         self.assertIn("the legs agree on R1/S1 pass, R2/S2 pass, R3/S3 pass, R4/S4 pass, R5/S5 pass, R6/S6 pass, R7/S7 pass, R7b/S7 pass", line)
-        self.assertIn("the pages' next steps held against 15 of the Client Manual's words, for the steps this run walked", line)
+        # HRW-1's fifteen, and the Solana road's six: R5s's two, R6s's two, R7s-2's one and R7s-3's one (R7s-1 stopped by name, so its three are not held)
+        self.assertIn("the pages' next steps held against 21 of the Client Manual's words, for the steps this run walked", line)
         self.assertTrue(any(n.startswith("R1, beside the manual: the manual says 'Open the invitation link.") for n in self.leg.notes["R8"]))
 
     def test_r9_cancels_nothing_where_every_run_landed(self) -> None:
@@ -430,7 +431,7 @@ class TheBirthWithoutEmail(unittest.TestCase):
         self.assertIn("signed in with the credential stored at", line_of(second, "R1"))
         self.assertIn("invitee_email %s — recorded by the record script after a birth without --email, whose one-line warning this run's printout carried: %r" % (
             T.REAL_WORLD_BIRTH_EMAIL, S.NO_EMAIL_LINE), line_of(second, "R1"))
-        self.assertEqual(outcomes(second), {s_: E.PASS for s_ in R.STATION_IDS}, "\n".join(second.said))
+        self.assertEqual(outcomes(second), ALL_PASS_ON_THE_BOOK, "\n".join(second.said))
 
     def test_a_blank_email_stops_the_run_even_where_the_printout_lost_the_warning(self) -> None:
         # invite.mjs prints its warning to standard error (invite.ts:159), so a printout saved with > alone lacks it: the stop does not depend on it
@@ -480,7 +481,7 @@ class TheStoredCredentials(unittest.TestCase):
         later = Setting(estate=reborn)
         later.store = first.store  # the operator's one store, across a rebirth of the estate on the same platform
         leg = later.walk()
-        self.assertEqual(outcomes(leg), {st: E.PASS for st in R.STATION_IDS}, "\n".join(leg.said))
+        self.assertEqual(outcomes(leg), ALL_PASS_ON_THE_BOOK, "\n".join(leg.said))
         self.assertTrue(any(n.startswith("the browser leg's state was of account %s and this birth's estate is account aap-account-reborn, so this run starts "
                                          "afresh (the earlier state kept at " % first.estate.aap_account_id) for n in leg.notes["start"]))
         self.assertIn("enrolled by the one-time link", line_of(leg, "R1"))
@@ -531,7 +532,7 @@ class TheResume(unittest.TestCase):
         cls.second = cls.s.walk(start_at="S7")
 
     def test_the_first_walk_passed(self) -> None:
-        self.assertEqual(outcomes(self.first), {s: E.PASS for s in R.STATION_IDS})
+        self.assertEqual(outcomes(self.first), ALL_PASS_ON_THE_BOOK)
 
     def test_from_s7_skips_r1_to_r6_and_signs_every_person_in_with_their_stored_credential(self) -> None:
         got = outcomes(self.second)
@@ -561,8 +562,9 @@ class TheResume(unittest.TestCase):
         self.assertEqual(self.s.estate.chain.balance_of(D.OWNER_WALLET_FOR_TESTS), 2 * 1000000)
 
     def test_a_step_the_rerun_did_not_walk_is_not_held_against_the_manual(self) -> None:
-        # R7's Submit and landed, R7b's Submit and its replay sentence set beside the page: the charter's, the wallet's and the payees' steps not walked
-        self.assertIn("held against 4 of the Client Manual's words, for the steps this run walked", line_of(self.second, "R8"))
+        # R7's Submit and landed, R7b's Submit and its replay sentence set beside the page, R7s-2's belt sentence and R7s-3's Re-read: the charter's, the wallets'
+        # and the payees' steps not walked
+        self.assertIn("held against 6 of the Client Manual's words, for the steps this run walked", line_of(self.second, "R8"))
 
 
 class TheSecondPress(unittest.TestCase):
@@ -625,8 +627,8 @@ class StrangerReviewingEstate(W.ScreensEstate):
 
     STRANGER = T.checksum_address("0x" + "1234" * 10)
 
-    def review(self, caller, charter, rows, acknowledged):  # type: ignore[no-untyped-def]
-        out = super().review(caller, charter, rows, acknowledged)
+    def review(self, caller, charter, rows, acknowledged, source_address=None):  # type: ignore[no-untyped-def]
+        out = super().review(caller, charter, rows, acknowledged, source_address)
         if out["payload"]["rows"]:
             out["payload"]["rows"][0]["address"] = self.STRANGER
         return out
@@ -750,7 +752,11 @@ class TheMoney(unittest.TestCase):
         self.assertEqual(outcomes(leg)["R6"], E.FAILED_PREREQUISITE)
         self.assertIn(R.OWNER_PAYEE_NOT_FILED, line_of(leg, "R6"))
         self.assertEqual(outcomes(leg)["R7"], E.FAILED_PREREQUISITE)
-        self.assertFalse(any(x.route == "POST /v1/payees" for x in leg.exchanges))
+        self.assertFalse(any(x.route == "POST /v1/payees" and x.station == "R6" for x in leg.exchanges))
+        # the Solana payee is the harness's own second wallet, not an address from payee.env, so R6s adds it all the same (Spec T29 §0a.2) — and nothing is paid
+        self.assertEqual([x.sent["displayName"] for x in leg.exchanges if x.route == "POST /v1/payees"], [A.SOLANA_PAYEE_NAME])
+        self.assertEqual(s.estate.chain.balance_of(D.OWNER_WALLET_FOR_TESTS), 0)
+        self.assertEqual(s.estate.solana.transfers, [])
 
 
 # ======================================================================================================================
@@ -784,8 +790,9 @@ class TheTwoLegs(unittest.TestCase):
             write_api_report(tmp, theirs, company=company)
         leg = R.RealWorld(base=D.BASE, store_root=tmp, runs_root=os.path.join(tmp, "runs"), api_reports=tmp, say=lambda s: None, dry_folder=True)
         leg.estate_name = A.ESTATE["company"]
-        leg.outcomes = [R.Outcome(st, mine.get(st, E.PASS), "a line") for st in R.STATION_IDS[:8]]
-        for st in R.STATION_IDS[:8]:
+        walked = [st for st in R.STATION_IDS if st not in ("R8", "R9")]  # every station before R8, the Solana five among them (Spec HRW-2)
+        leg.outcomes = [R.Outcome(st, mine.get(st, E.PASS), "a line") for st in walked]
+        for st in walked:
             leg.next_steps[st].append(("a page", "a sentence"))
         leg.current = "R8"
         return leg
@@ -921,7 +928,7 @@ class TheReviewOfTheCode(unittest.TestCase):
             json.dump(state, handle)
         second = s.walk(start_at="S5", birth=False)
         self.assertIn(R.WRONG_ESTATE, probes(second, "resume"))
-        self.assertEqual([outcomes(second)[st] for st in R.STATION_IDS[4:]], [E.NOT_RUN] * 6)
+        self.assertEqual([outcomes(second)[st] for st in R.STATION_IDS[4:]], [E.NOT_RUN] * len(R.STATION_IDS[4:]))
         self.assertTrue(os.path.isfile(second.report_path))
 
     def test_chromium_that_will_not_launch_is_the_harnesss_own_failure_with_its_install_sentence(self) -> None:
@@ -967,7 +974,10 @@ class TheReviewOfTheCode(unittest.TestCase):
             leg = s.walk()
         self.assertEqual(outcomes(leg)["R6"], E.PASS, line_of(leg, "R6"))
         self.assertIn("the page refused the address typed with a trailing space before anything was sent", line_of(leg, "R6"))
-        self.assertEqual(len([x for x in leg.exchanges if x.route == "POST /v1/payees"]), 2)
+        self.assertEqual(len([x for x in leg.exchanges if x.route == "POST /v1/payees" and x.station == "R6"]), 2)
+        # R6s meets the same strict page with the Solana address pasted with a trailing space, and pastes it again too
+        self.assertIn("the page refused the address pasted with a trailing space before anything was sent", line_of(leg, "R6s"))
+        self.assertEqual(len([x for x in leg.exchanges if x.route == "POST /v1/payees" and x.station == "R6s"]), 1)
 
     def test_a_payee_an_earlier_attempt_left_proposed_is_taken_on_never_added_again(self) -> None:
         estate = W.ScreensEstate()
@@ -976,7 +986,7 @@ class TheReviewOfTheCode(unittest.TestCase):
         leg = s.walk()
         self.assertEqual(outcomes(leg)["R6"], E.PASS, line_of(leg, "R6"))
         self.assertIn("Northwind Supplies stands proposed at the owner's wallet (an earlier attempt's), taken on from there and not added again", line_of(leg, "R6"))
-        self.assertEqual([x.sent["displayName"] for x in leg.exchanges if x.route == "POST /v1/payees"], ["Contoso Legal"])
+        self.assertEqual([x.sent["displayName"] for x in leg.exchanges if x.route == "POST /v1/payees" and x.station == "R6"], ["Contoso Legal"])
 
     def test_every_stop_is_classified(self) -> None:
         s = Setting(estate=ReplayRefusingEstate())
@@ -1342,13 +1352,13 @@ class TheDocuments(unittest.TestCase):
     def test_the_readme_says_how_the_browser_leg_walks_the_solana_road(self) -> None:
         text = read(os.path.join(ROOT, "README.md"))
         section = text.split("## Harness Real World, the browser leg of the estate harness", 1)[1].split("## Pathfinder", 1)[0]
-        for words in ("**R5s Solana wallets**", "**R6s Solana payee**", "**R7s-1 SOL payment**", "**R7s-2 The curve belt**", "**R7s-3 Solana holdings**",
+        for words in ("**R5s Solana wallet**", "**R6s Solana payee**", "**R7s-1 SOL payment**", "**R7s-2 The curve belt**", "**R7s-3 Solana holdings**",
                       "*Which network does the wallet stand on?*", "*Re-read every wallet now*", "`--funds-wait SECONDS`", "`SOLANA_PAYEE`", "has not received USDC yet",
                       "`WALLET_CURVE_MISMATCH`", "`SOLANA_ROAD_CLOSED`", "a Solana address pasted in the EVM field of an EVM payee", "`aer360_answers.SOLANA_PAYMENT_SOL`",
                       "the owner's ruling of 29 October 2026", "Spec HRW-2"):
             self.assertIn(words, section, words)
         estate = text.split("## The estate harness", 1)[1].split("## Harness Real World", 1)[0]
-        for words in ("S5s Solana wallets", "S6s Solana payee", "S7s-1 SOL payment", "S7s-2 the curve belt", "S7s-3 Solana holdings", "`--funds-wait SECONDS`",
+        for words in ("S5s Solana wallet", "S6s Solana payee", "S7s-1 SOL payment", "S7s-2 the curve belt", "S7s-3 Solana holdings", "`--funds-wait SECONDS`",
                       "**The two legs walk the Solana road:", "python3 aer360_harness.py --out ~/Downloads/harness-runs"):
             self.assertIn(words, estate, words)
 
@@ -1462,7 +1472,7 @@ class TheSolanaRoad(unittest.TestCase):
         self.assertEqual(review[0].status, 422)
         self.assertIsNone(review[0].sent.get("walletId"), "the funding wallet: an EVM key")
         self.assertIn("refused WALLET_CURVE_MISMATCH, 422 — \"%s\" (curve secp256k1, required ed25519: %s)" % (T.SOLANA_REFUSAL_SENTENCES[T.WALLET_CURVE_MISMATCH], T.CURVE_MISMATCH_CAUSE_SOLANA), line)
-        self.assertIn("the page says \"Refused: %s" % T.SOLANA_REFUSAL_SENTENCES[T.WALLET_CURVE_MISMATCH], line)
+        self.assertIn("Refused: %s" % T.SOLANA_REFUSAL_SENTENCES[T.WALLET_CURVE_MISMATCH], line)  # the notice's own words, after its glyph (Refusals.tsx)
         self.assertIn("'Submit this run' is not offered; nothing dialled", line)
         self.assertFalse(any(i.get("invoiceRef") == "HH-S002" for s in self.estate.sets.values() for i in s["instructions"]))
 
@@ -1485,24 +1495,44 @@ class TheSolanaRoad(unittest.TestCase):
         report = read(self.leg.report_path)  # type: ignore[attr-defined]
         for words in ("- The Solana wallets this leg made or took on: wallet 3, %s; wallet 4, %s (the first pays, the second is its payee; Spec T29)." % (self.wallets[0]["address"], self.wallets[1]["address"]),
                       "- The Solana payee: %s on solana at %s" % (A.SOLANA_PAYEE_NAME, self.wallets[1]["address"]), "- R7s-1: run ", "- The Solana holdings after R7s-1: wallet 3 0.047995 SOL; wallet 4 0.002 SOL.",
-                      "| R5s Solana wallets | pass |", "| R7s-1 SOL payment | pass |", "## R7s-3 — Solana holdings"):
+                      "| R5s Solana wallet | pass |", "| R7s-1 SOL payment | pass |", "## R7s-3 — Solana holdings"):
             self.assertIn(words, report, words)
         self.assertEqual(E.read_report(self.leg.report_path)["outcomes"]["R7s-1"], "pass")  # type: ignore[attr-defined]
 
-    def test_a_run_resumed_at_r6s_takes_the_wallets_on_and_pays_again_confirming_the_repeat(self) -> None:
+
+class TheSolanaRoadResumed(unittest.TestCase):
+    """A run resumed at R6s on an estate whose Solana wallets and payee stand: taken on, not pressed for again; the SOL paid again, the repeat confirmed as T28 bounds it."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.s = Setting()
+        cls.estate = cls.s.estate
         with the_solana_book():
-            leg = self.s.walk(start_at="R6s", birth=False)
-        self.assertEqual(outcomes(leg)["R5s"], E.SKIPPED)
+            cls.first = cls.s.walk()
+            cls.s.estate.age_runs(1)  # a day passes; the first run's payments stand within the screen's seven days
+            cls.second = cls.s.walk(start_at="R6s", birth=False)
+        cls.wallets = solana_wallets_of(cls.estate)
+
+    def test_the_first_walk_passed_and_the_second_takes_the_road_on(self) -> None:
+        self.assertEqual(outcomes(self.first), {s: E.PASS for s in R.STATION_IDS}, "\n".join(self.first.said))
+        self.assertEqual(outcomes(self.second)["R5s"], E.SKIPPED)
         for station in ("R6s", "R7s-1", "R7s-2", "R7s-3"):
-            self.assertEqual(outcomes(leg)[station], E.PASS, line_of(leg, station))
-        self.assertEqual(len(solana_wallets_of(self.estate)), 2, "nothing pressed for again")
-        self.assertIn("%s stands whitelisted on solana at %s (an earlier run's); taken on, not added again" % (A.SOLANA_PAYEE_NAME, self.wallets[1]["address"]), line_of(leg, "R6s"))
-        self.assertEqual(len(self.estate.solana.transfers), 2)
-        self.assertTrue(any("Spec T28" in n for n in leg.notes["R7s-1"]), leg.notes["R7s-1"])
+            self.assertEqual(outcomes(self.second)[station], E.PASS, line_of(self.second, station))
+        self.assertEqual(len(self.wallets), 2, "nothing pressed for again")
+        self.assertIn("%s stands whitelisted on solana at %s (an earlier run's); taken on, not added again" % (A.SOLANA_PAYEE_NAME, self.wallets[1]["address"]), line_of(self.second, "R6s"))
+        self.assertEqual([(t["from"], t["to"], t["lamports"]) for t in self.estate.solana.transfers], [(self.wallets[0]["address"], self.wallets[1]["address"], SOL_LAMPORTS)] * 2,
+                         "the second run pays the owner's figure again, as the book says")
+        self.assertTrue(any("Spec T28" in n for n in self.second.notes["R7s-1"]), self.second.notes["R7s-1"])
+        self.assertEqual(self.second.facts["solana_wallets"][0]["walletId"], self.first.facts["solana_wallets"][0]["walletId"], "state.json's wallets, found again in the register")
 
 
 class TheClosedSolanaRoad(unittest.TestCase):
-    """SOLANA_RPC_URLS names fewer than two endpoints: the wallets are born all the same, and every reading or payment says the road is closed by name, on the page."""
+    """
+    SOLANA_RPC_URLS names fewer than two endpoints: the wallets are born all the same, and every reading says the road is closed by name. At the review the
+    estate refuses SOLANA_ROAD_CLOSED on the row — but the page shows a founder no sentence for it (PaymentEntry.tsx at d369926 renders a gate's refusals only
+    where they carry no rowIndex, and setgates.ts folds only the sandbox gate's row refusals into the rows), so R7s-1 is a SCREEN finding: the estate said it,
+    the screen did not. The owner rules on that one; the harness keeps it red.
+    """
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -1511,9 +1541,9 @@ class TheClosedSolanaRoad(unittest.TestCase):
         with the_solana_book():
             cls.leg = cls.s.walk()
 
-    def test_every_station_passes_as_truth_told_and_nothing_moves(self) -> None:
-        self.assertEqual(outcomes(self.leg), {s: E.PASS for s in R.STATION_IDS}, "\n".join(self.leg.said))
-        self.assertEqual(self.leg.findings, [])
+    def test_every_station_but_r7s_1_passes_as_truth_told_and_nothing_moves(self) -> None:
+        self.assertEqual(outcomes(self.leg), dict({s: E.PASS for s in R.STATION_IDS}, **{"R7s-1": E.FAIL}), "\n".join(self.leg.said))
+        self.assertEqual([(f.station, f.probe) for f in self.leg.findings], [("R7s-1", "R7s-1: the page did not say the estate's sentence for the closed road")])
         self.assertEqual(self.estate.solana.transfers, [])
         self.assertEqual([r["station"] for r in self.leg.facts["runs"]], ["R7", "R7b"], "no Solana run was created")
         self.assertEqual(len(solana_wallets_of(self.estate)), 2, "the birth goes through the gateway, not the road")
@@ -1523,16 +1553,22 @@ class TheClosedSolanaRoad(unittest.TestCase):
         self.assertIn("solanaUsdcAccount null — the room says nothing (solanaUsdcAccount null: the road is closed, or the signal was never read)", line)
         self.assertNotIn(S.HAS_NOT_RECEIVED_USDC, line.split("solanaUsdcAccount null")[1].split(";")[0])
 
-    def test_r7s_1_reads_the_closed_road_on_the_page_at_the_review(self) -> None:
+    def test_r7s_1_meets_the_closed_road_at_the_review_and_the_page_says_nothing_of_it(self) -> None:
         line = line_of(self.leg, "R7s-1")
         sentence = T.SOLANA_REFUSAL_SENTENCES[T.SOLANA_ROAD_CLOSED]
         self.assertIn(T.CLOSED_ROAD_TRUTH_TOLD % ("%s: %s" % (T.SOLANA_ROAD_CLOSED, sentence)), line)
         self.assertIn("the refresh skipped it, SOLANA_ROAD_CLOSED", line)
-        self.assertIn("the page says \"Refused: %s" % sentence, line)
-        self.assertIn("'Submit this run' stands disabled", line)
+        self.assertIn("the page says \"\"; 'Submit this run' stands disabled", line)
         self.assertTrue(self.leg.facts["solana_closed"])
         self.assertEqual(exchanges_at(self.leg, "R7s-1", "POST /v1/sets"), [])
-        self.assertEqual(len(exchanges_at(self.leg, "R7s-1", "POST /v1/sets/review")), 1)
+        review = exchanges_at(self.leg, "R7s-1", "POST /v1/sets/review")
+        self.assertEqual(len(review), 1)
+        gate = next(g for g in review[0].json["gates"] if g["gate"] == T.GAS_GATE)
+        self.assertEqual([(r["code"], r["rowIndex"]) for r in gate["refusals"]], [(T.SOLANA_ROAD_CLOSED, 0)], "the estate refuses the row by name, on the gate")
+        self.assertEqual(review[0].json["rows"][0]["refusals"], [], "and folds nothing into the row — so the page, which renders a gate's refusals only without a rowIndex, shows none")
+        finding = next(f for f in self.leg.findings if f.station == "R7s-1")
+        self.assertEqual((finding.kind, finding.expected), (R.SCREEN, sentence))
+        self.assertIn("the estate refused SOLANA_ROAD_CLOSED and the page says \"\"", finding.said)
 
     def test_r7s_3_reads_the_absence_rows(self) -> None:
         line = line_of(self.leg, "R7s-3")

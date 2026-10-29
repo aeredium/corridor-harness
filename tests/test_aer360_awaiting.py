@@ -261,7 +261,9 @@ class TheWriteWaitsAndTwoPeopleSign(unittest.TestCase):
                       "compiled and the write waits (202): %s%s: ceremony " % (NAME, T.APPROVED_DESTINATIONS_SUFFIX), "awaiting, 0 of 2 signed; may sign: Ada Approver, Ben Signatory and Harriet Founder",
                       "read as Harriet Founder, Ada Approver, Ben Signatory and Olive Overseer", "finish: Ada Approver counted (1 of 2); Ada Approver's second press: refused, and the refusal says why (Rule 13): APPROVER_ALREADY_SIGNED: You have already signed this change",
                       "1 of 2 stand; nothing was signed again.; Ben Signatory counted and the write finished on their signature",
-                      "the trail: 1 onboarding.interview_written row(s) for the interview, 2 onboarding.ceremony_signed, 1 onboarding.write_awaiting_approvals, 0 onboarding.interview_write_failed; 1 wallet.born in all",
+                      # Spec T29: S5s's two Solana wallets are born under their own ids, so the funding wallet's one birth stands beside three rows in all
+                      "the trail: 1 onboarding.interview_written row(s) for the interview, 2 onboarding.ceremony_signed, 1 onboarding.write_awaiting_approvals, 0 onboarding.interview_write_failed; "
+                      "1 wallet.born for the funding wallet (3 in all: a pressed wallet's stands under its own id, Spec 110a)",
                       "funding wallet unchanged: %s" % self.runner.facts["funding_wallet"]["address"],
                       "the list: the estate offers a browser no road onto the platform's list, so it is judged by the estate's own record of the write, above"):
             self.assertIn(words, o.line, words)
@@ -282,7 +284,9 @@ class TheWriteWaitsAndTwoPeopleSign(unittest.TestCase):
         awaiting = H.rows_of(trail, T.WRITE_AWAITING_APPROVALS, interview_id)
         self.assertEqual([(r["detail"]["pendingTxId"], r["detail"]["road"], r["detail"]["requiredSignatures"], r["detail"]["signaturesCollected"]) for r in awaiting], [(pending, "compile", "2", "0")])
         self.assertEqual(H.rows_of(trail, T.INTERVIEW_WRITE_FAILED, interview_id), [])
-        self.assertEqual(len([r for r in trail if r["action"] == T.WALLET_BORN]), 1, "S5's press; the finish answered alreadyHeld")
+        self.assertEqual(len([r for r in trail if r["action"] == T.WALLET_BORN and r.get("subject_id") == self.double.workspace["id"]]), 1,
+                         "S5's press; the finish answered alreadyHeld (S5s's two Solana wallets stand under their own ids, Spec T29)")
+        self.assertEqual(len([r for r in trail if r["action"] == T.WALLET_BORN]), 3, "the funding wallet's and the two Solana wallets'")
         self.assertEqual(H.audit_the_finish(trail, interview_id, pending, [ada.credential_id, ben.credential_id], ben.credential_id), [])
 
     def test_the_calls_are_the_two_step_road_as_each_person_under_their_own_credential_and_never_retried(self):
@@ -704,7 +708,7 @@ class APrerequisiteIsAFailureWithItsOwnName(unittest.TestCase):
             report = handle.read()
         self.assertIn("| S7 Payments | %s | payments: %s — no passkey is stored for its founder at " % (RED_CELL, H.TREASURY_NOT_BORN), report, "red in the table")
         self.assertIn("Outcome: **%s**. payments: %s — " % (H.FAILED_PREREQUISITE, H.TREASURY_NOT_BORN), report)
-        self.assertEqual(report.count("<span"), 1, "the one markup the report carries")
+        self.assertEqual(report.count("<span"), 2, "the one markup the report carries, on the two stops by name: S7's here, and S7s-1's — the book names no SOL amount (Spec T29 §0a.3)")
         read = H.read_report(path)
         self.assertEqual(read["outcomes"]["S7"], H.FAILED_PREREQUISITE, "the report reader strips the markup")
         self.assertEqual(read["outcomes"]["S1"], H.PASS)
