@@ -309,8 +309,10 @@ class TheWalk(unittest.TestCase):
         typed = [x for x in self.leg.exchanges if x.route == "POST /v1/payees" and x.station == "R6"]  # R6's two; R6s adds the Solana payee at its own station (Spec HRW-2)
         self.assertEqual(len(typed), 2)
         self.assertEqual(typed[1].sent["addresses"][0]["address"], D.OWNER_WALLET_FOR_TESTS + " ")  # sent as typed; the estate trims it
-        approvals = [x for x in self.leg.exchanges if x.route.endswith("/approve") and "/payees/" in x.route]
+        # R6's approvals are the two EVM payees' alone, the pair twice; the Solana payee stands beside R6's payees, not among them, so its pair is R6s's own (Spec HRW-2)
+        approvals = [x for x in self.leg.exchanges if x.route.endswith("/approve") and "/payees/" in x.route and x.station == "R6"]
         self.assertEqual([x.who for x in approvals], ["Ada Approver", "Ben Signatory"] * 2)
+        self.assertEqual([x.who for x in self.leg.exchanges if x.route.endswith("/approve") and "/payees/" in x.route and x.station == "R6s"], ["Ada Approver", "Ben Signatory"])
 
     def test_r7_and_r7b_pay_the_one_dollar_book_between_them_to_the_owners_wallet_and_nothing_else(self) -> None:
         runs = self.leg.facts["runs"]
