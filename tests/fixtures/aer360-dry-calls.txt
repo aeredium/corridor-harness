@@ -101,6 +101,14 @@ S5 — POST /v1/workspace/funding-wallet {"issuedAtMs": "<issuedAtMs>", "respons
 S5 — GET /v1/workspace
 S5 — POST https://testnet.rpc.aeredium.io {"jsonrpc": "2.0", "id": 1, "method": "eth_getBalance", "params": ["<funding wallet>", "latest"]}
 S5 — POST https://aeredium.io/faucet-api/request {"address": "<funding wallet>"} — once per run, only where the balance reads below 0.1 SEAR
+S5s — GET /v1/aer360/wallets (as Harriet Founder)
+S5s — POST /v1/workspace/wallets/options {"whose": "estate", "chain": "solana"} (as Harriet Founder) — only where no Solana wallet stands
+S5s — POST /v1/workspace/wallets {"whose": "estate", "chain": "solana", "issuedAtMs": "<issuedAtMs>", "walletId": "<walletId>", "response": "<assertion by Harriet Founder's passkey over the challenge>"} (as Harriet Founder)
+S5s — GET /v1/aer360/wallets (as Harriet Founder)
+S5s — POST /v1/workspace/wallets/options {"whose": "estate", "chain": "solana"} (as Harriet Founder) — only where no Solana wallet 2 stands
+S5s — POST /v1/workspace/wallets {"whose": "estate", "chain": "solana", "issuedAtMs": "<issuedAtMs>", "walletId": "<walletId>", "response": "<assertion by Harriet Founder's passkey over the challenge>"} (as Harriet Founder)
+S5s — GET /v1/aer360/wallets (as Harriet Founder)
+S5s — [file] ~/.aer360-harness/harness-holdings/solana-wallets.json
 S6 — [file] ~/.aer360-harness/payee.env
 S6 — POST /v1/payees {"displayName": "Northwind Supplies", "defaultAsset": "USDC", "defaultChain": "arbitrum", "addresses": [{"chain": "arbitrum", "address": "<OWNER_PAYEE_ADDRESS from ~/.aer360-harness/payee.env>"}]} (as Harriet Founder)
 S6 — POST /v1/payees/addresses/<address of Northwind Supplies>/promote {} (as Harriet Founder)
@@ -113,6 +121,18 @@ S6 — POST /v1/payees/addresses/<address of Contoso Legal>/approve {} (as Ada A
 S6 — POST /v1/payees/addresses/<address of Contoso Legal>/approve {} (as Ben Signatory, the roster in order, the founder last)
 S6 — POST /v1/payees/addresses/<address of Contoso Legal>/approve {} (as Cora Clerk, the roster in order, the founder last)
 S6 — GET /v1/payees
+S6s — [file] ~/.aer360-harness/payee.env — SOLANA_PAYEE, where present, is ignored
+S6s — GET /v1/payees (as Harriet Founder)
+S6s — POST /v1/payees {"displayName": "Harness Holdings — Solana wallet 2", "defaultAsset": "USDC", "defaultChain": "solana", "addresses": [{"chain": "solana", "address": "<the second Solana wallet's address, from S5s>"}]} (as Harriet Founder)
+S6s — POST /v1/payees/addresses/<address of Harness Holdings — Solana wallet 2>/promote {} (as Harriet Founder)
+S6s — POST /v1/payees/addresses/<address of Harness Holdings — Solana wallet 2>/approve {} (as Ada Approver, the roster in order, the founder last)
+S6s — POST /v1/payees/addresses/<address of Harness Holdings — Solana wallet 2>/approve {} (as Ben Signatory, the roster in order, the founder last)
+S6s — POST /v1/payees/addresses/<address of Harness Holdings — Solana wallet 2>/approve {} (as Cora Clerk, the roster in order, the founder last)
+S6s — GET /v1/payees
+S6s — POST /v1/payees {"displayName": "Solana slip: the wrong shape (a 0x address)", "defaultAsset": "USDC", "defaultChain": "solana", "addresses": [{"chain": "solana", "address": "<a 0x address: one of the harness's own derived test addresses>"}]} (as Harriet Founder)
+S6s — POST /v1/payees {"displayName": "Solana slip: base58 of thirty-one bytes", "defaultAsset": "USDC", "defaultChain": "solana", "addresses": [{"chain": "solana", "address": "<the real address's first thirty-one bytes, re-encoded>"}]} (as Harriet Founder)
+S6s — POST /v1/payees {"displayName": "Solana slip: thirty-two bytes off the curve", "defaultAsset": "USDC", "defaultChain": "solana", "addresses": [{"chain": "solana", "address": "<the real address with a byte flipped until the harness's own on-curve check fails, re-encoded>"}]} (as Harriet Founder)
+S6s — GET /v1/payees
 S7 — GET /v1/workspace (as Cora Clerk)
 S7 — [file] ~/.aer360-harness/payee.env — only where S6 did not read it (a run resumed at S7)
 S7 — POST /v1/auth/login/options {} and POST /v1/auth/login/verify {"nonce": "<nonce>", "issuedAtMs": "<issuedAtMs>", "response": "<assertion>"} (as Harriet Founder at Harness Treasury, with the passkey stored at ~/.aer360-harness/harness-treasury/harriet.json)
@@ -169,6 +189,27 @@ S7 — GET /v1/sets/<run P3>
 S7 — POST https://arb1.arbitrum.io/rpc {"jsonrpc": "2.0", "id": 1, "method": "eth_call", "params": [{"to": "<the USDC contract the estate names>", "data": "<balanceOf(<address of Contoso Legal>)>"}, "latest"]}
 S7 — GET /v1/export/audit?limit=5000 (as Harriet Founder; every page by its nextCursor)
 S7 — GET /v1/workspace/funding-account/balances (as Cora Clerk), GET /v1/workspace/funding-account/balances (as Harriet Founder at Harness Treasury), GET /v1/gas/account (as Cora Clerk), GET /v1/gas/account (as Harriet Founder at Harness Treasury)
+S7s-1 — GET /v1/workspace/sandbox-allowance (as Cora Clerk)
+S7s-1 — [book] aer360_answers.SOLANA_PAYMENT_SOL
+S7s-1 — GET /v1/payees (as Cora Clerk) — only where S6s left no record of the Solana payee (a run resumed here)
+S7s-1 — POST /v1/aer360/refresh {} then GET /v1/aer360/overview (as Cora Clerk; again every 15 s, up to --funds-wait, default 180 s)
+S7s-1 — POST /v1/aer360/refresh {} then GET /v1/aer360/overview (as Cora Clerk)
+S7s-1 — POST /v1/sets/review {"pays": [{"payeeAddressId": "<address of Harness Holdings — Solana wallet 2>", "asset": "SOL", "chain": "solana", "amountMinor": "<lamports of the book's SOL amount, aer360_answers.SOLANA_PAYMENT_SOL: the owner's figure>", "invoiceRef": "HH-S001"}], "duplicatesAcknowledged": false, "walletId": "<the first Solana wallet's walletId>"} (as Cora Clerk)
+S7s-1 — POST /v1/sets/review {"pays": [{"payeeAddressId": "<address of Harness Holdings — Solana wallet 2>", "asset": "SOL", "chain": "solana", "amountMinor": "<lamports of the book's SOL amount, aer360_answers.SOLANA_PAYMENT_SOL: the owner's figure>", "invoiceRef": "HH-S001"}], "duplicatesAcknowledged": true, "walletId": "<the first Solana wallet's walletId>"} (as Cora Clerk) — only where the review's duplicate screen names a payment of an earlier run (previouslySentAt before this run began); a duplicate within this run is a finding, never acknowledged
+S7s-1 — [judge] the review's value against the one-dollar total and the sandbox allowance
+S7s-1 — POST <AAP_ADMIN_BASE_URL>/v1/admin/accounts/<Harness Holdings' aapAccountId>/gas-account/credits {"amount_usd_cents": "<1000, or the next ten dollars above twice the refusal's ceiling>", "reason": "sandbox run <run>", "idempotency_key": "aer360-harness-<run>-harness-holdings-gas-<n>"} (Authorization: Bearer <AAP_ADMIN_KEY>) — only where the review refuses GAS_SHORTFALL
+S7s-1 — POST /v1/sets {"pays": [{"payeeAddressId": "<address of Harness Holdings — Solana wallet 2>", "asset": "SOL", "chain": "solana", "amountMinor": "<lamports of the book's SOL amount, aer360_answers.SOLANA_PAYMENT_SOL: the owner's figure>", "invoiceRef": "HH-S001"}], "duplicatesAcknowledged": "<true only where the second review above was made, else false>", "walletId": "<the first Solana wallet's walletId>", "idempotencyKey": "aer360-harness-<run>-PS1", "reference": "Harness payment PS1"} (as Cora Clerk)
+S7s-1 — POST /v1/sets/<run PS1>/submit {}
+S7s-1 — POST /v1/approvals/<run PS1>/challenge {} then /approve {"response": "<assertion over the challenge>"} (as Ben Signatory, Cora Clerk, Ada Approver and Harriet Founder in turn while the run waits)
+S7s-1 — POST /v1/sets/<run PS1>/execute {} (as Cora Clerk)
+S7s-1 — GET /v1/sets/<run PS1>
+S7s-1 — POST /v1/aer360/refresh {} then GET /v1/aer360/overview (as Cora Clerk)
+S7s-1 — GET /v1/export/audit?limit=5000 (as Harriet Founder; every page by its nextCursor)
+S7s-2 — GET /v1/payees (as Cora Clerk) — only where S6s left no record of the Solana payee
+S7s-2 — POST /v1/sets/review {"pays": [{"payeeAddressId": "<address of Harness Holdings — Solana wallet 2>", "asset": "SOL", "chain": "solana", "amountMinor": "<lamports of the book's SOL amount, aer360_answers.SOLANA_PAYMENT_SOL: the owner's figure>", "invoiceRef": "HH-S002"}], "duplicatesAcknowledged": false} (as Cora Clerk)
+S7s-2 — GET /v1/sets (as Cora Clerk)
+S7s-3 — POST /v1/aer360/refresh {} then GET /v1/aer360/overview (as Cora Clerk)
+S7s-3 — GET /v1/payees (as Cora Clerk)
 S8 — GET /v1/journey
 S8 — GET /v1/workspace/readiness
 S9 — [out of scope] the tour's answers as Claude would see them: the harness is the founder, not Claude

@@ -27,6 +27,7 @@ refused. The book's three payments on a real chain total one dollar (`aer360_ans
 from __future__ import annotations
 
 import os
+import re
 import sys
 from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
@@ -111,7 +112,7 @@ PAYEES: List[Dict[str, str]] = [
 
 # The asset the payments are made in, and its decimals as `packages/shared/src/money.ts` knows them.
 PAYMENT_ASSET = "USDC"
-ASSET_DECIMALS = {"USDC": 6, "USDT": 6, "ETH": 18, "WETH": 18, "DAI": 18}
+ASSET_DECIMALS = {"USDC": 6, "USDT": 6, "ETH": 18, "WETH": 18, "DAI": 18, "SOL": 9}  # SOL: nine decimals, money.ts ASSET_DECIMALS (Spec T29)
 
 def address(key: str) -> str:
     """The pinned bytes for a table key. A key that is not pinned is a bug, and it throws."""
@@ -589,4 +590,299 @@ UNTIDY_FIXTURES: List[Tuple[str, str]] = [
      "Spec AER360-RUN-ROAD §1: the key was `${reference || 'run'}-${today}`, and a founder's second run of the day was refused as a replay"),
     ("the estate's signing entries are never set by hand: they stand at zero until the Policy Interview's write puts the charter's ceilings on them",
      "the owner, 7 October 2026 (the fixture of 9 October); Spec AER360-115: the compile writes C2 and C3 onto aer-accounts and every (author) entry"),
+    # Spec T29 and HRW-2 (§4): the Solana road's two untidy fixtures, each a slip a founder makes with a base58 address
+    ("a Solana payee's address is pasted with a trailing space (the estate trims it; the register shows it trimmed)",
+     "Spec T29 and HRW-2 §4; shared/payeeaddress.ts judges the trimmed string (payeeAddressRefusal: address.trim()) and stores it verbatim"),
+    ("a Solana address is pasted in the EVM field of an EVM payee (refused in the estate's sentence: not an address Arbitrum One can pay)",
+     "Spec T29 and HRW-2 §4; shared/payeeaddress.ts ADDRESS_SHAPES.evm: an address is 0x followed by exactly 40 hexadecimal characters"),
 ]
+
+
+# ---------------------------------------------------------------------------
+# THE SOLANA ROAD (Spec T29 and HRW-2, written 24 October 2026, amended 30 October 2026): the two legs learn a second curve. Every route,
+# shape and sentence below is read from aeredium/AERAccounts main at d369926 (Spec AER360-SOL-114, PR #143, 24 October 2026), never from
+# memory, and the file each came from is named beside it:
+#   apps/web/src/screens/Wallets.tsx and services/fundingwallet.ts — Create a new wallet asks the network first ("Which network does the
+#     wallet stand on?": the Ethereum-family networks, or Solana), then whose wallet it is; both steps of the press carry `chain: 'evm' |
+#     'solana'`; a Solana wallet is an Ed25519 pool key allocated through the gateway on Group 100 with `key_type ed25519`, its base58 address
+#     recorded VERBATIM (the case is the key), its register row standing on `solana` alone with `addressForm: 'solana'` and `curve: 'ed25519'`
+#     on the key's row; no recovery line is shown for it (the owner's ruling of 23 October 2026). The birth is not gated by the Solana road:
+#     the allocation goes through the gateway, and nothing of SOLANA_RPC_URLS is read at a birth.
+#   routes/payees.ts and packages/shared/src/payeeaddress.ts — a Solana address is judged at entry: the base58 shape (32 to 44 characters of
+#     Bitcoin's alphabet), then exactly 32 bytes, then the Ed25519 curve, each fault in its own sentence under ADDRESS_MALFORMED (422), with
+#     the fault named in the detail; the platform judges again at the whitelist write; beside a Solana address the register says
+#     `solanaUsdcAccount` true, false ("has not received USDC yet", PayeeRegistry.tsx) or null (the road closed: the room says nothing).
+#   packages/solana/src/address.ts — the judgment's three faults, `shape`, `length`, `off_curve`, and the curve's own arithmetic over
+#     p = 2^255 − 19, which the harness carries below in pure Python, as the passkey's CBOR is carried, so the fault stations can build a
+#     32-byte string no key produces without any library.
+#   services/payoutsets.ts, services/execution.ts, services/solana/payroad.ts — the curve belt (assertCurveForChain) refuses a Solana payment
+#     from an EVM wallet and an EVM payment from a Solana wallet, WALLET_CURVE_MISMATCH (422), at the review and again at execution; a payee
+#     with no USDC account is refused SOLANA_TOKEN_ACCOUNT_ABSENT before anything is signed; the fee is the wallet's own lamports, topped up
+#     by the platform's sponsor where they fall short of the reserve of 0.01 SOL (packages/solana/src/fees.ts FEE_RESERVE_LAMPORTS), the
+#     top-up on the trail (operationId, reserveLamports, debit, sentReported); the message is signed through BIS 100 and broadcast by the
+#     estate; the trail's `instruction.signing` row carries `road: 'solana'`, and the row lands with its signature as its hash and the slot on
+#     `instruction.confirmed`.
+#   services/solana/road.ts — a closed road is SOLANA_ROAD_CLOSED naming SOLANA_RPC_URLS; a stop between the two endpoints is
+#     SOLANA_SOURCES_DISAGREE; the top-up's two ends are SOLANA_TOPUP_FAILED and SOLANA_TOPUP_EXPIRED; the review's Solana leg
+#     (execution.ts solanaChainPreflight) refuses every Solana row with the closed road's own refusal, so a closed road refuses at the review.
+#   packages/shared/src/refusals.ts and explain.ts — the sentences, and the founder's sentence beside each; apps/server/src/http.ts — the statuses.
+#   routes/workspace.ts — GET /v1/workspace/sandbox-allowance (Spec AER360-117): the sandbox's allowance, what its payments have taken, what is
+#     left, and the line the pages say; routes/aer360.ts — the register (GET /v1/aer360/wallets), the plan's signing group (GET /v1/aer360/plan),
+#     the refresh that reads every wallet's holdings live (POST /v1/aer360/refresh: SOL always, USDC summed across every token account of the
+#     configured mint, through the two-source reader — services/holdings.ts) and the overview that lists them per asset (GET /v1/aer360/overview).
+# ---------------------------------------------------------------------------
+SOLANA_CHAIN = "solana"                      # packages/shared/src/chains.ts: id `solana`, display name Solana, family solana, native asset SOL, payouts true
+SOLANA_DISPLAY_NAME = "Solana"
+SOL = "SOL"                                  # the native coin; nine decimals (money.ts ASSET_DECIMALS)
+SOL_DECIMALS = 9
+LAMPORTS_PER_SOL = 10 ** SOL_DECIMALS
+FEE_RESERVE_LAMPORTS = 10_000_000            # packages/solana/src/fees.ts FEE_RESERVE_LAMPORTS: 0.01 SOL a wallet keeps back so its next payment can pay its own fee
+SOLANA_CURVE = "ed25519"                     # wallet_keys.curve for a Solana birth (fundingwallet.ts); every EVM key is secp256k1
+EVM_CURVE = "secp256k1"
+SOLANA_RPC_SETTING = "SOLANA_RPC_URLS"       # config.ts: two endpoints open the road; fewer close it by name
+SOLANA_MINT_SETTING = "SOLANA_USDC_MINT"
+SOLANA_EXPLORER_TX_URL = "https://solscan.io/tx/"  # chains.ts explorerTxUrl for solana
+PRODUCTION_SIGNING_GROUP = "group-100"       # the one signing group a client account stands on (Spec 113; the Group 100 brief of 27 September 2026)
+# The roads (routes/workspace.ts, routes/aer360.ts).
+WALLET_PRESS_OPTIONS_ROUTE = "/v1/workspace/wallets/options"   # step one of the press: whose, chain → options, issuedAtMs, walletId
+WALLET_PRESS_ROUTE = "/v1/workspace/wallets"                   # step two: the same answers, the assertion, issuedAtMs, walletId → born, wallet, signingGroup
+WALLETS_REGISTER_ROUTE = "/v1/aer360/wallets"                  # the register: wallets [{walletId, walletNumber, name, address, chains, keyed, level, …}]
+PLAN_ROUTE = "/v1/aer360/plan"                                 # the plan, and signingGroup {accountId, assigned, standing, sentence}, read live from the platform
+SANDBOX_ALLOWANCE_ROUTE = "/v1/workspace/sandbox-allowance"    # {realm, allowance: {allowanceUsdCents, spentUsdCents, leftUsdCents, said} | null}
+REFRESH_ROUTE = "/v1/aer360/refresh"                           # POST (author): every wallet's holdings read live; {holdings: {taken, skipped: [{holder, wallet, asset, reason}], source}, …}
+OVERVIEW_ROUTE = "/v1/aer360/overview"                         # {holders: [{name, wallets: [{id, walletNumber, name, holdingBaseMinor, absence, holdings: [{asset, chain, amountMinor, …}]}]}]}
+READINESS_ROUTE = "/v1/workspace/readiness"                    # {transactable, reason, workspace}
+ADMIN_POLICIES_ROUTE = "/v1/admin/accounts/%s/policies"        # the platform's read road of an account's entries (aapclient.ts listPolicyEntriesAsAdmin), as the browser leg's R3 reads it
+# The refusals (refusals.ts REFUSAL_CODES and REFUSAL_MESSAGES; http.ts REFUSAL_STATUS), word for word.
+SOLANA_ROAD_CLOSED = "SOLANA_ROAD_CLOSED"
+SOLANA_TOKEN_ACCOUNT_ABSENT = "SOLANA_TOKEN_ACCOUNT_ABSENT"
+WALLET_CURVE_MISMATCH = "WALLET_CURVE_MISMATCH"
+SOLANA_SOURCES_DISAGREE = "SOLANA_SOURCES_DISAGREE"
+SOLANA_TOPUP_FAILED = "SOLANA_TOPUP_FAILED"
+SOLANA_TOPUP_EXPIRED = "SOLANA_TOPUP_EXPIRED"
+SOLANA_REFUSAL_STATUSES = {SOLANA_ROAD_CLOSED: 503, SOLANA_SOURCES_DISAGREE: 503, SOLANA_TOKEN_ACCOUNT_ABSENT: 422, SOLANA_TOPUP_FAILED: 422,
+                           SOLANA_TOPUP_EXPIRED: 422, WALLET_CURVE_MISMATCH: 422}
+SOLANA_REFUSAL_SENTENCES = {
+    SOLANA_ROAD_CLOSED: "The Solana road is closed on this deployment: it names fewer than two Solana endpoints (SOLANA_RPC_URLS). Nothing was read and nothing was sent.",
+    SOLANA_TOKEN_ACCOUNT_ABSENT: "This payee has not received USDC yet, so there is no USDC account on Solana to pay into. Nothing was sent. The payee must receive USDC once before it can be paid here.",
+    WALLET_CURVE_MISMATCH: "This wallet’s key is not of the curve this payment’s network runs on — a wallet pays only on the network its key’s curve belongs to. Nothing was sent.",
+    SOLANA_SOURCES_DISAGREE: "The estate’s two Solana endpoints did not answer alike, so the Solana road is stopped. Nothing was read and nothing was sent.",
+    SOLANA_TOPUP_FAILED: "The Solana network did not carry the sponsor’s fee top-up. Nothing left the wallet; the platform’s signed top-up stands unbroadcast, and a new run asks it again.",
+    SOLANA_TOPUP_EXPIRED: "The sponsor’s fee top-up passed its last valid block height without landing on the Solana network, so this attempt is over. Nothing left the wallet; the retry broadcasts the platform’s same signed bytes again.",
+}
+# The founder's sentence beside each (explain.ts FOUNDER_SENTENCES, the Solana road's block; SEND_US is explain.ts's own closing line).
+SEND_US = "Send the words above to us and we will tell you what to do."
+SOLANA_FOUNDER_SENTENCES = {
+    WALLET_CURVE_MISMATCH: "This wallet’s key is not of the curve this payment’s network runs on — a wallet pays only on the network its key’s curve belongs to, and nothing was sent. Make the payment again from a wallet of that network.",
+    SOLANA_TOKEN_ACCOUNT_ABSENT: "This payee has not received USDC yet, so there is no USDC account on Solana to pay into. Nothing was sent. The payee must receive USDC once before it can be paid here.",
+    SOLANA_SOURCES_DISAGREE: "The estate’s two Solana endpoints did not answer alike, so the Solana road is stopped. Nothing was read and nothing was sent, and the operations desk has been told.",
+    SOLANA_ROAD_CLOSED: "The Solana road is closed on this deployment, so nothing was read and nothing was sent. " + SEND_US,
+    SOLANA_TOPUP_FAILED: "The Solana network did not carry the sponsor’s fee top-up; its own final word is above. Nothing left the wallet, and the top-up is never paid for twice — make the run again and the platform answers the same signed top-up.",
+    SOLANA_TOPUP_EXPIRED: "The sponsor’s fee top-up outlived its moment on the network without landing, so nothing left the wallet. Make the run again: the platform answers the same signed top-up under the payment’s own id, and the estate sends it again.",
+}
+# The curve belt's cause (payoutsets.ts assertCurveForChain), carried in the refusal's detail beside chain, curve and required.
+CURVE_MISMATCH_CAUSE_SOLANA = "a Solana payment leaves only from a wallet whose key’s curve is recorded as ed25519"
+CURVE_MISMATCH_CAUSE_EVM = "an EVM payment leaves only from a wallet whose key’s curve is secp256k1"
+# The press refused a network that is neither (fundingwallet.ts judgePressAnswers): REQUEST_MALFORMED, 400.
+WALLET_NETWORK_REFUSED_SENTENCE = "A wallet is born on the EVM networks or on Solana; answer the network question one way or the other."
+# The payee door's words for a Solana address (payeeaddress.ts ADDRESS_SHAPES.solana, addressMalformedRefusal, solanaKeyRefusal): one code,
+# ADDRESS_MALFORMED, three sentences — the fault travels in the detail (`fault`: shape, length, off_curve).
+ADDRESS_MALFORMED = "ADDRESS_MALFORMED"
+SOLANA_SHAPE_EXPECTED = "an address is 32 to 44 base58 characters, and base58 leaves out the digit zero, capital O, capital I and lower-case L"
+EVM_SHAPE_EXPECTED = "an address is 0x followed by exactly 40 hexadecimal characters"
+SOLANA_LENGTH_WORDS = "A Solana address is exactly 32 bytes in base58, and this string decodes to a different length."
+SOLANA_OFF_CURVE_WORDS = "A Solana address is a key on Solana’s own curve, and this string — well-formed base58 though it is — is not one: no secret key produces it."
+SOLANA_FAULTS = ("shape", "length", "off_curve")  # packages/solana/src/address.ts SolanaAddressFault, judged in this order
+HAS_NOT_RECEIVED_USDC = "has not received USDC yet"  # PayeeRegistry.tsx, beside a Solana address whose solanaUsdcAccount reads false
+# The trail's verbs on a Solana payment (services/audit.ts; execution.ts driveSolanaPayment), beside INSTRUCTION_CONFIRMED above.
+INSTRUCTION_BUILDING = "instruction.building"
+INSTRUCTION_SIGNING = "instruction.signing"
+INSTRUCTION_BROADCASTING = "instruction.broadcasting"
+INSTRUCTION_FAILED = "instruction.failed"
+INSTRUCTION_REJECTED = "instruction.rejected"
+SOLANA_ROAD_WORD = "solana"                  # `road` on every trail row of a Solana payment; `gas_roads` on an EVM one
+SIGNATURE_BYTES = 64                         # packages/solana/src/sign.ts SIGNATURE_BYTES: an Ed25519 signature, and so the hash a Solana row lands with
+# The cluster's refusal that names no rule (Spec T29 §0a.5): the exact words BIS 100's party 0 answers, filed under the Group 100 findings.
+PARTY_0_DENIED = "policy evaluation on party 0 rejected the request: denied"
+GROUP_100_FINDING_WORDS = "Group 100"        # the probe's opening words for a finding that is the cluster's, not the estate's
+# THE BASE58 ALPHABET AND THE CURVE'S CONSTANTS (packages/solana/src/address.ts, byte for byte): no 0, no O, no I, no l; p = 2^255 − 19; the
+# curve's d (−121665/121666 in the field, the published constant of RFC 8032); √−1 in the field (2^((p−1)/4) mod p).
+BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+_BASE58_INDEX = {ch: index for index, ch in enumerate(BASE58_ALPHABET)}
+SOLANA_SHAPE = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$")  # address.ts judgeSolanaAddress's first fact; payeeaddress.ts ADDRESS_SHAPES.solana.fits
+_P = (1 << 255) - 19
+_EDWARDS_D = 37095705934669439343138083508754565189542113879843219016388785533085940283555
+_SQRT_M1 = 19681161376707505956807079304988542015446066515923890162744021073123829784752
+
+
+def base58_decode(text: Any) -> Optional[bytes]:
+    """address.ts base58Decode: the text as one big-endian number, each leading '1' a leading zero byte; None where a character is not base58."""
+    if not isinstance(text, str):
+        return None
+    if text == "":
+        return b""
+    value = 0
+    for ch in text:
+        digit = _BASE58_INDEX.get(ch)
+        if digit is None:
+            return None
+        value = value * 58 + digit
+    body = value.to_bytes((value.bit_length() + 7) // 8, "big") if value else b""
+    leading = len(text) - len(text.lstrip("1"))
+    return b"\x00" * leading + body
+
+
+def base58_encode(raw: bytes) -> str:
+    """address.ts base58Encode: each leading zero byte a '1', then the number in the alphabet."""
+    leading = len(raw) - len(raw.lstrip(b"\x00"))
+    value = int.from_bytes(raw, "big") if raw else 0
+    out = ""
+    while value > 0:
+        value, digit = divmod(value, 58)
+        out = BASE58_ALPHABET[digit] + out
+    return "1" * leading + out
+
+
+def is_on_curve(raw: bytes) -> bool:
+    """
+    address.ts isOnCurve, the curve's own arithmetic: the low 255 bits of the thirty-two bytes (little-endian) are y, which must be below p; the top
+    bit is the sign of x and plays no part; x² = (y² − 1) / (d·y² + 1) must be a square in the field — found by the (p+3)/8 exponent, with the √−1
+    correction the standard prescribes. A string of thirty-two bytes that is not a point is nobody's key.
+    """
+    if len(raw) != 32:
+        return False
+    y = int.from_bytes(raw, "little") & ((1 << 255) - 1)
+    if y >= _P:
+        return False
+    y2 = (y * y) % _P
+    u = (y2 - 1) % _P
+    v = (_EDWARDS_D * y2 + 1) % _P
+    x2 = (u * pow(v, _P - 2, _P)) % _P
+    x = pow(x2, (_P + 3) // 8, _P)
+    if (x * x - x2) % _P != 0:
+        x = (x * _SQRT_M1) % _P
+        if (x * x - x2) % _P != 0:
+            return False
+    return True
+
+
+def judge_solana_address(text: Any) -> Tuple[Optional[str], Optional[bytes]]:
+    """
+    address.ts judgeSolanaAddress, in its order: the shape, then exactly thirty-two bytes, then the curve. Answers (None, the bytes) for an address,
+    else (the fault, the bytes where the shape fit): 'shape', 'length' or 'off_curve'.
+    """
+    if not isinstance(text, str) or not SOLANA_SHAPE.match(text):
+        return "shape", None
+    raw = base58_decode(text)
+    if raw is None:
+        return "shape", None
+    if len(raw) != 32:
+        return "length", raw
+    if not is_on_curve(raw):
+        return "off_curve", raw
+    return None, raw
+
+
+def is_solana_address(text: Any) -> bool:
+    """True where the string is a Solana address in full: shape, bytes and curve (address.ts isSolanaAddress)."""
+    return judge_solana_address(text)[0] is None
+
+
+def solana_address_malformed_sentence(fault: str, named: str = SOLANA_DISPLAY_NAME) -> str:
+    """payeeaddress.ts addressMalformedRefusal (shape) and solanaKeyRefusal (length, off_curve): the one code's three sentences, word for word."""
+    base = "That is not an address %s can pay, so nothing was saved." % named
+    if fault == "shape":
+        return "%s On %s, %s." % (base, named, SOLANA_SHAPE_EXPECTED)
+    if fault == "length":
+        return "%s %s" % (base, SOLANA_LENGTH_WORDS)
+    if fault == "off_curve":
+        return "%s %s" % (base, SOLANA_OFF_CURVE_WORDS)
+    raise ValueError("a Solana address has three faults, shape, length and off_curve, not %r" % fault)
+
+
+def evm_address_malformed_sentence(named: str) -> str:
+    """payeeaddress.ts addressMalformedRefusal for an EVM chain: what the door says to a Solana address pasted in an EVM payee's field (HRW-2 §4)."""
+    return "That is not an address %s can pay, so nothing was saved. On %s, %s." % (named, named, EVM_SHAPE_EXPECTED)
+
+
+def off_curve_variant(address: str) -> str:
+    """
+    Spec T29 §3.2's third slip: the real address decoded, a byte flipped until the harness's own on-curve check fails, re-encoded — a base58 string
+    of thirty-two bytes that is well formed and is nobody's key. The low bytes are tried first (they are y's low bits); about half of all
+    thirty-two-byte strings are off the curve, so the first flip or the second finds one.
+    """
+    fault, raw = judge_solana_address(address)
+    if fault is not None or raw is None:
+        raise ValueError("%r is not a Solana address (%s), so no off-curve variant of it can be built" % (address, fault))
+    for index in range(0, 32):
+        for flip in range(1, 256):
+            candidate = bytearray(raw)
+            candidate[index] ^= flip
+            if not is_on_curve(bytes(candidate)):
+                return base58_encode(bytes(candidate))
+    raise ValueError("no byte of %s can be flipped off the curve" % address)
+
+
+def short_variant(address: str) -> str:
+    """Spec T29 §3.2's second slip: a base58 string of thirty-one bytes — the real address's first thirty-one bytes, re-encoded."""
+    fault, raw = judge_solana_address(address)
+    if fault is not None or raw is None:
+        raise ValueError("%r is not a Solana address (%s), so no thirty-one-byte variant of it can be built" % (address, fault))
+    return base58_encode(raw[:31])
+
+
+def lamports_of(amount: str) -> int:
+    """A plain decimal of SOL to lamports, by the same string arithmetic as minor_units (nine decimals)."""
+    return int(minor_units(amount, SOL_DECIMALS))
+
+
+def sol_words(lamports: Any) -> str:
+    """Lamports as a plain decimal of SOL with the coin's name, by string arithmetic: 10000000 → "0.01 SOL", 2500000 → "0.0025 SOL", 0 → "0 SOL"."""
+    n = int(lamports)
+    if n < 0:
+        raise ValueError("a balance is a non-negative integer of lamports: %r" % (lamports,))
+    text = str(n).rjust(SOL_DECIMALS + 1, "0")
+    whole, fraction = text[:-SOL_DECIMALS], text[-SOL_DECIMALS:].rstrip("0")
+    return "%s%s SOL" % (whole, ("." + fraction) if fraction else "")
+
+
+def curve_for_chain(chain: Any) -> str:
+    """payoutsets.ts assertCurveForChain: `ed25519` for a payment on solana, `secp256k1` for every other chain."""
+    return SOLANA_CURVE if str(chain or "").lower() == SOLANA_CHAIN else EVM_CURVE
+
+
+def chain_family(chain: Any) -> str:
+    """packages/shared/src/chains.ts: the family a chain's addresses belong to — solana for `solana`, evm for every other chain the registry pays."""
+    return "solana" if str(chain or "").lower() == SOLANA_CHAIN else "evm"
+
+
+def usdc_signal_words(signal: Any) -> str:
+    """The register's `solanaUsdcAccount` beside a Solana address, in the words the room shows (PayeeRegistry.tsx): false is the room's sentence, null is silence."""
+    if signal is True:
+        return "a USDC account stands (solanaUsdcAccount true)"
+    if signal is False:
+        return "%s (solanaUsdcAccount false)" % HAS_NOT_RECEIVED_USDC
+    return "the room says nothing (solanaUsdcAccount null: the road is closed, or the signal was never read)"
+
+
+# The sentences the Solana stations say (Spec T29 §0a, §3), word for word, so a test holds each.
+SOLANA_PAYEE_KEY = "SOLANA_PAYEE"            # the payee.env key §3.2 drafted and §0a.2 retired: present, it is ignored and the report says so
+SOLANA_WALLETS_FILE = "solana-wallets.json"  # under ~/.aer360-harness/<estate>/: the two Solana wallets S5s pressed for (no key in it), reused by later runs
+SOLANA_PAYEE_IGNORED_SENTENCE = ("%s in ~/.aer360-harness/%s is ignored: the Solana payment's destination is the harness's own second Solana wallet, born on the "
+                                 "threshold cluster at S5s, never an address outside the estate (the owner's ruling of 29 October 2026, Spec T29 §0a.2)" % (
+                                     SOLANA_PAYEE_KEY, PAYEE_ENV_FILE))
+SOLANA_AMOUNT_NOT_WRITTEN_SENTENCE = ("the book names no SOL amount for the Solana payment (aer360_answers.SOLANA_PAYMENT_SOL is None): the figure is the owner's, "
+                                      "written in the book by him, and the brief writes none (Spec T29 §0a.3); nothing was sent")
+SOLANA_FUNDS_LINE = "the Solana wallet's address: %s — the owner sends the SOL once, at his amount, from his own wallet; the payment needs %s plus the %s fee reserve (Spec T29 §0a.3)"
+WAITING_FOR_SOL_SENTENCE = ("waiting for the owner's SOL: the Solana wallet %s holds %s and the payment needs %s plus the %s fee reserve (%s in all), read from the estate's "
+                            "holdings road; the owner sends it once, at his amount, from his own wallet; the wait of %d s under --funds-wait ran out and nothing was sent")
+NO_ROOM_UNDER_THE_DOLLAR_SENTENCE = ("no room under the one-dollar total (Spec T24): the book's payments on %s come to %s and the Solana payment is worth %s at the estate's "
+                                     "own valuation, %s in all; the harness refuses to exceed one dollar in a run, and nothing was sent")
+ALLOWANCE_SHORT_SENTENCE = "the sandbox allowance is short: the estate says \"%s\", and the Solana payment is worth %s at the estate's valuation; nothing was sent (Spec T29 §0a.6)"
+SOLANA_SKIPPED_SENTENCE = "the Solana stations after S5s are skipped by name: %s"
+SOLANA_NOT_ALLOWED_SENTENCE = ("the account's allowed chains lack solana: the platform's entries in force name %s, so the cluster's party 0 would refuse every Solana "
+                               "payment with no rule named; the owner adds solana by the admin road before the Solana stations walk (Spec T29 §0a.4); nothing was pressed")
+WRONG_SIGNING_GROUP_SENTENCE = ("the workspace %s (account %s) stands on %s, not %s: the harness refuses to run at all on a workspace off the production signing group "
+                                "(Spec T29 §0a.4; the journal of 29 October 2026 shows a Harness Holdings row standing on group-3); nothing was pressed")
+CLOSED_ROAD_TRUTH_TOLD = "the road is closed, and the estate said so by name: %s — truth told, zero moved"
+

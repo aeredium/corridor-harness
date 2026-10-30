@@ -217,9 +217,10 @@ class TheBookPaysOnArbitrum(unittest.TestCase):
         self.assertIn("Contoso Legal: created on arbitrum; promoted;", o.line)
         creates = [s for s in self.runner.evidence["S6"] if s["route"] == "POST /v1/payees"]
         self.assertEqual([(s["sent"]["defaultChain"], s["sent"]["addresses"][0]["chain"]) for s in creates], [("arbitrum", "arbitrum")] * 2)
-        self.assertEqual({a["chain"] for a in self.double.addresses.values()}, {"arbitrum"})
-        self.assertEqual([r["chain"] for r in self.runner.facts["payees"]], ["arbitrum", "arbitrum"])
-        self.assertEqual([r["elsewhere"] for r in self.runner.facts["payees"]], [[], []])
+        # Spec T29: S6s adds the harness's own second Solana wallet as a payee on solana beside S6's two on arbitrum
+        self.assertEqual({a["chain"] for a in self.double.addresses.values()}, {"arbitrum", "solana"})
+        self.assertEqual([r["chain"] for r in self.runner.facts["payees"]], ["arbitrum", "arbitrum", "solana"])
+        self.assertEqual([r["elsewhere"] for r in self.runner.facts["payees"]], [[], [], []])
 
     def test_s7_pays_on_arbitrum_reads_the_payees_from_arbitrums_public_rpc_and_names_the_chain_in_its_words(self):
         o = self.outcomes["S7"]
@@ -312,8 +313,8 @@ class S3JudgesTheRecordedNetworks(unittest.TestCase):
         served = json.loads(answered_c9s.text)
         self.assertEqual((served["question"]["questionId"], served["question"]["options"]), ("C9", ["Ethereum", "Solana", "Bitcoin"]))
         # the payee door judges the registry, not the charter's list (Spec 106), so S6 still creates the payees on arbitrum; with no policy
-        # charter compiled this run the estate seated no whitelist roster, which is S6's own failure to report, not S3's
-        self.assertEqual({a["chain"] for a in double.addresses.values()}, {"arbitrum"})
+        # charter compiled this run the estate seated no whitelist roster, which is S6's own failure to report, not S3's (and S6s's Solana payee stands on solana, Spec T29)
+        self.assertEqual({a["chain"] for a in double.addresses.values()}, {"arbitrum", "solana"})
 
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
@@ -397,9 +398,9 @@ class TheRegisterDouble(unittest.TestCase):
         self.assertIn(first_northwind, paid_ids, "the first run's whitelisted record on arbitrum")
         self.assertNotIn(on_ethereum["id"], paid_ids)
         self.assertEqual({double.addresses[i]["chain"] for i in paid_ids}, {"arbitrum"})
-        self.assertEqual(len(H.dry_lines()), 240, "the conditional register read is one dry line under S7 (193 → 194); Spec T19 adds S5's head and S14 (194 → 231); Spec T24 adds the payee.env reads and the one-off's register read (231 → 234); "
+        self.assertEqual(len(H.dry_lines()), 281, "the conditional register read is one dry line under S7 (193 → 194); Spec T19 adds S5's head and S14 (194 → 231); Spec T24 adds the payee.env reads and the one-off's register read (231 → 234); "
                                                    "Spec T26 drops the three standing gas credits for two conditional cures (234 → 233); Spec T27 adds S3's answers to C2 and C3 (233 → 235); "
-                                                   "Spec T28 adds S7's five conditional second reviews, each with the founder's acknowledgement (235 → 240)")
+                                                   "Spec T28 adds S7's five conditional second reviews, each with the founder's acknowledgement (235 → 240); Spec T29 adds the Solana road's five stations (240 → 281)")
 
     def test_a_register_holding_the_payee_on_ethereum_only_at_s7_sends_nothing_for_it_and_says_so(self):
         """A run resumed at S7 on an estate whose register holds Northwind on ethereum only: P1 is not sent, and the line says which record was never paid."""

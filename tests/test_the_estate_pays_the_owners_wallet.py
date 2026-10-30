@@ -22,7 +22,7 @@ import aer360_answers as A  # noqa: E402
 import aer360_harness as H  # noqa: E402
 import aer360_passkey as PK  # noqa: E402
 import aer360_tables as T  # noqa: E402
-from tests.test_aer360_double import EstateDouble, OWNER_WALLET_FOR_TESTS, file_the_owner_payee, runner_on  # noqa: E402
+from tests.test_aer360_double import EstateDouble, OWNER_WALLET_FOR_TESTS, credit_posts, file_the_owner_payee, runner_on  # noqa: E402
 
 OWNER = OWNER_WALLET_FOR_TESTS
 STOP = T.NO_OWNER_PAYEE_SENTENCE % "arbitrum"
@@ -55,8 +55,8 @@ class TheOwnersWalletIsThePayee(unittest.TestCase):
         creates = [s for s in self.runner.evidence["S6"] if s["route"] == "POST /v1/payees"]
         self.assertEqual([(s["sent"]["displayName"], s["sent"]["addresses"]) for s in creates],
                          [("Northwind Supplies", [{"chain": "arbitrum", "address": OWNER}]), ("Contoso Legal", [{"chain": "arbitrum", "address": OWNER}])])
-        self.assertEqual([r["address"] for r in self.runner.facts["payees"]], [OWNER, OWNER])
-        self.assertEqual([r["register_status"] for r in self.runner.facts["payees"]], ["whitelisted", "whitelisted"], "promoted and whitelisted at the roster's quorum of two (Spec T18 §2 resolves by name and chain)")
+        self.assertEqual([r["address"] for r in self.runner.facts["payees"] if r["chain"] == "arbitrum"], [OWNER, OWNER])  # S6's two; S6s's Solana payee stands beside them (Spec T29)
+        self.assertEqual([r["register_status"] for r in self.runner.facts["payees"] if r["chain"] == "arbitrum"], ["whitelisted", "whitelisted"], "promoted and whitelisted at the roster's quorum of two (Spec T18 §2 resolves by name and chain)")
         self.assertIn("Northwind Supplies: created on arbitrum; promoted; Ada Approver counted (1 of 2); Ben Signatory counted (2 of 2): whitelisted", o.line)
         self.assertTrue(o.line.endswith("; both at %s, the owner's wallet (read from ~/.aer360-harness/payee.env; never a derived address on arbitrum, Spec T24)" % OWNER), o.line)
         self.assertEqual(self.runner.facts["owner_payee"], OWNER)
@@ -93,7 +93,7 @@ class TheOwnersWalletIsThePayee(unittest.TestCase):
         # the Treasury's and P1's, both accounts holding nothing in this double — one credit each, U3's ten dollars
         self.assertIn("Harness Treasury pays Harness Holdings (%s) the shortfall of US$1.00:" % self.double.source_account, o.line)
         self.assertEqual(self.runner.facts["money"]["treasury"]["paid_minor"], 1000000)
-        self.assertEqual([json.loads(r["body"])["amount_usd_cents"] for r in self.double.platform.requests], [1000, 1000], "one cure each (Spec T26): the Treasury's review and P1's refused GAS_SHORTFALL")
+        self.assertEqual([json.loads(r["body"])["amount_usd_cents"] for r in credit_posts(self.double.platform)], [1000, 1000], "one cure each (Spec T26): the Treasury's review and P1's refused GAS_SHORTFALL")
         # the payee's balance was read from the chain against the owner's wallet, before and after each payment
         rpc = [c for c in self.runner.calls if c.station == "S7" and c.path == T.public_rpc_url(T.PAYEE_CHAIN)]
         self.assertEqual(len(rpc), 6)
@@ -187,7 +187,7 @@ class TheFileAbsentOrMalformed(unittest.TestCase):
         self.assertEqual(STOP, "the owner's payee address is not filed at ~/.aer360-harness/payee.env (OWNER_PAYEE_ADDRESS); on arbitrum the harness pays only the owner's own wallet; nothing was sent")
         self.assertEqual([p["displayName"] for p in double.payees.values() if p["displayName"] in ("Northwind Supplies", "Contoso Legal")], [], "no payee made")
         self.assertEqual(s7_calls(runner, "POST /v1/sets") + s7_calls(runner, "POST /v1/sets/review"), [], "nothing reviewed or created")
-        self.assertEqual((double.sets, double.treasury.sets, double.chain.transfers, double.platform.requests), ({}, {}, [], []), "nothing sent, not even the Treasury's shortfall, and no gas credited")
+        self.assertEqual((double.sets, double.treasury.sets, double.chain.transfers, credit_posts(double.platform)), ({}, {}, [], []), "nothing sent, not even the Treasury's shortfall, and no gas credited")
         self.assertEqual([n for n in runner.notes["S7"] if STOP in n], [], "Spec T19 §3: the sentence travels in the line, not in a note beside it")
         self.assertEqual(runner.facts["owner_payee_problem"], "%s is not filed" % runner.payee_env_path)
         self.assertFalse(any(T.is_pinned(a["address"]) for a in double.addresses.values() if a["whitelistStatus"] != "proposed"), "S11's probe row aside, the estate holds no derived address")

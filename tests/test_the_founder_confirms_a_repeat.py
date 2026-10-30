@@ -687,7 +687,7 @@ class TheDryRunSaysTheBound(unittest.TestCase):
         self.assertEqual((firsts[0] + 1, seconds[0] + 1, admin + 1), (seconds[0], admin, cure), "review, review again, then the credential and the cure")
         self.assertIn("made before any gas is credited", lines[seconds[0]])
         self.assertTrue(lines[seconds[1] + 1].startswith("S7 — GET /v1/sets (as Cora Clerk) → expect no new run since S7a's review"), lines[seconds[1] + 1])
-        self.assertEqual(len(H.dry_lines()), 240, "Spec T27's 235 and the five second reviews")
+        self.assertEqual(len(H.dry_lines()), 281, "Spec T27's 235 and the five second reviews (240); Spec T29's Solana stations (281)")
 
 
 if __name__ == "__main__":

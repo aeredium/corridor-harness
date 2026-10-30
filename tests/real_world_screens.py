@@ -37,7 +37,40 @@ GATE_LABELS = {"whitelist_or_one_off": "Approved payee, or a capped one-off", "p
 LEVEL_ONE = ("Level 1 — head office", "This estate’s own wallets — everything internal to the company, its divisions included — approved by the estate’s people under the charter.")
 ASSET_DECIMALS = {"ETH": 18, "WETH": 18, "DAI": 18, "POL": 18, "MATIC": 18, "AVAX": 18, "BNB": 18, "AERX": 18, "USDC": 6, "USDT": 6, "WBTC": 8, "SOL": 9}
 KNOWN_CHAINS = ("ethereum", "polygon", "arbitrum", "optimism", "base", "avalanche", "bsc", "solana", "anvil")
-CHAIN_NAMES = {"ethereum": "Ethereum", "arbitrum": "Arbitrum One", "base": "Base", "polygon": "Polygon", "optimism": "OP Mainnet"}
+CHAIN_NAMES = {"ethereum": "Ethereum", "arbitrum": "Arbitrum One", "base": "Base", "polygon": "Polygon", "optimism": "OP Mainnet", "solana": "Solana"}
+# shared/runs.ts TRAIL_WORDS (d369926): the words a person reads for each verb of a run's trail, the payment's place said where the row is about one
+TRAIL_WORDS = {"set.created": "Created", "set.updated": "Edited", "set.submitted": "Submitted", "set.approval_recorded": "An approval was recorded", "set.approved": "Approved",
+               "set.execution_started": "Execution started", "set.execution_refused": "Execution refused", "set.settled": "Execution finished", "set.cancelled": "Cancelled",
+               "instruction.queued": "waits", "instruction.building": "is being built", "instruction.signing": "is being signed", "instruction.held": "is held",
+               "instruction.hold_approved": "hold approved", "instruction.hold_rejected": "hold rejected", "instruction.broadcasting": "was sent to its network",
+               "instruction.confirmed": "landed", "instruction.failed": "failed", "instruction.rejected": "was rejected"}
+# web/screens/Wallets.tsx at d369926 (Spec AER360-SOL-114 §3.3): the network question the press asks first, and its two answers
+NETWORK_LEGEND = "Which network does the wallet stand on?"
+EVM_NETWORK = "The Ethereum-family networks (EVM)"
+SOLANA_NETWORK = "Solana"
+WALLET_NOT_READ_YET = "This wallet has not been read yet, so it shows no figure rather than a zero."  # server/services/consolidation.ts, the row's absence
+
+
+def run_trail_words(action: str, sequence: Any) -> str:
+    """shared/runs.ts runTrailWords: "Submitted", "Payment 1 landed"; an unknown verb said as the trail holds it."""
+    words = TRAIL_WORDS.get(action)
+    if not words:
+        return action
+    return ("Payment %d %s" % ((sequence or 0) + 1, words)) if action.startswith("instruction.") else words
+
+
+def format_asset(minor: Any, asset: str, decimals: int) -> str:
+    """web/lib/format.ts formatAsset: the native amount as a plain decimal with the asset's symbol — "0.05 SOL", "2 USDC"."""
+    n = int(str(minor))
+    text = str(n).rjust(decimals + 1, "0")
+    whole, fraction = (text[:-decimals], text[-decimals:].rstrip("0")) if decimals else (text, "")
+    return "%s%s %s" % (whole, ("." + fraction) if fraction else "", asset)
+
+
+def money_words(usd_minor: Any) -> str:
+    """The screen's one lens over USD cents, as the double's display lens speaks it: US$ and two decimals."""
+    n = int(str(usd_minor))
+    return "US$%d.%02d" % (n // 100, n % 100)
 
 
 def now_ms() -> int:
@@ -209,14 +242,88 @@ class App:
 
 
 class Consolidation:
+    """
+    web/screens/Aer360.tsx at d369926: the Consolidation, as far as the browser leg reads it (Spec HRW-2 R7s-1, R7s-3) — "Re-read every wallet now" (POST
+    /v1/aer360/refresh, then the overview read again), and the section "Every wallet holder": each holder a disclosure button onto its ledger
+    (web/components/Ledger.tsx HolderLedger): the columns Asset, Held and In <currency>, one row group per wallet named "Wallet <n> · <name>", one row per asset
+    held — the asset (its chain hidden beside it), the native amount, the value — or one muted row with the wallet's absence sentence, never a zero for unknown.
+    """
+
     def __init__(self, app: App):
         self.app = app
+        self.overview: Optional[Dict[str, Any]] = None
+        self.error: Optional[Dict[str, Any]] = None
+        self.open: Dict[str, bool] = {}
+        self.refreshing = False
 
     def mount(self) -> None:
-        pass
+        self.load()
+
+    def load(self) -> None:
+        try:
+            self.overview = self.app.get("/v1/aer360/overview")
+            self.error = None
+        except ApiError as err:
+            self.error = err.refusal
+
+    def refresh(self) -> None:
+        self.refreshing = True
+        try:
+            self.app.post("/v1/aer360/refresh")
+        except ApiError as err:
+            self.error = err.refusal
+            self.refreshing = False
+            return
+        self.refreshing = False
+        self.load()
+
+    def toggle(self, holder_id: str) -> None:
+        self.open[holder_id] = not self.open.get(holder_id, False)
+
+    def ledger(self, holder: Dict[str, Any]) -> El:
+        groups: List[El] = []
+        for w in holder.get("wallets") or []:
+            group_name = "Wallet %s · %s" % (w.get("walletNumber"), w.get("name"))
+            rows: List[Any] = [h("tr", h("th", group_name, attrs={"scope": "rowgroup", "colspan": "3"}))]
+            if not w.get("holdings"):
+                rows.append(h("tr", h("td", w.get("absence") or "This wallet has not been read yet.", cls="muted", attrs={"colspan": "3"})))
+            else:
+                for pair in w["holdings"]:
+                    value = pair.get("valuedBaseMinor")
+                    rows.append(h("tr", h("th", pair["asset"], hidden(" on %s" % pair["chain"]), attrs={"scope": "row"}),
+                                  h("td", format_asset(pair["amountMinor"], pair["asset"], int(pair.get("assetDecimals") or 0)), cls="native"),
+                                  h("td", money_words(value) if value is not None else h("span", "Not priced — no rate for %s" % pair["asset"], cls="muted"), cls="reporting")))
+            groups.append(h("tbody", *rows, attrs={"aria-label": group_name}))
+        total = holder.get("holdingBaseMinor")
+        return h("div", h("table", h("caption", "%s: every named wallet, each asset held shown as the native amount beside its value in AUD." % holder.get("name"), cls="visually-hidden"),
+                          h("thead", h("tr", h("th", "Asset", attrs={"scope": "col"}), h("th", "Held", attrs={"scope": "col"}, cls="native"), h("th", "In AUD", attrs={"scope": "col"}, cls="reporting"))),
+                          *groups,
+                          h("tfoot", h("tr", h("th", "%s total" % holder.get("name"), attrs={"scope": "row"}), h("td", cls="native"), h("td", "not read" if total is None else money_words(total), cls="reporting"))),
+                          cls="two-column"), cls="table-scroll")
 
     def render(self) -> El:
-        return h("div", h("h1", "Consolidation"))
+        children: List[Any] = [h("h1", "Consolidation"),
+                               h("button", "Re-reading every wallet…" if self.refreshing else "Re-read every wallet now", disabled=self.refreshing, click=self.refresh)]
+        if self.error:
+            children.append(refusal_notice(self.error))
+        holders = (self.overview or {}).get("holders") or []
+        rail: List[Any] = []
+        for holder in holders:
+            wallets = holder.get("wallets") or []
+            total = holder.get("holdingBaseMinor")
+            opened = self.open.get(holder["id"], False)
+            rail.append(h("button", h("span", holder.get("name"), cls="holder-name"), h("span", "—" if total is None else money_words(total), cls="holder-total"),
+                          h("span", "%d named wallet%s%s" % (len(wallets), "" if len(wallets) == 1 else "s", (" · read %s" % holder["asOf"]) if holder.get("asOf") else " · not read yet"), cls="holder-meta"),
+                          h("span", "%s paid in 24h" % money_words(holder.get("last24hSpendBaseMinor") or 0), cls="holder-whisper"),
+                          cls="holder-row", attrs={"aria-expanded": "true" if opened else "false"}, click=lambda hid=holder["id"]: self.toggle(hid)))
+            if opened:
+                rail.append(h("div", self.ledger(holder), cls="wallet-panel"))
+        if not holders:
+            rail.append(h("p", "No wallet holders have been discovered yet. Re-read every wallet to walk the hierarchy again.", cls="absence"))
+        children.append(h("section", h("h2", "Every wallet holder"),
+                          h("p", "%d holder, %d named wallet%s between them" % (len(holders), sum(len(x.get("wallets") or []) for x in holders), "" if sum(len(x.get("wallets") or []) for x in holders) == 1 else "s")),
+                          h("div", *rail, cls="rail"), attrs={"aria-labelledby": "rail-heading"}))
+        return h("div", *children)
 
 
 # ======================================================================================================================
@@ -734,6 +841,7 @@ class Wallets:
         self.offer = False
         self.stage = "idle"
         self.whose = "estate"
+        self.chain = "evm"  # Spec AER360-SOL-114 §3.3: pre-selected to the road every wallet here was born on; the answer is on the wire either way
         self.born: Optional[Dict[str, Any]] = None
         self.refusal: Optional[Dict[str, Any]] = None
 
@@ -767,10 +875,12 @@ class Wallets:
         self.stage = "pressing"
         self.refusal = None
         try:
-            start = self.app.post("/v1/workspace/wallets/options", {"whose": self.whose})
+            # the press carries the network on both of its steps (Wallets.tsx answersOnTheWire; createwallet.test.tsx:239-252)
+            start = self.app.post("/v1/workspace/wallets/options", {"whose": self.whose, "chain": self.chain})
             response = self.assert_with(start)
-            born = self.app.post("/v1/workspace/wallets", {"whose": self.whose, "issuedAtMs": start["issuedAtMs"], "response": response, "walletId": start["walletId"]})
+            born = self.app.post("/v1/workspace/wallets", {"whose": self.whose, "chain": self.chain, "issuedAtMs": start["issuedAtMs"], "response": response, "walletId": start["walletId"]})
             self.born = born["wallet"]
+            self.chain = "evm"  # FRESH_ANSWERS: the next press starts from the standing answer
             self.load()
         except NotAllowed:
             self.refusal = {"code": "STEP_UP_INVALID", "message": "The passkey signature did not complete; nothing was recorded."}
@@ -789,6 +899,10 @@ class Wallets:
                 if self.stage == "idle":
                     body.append(h("button", "Create a new wallet", click=lambda: setattr(self, "stage", "confirm")))
                 if self.stage == "confirm":
+                    # THE NETWORK FIRST (Wallets.tsx:817-844 at d369926): the Ethereum-family networks the standing answer, Solana the other; nothing here speaks of recovery
+                    body.append(h("fieldset", h("legend", NETWORK_LEGEND),
+                                  label_of(" ", h("input", kind="radio", checked=self.chain == "evm", check=lambda on: setattr(self, "chain", "evm")), EVM_NETWORK),
+                                  label_of(" ", h("input", kind="radio", checked=self.chain == "solana", check=lambda on: setattr(self, "chain", "solana")), SOLANA_NETWORK)))
                     body.append(h("fieldset", h("legend", "Whose wallet is this?"),
                                   label_of(" ", h("input", kind="radio", checked=self.whose == "estate", check=lambda on: setattr(self, "whose", "estate")), "This estate"),
                                   label_of(" ", h("input", kind="radio", checked=self.whose == "client", check=lambda on: setattr(self, "whose", "client")), "A client’s")))
@@ -820,9 +934,21 @@ class Wallets:
 # web/screens/PayeeRegistry.tsx.
 # ======================================================================================================================
 def payee_address_refusal(chain: str, address: str) -> Optional[Dict[str, Any]]:
-    """shared/payeeaddress.ts payeeAddressRefusal: the shape (trimmed first), then the EIP-55 checksum where the letters are mixed."""
+    """
+    shared/payeeaddress.ts payeeAddressRefusal: the shape (trimmed first), then — on an EVM chain — the EIP-55 checksum where the letters are mixed; on solana
+    the key (Spec AER360-SOL-114 §3.4): base58 of 32 to 44 characters, exactly 32 bytes, on the Ed25519 curve, each fault in its own sentence under one code.
+    """
     trimmed = address.strip()
     named = CHAIN_NAMES.get(chain, chain)
+    if chain == "solana":
+        import aer360_tables as T  # the curve's arithmetic, held to the estate's own vectors by Spec T29's tests
+        fault, _ = T.judge_solana_address(trimmed)
+        if fault is None:
+            return None
+        detail = ({"field": "address", "chain": chain, "address": address, "expected": T.SOLANA_SHAPE_EXPECTED} if fault == "shape"
+                  else {"field": "address", "chain": chain, "address": trimmed, "fault": fault})
+        return {"code": "ADDRESS_MALFORMED", "message": T.solana_address_malformed_sentence(fault, named), "detail": detail,
+                "provenance": {"source": "chain_registry", "reference": chain}}
     if not re.match(r"^0x[0-9a-fA-F]{40}$", trimmed):
         return {"code": "ADDRESS_MALFORMED", "message": "That is not an address %s can pay, so nothing was saved. On %s, an address is 0x followed by exactly 40 hexadecimal "
                                                          "characters." % (named, named), "detail": {"field": "address", "chain": chain, "address": address}}
@@ -897,7 +1023,8 @@ class Payees:
                     action = h("span", "—", cls="muted")
                 said = self.pending_said.get(a["id"])
                 rows.append(h("tr", h("th", payee["displayName"], pill("Approved payee" if status == "whitelisted" else "One-off")), h("td", a["chain"]),
-                              h("td", a["address"][:6] + "…" + a["address"][-4:]),
+                              # PayeeRegistry.tsx:279-288 at d369926: beside a Solana address whose USDC token account does not stand, the room says so; null says nothing
+                              h("td", a["address"][:6] + "…" + a["address"][-4:], h("div", "has not received USDC yet", cls="muted") if a.get("solanaUsdcAccount") is False else None),
                               h("td", pill(STATUS_WORDS.get(status, status)), h("p", said, cls="muted", attrs={"role": "status"}) if said else None), h("td", action)))
         return h("div", h("div", h("h1", "Payees and counterparties"), h("p", "Who you pay, and who pays you.")),
                  refusal_notice(self.error) if self.error else None,
@@ -1158,8 +1285,17 @@ class RunPage:
                    attrs={"href": "https://arbiscan.io/tx/%s" % i["txHash"]}, click=lambda: None) if i.get("txHash") else "—"
             reason = i.get("failureReason") or "—"
             rows.append(h("tr", h("th", i.get("payeeName"), pill("One-off" if i.get("isOneOff") else "Approved payee"), "%s…%s" % (i["address"][:6], i["address"][-4:])),
-                          h("td", str(int(i["amountMinor"]) / 10 ** 6)), h("td", i.get("asset")), h("td", chain), h("td", pill(payment_status_words(i))), h("td", tx), h("td", reason)))
+                          h("td", format_asset(i["amountMinor"], str(i.get("asset")), ASSET_DECIMALS.get(str(i.get("asset")), 6))), h("td", i.get("asset")), h("td", chain),
+                          h("td", pill(payment_status_words(i))), h("td", tx), h("td", reason)))
         submitted = (self.arrived or {}).get("submitted")
+        # THE TRAIL (Runs.tsx:478-493 at d369926): the run's own page carries it, oldest first — "<when> — <words>: <said> · by <who> · <action>"
+        trail_card = None
+        if run.get("trail") is not None:
+            items = [h("li", "%s — %s%s%s" % (r.get("at"), run_trail_words(str(r.get("action")), r.get("sequence")), (": %s" % r["said"]) if r.get("said") else "",
+                                              (" · by %s" % ("you" if r.get("credentialId") == me else str(r.get("credentialId"))[:8])) if r.get("credentialId") else ""),
+                       h("span", " · %s" % r.get("action"), cls="muted mono")) for r in run["trail"]]
+            trail_card = card("Trail", h("ol", *items, cls="trail", attrs={"aria-label": "The trail of %s, oldest first" % run.get("reference")}) if items
+                              else h("p", "Nothing is recorded for this run yet.", cls="empty"))
         return h("div",
                  h("p", h("a", "All runs", attrs={"href": "/runs"}, click=lambda: None)),
                  h("div", h("h1", run.get("reference")), h("p", "Created %s · leaves from %s" % (run.get("createdAt"), run.get("sourceAccount")))),
@@ -1168,7 +1304,8 @@ class RunPage:
                  refusal_notice(self.refusal) if self.refusal else None,
                  card("Where it stands", h("p", pill(words), attrs={"role": "status", "aria-label": "Status of this run"}),
                       self.approvals(run), h("div", *actions, cls="actions")),
-                 card("Payments", h("table", *rows)))
+                 card("Payments", h("table", *rows)),
+                 trail_card)
 
 
 # ======================================================================================================================

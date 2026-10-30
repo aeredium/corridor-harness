@@ -219,11 +219,19 @@ class DryRunTest(unittest.TestCase):
         """Spec T8: --dry unchanged in its calls. The fixture is the dry run at main after PR #5, its expectations cut off at the arrow."""
         with open(FROZEN_CALLS, "r", encoding="utf-8") as handle:
             frozen = handle.read().splitlines()
-        self.assertEqual(len(frozen), 240, "Spec T14 rewrote S7 (159 → 193); Spec T18 adds S7's conditional register read for a run resumed at S7 (193 → 194); Spec T19 adds S5's head — the ceremonies read and the conditional finish — and S14 (194 → 231); "
+        self.assertEqual(len(frozen), 281, "Spec T14 rewrote S7 (159 → 193); Spec T18 adds S7's conditional register read for a run resumed at S7 (193 → 194); Spec T19 adds S5's head — the ceremonies read and the conditional finish — and S14 (194 → 231); "
                                             "Spec T24 adds S6's payee.env read, S7's conditional one, and the runs register read before the one-off (231 → 234); "
                                             "Spec T26 drops the three standing credit lines and prints one conditional cure per workspace, the admin.env line moved to where it is read (234 → 233); "
                                             "Spec T27 adds S3's answers to C2 and C3 between C9 and C10 (233 → 235); "
-                                            "Spec T28 adds S7's five conditional second reviews — the Treasury's, S7a's and each payment's — with the founder's acknowledgement, and the four creations carry it only then (235 → 240)")
+                                            "Spec T28 adds S7's five conditional second reviews — the Treasury's, S7a's and each payment's — with the founder's acknowledgement, and the four creations carry it only then (235 → 240); "
+                                            "Spec T29 adds the Solana road's five stations — S5s after S5 (8), S6s after S6 (12), S7s-1, S7s-2 and S7s-3 after S7 (16, 3 and 2) — and nothing else moved (240 → 281)")
+        # Spec T29: the Solana stations' lines stand after S5's, S6's and S7's, each block together, and the EVM stations' lines are unchanged
+        stations = [l.split(" — ", 1)[0] for l in frozen]
+        self.assertEqual([s for s in stations if s in ("S5s", "S6s", "S7s-1", "S7s-2", "S7s-3")], ["S5s"] * 8 + ["S6s"] * 12 + ["S7s-1"] * 16 + ["S7s-2"] * 3 + ["S7s-3"] * 2)
+        self.assertEqual(stations.index("S5s"), stations.index("S6") - 8)
+        self.assertEqual(stations.index("S6s"), stations.index("S7") - 12)
+        self.assertEqual(stations.index("S7s-1"), stations.index("S8") - 21)
+        self.assertEqual(len([s for s in stations if s not in ("S5s", "S6s", "S7s-1", "S7s-2", "S7s-3")]), 240, "the EVM stations' 240 lines of Spec T28 stand as they were")
         # Spec T27: the two new lines are S3's, in the catalog's order, and nothing else in the calls moved
         ceilings = [i for i, l in enumerate(frozen) if '"questionId": "C2"' in l or '"questionId": "C3"' in l]
         self.assertEqual([frozen[i] for i in ceilings], ['S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C2", "value": {"cents": "10000"}}',
@@ -385,7 +393,10 @@ class DryRunTest(unittest.TestCase):
     def test_from_resumes_at_a_station_with_a_sign_in_for_the_stored_passkeys(self):
         lines = H.dry_lines(start_at="S5")
         self.assertTrue(lines[0].startswith("resume — POST /v1/auth/login/options"))
-        self.assertEqual(self.stations_in(lines[1:]), ["S5", "S6", "S7", "S8", "S9", "S10", "S11", "S12", "S14"])
+        self.assertEqual(self.stations_in(lines[1:]), ["S5", "S5s", "S6", "S6s", "S7", "S7s-1", "S7s-2", "S7s-3", "S8", "S9", "S10", "S11", "S12", "S14"])
+        # Spec T29: the Solana stations resume by name, S5s, S6s and S7s-1 among them, and nothing before them is printed
+        self.assertEqual(self.stations_in(H.dry_lines(start_at="S5s")[1:]), ["S5s", "S6", "S6s", "S7", "S7s-1", "S7s-2", "S7s-3", "S8", "S9", "S10", "S11", "S12", "S14"])
+        self.assertEqual(self.stations_in(H.dry_lines(start_at="S7s-1")[1:]), ["S7s-1", "S7s-2", "S7s-3", "S8", "S9", "S10", "S11", "S12", "S14"])
         with self.assertRaises(H.HarnessError):
             H.dry_lines(start_at="S13")
 

@@ -23,7 +23,7 @@ import aer360_harness as H  # noqa: E402
 import aer360_passkey as PK  # noqa: E402
 import aer360_tables as T  # noqa: E402
 import tables as corridor  # noqa: E402
-from tests.test_aer360_double import EstateDouble, OWNER_WALLET_FOR_TESTS, file_the_owner_payee, runner_on  # noqa: E402
+from tests.test_aer360_double import EstateDouble, OWNER_WALLET_FOR_TESTS, credit_posts, file_the_owner_payee, runner_on  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -224,7 +224,7 @@ class TheLawOfTheRealChain(unittest.TestCase):
         self.assertEqual(double.sets, {}, "no run of Harness Holdings")
         self.assertEqual(double.treasury.sets, {}, "the stop comes before the Treasury pays")
         self.assertEqual(double.chain.transfers, [])
-        self.assertEqual(double.platform.requests, [], "no gas was credited")
+        self.assertEqual(credit_posts(double.platform), [], "no gas was credited (the pre-flight's read of the account's entries is a GET, Spec T29 §0a.4)")
         self.assertEqual([p["displayName"] for p in double.payees.values() if p["displayName"] in ("Northwind Supplies", "Contoso Legal")], [], "no payee was made at a derived address")
         self.assertFalse(any(T.is_pinned(a["address"]) and a["whitelistStatus"] != "proposed" for a in double.addresses.values()), "S11's probe payee is the one row the estate holds, proposed and never paid")
         self.assertEqual([c.route for c in runner.calls if c.station == "S6"], [], "S6 asked the estate nothing")

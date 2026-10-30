@@ -366,6 +366,11 @@ STATUS = {
     "PAYMENT_UNPRICED": 502, "PAYMENT_PRICING_UNAVAILABLE": 503,
     # setgates.ts duplicateScreen (http.ts): the creation's refusal where the author did not acknowledge the repeat (Spec T28)
     "DUPLICATE_UNACKNOWLEDGED": 422,
+    # Spec AER360-SOL-114 (http.ts at d369926): the Solana road's six — 503 for the two deployment states, 422 for the judgments on a well-formed request
+    T.SOLANA_ROAD_CLOSED: 503, T.SOLANA_SOURCES_DISAGREE: 503, T.SOLANA_TOKEN_ACCOUNT_ABSENT: 422, T.SOLANA_TOPUP_FAILED: 422, T.SOLANA_TOPUP_EXPIRED: 422,
+    T.WALLET_CURVE_MISMATCH: 422,
+    # spec 110 (payoutsets.ts resolveSetSource): a run naming a wallet this estate holds no key for, or none at all
+    "WALLET_NOT_FOUND": 404,
 }
 MESSAGES = {
     "NOT_AUTHENTICATED": "You are not signed in.",
@@ -426,7 +431,23 @@ MESSAGES = {
     "PAYMENT_PRICING_UNAVAILABLE": "This payment could not be priced: the access platform could not be asked. Nothing was sent.",
     # refusals.ts REFUSAL_MESSAGES (Spec T28): the duplicate screen's warning, the same at the review and at the creation
     "DUPLICATE_UNACKNOWLEDGED": "This looks like a payment that has already been made recently. Confirm it is intentional to continue.",
+    # refusals.ts REFUSAL_MESSAGES at d369926 (Spec AER360-SOL-114): the Solana road's six, word for word — the harness's own table (aer360_tables) is held to these by a test
+    T.SOLANA_ROAD_CLOSED: "The Solana road is closed on this deployment: it names fewer than two Solana endpoints (SOLANA_RPC_URLS). Nothing was read and nothing was sent.",
+    T.SOLANA_TOKEN_ACCOUNT_ABSENT: "This payee has not received USDC yet, so there is no USDC account on Solana to pay into. Nothing was sent. The payee must receive USDC once before it can be paid here.",
+    T.WALLET_CURVE_MISMATCH: "This wallet’s key is not of the curve this payment’s network runs on — a wallet pays only on the network its key’s curve belongs to. Nothing was sent.",
+    T.SOLANA_SOURCES_DISAGREE: "The estate’s two Solana endpoints did not answer alike, so the Solana road is stopped. Nothing was read and nothing was sent.",
+    T.SOLANA_TOPUP_FAILED: "The Solana network did not carry the sponsor’s fee top-up. Nothing left the wallet; the platform’s signed top-up stands unbroadcast, and a new run asks it again.",
+    T.SOLANA_TOPUP_EXPIRED: "The sponsor’s fee top-up passed its last valid block height without landing on the Solana network, so this attempt is over. Nothing left the wallet; the retry broadcasts the platform’s same signed bytes again.",
+    "WALLET_NOT_FOUND": "No wallet of this estate's goes by that id.",
 }
+# Spec AER360-SOL-114, as the API double stands in for it (Spec T29's tests). The Solana address judgment's sentences (shared/payeeaddress.ts), the
+# press's network refusal (fundingwallet.ts judgePressAnswers) and the curve belt's cause (payoutsets.ts) are the harness's own table's, held to the
+# source by tests/test_the_harness_walks_the_solana_road.py; the double speaks them from there so the two cannot drift apart.
+SOLANA_USDC_MINT_FOR_TESTS = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"  # config.ts SOLANA_USDC_MINT's default: the platform's canon for USDC on Solana (a public value)
+SOLANA_USD_CENTS_PER_SOL = 10000          # the double's rate: one SOL at US$100.00 — a double's constant, as the gas double's ETH stands at US$1,000.00
+SOLANA_BASE_FEE_LAMPORTS = 5000           # the cluster's fee for one signature, burnt from the sender out of its reserve
+PLAN_SENTENCE = "This estate's account stands on group-100, the one signing group."  # signinggroup.ts signingGroupSentence for ["group-100"]
+ASSET_DECIMALS_OF = {"USDC": 6, "USDT": 6, "SOL": 9, "ETH": 18, "WETH": 18, "DAI": 18}  # money.ts ASSET_DECIMALS, the rows the double prices
 DUPLICATE_WINDOW_DAYS = 7  # config.ts DUPLICATE_WINDOW_DAYS, the estate's default
 ESTATE_KEY_CURE = ("If you meant a different estate, sign out and choose that estate’s key when your device offers the picker — "
                    "each key is labelled with its estate’s name.")
@@ -1079,6 +1100,25 @@ class PlatformDouble:
         self.lines: List[Dict[str, Any]] = []
         self.requests: List[Dict[str, Any]] = []
         self.audit: List[Dict[str, Any]] = []
+        # The accounts' policy entries, as the admin read road lists them (router.go AdminListPolicyEntries): each signing entry with its two legacy limits in
+        # whole dollars and, since Spec T29's pre-flight reads them, its allowed chains — the estate double draws up its own account's at birth
+        self.entries: Dict[str, List[Dict[str, Any]]] = {}
+
+    def list_policy_entries(self, request: urllib.request.Request, account_id: str) -> Tuple[int, List[Tuple[str, str]], str]:
+        """GET /v1/admin/accounts/{id}/policies under the admin key: the read road the browser leg's R3 and the API leg's pre-flight read, read-only."""
+        headers = {k.lower(): v for k, v in request.header_items()}
+        self.requests.append({"method": "GET", "path": urllib.parse.urlparse(request.full_url).path, "headers": headers, "body": ""})
+        if self.down:
+            raise H.Unreachable("GET %s could not be reached: [Errno 61] Connection refused" % request.full_url)
+        authorization = headers.get("authorization", "")
+        bearer = authorization[len("Bearer "):].strip() if authorization.startswith("Bearer ") else ""
+        if not bearer:
+            return self._json(401, {"error": PLATFORM_ADMIN_MISSING})
+        if bearer != self.admin_key:
+            return self._json(401, {"error": PLATFORM_ADMIN_INVALID})
+        if account_id not in self.accounts:
+            return self._json(404, {"error": PLATFORM_ACCOUNT_NOT_FOUND})
+        return self._json(200, {"policy_entries": [dict(e) for e in self.entries.get(account_id, [])]})
 
     # -- the ledger (ledger.go) ----------------------------------------------------------------------------------------
     def balance(self, account_id: str) -> Dict[str, int]:
@@ -1134,6 +1174,10 @@ class PlatformDouble:
         headers = {k.lower(): v for k, v in request.header_items()}
         raw_body = request.data.decode("utf-8") if request.data else ""
         self.requests.append({"method": method, "path": url.path, "headers": headers, "body": raw_body})
+        read = re.match(r"^/v1/admin/accounts/([^/]+)/policies$", url.path)
+        if read and method == "GET":
+            self.requests.pop()  # recorded by the read itself
+            return self.list_policy_entries(request, read.group(1))
         if self.down:
             raise H.Unreachable("%s %s could not be reached: [Errno 61] Connection refused" % (method, request.full_url))
         m = re.match(r"^/v1/admin/accounts/([^/]+)/gas-account/credits$", url.path)
@@ -1190,6 +1234,67 @@ class PlatformDouble:
     @staticmethod
     def _json(status: int, payload: Any) -> Tuple[int, List[Tuple[str, str]], str]:
         return status, [("Content-Type", "application/json")], json.dumps(payload)
+
+
+def solana_address_for_tests(label: str) -> str:
+    """
+    A Solana address of the double's own, derived from a label as the EVM test addresses are derived from the seed (aer360_tables.derive_address): the
+    SHA-256 of the label and a counter, the first digest that is a point on the Ed25519 curve (about every second one is), in base58. Nobody's key
+    stands behind it, and it is never a real party's.
+    """
+    for counter in range(512):
+        raw = hashlib.sha256(("%s|%s|%d" % (T.SEED, label, counter)).encode("utf-8")).digest()
+        if T.is_on_curve(raw):
+            return T.base58_encode(raw)
+    raise RuntimeError("no on-curve digest for %r in 512 tries" % label)
+
+
+class SolanaChainDouble:
+    """
+    THE SOLANA CLUSTER AS THE ESTATE'S TWO SOURCES READ IT (Spec AER360-SOL-114 §3.7): lamports per address, USDC token accounts per owner under the
+    configured mint, the slot, and the signatures the cluster names a transaction by. The harness reads none of it directly — every figure reaches it
+    through the estate's holdings road (Spec T29 §0a.3) — so this double has no HTTP front: the estate double reads it as its two-source reader would.
+    """
+
+    def __init__(self, mint: str = SOLANA_USDC_MINT_FOR_TESTS):
+        self.mint = mint
+        self.lamports: Dict[str, int] = {}
+        self.usdc: Dict[str, List[int]] = {}  # token accounts by owner, each its base units
+        self.slot = 250_000_000
+        self.transfers: List[Dict[str, Any]] = []
+        self.signatures: List[str] = []
+
+    def balance_of(self, address: str) -> int:
+        return self.lamports.get(address, 0)
+
+    def credit(self, address: str, lamports: int) -> None:
+        self.lamports[address] = self.balance_of(address) + int(lamports)
+
+    def usdc_of(self, owner: str) -> int:
+        return sum(self.usdc.get(owner, []))
+
+    def has_usdc_account(self, owner: str) -> bool:
+        return owner in self.usdc
+
+    def open_usdc_account(self, owner: str, base: int = 0) -> None:
+        self.usdc.setdefault(owner, []).append(int(base))
+
+    def signature(self) -> str:
+        """A transaction's name: its first signature, 64 bytes of Ed25519 in base58 (sign.ts SIGNATURE_BYTES)."""
+        sig = T.base58_encode(secrets.token_bytes(T.SIGNATURE_BYTES))
+        self.signatures.append(sig)
+        return sig
+
+    def transfer_sol(self, sender: str, payee: str, lamports: int) -> Tuple[str, int]:
+        """A System transfer carried by the cluster: the amount and the base fee leave the sender, the amount reaches the payee, the slot advances."""
+        if self.balance_of(sender) < lamports + SOLANA_BASE_FEE_LAMPORTS:
+            raise ValueError("insufficient lamports: %d held, %d moved and %d of fee" % (self.balance_of(sender), lamports, SOLANA_BASE_FEE_LAMPORTS))
+        self.lamports[sender] = self.balance_of(sender) - lamports - SOLANA_BASE_FEE_LAMPORTS
+        self.credit(payee, lamports)
+        self.slot += 1
+        sig = self.signature()
+        self.transfers.append({"from": sender, "to": payee, "lamports": lamports, "signature": sig, "slot": self.slot})
+        return sig, self.slot
 
 
 class UsdcChainDouble:
@@ -1268,8 +1373,33 @@ class EstateDouble:
                  before_spec_106: bool = False, recorded_chains: Optional[Sequence[str]] = None,
                  before_spec_109: Optional[bool] = None, list_ceremony_lapses: int = 0, second_account_refused: Optional[str] = None,
                  refuses_payee_addresses: Sequence[str] = (), settle_after_reads: int = 0, acknowledgement_ignored: bool = False,
-                 acknowledged_review_refused: bool = False):
+                 acknowledged_review_refused: bool = False, new_wallet_usdc_cents: int = 0, solana_road: str = "open", solana_wallet_lamports: int = 50_000_000,
+                 solana_usd_cents_per_sol: int = SOLANA_USD_CENTS_PER_SOL, solana_fault: Optional[str] = None, assigned_groups: Sequence[str] = (T.PRODUCTION_SIGNING_GROUP,),
+                 sandbox_allowance_usd_cents: int = 1000, solana_allowed: bool = True, solana: Optional[SolanaChainDouble] = None):
         self.currency_spoken_as_code = currency_spoken_as_code  # False: main's default arm (JSON); True: Spec 88's code
+        # Spec T29's dials (Spec AER360-SOL-114 at d369926). `solana_road`: "open" (two endpoints agreeing), "closed" (SOLANA_RPC_URLS names fewer than two: every
+        # Solana door refuses SOLANA_ROAD_CLOSED, the review's Solana leg first) or "stopped" (the two sources disagreed: SOLANA_SOURCES_DISAGREE). `solana_wallet_lamports`:
+        # what the owner funds the FIRST Solana wallet with at its birth — the harness funds nothing (Spec T23) — so a figure below the payment plus the 0.01 SOL reserve
+        # makes the sponsor top the wallet up first (fees.ts topUpLamports), charged to the gas account in dollars. `solana_fault`: "topup_failed", "topup_expired" (the
+        # top-up's two ends, Spec AER360-SOL-114 §3.6) or "denied" (the cluster's party 0 refusing the signature with no rule named, Spec T29 §0a.5). `assigned_groups`:
+        # the signing groups the platform answers for the account (GET /v1/aer360/plan). `sandbox_allowance_usd_cents`: the sandbox's allowance (Spec AER360-117, US$10
+        # today). `solana_allowed`: whether the account's entries in force on the platform name solana among their allowed chains (Spec T29 §0a.4). `new_wallet_usdc_cents`:
+        # what the owner funds a pressed EVM wallet with at its birth (the browser leg's R7 pays from it).
+        if solana_road not in ("open", "closed", "stopped"):
+            raise ValueError("solana_road is open, closed or stopped, not %r" % solana_road)
+        self.solana_road = solana_road
+        self.solana_wallet_lamports = solana_wallet_lamports
+        self.solana_usd_cents_per_sol = solana_usd_cents_per_sol
+        self.solana_fault = solana_fault
+        self.assigned_groups = list(assigned_groups)
+        self.sandbox_allowance_usd_cents = sandbox_allowance_usd_cents
+        self.solana_allowed = solana_allowed
+        self.new_wallet_usdc_cents = new_wallet_usdc_cents
+        self.solana = solana if solana is not None else SolanaChainDouble()
+        self.pressed_wallets: Dict[str, Dict[str, Any]] = {}
+        self.wallet_challenges: Dict[str, Dict[str, Any]] = {}
+        self.snapshots: Dict[str, List[Dict[str, Any]]] = {}  # the refresh's readings by wallet id, as holdings_snapshots holds them for the overview
+        self.refreshed_at: Optional[str] = None
         # Spec T23's dials. `refuses_payee_addresses`: addresses the payee door refuses whatever the charter says, under the stand-in
         # refusal Spec T8's `refuses_venue_contract=True` uses (ADDRESS_PROPOSAL_REFUSED, 422, the stipulation sentence) — an estate that
         # will not have the agent's wallet as a payee, in its own sentence. `settle_after_reads`: an execute that answers with the run
@@ -1358,6 +1488,15 @@ class EstateDouble:
         self.chain = chain if chain is not None else UsdcChainDouble()
         self.aap_account_id = aap_account_id or AAP_ACCOUNT_ID
         self.platform.accounts.add(self.aap_account_id)
+        # Spec T29 §0a.4: the account's entries in force on the platform (its read road, GET /v1/admin/accounts/{id}/policies), each with its allowed chains — the
+        # estate's own entry and the founder's (author) entry, as the birth road draws them up; an estate born before 23 October 2026 carries no solana
+        chains = [T.PAYEE_CHAIN] + ([T.SOLANA_CHAIN] if solana_allowed else [])
+        self.platform.entries.setdefault(self.aap_account_id, [
+            {"id": "pe-" + secrets.token_hex(4), "name": "aer-accounts", "access_type": "sign+audit", "active": True, "superseded_by": "", "allowed_chains": list(chains),
+             "max_amount_per_tx_usd": 100, "max_amount_per_day_usd": 1000},
+            {"id": "pe-author-" + secrets.token_hex(4), "name": "Harriet (author)", "access_type": "sign+audit", "active": True, "superseded_by": "", "allowed_chains": list(chains),
+             "max_amount_per_tx_usd": 100, "max_amount_per_day_usd": 1000},
+        ])
         # Spec T26: the gas this workspace's account holds before the run — an earlier run's credit standing on the ledger, as the sandbox's two
         # accounts stood on 4 October 2026 (US$99.71 and US$119.95); nothing of this run credits an account that covers its sets
         self.initial_gas_cents = initial_gas_cents if initial_gas_cents is not None else holdings_gas_cents
@@ -1702,7 +1841,7 @@ class EstateDouble:
                 if not row:
                     raise Refusal("SET_NOT_EDITABLE", detail={"cause": "no such run"})
                 self.settle_on_read(caller, row)
-                return 200, {"set": self.set_view(row, caller)}
+                return 200, {"set": self.set_view(row, caller, trail=True)}  # the run's own page carries its trail (routes/sets.ts, trail: true; Spec AER360-RUN-ROAD item 4)
             if method == "POST" and m.group(2) == "/submit":
                 return self.submit_set(headers, m.group(1))
             if method == "POST" and m.group(2) == "/execute":
@@ -1736,7 +1875,23 @@ class EstateDouble:
             return 200, {"transactable": True, "reason": None, "workspace": dict(self.workspace)}
         if route == "GET /v1/aer360/wallets":
             self.require_caller(headers, "viewer")
-            return 200, {"answer": None, "absence": WALLETS_ABSENCE, "display": {"currency": "AUD", "rateE8": "150000000"}}
+            # spec 107a item 4 (routes/aer360.ts): the register beside the close's answer, whether or not a close has completed
+            return 200, {"answer": None, "absence": WALLETS_ABSENCE, "display": {"currency": "AUD", "rateE8": "150000000"}, "register": self.register()}
+        # Spec T29 (Spec AER360-SOL-114 at d369926): the roads the Solana stations walk — the plan's signing group, the press for a new wallet with its network, the
+        # sandbox's allowance, and the holdings read live (the refresh) and listed per asset (the overview)
+        if route == "GET %s" % T.PLAN_ROUTE:
+            self.require_caller(headers, "viewer")
+            return 200, self.plan_view()
+        if route == "POST %s" % T.WALLET_PRESS_OPTIONS_ROUTE:
+            return self.wallet_options(headers, body)
+        if route == "POST %s" % T.WALLET_PRESS_ROUTE:
+            return self.wallet_press(headers, body)
+        if route == "GET %s" % T.SANDBOX_ALLOWANCE_ROUTE:
+            return self.sandbox_allowance(headers)
+        if route == "POST %s" % T.REFRESH_ROUTE:
+            return self.refresh(headers)
+        if route == "GET %s" % T.OVERVIEW_ROUTE:
+            return self.overview(headers)
         raise Refusal("REQUEST_MALFORMED", detail={"validation": "Route %s not found" % route})
 
     # -- auth ----------------------------------------------------------------------------------------
@@ -3270,6 +3425,13 @@ class EstateDouble:
                             else "an address is 32 to 44 base58 characters, and base58 leaves out the digit zero, capital O, capital I and lower-case L")
                 raise Refusal("ADDRESS_MALFORMED", "That is not an address %s can pay, so nothing was saved. On %s, %s." % (named, named, expected),
                               {"field": "address", "chain": a["chain"], "address": address, "expected": expected}, provenance={"source": "chain_registry", "reference": a["chain"]})
+            if a["chain"] == "solana":
+                # Spec AER360-SOL-114 §3.4 (shared/payeeaddress.ts solanaKeyRefusal): the shape passed, so the module's judgment can only fail on the bytes' length or the curve —
+                # one code, ADDRESS_MALFORMED, the fault named in the detail; the sentences are the harness's table's, held to the source by Spec T29's tests
+                fault, _ = T.judge_solana_address(address)
+                if fault in ("length", "off_curve"):
+                    raise Refusal("ADDRESS_MALFORMED", T.solana_address_malformed_sentence(fault), {"field": "address", "chain": a["chain"], "address": address, "fault": fault},
+                                  provenance={"source": "chain_registry", "reference": a["chain"]})
             if (self.refuses_venue_contract is True and address.lower() == T.venue_address_for_probe()["address"].lower()) or address.lower() in self.refuses_payee_addresses:
                 # Spec T8's stand-in: a door that refuses the probe address whatever its charter says, under the code the estate used for
                 # an address it would not propose — since Spec 92 an estate refusing against a charter that says accepted
@@ -3310,10 +3472,17 @@ class EstateDouble:
         self.addresses[row["id"]] = row
         return row
 
+    def usdc_signal_of(self, chain: str, address: str) -> Optional[bool]:
+        """routes/payees.ts (Spec AER360-SOL-114 §3.4): beside a Solana address, whether a USDC token account stands — read through the two sources where the road is open; null otherwise."""
+        if chain != T.SOLANA_CHAIN or self.solana_road != "open":
+            return None
+        return self.solana.has_usdc_account(address)
+
     def payee_view(self, payee: Dict[str, Any]) -> Dict[str, Any]:
         addresses = sorted([a for a in self.addresses.values() if a["payeeId"] == payee["id"]], key=lambda a: a["chain"])
         view = dict(payee)
-        view["addresses"] = [{"id": a["id"], "chain": a["chain"], "address": a["address"], "whitelistStatus": a["whitelistStatus"], "promotedAt": a["promotedAt"], "platformMembershipId": a["platformMembershipId"]} for a in addresses]
+        view["addresses"] = [{"id": a["id"], "chain": a["chain"], "address": a["address"], "whitelistStatus": a["whitelistStatus"], "promotedAt": a["promotedAt"], "platformMembershipId": a["platformMembershipId"],
+                              "solanaUsdcAccount": self.usdc_signal_of(a["chain"], a["address"])} for a in addresses]
         return view
 
     def list_payees(self) -> List[Dict[str, Any]]:
@@ -3853,23 +4022,28 @@ class EstateDouble:
             if not isinstance(amount, str) or not re.match(r"^-?\d+$", amount.strip()):
                 raise Refusal("AMOUNT_MALFORMED", detail={"amountMinor": str(amount)})
             rows.append({"index": index, "pay": p, "amountMinor": int(amount)})
+        # THE WALLET THE RUN LEAVES FROM (spec 110, item 4; routes/sets.ts sourceFor) and THE CURVE BELT (Spec AER360-SOL-114 §2; payoutsets.ts assertCurveForChain):
+        # judged at the review and again at the creation, before the gates — a wallet pays only on the network its key's curve belongs to
+        source = self.resolve_set_source(body.get("walletId"))
+        for r in rows:
+            self.assert_curve_for_chain(source, str((r["pay"] or {}).get("chain") or ""))
         if create:
             existing = next((s for s in self.sets.values() if s["idempotencyKey"] == body["idempotencyKey"]), None)
             if existing:
-                return 200, {"set": self.set_view(existing, caller), "alreadyExisted": True, "review": existing["review"]}
+                return 200, {"set": self.set_view(existing, caller), "alreadyExisted": True, "review": existing["review"], "wallet": source["wallet"]}
         if self.acknowledged_review_refused and not create and body.get("duplicatesAcknowledged") is True:
             raise Refusal("NOT_AUTHENTICATED")
-        review = self.review(caller, charter, rows, body.get("duplicatesAcknowledged") is True and not self.acknowledgement_ignored)
+        review = self.review(caller, charter, rows, body.get("duplicatesAcknowledged") is True and not self.acknowledgement_ignored, source["address"])
         if not create:
             if self.review_refuses_but_pays and not review["payload"]["acceptable"]:
                 self.pay_behind_the_review(caller, review)  # a double that lies: "Nothing was sent", and money moved
-            return 200, review["payload"]
+            return 200, dict(review["payload"], wallet=source["wallet"])
         if not review["payload"]["acceptable"]:
             blocking = [r for g in review["payload"]["gates"] if not g["passed"] for r in g["refusals"]]
             first = blocking[0]
             raise Refusal(first["code"], first["message"], first.get("detail"), **{k: v for k, v in first.items() if k not in ("code", "message", "detail")})
         set_row = {"id": "set-" + secrets.token_hex(6), "reference": "S-" + body["reference"], "realm": "sandbox", "idempotencyKey": body["idempotencyKey"], "status": "draft",
-                   "sourceAccount": self.source_account, "authorCredentialId": caller["credentialId"], "setDigest": "0x" + secrets.token_hex(32),
+                   "sourceAccount": source["address"], "walletId": source["walletId"], "sourceCurve": source["curve"], "authorCredentialId": caller["credentialId"], "setDigest": "0x" + secrets.token_hex(32),
                    "aggregateBaseMinor": str(review["aggregateUsd"]), "aggregateUsdMinor": str(review["aggregateUsd"]), "approvalsRequired": review["approvalsRequired"],
                    "bandThresholdBaseMinor": str(review["threshold"]), "createdAt": self._run_stamp(), "submittedAt": None, "approvedAt": None, "executedAt": None,
                    "instructions": [], "review": review["payload"]}
@@ -3878,16 +4052,28 @@ class EstateDouble:
                                             "chain": r["chain"], "address": r["address"], "isOneOff": r["isOneOff"], "asset": r["asset"], "amountMinor": str(r["amountMinor"]),
                                             "invoiceRef": r["invoiceRef"], "memo": None, "glCode": None, "status": "queued", "clientRequestId": "req-" + secrets.token_hex(4), "txHash": None,
                                             "failureReason": None, "holdId": None, "heldReason": None, "heldWaitSentence": None,
-                                            "entryValue": {"asset": r["asset"], "assetDecimals": 6, "amountAssetMinor": str(r["amountMinor"]), "baseCurrency": "USD", "baseDecimals": 2,
-                                                           "amountBaseMinor": str(r["usdMinor"]), "amountUsdMinor": str(r["usdMinor"]), "rate": {"source": "double", "observedAt": self._now_iso(), "rateE8": "100000000"},
+                                            "entryValue": {"asset": r["asset"], "assetDecimals": ASSET_DECIMALS_OF.get(r["asset"], 6), "amountAssetMinor": str(r["amountMinor"]), "baseCurrency": "USD", "baseDecimals": 2,
+                                                           "amountBaseMinor": str(r["usdMinor"]), "amountUsdMinor": str(r["usdMinor"]), "rate": {"source": "double", "observedAt": self._now_iso(), "rateE8": self.rate_e8_of(r["asset"])},
                                                            "kind": "entry", "valuationId": "val-" + secrets.token_hex(4), "occurredAt": self._now_iso()},
                                             "executionValue": None, "gasValue": None, "feeAccrual": None, "lockedValue": None})
             self.instructions_seen.append((r["chain"], r["address"].lower()))
         self.sets[set_row["id"]] = set_row
         self.approvals[set_row["id"]] = []
-        return 201, {"set": self.set_view(set_row, caller), "alreadyExisted": False, "review": review["payload"]}
+        return 201, {"set": self.set_view(set_row, caller), "alreadyExisted": False, "review": review["payload"], "wallet": source["wallet"]}
 
-    def review(self, caller: Dict[str, Any], charter: Optional[Dict[str, Any]], rows: List[Dict[str, Any]], acknowledged: bool) -> Dict[str, Any]:
+    def usd_cents_of(self, asset: str, minor: int) -> int:
+        """The double's pricing: USDC and USDT at par (six decimals → cents); SOL at the double's rate (nine decimals); anything else as it came."""
+        if asset in ("USDC", "USDT"):
+            return minor // 10000
+        if asset == T.SOL:
+            return minor * self.solana_usd_cents_per_sol // T.LAMPORTS_PER_SOL
+        return minor
+
+    def rate_e8_of(self, asset: str) -> str:
+        return str(self.solana_usd_cents_per_sol * 10 ** 6) if asset == T.SOL else "100000000"
+
+    def review(self, caller: Dict[str, Any], charter: Optional[Dict[str, Any]], rows: List[Dict[str, Any]], acknowledged: bool, source_address: Optional[str] = None) -> Dict[str, Any]:
+        source_address = source_address or self.source_account
         resolved = []
         whitelist_refusals = []
         waits = 0
@@ -3915,8 +4101,8 @@ class EstateDouble:
                     out["standing"] = "whitelisted" if found["whitelistStatus"] == "whitelisted" else ("pending_promotion" if found["whitelistStatus"] == "pending_promotion" else "registered_unlisted")
             elif not p.get("oneOff"):
                 out["refusals"].append({"code": "ONE_OFF_NOT_DECLARED", "message": MESSAGES["ONE_OFF_NOT_DECLARED"], "rowIndex": r["index"], "detail": {"cause": "no payee address was chosen and no one-off was declared"}})
-            # USDC and USDT price 1:1 with the dollar in this double; the minor units are cents already (6 decimals → 2)
-            out["usdMinor"] = r["amountMinor"] // 10000 if out["asset"] in ("USDC", "USDT") else r["amountMinor"]
+            # USDC and USDT price 1:1 with the dollar in this double (six decimals → cents); SOL at the double's own rate (Spec T29: the estate's valuation, never the harness's)
+            out["usdMinor"] = self.usd_cents_of(out["asset"], r["amountMinor"])
             resolved.append(out)
         for out in resolved:
             if out["standing"] == "undeclared":
@@ -3963,16 +4149,18 @@ class EstateDouble:
              else "%d on the approved list, %d one-off" % (sum(1 for o in resolved if o["standing"] == "whitelisted"), sum(1 for o in resolved if o["isOneOff"]))},
             {"gate": "pricing", "passed": not pricing_refusals and bool(resolved), "refusals": pricing_refusals, "evidence": "priced from double"},
             {"gate": "quota", "passed": True, "refusals": [], "evidence": "this plan has no monthly signature ceiling"},
-            self.gas_account_preflight(resolved),
+            self.gas_account_preflight(resolved, source_address),
             self.duplicate_screen(resolved, acknowledged),  # after the gas gate, as the estate evaluates it: a repeat never hides a row from the quotes
         ]
+        assets = sorted({o["asset"] for o in resolved})
+        one_asset = assets[0] if len(assets) == 1 else "MIXED"  # setgates.ts aggregateOf: a mixed-asset run states no single asset amount
         payload = {"rows": [{"index": o["index"], "payeeName": o["payeeName"], "chain": o["chain"], "address": o["address"], "isOneOff": o["isOneOff"], "asset": o["asset"],
-                             "amountMinor": str(o["amountMinor"]), "value": {"asset": o["asset"], "assetDecimals": 6, "amountAssetMinor": str(o["amountMinor"]), "baseCurrency": "USD", "baseDecimals": 2,
-                                                                             "amountBaseMinor": str(o["usdMinor"]), "amountUsdMinor": str(o["usdMinor"]), "rate": {"source": "double", "observedAt": self._now_iso(), "rateE8": "100000000"},
+                             "amountMinor": str(o["amountMinor"]), "value": {"asset": o["asset"], "assetDecimals": ASSET_DECIMALS_OF.get(o["asset"], 6), "amountAssetMinor": str(o["amountMinor"]), "baseCurrency": "USD", "baseDecimals": 2,
+                                                                             "amountBaseMinor": str(o["usdMinor"]), "amountUsdMinor": str(o["usdMinor"]), "rate": {"source": "double", "observedAt": self._now_iso(), "rateE8": self.rate_e8_of(o["asset"])},
                                                                              "kind": "entry", "valuationId": "", "occurredAt": self._now_iso()}, "refusals": o["refusals"]} for o in resolved],
                    "gates": gates,
-                   "aggregate": {"asset": "USDC", "assetDecimals": 6, "amountAssetMinor": str(sum(o["amountMinor"] for o in resolved)), "baseCurrency": "USD", "baseDecimals": 2,
-                                 "amountBaseMinor": str(aggregate), "amountUsdMinor": str(aggregate), "rate": {"source": "double", "observedAt": self._now_iso(), "rateE8": "100000000"}, "kind": "entry", "valuationId": "", "occurredAt": self._now_iso()},
+                   "aggregate": {"asset": one_asset, "assetDecimals": ASSET_DECIMALS_OF.get(one_asset, 6), "amountAssetMinor": str(sum(o["amountMinor"] for o in resolved)) if one_asset != "MIXED" else "0", "baseCurrency": "USD", "baseDecimals": 2,
+                                 "amountBaseMinor": str(aggregate), "amountUsdMinor": str(aggregate), "rate": {"source": "double", "observedAt": self._now_iso(), "rateE8": self.rate_e8_of(one_asset)}, "kind": "entry", "valuationId": "", "occurredAt": self._now_iso()},
                    "approval": {"approvalsRequired": approvals_required, "approvalsGiven": 0, "bandThresholdBaseMinor": str(threshold), "aggregateBaseMinor": str(aggregate),
                                 "eligibleApproverCredentialIds": list(self.second_approvers), "approvedByCredentialIds": [], "submitterCredentialId": caller["credentialId"]},
                    "acceptable": bool(resolved) and all(g["passed"] for g in gates),
@@ -4027,7 +4215,35 @@ class EstateDouble:
             for row in double.sets.values():
                 row["createdAt"] = double._run_stamp(double._epoch(row["createdAt"]) - days * 24 * 60 * 60)
 
-    def gas_account_preflight(self, resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def solana_chain_preflight(self, wallet: str, rows: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[str]]:
+        """
+        THE SOLANA ROAD'S OWN LEG OF THE GAS GATE (Spec AER360-SOL-114 §3.6; execution.ts solanaChainPreflight): the two-source reader, or the closed road's
+        refusal on every Solana row (refusalWithRow); a stop's refusal the same way; else the wallet's lamports read and the top-up the payment would need
+        (fees.ts topUpLamports) priced against the gas account. The harness meets the closed road HERE, at the review, and the station says so by name.
+        """
+        refusals: List[Dict[str, Any]] = []
+        evidence: List[str] = []
+        if not rows:
+            return refusals, evidence
+        if self.solana_road == "closed":
+            for o in rows:
+                refusals.append({"code": T.SOLANA_ROAD_CLOSED, "message": MESSAGES[T.SOLANA_ROAD_CLOSED], "rowIndex": o["index"], "detail": {"setting": T.SOLANA_RPC_SETTING},
+                                 "provenance": {"source": "deployment", "reference": T.SOLANA_RPC_SETTING}})
+            return refusals, evidence
+        if self.solana_road == "stopped":
+            for o in rows:
+                refusals.append({"code": T.SOLANA_SOURCES_DISAGREE, "message": MESSAGES[T.SOLANA_SOURCES_DISAGREE], "rowIndex": o["index"],
+                                 "detail": {"read": "getBalance", "first": "answered", "second": "answered otherwise"}, "provenance": {"source": "solana_rpc", "reference": wallet}})
+            return refusals, evidence
+        moves = sum(o["amountMinor"] for o in rows if o["asset"] == T.SOL)
+        balance = self.solana.balance_of(wallet)
+        required = moves + T.FEE_RESERVE_LAMPORTS
+        top_up = max(0, required - balance)
+        evidence.append("solana: the wallet holds %d lamports; this set moves %d and keeps the %d reserve%s" % (
+            balance, moves, T.FEE_RESERVE_LAMPORTS, ("; the sponsor tops it up by %d lamports first, charged to the gas account" % top_up) if top_up else ""))
+        return refusals, evidence
+
+    def gas_account_preflight(self, resolved: List[Dict[str, Any]], source_address: Optional[str] = None) -> Dict[str, Any]:
         """
         THE FOURTH GATE (Spec 104 §4; services/execution.ts gasAccountPreflight): the gas balance read from the platform before the quotes,
         one dry quote per payment — the chain's dry run of the transfer refuses where the key holds less than the amount, relayed as
@@ -4036,17 +4252,24 @@ class EstateDouble:
         where the balance is below the sum. The review's reservations are released by the platform's poller at valid_until, which in this
         double is the review's end, so the next read of the account sees the balance whole.
         """
+        source_address = source_address or self.source_account
         payable = [o for o in resolved if not o["refusals"] and o["address"]]
-        if not payable:
+        # Spec AER360-SOL-114 §3.6: the Solana rows take the road's own leg; the EVM rows the gas roads' quotes, as before
+        on_solana = [o for o in payable if str(o.get("chain") or "").lower() == T.SOLANA_CHAIN]
+        payable = [o for o in payable if str(o.get("chain") or "").lower() != T.SOLANA_CHAIN]
+        solana_refusals, solana_evidence = self.solana_chain_preflight(source_address, on_solana)
+        if not payable and not on_solana:
             return {"gate": "gas_preflight", "passed": True, "refusals": [], "evidence": "nothing to price"}
+        if not payable:
+            return {"gate": "gas_preflight", "passed": not solana_refusals, "refusals": solana_refusals, "evidence": "; ".join(solana_evidence) or "the Solana road's leg judged the set"}
         account = self.aap_account_id
         available = self.platform.balance(account)["available_usd_cents"]
         review_id = secrets.token_hex(4)
-        refusals: List[Dict[str, Any]] = []
+        refusals: List[Dict[str, Any]] = list(solana_refusals)
         reserved: List[str] = []
         ceiling = quoted = shortfalls = 0
         for o in payable:
-            if self.chain.balance_of(self.source_account) < o["amountMinor"]:
+            if self.chain.balance_of(source_address) < o["amountMinor"]:
                 refusals.append({"code": "PAYMENT_UNPRICED", "message": "This payment could not be priced: %s. The answer will be the same until what it named is resolved." % ESTIMATE_REVERTED_CLAUSE,
                                  "rowIndex": o["index"], "detail": {"party": "the access platform", "outcome": "refused", "route": "POST /v1/gas/quote", "said": ESTIMATE_REVERTED_SAID, "status": "400",
                                                                     "platformCode": "refused", "chain": o["chain"], "asset": o["asset"]},
@@ -4065,10 +4288,12 @@ class EstateDouble:
         if (quoted or shortfalls) and available < ceiling:
             said_available, said_ceiling = (available + 1, ceiling + 100) if self.gas_refusal_names_other_figures else (available, ceiling)
             refusals.append({"code": "GAS_SHORTFALL", "message": T.gas_set_shortfall_sentence(said_available, said_ceiling),
-                             "detail": {"availableUsdCents": str(said_available), "ceilingUsdCents": str(said_ceiling), "payments": str(quoted + shortfalls), "account": self.source_account, "minimumTopUpUsdCents": "1000"},
+                             "detail": {"availableUsdCents": str(said_available), "ceilingUsdCents": str(said_ceiling), "payments": str(quoted + shortfalls), "account": source_address, "minimumTopUpUsdCents": "1000"},
                              "provenance": {"source": "aap", "reference": "GET /v1/gas-account"}})
         n = quoted + shortfalls
         evidence = "gas account: %s available; this set needs at most %s of gas over %d payment%s" % (T.format_usd_cents(available), T.format_usd_cents(ceiling), n, "" if n == 1 else "s")
+        if solana_evidence:
+            evidence += "; " + "; ".join(solana_evidence)
         if quoted:
             evidence += "; the review’s %s (review:%s) %s on the gas account until the access platform releases %s at %s" % (
                 "1 quote" if quoted == 1 else "%d quotes" % quoted, review_id, "holds its ceiling" if quoted == 1 else "hold their ceilings", "it" if quoted == 1 else "them", self._iso(time.time() + 300))
@@ -4147,10 +4372,20 @@ class EstateDouble:
 
     def drive_and_settle(self, caller: Dict[str, Any], row: Dict[str, Any]) -> None:
         """Every instruction not yet terminal driven, then the run's outcome resolved (states.ts resolveSetOutcome) and the trail's set.settled row written."""
-        for instruction in row["instructions"]:
-            if instruction["status"] in T.INSTRUCTION_TERMINAL_STATES or instruction["status"] == "held":
-                continue
-            self.drive_payment(caller, instruction)
+        # spec 110a: a run leaves the wallet it names — the source the row recorded at its creation, under that wallet's own key — and the funding wallet otherwise
+        funding = self.source_account
+        if row.get("sourceAccount") and row["sourceAccount"] != funding:
+            self.source_account = row["sourceAccount"]
+        try:
+            for instruction in row["instructions"]:
+                if instruction["status"] in T.INSTRUCTION_TERMINAL_STATES or instruction["status"] == "held":
+                    continue
+                if str(instruction.get("chain") or "").lower() == T.SOLANA_CHAIN:
+                    self.drive_solana_payment(caller, instruction, row)
+                else:
+                    self.drive_payment(caller, instruction)
+        finally:
+            self.source_account = funding
         statuses = [i["status"] for i in row["instructions"]]
         if statuses and all(s in T.INSTRUCTION_TERMINAL_STATES for s in statuses) and row["status"] == "executing":
             row["status"] = "settled" if all(s == "confirmed" for s in statuses) else "partially_settled"  # states.ts resolveSetOutcome
@@ -4207,11 +4442,93 @@ class EstateDouble:
             "actualCostWei": str(gas_wei), "gasUsed": "150000", "effectiveGasPrice": str(gas_wei // 150000), "settlePriceUsd": "1000.00", "blockNumber": str(20000000 + len(self.trail)),
             "executionValuationId": instruction["executionValue"]["valuationId"], "gasValuationId": instruction["gasValue"]["valuationId"]}, subject_id=instruction["id"])
 
-    def fail_instruction(self, caller: Dict[str, Any], instruction: Dict[str, Any], reason: str, detail: Dict[str, Any]) -> None:
-        """`failInstruction`: one payee's failure is recorded on that payee and nothing else."""
+    def fail_instruction(self, caller: Dict[str, Any], instruction: Dict[str, Any], reason: str, detail: Dict[str, Any], road: str = "gas_roads") -> None:
+        """`failInstruction`: one payee's failure is recorded on that payee and nothing else; a refusal's reason is "<code>: <message>" (execution.ts failInstruction)."""
         instruction["status"] = "failed"
         instruction["failureReason"] = reason
-        self.append_trail("instruction.failed", caller["credentialId"], dict(detail, reason=reason, payloadKind="user_operation", road="gas_roads"), subject_id=instruction["id"])
+        self.append_trail("instruction.failed", caller["credentialId"], dict(detail, reason=reason, payloadKind="user_operation" if road == "gas_roads" else "transaction", road=road),
+                          subject_id=instruction["id"])
+
+    def drive_solana_payment(self, caller: Dict[str, Any], instruction: Dict[str, Any], row: Dict[str, Any]) -> None:
+        """
+        `driveSolanaPayment` (execution.ts; Spec AER360-SOL-114 §3.6, in §2's order): the message built by the module (instruction.building, road solana); the fee
+        read — the wallet's own lamports — and the sponsor's top-up requested, broadcast by the estate and confirmed FIRST where they fall short of the payment
+        plus the 0.01 SOL reserve, charged to the gas account in dollars (the two ends: SOLANA_TOPUP_FAILED, SOLANA_TOPUP_EXPIRED); the bytes signed through the
+        cluster (instruction.signing with the top-up's record or the line that the standing lamports met the fee); broadcast through the first endpoint, confirmed
+        from both; the row landing with its signature as its hash and the slot on instruction.confirmed. A closed or stopped road refuses by name, and the
+        cluster's "denied" with no rule named rejects the row in its own words (Spec T29 §0a.5).
+        """
+        sender = self.source_account or ""
+        payee = str(instruction["address"])
+        lamports = int(instruction["amountMinor"])
+        if self.solana_road == "closed":
+            self.fail_instruction(caller, instruction, "%s: %s" % (T.SOLANA_ROAD_CLOSED, MESSAGES[T.SOLANA_ROAD_CLOSED]), {"setting": T.SOLANA_RPC_SETTING}, road=T.SOLANA_ROAD_WORD)
+            return
+        if self.solana_road == "stopped":
+            self.fail_instruction(caller, instruction, "%s: %s" % (T.SOLANA_SOURCES_DISAGREE, MESSAGES[T.SOLANA_SOURCES_DISAGREE]), {"read": "getLatestBlockhash"}, road=T.SOLANA_ROAD_WORD)
+            return
+        if instruction["asset"] != T.SOL:
+            if instruction["asset"] == T.PAYMENT_ASSET and not self.solana.has_usdc_account(payee):
+                self.fail_instruction(caller, instruction, "%s: %s" % (T.SOLANA_TOKEN_ACCOUNT_ABSENT, MESSAGES[T.SOLANA_TOKEN_ACCOUNT_ABSENT]),
+                                      {"payee": payee, "mint": self.solana.mint, "asset": instruction["asset"], "outcome": "refused"}, road=T.SOLANA_ROAD_WORD)
+                return
+            self.fail_instruction(caller, instruction, "PAYMENT_UNPRICED: This payment could not be priced: no Solana mint is configured for %s, so the asset it moves cannot be named on Solana." % instruction["asset"],
+                                  {"chain": T.SOLANA_CHAIN, "asset": instruction["asset"]}, road=T.SOLANA_ROAD_WORD)
+            return
+        blockhash = T.base58_encode(secrets.token_bytes(32))
+        last_valid = self.solana.slot + 150
+        digest = "0x" + secrets.token_hex(64)
+        instruction["status"] = "building"
+        self.append_trail(T.INSTRUCTION_BUILDING, caller["credentialId"], {"sequence": instruction["sequence"], "chain": T.SOLANA_CHAIN, "asset": T.SOL, "road": T.SOLANA_ROAD_WORD,
+                                                                           "sender": sender, "blockhash": blockhash, "lastValidBlockHeight": str(last_valid), "messageBytes": digest},
+                          subject_id=instruction["id"])
+        balance = self.solana.balance_of(sender)
+        required = lamports + T.FEE_RESERVE_LAMPORTS
+        top_up: Optional[Dict[str, Any]] = None
+        if balance < required:
+            needed = required - balance
+            if self.solana_fault == "topup_failed":
+                self.fail_instruction(caller, instruction, "%s: %s" % (T.SOLANA_TOPUP_FAILED, MESSAGES[T.SOLANA_TOPUP_FAILED]),
+                                      {"operationId": "gop-" + secrets.token_hex(4), "clusterSaid": '{"InstructionError":[0,{"Custom":1}]}'}, road=T.SOLANA_ROAD_WORD)
+                return
+            if self.solana_fault == "topup_expired":
+                self.fail_instruction(caller, instruction, "%s: %s" % (T.SOLANA_TOPUP_EXPIRED, MESSAGES[T.SOLANA_TOPUP_EXPIRED]), {"operationId": "gop-" + secrets.token_hex(4)}, road=T.SOLANA_ROAD_WORD)
+                return
+            # the sponsor's System transfer, broadcast by the estate: the lamports land, the platform charges the gas account the dollars (SOL-160)
+            self.solana.credit(sender, needed)
+            debit_cents = max(1, -(-needed * self.solana_usd_cents_per_sol // T.LAMPORTS_PER_SOL))
+            operation = "gop-" + secrets.token_hex(4)
+            sponsor_signature = self.solana.signature()
+            self.platform.debit(self.aap_account_id, debit_cents, "topup:%s" % instruction["id"], T.SOLANA_CHAIN, operation, sponsor_signature)
+            top_up = {"operationId": operation, "signature": sponsor_signature, "reserveLamports": str(T.FEE_RESERVE_LAMPORTS), "debitUsdCents": debit_cents,
+                      "debit": T.format_usd_cents(debit_cents), "deduped": False, "sentReported": True}
+            balance = self.solana.balance_of(sender)
+        instruction["status"] = "signing"
+        self.append_trail(T.INSTRUCTION_SIGNING, caller["credentialId"], {"clientRequestId": instruction["clientRequestId"], "digest": digest, "payloadKind": "transaction", "road": T.SOLANA_ROAD_WORD,
+                                                                          "sender": sender, "target": payee, "carries": {"kind": "native", "lamports": str(lamports)}, "blockhash": blockhash,
+                                                                          "lastValidBlockHeight": str(last_valid), "feeLamports": str(balance),
+                                                                          **({"topUp": top_up} if top_up else {"fee": "met from the wallet’s standing lamports"})}, subject_id=instruction["id"])
+        if self.solana_fault == "denied":
+            # BIS 100's party 0 refusing the signature with no rule named (Spec T29 §0a.5): the row rejected in the cluster's own words
+            instruction["status"] = "rejected"
+            instruction["failureReason"] = T.PARTY_0_DENIED
+            self.append_trail(T.INSTRUCTION_REJECTED, caller["credentialId"], {"reasonCode": "denied", "reason": T.PARTY_0_DENIED, "gatewaySaid": T.PARTY_0_DENIED, "payloadKind": "transaction",
+                                                                               "road": T.SOLANA_ROAD_WORD, "digest": digest}, subject_id=instruction["id"])
+            return
+        signature, slot = self.solana.transfer_sol(sender, payee, lamports)
+        instruction["status"] = "broadcasting"
+        self.append_trail(T.INSTRUCTION_BROADCASTING, caller["credentialId"], {"signature": signature, "digest": digest, "payloadKind": "transaction", "road": T.SOLANA_ROAD_WORD}, subject_id=instruction["id"])
+        now = self._now_iso()
+        instruction["status"] = "confirmed"
+        instruction["txHash"] = signature
+        instruction["executionValue"] = dict(instruction["entryValue"] or {}, kind="execution", occurredAt=now, valuationId="val-" + secrets.token_hex(4))
+        instruction["gasValue"] = None  # the network's own burn is not read back (Spec AER360-SOL-114 §3.6); what the fee cost is the top-up's charge
+        self.append_trail(T.INSTRUCTION_CONFIRMED, caller["credentialId"], {"txHash": signature, "signature": signature, "digest": digest, "payloadKind": "transaction", "road": T.SOLANA_ROAD_WORD,
+                                                                            "slot": str(slot), "blockhash": blockhash, "target": payee, "carries": {"kind": "native", "lamports": str(lamports)},
+                                                                            **({"topUp": top_up} if top_up else {"fee": "met from the wallet’s standing lamports"}),
+                                                                            "feeNote": "the network’s own burn is not read back through the estate’s six reads, so no lamport figure stands here; what the fee cost is the top-up’s charge above",
+                                                                            "explorer": T.SOLANA_EXPLORER_TX_URL + signature, "executionValuationId": instruction["executionValue"]["valuationId"]},
+                          subject_id=instruction["id"])
 
     # -- two workspaces on one estate (Spec T14) ------------------------------------------------------------------------------------
     def owns(self, path: str, headers: Dict[str, str], data: Optional[bytes]) -> bool:
@@ -4234,9 +4551,32 @@ class EstateDouble:
         response = body.get("response") if isinstance(body.get("response"), dict) else {}
         return isinstance(response.get("id"), str) and response["id"] in self.passkeys
 
-    def set_view(self, row: Dict[str, Any], caller: Dict[str, Any]) -> Dict[str, Any]:
+    @staticmethod
+    def trail_said(action: str, detail: Dict[str, Any]) -> Optional[str]:
+        """routes/views.ts trailSaid: the row's own words where it carries any — a landed payment's transaction, a failure's reason, a count — never a sentence the page made up."""
+        text = lambda v: v if isinstance(v, str) and v.strip() else None  # noqa: E731
+        if action == T.INSTRUCTION_CONFIRMED:
+            return text(detail.get("txHash"))
+        if action in (T.INSTRUCTION_FAILED, "instruction.held", "instruction.hold_rejected"):
+            return text(detail.get("reason"))
+        if action == T.INSTRUCTION_REJECTED:
+            return ("%s: %s" % (detail.get("reasonCode"), detail.get("reason") or "")).strip() if text(detail.get("reasonCode")) else text(detail.get("reason"))
+        if action == "set.settled" and isinstance(detail.get("outcome"), str):
+            return "%s: %s landed, %s failed, %s rejected" % (detail["outcome"], detail.get("confirmed", 0), detail.get("failed", 0), detail.get("rejected", 0))
+        return None
+
+    def set_view(self, row: Dict[str, Any], caller: Dict[str, Any], trail: bool = False) -> Dict[str, Any]:
         current = [a for a in self.approvals.get(row["id"], []) if a["setDigest"] == row["setDigest"]]
         view = {k: row[k] for k in ("id", "reference", "realm", "idempotencyKey", "status", "sourceAccount", "authorCredentialId", "setDigest", "createdAt", "submittedAt", "approvedAt", "executedAt")}
+        view["walletId"] = row.get("walletId")
+        if trail:
+            # THE RUN'S OWN PAGE CARRIES ITS TRAIL (routes/views.ts runTrail): every set. and instruction. row about the run or its payments, in the clock's order,
+            # each as RunTrailEntry {at, action, credentialId, sequence, said}
+            sequence_of = {i["id"]: i["sequence"] for i in row["instructions"]}
+            subjects = {row["id"]} | set(sequence_of)
+            view["trail"] = [{"at": r["at"], "action": r["action"], "credentialId": r.get("credential_id") or None, "sequence": sequence_of.get(r.get("subject_id")),
+                              "said": self.trail_said(r["action"], r.get("detail") if isinstance(r.get("detail"), dict) else {})}
+                             for r in self.trail if r.get("subject_id") in subjects and (str(r["action"]).startswith("set.") or str(r["action"]).startswith("instruction."))]
         view["aggregate"] = {"asset": "USDC", "assetDecimals": 6, "amountAssetMinor": "0", "baseCurrency": "USD", "baseDecimals": 2, "amountBaseMinor": row["aggregateBaseMinor"],
                              "amountUsdMinor": row["aggregateUsdMinor"], "rate": {"source": "double", "observedAt": row["createdAt"], "rateE8": "100000000"}, "kind": "entry", "valuationId": "", "occurredAt": row["createdAt"]}
         view["approval"] = {"approvalsRequired": row["approvalsRequired"], "approvalsGiven": len(current), "bandThresholdBaseMinor": row["bandThresholdBaseMinor"], "aggregateBaseMinor": row["aggregateBaseMinor"],
@@ -4290,6 +4630,207 @@ class EstateDouble:
             row["approvedAt"] = self._now_iso()
         return 200, {"status": row["status"], "approvalsGiven": count, "approvalsRequired": row["approvalsRequired"], "setDigest": row["setDigest"]}
 
+    # -- the roads the Solana stations walk (Spec T29; Spec AER360-SOL-114 at d369926) ------------------------------------------------------------------
+    def resolve_set_source(self, wallet_id: Any) -> Dict[str, Any]:
+        """payoutsets.ts resolveSetSource: null is the funding wallet (the key's own address, secp256k1); an id is one of the estate's pressed wallets with a key row, by its curve."""
+        if wallet_id in (None, ""):
+            return {"walletId": None, "address": self.source_account, "keyId": self.custody_key_id, "curve": T.EVM_CURVE, "wallet": None}
+        wallet = self.pressed_wallets.get(str(wallet_id))
+        if wallet is None or not wallet.get("keyed"):
+            raise Refusal("WALLET_NOT_FOUND", detail={"walletId": str(wallet_id)}, provenance={"source": "wallets"})
+        return {"walletId": wallet["walletId"], "address": wallet["address"], "keyId": wallet["keyId"], "curve": wallet["curve"],
+                "wallet": {k: wallet[k] for k in ("walletId", "walletNumber", "name", "level", "beneficiary", "address")}}
+
+    @staticmethod
+    def assert_curve_for_chain(source: Dict[str, Any], chain: str) -> None:
+        """payoutsets.ts assertCurveForChain (Spec AER360-SOL-114 §2): a wallet pays only on the network its key's curve belongs to; both mismatches refuse WALLET_CURVE_MISMATCH."""
+        wants = T.curve_for_chain(chain)
+        if source["curve"] == wants:
+            return
+        detail: Dict[str, Any] = {"chain": chain, "curve": source["curve"], "required": wants,
+                                  "cause": T.CURVE_MISMATCH_CAUSE_SOLANA if wants == T.SOLANA_CURVE else T.CURVE_MISMATCH_CAUSE_EVM}
+        if source.get("walletId"):
+            detail.update({"wallet": source["walletId"], "walletNumber": (source.get("wallet") or {}).get("walletNumber") or ""})
+        else:
+            detail["wallet"] = "the estate’s funding wallet"
+        raise Refusal(T.WALLET_CURVE_MISMATCH, detail=detail, provenance={"source": "wallet_keys"})
+
+    def signing_group_view(self) -> Dict[str, Any]:
+        """signinggroup.ts signingGroupView: the groups the platform answered, verbatim and in its order, the standing, and the one sentence."""
+        on_the_one = self.assigned_groups == [T.PRODUCTION_SIGNING_GROUP]
+        return {"accountId": self.aap_account_id, "assigned": list(self.assigned_groups), "standing": "on_the_one_group" if on_the_one else "elsewhere",
+                "sentence": PLAN_SENTENCE if on_the_one else "This estate's account stands on %s, not on group-100 alone." % (", ".join(self.assigned_groups) or "no group")}
+
+    def plan_view(self) -> Dict[str, Any]:
+        """GET /v1/aer360/plan (routes/aer360.ts; spec 97, spec 101): the plan the platform reports and the signing group it holds for the account, read live."""
+        return {"plan": "starter", "maxTokens": 10, "activeCredentials": len(self.credentials), "readAt": self._now_iso(), "absence": None, "signingGroup": self.signing_group_view()}
+
+    def register(self) -> Dict[str, Any]:
+        """The register beside the close's answer (spec 107a item 4; fundingwallet.ts readBornRegister): the funding wallet's row, then every pressed wallet's, as RegisterWalletView."""
+        rows: List[Dict[str, Any]] = []
+        if self.has_funding_wallet():
+            rows.append({"walletId": "wallet-funding", "walletNumber": "1", "name": "Funding wallet", "address": self.source_account, "funding": True,
+                         "chains": [T.PAYEE_CHAIN], "fundSentence": "Fund this account with USDC on %s. Gas is bought separately, below." % T.PAYEE_CHAIN,
+                         "level": 1, "beneficiary": None, "clientSeat": None, "clientInvitation": None, "keyed": False})
+        for w in self.pressed_wallets.values():
+            rows.append({k: w[k] for k in ("walletId", "walletNumber", "name", "address", "funding", "chains", "fundSentence", "level", "beneficiary", "clientSeat", "clientInvitation", "keyed")})
+        return {"walletCount": len(rows), "wallets": rows,
+                "levels": [{"level": 1, "name": "Level 1 — head office", "count": len(rows), "heldBaseMinor": None, "balancesSaid": None, "route": None}]}
+
+    @staticmethod
+    def judge_press_answers(body: Any) -> Tuple[str, str]:
+        """fundingwallet.ts judgePressAnswers: whose (this double presses the estate's own wallets only) and the network — absent is evm, the road as it was before the question; anything else refused."""
+        body = body or {}
+        chain = body.get("chain")
+        chain = "evm" if chain is None else chain
+        if chain not in ("evm", T.SOLANA_CHAIN):
+            raise Refusal("REQUEST_MALFORMED", T.WALLET_NETWORK_REFUSED_SENTENCE, {"cause": "the press named a network that is neither evm nor solana"}, provenance={"source": "wallets"})
+        if body.get("whose") != "estate":
+            raise Malformed("whose: the double presses this estate's own wallets only")
+        return str(body["whose"]), str(chain)
+
+    def wallet_options(self, headers: Dict[str, str], body: Any) -> Tuple[int, Any]:
+        """POST /v1/workspace/wallets/options (routes/workspace.ts; spec 110 item 2; Spec AER360-SOL-114 §3.3): the two answers judged, the challenge bound to them and the walletId."""
+        caller = self.require_caller(headers, "author", mutating=True)
+        whose, chain = self.judge_press_answers(body)
+        if not self.has_funding_wallet():
+            raise Refusal("WORKSPACE_NOT_PROVISIONED", NO_FUNDING_WALLET_SENTENCE, {"cause": NO_FUNDING_WALLET_REASON}, provenance={"source": "workspace"})
+        wallet_id = "wallet-" + secrets.token_hex(6)
+        issued = int(time.time() * 1000)
+        challenge = self.challenge("workspace.wallet", "wallet:%s:%s:%s|%s" % (wallet_id, chain, issued, caller["credentialId"]), issued)
+        self.wallet_challenges[wallet_id] = {"challenge": challenge, "issuedAtMs": issued, "credentialId": caller["credentialId"], "whose": whose, "chain": chain}
+        own = [w for w, row in self.passkeys.items() if row["credentialId"] == caller["credentialId"]]
+        return 200, {"options": {"challenge": challenge, "rpId": self.rp_id, "timeout": 60000, "userVerification": "required",
+                                 "allowCredentials": [{"id": w, "type": "public-key", "transports": ["internal"]} for w in own]},
+                     "issuedAtMs": issued, "walletId": wallet_id, "level": 1, "beneficiary": None}
+
+    def wallet_press(self, headers: Dict[str, str], body: Any) -> Tuple[int, Any]:
+        """
+        POST /v1/workspace/wallets (routes/workspace.ts; fundingwallet.ts birthPressedWallet): the answers judged again — a press whose two halves answer differently
+        derives another challenge and is refused — the assertion verified, then the birth: an EVM wallet on the chains this deployment reads, a Solana wallet an
+        Ed25519 key registered on solana alone, its base58 address verbatim and its curve on the key row; nothing about recovery, on either network.
+        """
+        caller = self.require_caller(headers, "author", mutating=True)
+        body = body or {}
+        whose, chain = self.judge_press_answers(body)
+        pending = self.wallet_challenges.pop(str(body.get("walletId")), None)
+        if pending is None or pending["credentialId"] != caller["credentialId"] or body.get("issuedAtMs") != pending["issuedAtMs"] or pending.get("chain") != chain:
+            raise Refusal("STEP_UP_INVALID", detail={"cause": "no press of this wallet with these answers was opened by this credential"})
+        response = body.get("response") or {}
+        stored = self.passkeys.get(str(response.get("id")))
+        if not stored or stored["credentialId"] != caller["credentialId"]:
+            raise Refusal("STEP_UP_INVALID", detail={"cause": "the asserting passkey is not the pressing credential"})
+        try:
+            stored["signCount"] = PK.verify_assertion(response, pending["challenge"], self.origin, self.rp_id, stored["publicKey"], stored["signCount"])
+        except PK.PasskeyRefused as err:
+            raise Refusal("STEP_UP_INVALID", detail={"cause": str(err)[:200]})
+        number = str(2 + len(self.pressed_wallets))
+        solana_born = sum(1 for w in self.pressed_wallets.values() if w["chain"] == T.SOLANA_CHAIN)
+        if chain == T.SOLANA_CHAIN:
+            address = solana_address_for_tests("the estate double's Solana wallet %s/%s" % (number, self.workspace["name"]))
+            chains = [T.SOLANA_CHAIN]
+            curve = T.SOLANA_CURVE
+            fund = "Fund this account with USDC on %s. Gas is bought separately, below." % T.SOLANA_CHAIN
+        else:
+            address = T.derive_address("the estate double's pressed wallet %s/%s" % (number, self.workspace["name"]))
+            chains = [T.PAYEE_CHAIN]
+            curve = T.EVM_CURVE
+            fund = "Fund this account with USDC on %s. Gas is bought separately, below." % T.PAYEE_CHAIN
+        wallet = {"walletId": body["walletId"], "walletNumber": number, "name": "Wallet %s" % number, "address": address, "funding": False, "chains": chains, "fundSentence": fund,
+                  "level": 1, "beneficiary": None, "clientSeat": None, "clientInvitation": None, "keyed": True,
+                  "keyId": "key-" + secrets.token_hex(6), "curve": curve, "chain": chain, "addressForm": chain, "bornAt": self._now_iso()}
+        self.pressed_wallets[wallet["walletId"]] = wallet
+        if chain == T.SOLANA_CHAIN:
+            if solana_born == 0 and self.solana_wallet_lamports:
+                self.solana.credit(address, self.solana_wallet_lamports)  # the owner funds the first Solana wallet once, at his amount (Spec T29 §0a.3); the harness never does
+        elif self.new_wallet_usdc_cents:
+            self.chain.credit(address, T.usdc_minor_of_cents(self.new_wallet_usdc_cents))  # the owner funds the wallet (the browser leg's R7 pays from it); the harness never does
+        self.append_trail(T.WALLET_BORN, caller["credentialId"], {"walletId": wallet["walletId"], "address": address, "keyId": wallet["keyId"], "homeStack": self.home_stack, "via": "press",
+                                                                  **({"curve": T.SOLANA_CURVE} if chain == T.SOLANA_CHAIN else {})}, subject_id=wallet["walletId"])
+        self.append_trail("wallet.registered", caller["credentialId"], {"walletId": wallet["walletId"], "address": address, "via": "press", "chains": chains}, subject_id=wallet["walletId"])
+        return 200, {"born": True, "wallet": {k: wallet[k] for k in ("walletId", "walletNumber", "name", "address", "level", "beneficiary")}, "signingGroup": self.signing_group_view()}
+
+    def sandbox_allowance(self, headers: Dict[str, str]) -> Tuple[int, Any]:
+        """GET /v1/workspace/sandbox-allowance (routes/workspace.ts; sandboxlaw.ts sandboxAllowanceOf, Spec AER360-117): the allowance, what the payments have taken, what is left, the line."""
+        self.require_caller(headers, "viewer")
+        spent = 0
+        for s in self.sets.values():
+            if s["status"] == "cancelled":
+                continue
+            for i in s["instructions"]:
+                if i["status"] in ("rejected", "failed"):
+                    continue
+                spent += int(((i.get("entryValue") or {}).get("amountUsdMinor") or 0))
+        allowance = self.sandbox_allowance_usd_cents
+        left = max(0, allowance - spent)
+        return 200, {"realm": "sandbox", "allowance": {"allowanceUsdCents": str(allowance), "spentUsdCents": str(spent), "leftUsdCents": str(left),
+                                                       "said": "Sandbox allowance: %s of %s left" % (T.format_usd_cents(left), T.format_usd_cents(allowance))}}
+
+    def every_wallet(self) -> List[Dict[str, Any]]:
+        """Every wallet the refresh and the overview walk: the funding wallet's row and each pressed wallet's, with the chain each reads on."""
+        out: List[Dict[str, Any]] = []
+        if self.has_funding_wallet():
+            out.append({"walletId": "wallet-funding", "walletNumber": "1", "name": "Funding wallet", "address": self.source_account, "chain": "evm"})
+        for w in self.pressed_wallets.values():
+            out.append({"walletId": w["walletId"], "walletNumber": w["walletNumber"], "name": w["name"], "address": w["address"], "chain": w["chain"]})
+        return out
+
+    def refresh(self, headers: Dict[str, str]) -> Tuple[int, Any]:
+        """
+        POST /v1/aer360/refresh (routes/aer360.ts; consolidation.ts refreshConsolidation, readHoldings): every wallet's holdings read live — an EVM wallet's USDC through
+        the chain reader, a Solana wallet's SOL always and its USDC summed across the mint's token accounts through the two-source reader (holdings.ts) — and each
+        wallet the read could not make named in `skipped` with the refusal's code as its reason: SOLANA_ROAD_CLOSED where the road is closed.
+        """
+        self.require_caller(headers, "author", mutating=True)
+        taken = 0
+        skipped: List[Dict[str, Any]] = []
+        now = self._now_iso()
+        for w in self.every_wallet():
+            readings: List[Dict[str, Any]] = []
+            if w["chain"] == T.SOLANA_CHAIN:
+                if self.solana_road == "closed":
+                    skipped.append({"holder": self.workspace["name"], "wallet": w["name"], "asset": "-", "reason": T.SOLANA_ROAD_CLOSED})
+                    continue
+                if self.solana_road == "stopped":
+                    skipped.append({"holder": self.workspace["name"], "wallet": w["name"], "asset": "-", "reason": T.SOLANA_SOURCES_DISAGREE})
+                    continue
+                lamports = self.solana.balance_of(w["address"])
+                usdc = self.solana.usdc_of(w["address"])
+                readings.append({"asset": T.SOL, "chain": T.SOLANA_CHAIN, "amountMinor": str(lamports), "assetDecimals": T.SOL_DECIMALS,
+                                 "valuedBaseMinor": str(self.usd_cents_of(T.SOL, lamports)), "rate": {"source": "double", "observedAt": now, "rateE8": self.rate_e8_of(T.SOL)}, "takenAt": now})
+                readings.append({"asset": T.PAYMENT_ASSET, "chain": T.SOLANA_CHAIN, "amountMinor": str(usdc), "assetDecimals": 6,
+                                 "valuedBaseMinor": str(self.usd_cents_of(T.PAYMENT_ASSET, usdc)), "rate": {"source": "double", "observedAt": now, "rateE8": "100000000"}, "takenAt": now})
+            else:
+                minor = self.chain.balance_of(w["address"])
+                readings.append({"asset": T.PAYMENT_ASSET, "chain": T.PAYEE_CHAIN, "amountMinor": str(minor), "assetDecimals": 6, "valuedBaseMinor": str(self.usd_cents_of(T.PAYMENT_ASSET, minor)),
+                                 "rate": {"source": "double", "observedAt": now, "rateE8": "100000000"}, "takenAt": now})
+            self.snapshots[w["walletId"]] = readings
+            taken += len(readings)
+        self.refreshed_at = now
+        return 200, {"discovery": {"holdersDiscovered": 1, "holdersUpdated": 0, "holdersRemoved": 0, "walletsDiscovered": len(self.every_wallet()), "walletsRemoved": 0, "source": "double"},
+                     "holdings": {"taken": taken, "skipped": skipped, "source": "double"}, "spend": {"rowsWritten": 0, "paymentsFolded": 0, "unattributedPayments": 0}, "refreshedAt": now}
+
+    def overview(self, headers: Dict[str, str]) -> Tuple[int, Any]:
+        """GET /v1/aer360/overview (routes/aer360.ts; consolidation.ts readOverview): one holder, the estate, its wallets each with its holdings per asset from the latest readings, or the absence sentence."""
+        self.require_caller(headers, "viewer")
+        wallets_view: List[Dict[str, Any]] = []
+        total = 0
+        unread = 0
+        for w in self.every_wallet():
+            readings = self.snapshots.get(w["walletId"]) or []
+            if not readings:
+                unread += 1
+                wallets_view.append({"id": w["walletId"], "walletNumber": w["walletNumber"], "name": w["name"], "holdingBaseMinor": None, "asOf": None,
+                                     "absence": "This wallet has not been read yet, so it shows no figure rather than a zero.", "holdings": []})
+                continue
+            held = sum(int(r["valuedBaseMinor"]) for r in readings)
+            total += held
+            wallets_view.append({"id": w["walletId"], "walletNumber": w["walletNumber"], "name": w["name"], "holdingBaseMinor": str(held), "asOf": readings[0]["takenAt"], "absence": None,
+                                 "holdings": sorted(readings, key=lambda r: (-int(r["valuedBaseMinor"]), r["asset"]))})
+        holder = {"id": "holder-" + self.workspace["id"], "aapOrgId": self.aap_account_id, "name": self.workspace["name"], "category": None, "level": 1,
+                  "holdingBaseMinor": str(total) if len(wallets_view) > unread else None, "asOf": self.refreshed_at, "last24hSpendBaseMinor": "0", "wallets": wallets_view, "unreadWalletCount": unread}
+        return 200, {"holders": [holder], "totalHolderCount": 1, "totalWalletCount": len(wallets_view), "hierarchySource": "double", "holdersRefreshedAt": self.refreshed_at, "readAt": self._now_iso()}
+
     # -- the journey (services/journey.ts) ------------------------------------------------------------------------
     def journey(self, headers: Dict[str, str]) -> Tuple[int, Any]:
         caller = self.require_caller(headers, "viewer")
@@ -4335,6 +4876,15 @@ def the_testnet_book():
     (tests/test_aer360_tables.py) is proved on the unpatched code.
     """
     return unittest.mock.patch.object(A, "payments", lambda: list(A.PAYMENTS_ON_THE_TESTNET))
+
+
+def credit_posts(platform: PlatformDouble) -> List[Dict[str, Any]]:
+    """
+    The platform's admin credit road as it was asked: the POSTs alone. Since Spec T29 §0a.4 the API leg's pre-flight also READS the account's entries on the
+    platform's read road (GET /v1/admin/accounts/{id}/policies) under the same credential, and a read credits nothing — so a test that says "no gas was credited"
+    counts the credits, not every request the platform saw.
+    """
+    return [r for r in platform.requests if r["method"] == "POST"]
 
 
 def runner_on(double: EstateDouble, tmp: str, invite: Optional[str] = None, start_at: Optional[str] = None, said: Optional[List[str]] = None,

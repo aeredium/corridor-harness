@@ -54,6 +54,22 @@ THE STATIONS carry the API leg's numbers so the two legs line up: R1 Enrol (S1),
 (S4), R5 Wallet (S5), R6 Payees (S6), R7 Payment and R7b The second press (S7), R8 The two legs agree, R9 Teardown. `--from S5` (or
 R5) resumes at a station, every person signed in with the credential stored for them, so a station can be re-run without rebirth.
 
+THE SOLANA ROAD (Spec T29 and HRW-2, written 24 October 2026, amended 30 October 2026): five stations beside the API leg's five, numbered so
+nothing moves — R5s Solana wallet (S5s; the spec's name for the station that births the two), R6s Solana payee (S6s), R7s-1 SOL payment
+(S7s-1), R7s-2 The curve belt (S7s-2), R7s-3 Solana holdings (S7s-3). A founder presses Create a new wallet with the network Solana, twice (the first wallet pays, the second is its payee);
+adds the second wallet as a payee on solana — pasted with a trailing space — and meets the page's own judgment of a base58 address: the three
+faults, and a Solana address in an EVM payee's field, each refused at the page in the estate's sentence before anything is sent (the two
+untidy fixtures of HRW-2 §4); pays one SOL payment from the first wallet to the second, under the one-dollar total at the estate's own
+valuation and the sandbox allowance read from the estate, the wallet's SOL read on the Consolidation page until it holds the payment plus
+the 0.01 SOL fee reserve (the owner sends it once, at his amount, from his own wallet; --funds-wait bounds the wait, and a wait that runs out
+records the station waiting and moves nothing); enters a SOL row from the funding wallet and reads the curve belt's refusal; and reads each
+Solana wallet's holdings in the Consolidation ledger. The payee is the harness's own second Solana wallet, never an address outside the
+estate (the owner's ruling of 29 October 2026, Spec T29 §0a.2): SOLANA_PAYEE in payee.env is ignored where present, and the report says so.
+The SOL amount is the owner's figure, written in the book by him (aer360_answers.SOLANA_PAYMENT_SOL); none written, R7s-1 prints the first
+wallet's address and stops before any review. A closed road is recorded by name — the estate's own SOLANA_ROAD_CLOSED sentence, read on the
+page where the estate says it — and the station passes with nothing moved. Every route, shape and sentence is pinned from aeredium/AERAccounts
+main at d369926 (Spec AER360-SOL-114) in aer360_screens.py and aer360_tables.py, never from memory.
+
 THE UNTIDY FIXTURES (Spec HRW-1 §4) are listed in aer360_tables.py beside the ruling or spec that made each a rule (UNTIDY_FIXTURES):
 the estate born by the operator's CLI road (group100_invite.sh), with --email and, in one run, deliberately without it; the charter's
 addresses with capitals and surrounding spaces; one approver whose display name is not their address; the founder pressing Submit
@@ -137,13 +153,15 @@ USER_AGENT_NOTE = "Harness Real World (Spec HRW-1)"
 # The stations, with the API leg's numbers (Spec HRW-1 §3).
 # ---------------------------------------------------------------------------
 STATIONS: List[Tuple[str, str]] = [
-    ("R1", "Enrol"), ("R2", "Sign in"), ("R3", "Policy Interview"), ("R4", "People"), ("R5", "Wallet"), ("R6", "Payees"),
-    ("R7", "Payment"), ("R7b", "The second press"), ("R8", "The two legs agree"), ("R9", "Teardown"),
+    ("R1", "Enrol"), ("R2", "Sign in"), ("R3", "Policy Interview"), ("R4", "People"), ("R5", "Wallet"), ("R5s", "Solana wallet"), ("R6", "Payees"),
+    ("R6s", "Solana payee"), ("R7", "Payment"), ("R7b", "The second press"), ("R7s-1", "SOL payment"), ("R7s-2", "The curve belt"), ("R7s-3", "Solana holdings"),
+    ("R8", "The two legs agree"), ("R9", "Teardown"),
 ]
 STATION_IDS = [s for s, _ in STATIONS]
 TITLES = dict(STATIONS)
-# R8 holds each browser station against the API leg's station of the same number (R7b's press is S7's road too).
-API_LEG_STATION = {"R1": "S1", "R2": "S2", "R3": "S3", "R4": "S4", "R5": "S5", "R6": "S6", "R7": "S7", "R7b": "S7"}
+# R8 holds each browser station against the API leg's station of the same number (R7b's press is S7's road too; the Solana five carry the API leg's names).
+API_LEG_STATION = {"R1": "S1", "R2": "S2", "R3": "S3", "R4": "S4", "R5": "S5", "R5s": "S5s", "R6": "S6", "R6s": "S6s", "R7": "S7", "R7b": "S7",
+                   "R7s-1": "S7s-1", "R7s-2": "S7s-2", "R7s-3": "S7s-3"}
 
 PASS, FAIL, FAILED_PREREQUISITE, SKIPPED, NOT_RUN = E.PASS, E.FAIL, E.FAILED_PREREQUISITE, E.SKIPPED, E.NOT_RUN
 FAILURES = E.FAILURES
@@ -179,8 +197,8 @@ PLAYWRIGHT_MISSING = ("Playwright for Python is not importable by %s, and the br
                       "Install it once: %s -m pip install --user playwright, then %s -m playwright install chromium. Nothing was opened and nothing was sent")
 CHROMIUM_MISSING = ("Chromium would not launch through Playwright (%s); install it once: %s -m playwright install chromium. Nothing was opened and nothing "
                     "was sent")
-I_MEAN_IT = ("Harness Real World presses controls on %s with real passkeys and moves up to one dollar of real USDC to the owner's wallet. "
-             "Nothing was opened. Run it again with --i-mean-it; the plan it would walk is printed below.")
+I_MEAN_IT = ("Harness Real World presses controls on %s with real passkeys and moves up to one dollar of real USDC and SOL to the owner's own wallets "
+             "(the owner's wallet, and the harness's own second Solana wallet). Nothing was opened. Run it again with --i-mean-it; the plan it would walk is printed below.")
 FOUNDER_NOT_ENROLLED = "the founder not enrolled here"
 NO_FOUNDER_SESSION = "no founder session"
 WRONG_ESTATE = "a page names another estate"
@@ -213,6 +231,24 @@ LITERAL_BOUND_TOTAL = ("the rows the page would submit come to %d cents and this
                        "run at most (Spec HRW-1 §5, the one-dollar law), so %r was not pressed and the run stops here")
 FUND_THE_WALLET = ("fund wallet %s (%s) with %s of %s on %s — this run's book needs %s from here and the chain reads %s there — then rerun with --from %s; "
                    "the harness funds no wallet, because funding a wallet is the owner's act")
+# THE SOLANA ROAD (Spec T29 and HRW-2): the stops in the API leg's own words (aer360_harness.py), so the two legs' reports read alike, and the bound a SOL row is
+# held to before Submit this run — the one row the page will submit is to the harness's own second Solana wallet, in SOL, in the book's lamports, and with what
+# this run has submitted it stays under RUN_CEILING_CENTS at the estate's own valuation (never a price of the harness's own).
+SOLANA_STATIONS_SKIPPED = E.SOLANA_STATIONS_SKIPPED
+NO_SOLANA_WALLET = E.NO_SOLANA_WALLET
+NO_SOLANA_PAYEE = E.NO_SOLANA_PAYEE
+SOLANA_AMOUNT_NOT_WRITTEN = E.SOLANA_AMOUNT_NOT_WRITTEN
+WAITING_FOR_SOL = E.WAITING_FOR_SOL
+NO_ROOM_UNDER_THE_DOLLAR = E.NO_ROOM_UNDER_THE_DOLLAR
+ALLOWANCE_SHORT = E.ALLOWANCE_SHORT
+FUNDS_WAIT_SECONDS = E.FUNDS_WAIT_SECONDS      # --funds-wait's default: how long R7s-1 waits for the owner's SOL to reach the first Solana wallet (Spec T29 §0a.3)
+FUNDS_POLL_SECONDS = E.FUNDS_POLL_SECONDS      # between two readings of the wallet's SOL on the Consolidation page while it waits (no-op under the test clock)
+SOLANA_BOUND_ADDRESS = ("the review the page received names %s, not the harness's own second Solana wallet %s; this leg pays the harness's own wallets alone "
+                        "(Spec T29 §0a.2, Spec T24), so %r was not pressed and the run stops here")
+SOLANA_BOUND_ROW = ("the review the page received carries %s, and this press submits one row of %s to the Solana payee and nothing else, so %r was not pressed "
+                    "and the run stops here")
+SOLANA_SLIP_SENT = ("the page sent a founder's slip to the estate instead of refusing it itself (PayeeRegistry.tsx judges the address before Add payee sends, "
+                    "shared/payeeaddress.ts); the estate answered %s")
 
 
 class HarnessFault(E.HarnessError):
@@ -793,8 +829,9 @@ class RealWorld:
                  start_at: Optional[str] = None, headed: bool = False, runs_root: str = RUNS_DIR, api_reports: str = API_REPORTS_DIR,
                  driver: Optional[Driver] = None, transport: Optional[Callable[[urllib.request.Request], Tuple[int, List[Tuple[str, str]], str]]] = None,
                  say: Callable[[str], None] = print, sleep: Callable[[float], None] = time.sleep, time_scale: float = 1.0,
-                 in_colour: Optional[bool] = None, dry_folder: bool = False):
+                 in_colour: Optional[bool] = None, dry_folder: bool = False, funds_wait: float = FUNDS_WAIT_SECONDS):
         self.base = base.rstrip("/")
+        self.funds_wait = float(funds_wait)  # Spec T29 §0a.3: how long R7s-1 waits for the owner's SOL (--funds-wait)
         parsed = urllib.parse.urlparse(self.base)
         self.origin = "%s://%s" % (parsed.scheme, parsed.netloc)
         self.store_root = store_root
@@ -839,7 +876,10 @@ class RealWorld:
         self.refused_birth: Optional[str] = None  # a printout naming an estate not the harness's own: R1 stops the run on it, before any link is opened
         # what this run made and read, station by station — the report's summary and R8's comparison read these
         self.facts: Dict[str, Any] = {"runs": [], "instructions_created": {}, "gas_credits": [], "owner_payee": None, "entries_before": None, "submitted_cents": 0,
-                                      "entries_after": None, "receipt_ceilings": None, "wallet": None, "payees": [], "chain": {}}
+                                      "entries_after": None, "receipt_ceilings": None, "wallet": None, "payees": [], "chain": {},
+                                      # the Solana road (Spec T29, HRW-2): the two wallets, the payee, the run, the holdings, and why the road's stations were skipped or closed
+                                      "solana_wallets": [], "solana_payee": None, "solana_run": None, "solana_holdings": None, "solana_skipped": None, "solana_closed": False,
+                                      "solana_usdc_signal": None, "solana_allowance": None}
 
     # -- the records ------------------------------------------------------------------------------------------------------
     def step(self, kind: str, who: str, what: str, expected: str = "", result: str = "", page: str = "", shot: Optional[str] = None) -> None:
@@ -1286,7 +1326,7 @@ class RealWorld:
 
     def run_station(self, station: str, title: str) -> Outcome:
         self.current = station
-        method = getattr(self, "station_%s" % station.lower())
+        method = getattr(self, "station_%s" % station.lower().replace("-", "_"))
         try:
             outcome = method()
         except RunStop as stop:
@@ -2178,8 +2218,8 @@ class RealWorld:
             out.append(v)
         return out
 
-    def payee_row(self, v: Visitor, name: str, status_word: Optional[str] = None) -> Any:
-        rows = v.card(S.PAYEES_CARD).get_by_role("row").filter(has_text=name).filter(has_text=T.PAYEE_CHAIN)
+    def payee_row(self, v: Visitor, name: str, status_word: Optional[str] = None, chain: str = T.PAYEE_CHAIN) -> Any:
+        rows = v.card(S.PAYEES_CARD).get_by_role("row").filter(has_text=name).filter(has_text=chain)
         return rows.filter(has_text=status_word) if status_word else rows
 
     def add_the_payee(self, v: Visitor, index: int, name: str, owner: str, said: List[str]) -> int:
@@ -2220,16 +2260,55 @@ class RealWorld:
                      store=json.dumps(addresses, ensure_ascii=False), expected="the address without the space (%s)" % owner)
         return 1
 
-    def send_for_approval(self, v: Visitor, name: str) -> None:
+    def send_for_approval(self, v: Visitor, name: str, chain: str = T.PAYEE_CHAIN) -> None:
         """The payee's own Send for approval, and its row read once it says Pending promotion."""
-        row = self.payee_row(v, name, S.STATUS_WORDS["proposed"])
+        row = self.payee_row(v, name, S.STATUS_WORDS["proposed"], chain)
         sent = v.press(S.SEND_FOR_APPROVAL, within=row, answer=("POST", r"^/v1/payees/addresses/[^/]+/promote$"), why="the address to its approvers")
         if sent is None or not sent.ok:
             v.poll(lambda: bool(v.refusals()))
             raise StationStop("%s was not sent for approval: the page says %s; the estate answered %s (%s)" % (
                 name, json.dumps(" | ".join(v.refusals()) or "nothing", ensure_ascii=False), sent.sentence() if sent else "nothing",
                 kind_of(sent.status, sent.json) if sent else UNREACHABLE))
-        v.poll(lambda: S.STATUS_WORDS["pending_promotion"] in v.text_of(self.payee_row(v, name)))
+        v.poll(lambda: S.STATUS_WORDS["pending_promotion"] in v.text_of(self.payee_row(v, name, chain=chain)))
+
+    def collect_approvals(self, name: str, approvers: Sequence[Visitor], chain: str = T.PAYEE_CHAIN) -> Tuple[List[str], int]:
+        """
+        Each approver, in their own context, presses Approve on the payee's row until the estate answers whitelisted — the row read as the approver then
+        reads it (its status, and the sentence the press left in it), and any refusal, once the page shows what the answer said. Answers the words and the
+        failures found.
+        """
+        words: List[str] = []
+        failures = 0
+        for a in approvers:
+            a.goto(S.PAYEES_ROUTE)
+            arow = self.payee_row(a, name, S.STATUS_WORDS["pending_promotion"], chain)
+            if not arow.count():
+                break
+            pressed = a.press(S.APPROVE, within=arow, answer=("POST", r"^/v1/payees/addresses/[^/]+/approve$"), why="their own signature on the address")
+            self.save_credential(a)
+            if pressed is not None and pressed.ok and isinstance(pressed.json, dict):
+                shows = (S.STATUS_WORDS["whitelisted"] if pressed.json.get("whitelistStatus") == "whitelisted"
+                         else " ".join(str(pressed.json.get("sentence") or S.STATUS_WORDS["pending_promotion"]).split()))
+                a.poll(lambda: shows in a.text_of(self.payee_row(a, name, chain=chain)))
+            else:
+                a.poll(lambda: bool(a.refusals()))
+            page_words = " | ".join(t for t in [a.text_of(self.payee_row(a, name, chain=chain))] + a.refusals() if t)
+            if pressed is None or not pressed.ok or not isinstance(pressed.json, dict):
+                failures += 1
+                detail = ((pressed.json or {}).get("error") or {}).get("detail") if pressed and isinstance(pressed.json, dict) else None
+                self.finding("%s's approval of %s was refused" % (a.name, name), "the page says %s; the platform said %s" % (
+                    json.dumps(page_words, ensure_ascii=False), json.dumps((detail or {}).get("platformSaid") if isinstance(detail, dict) else None)),
+                    kind_of(pressed.status, pressed.json) if pressed else UNREACHABLE, page=page_words, store=pressed.sentence() if pressed else "",
+                    route="POST /v1/payees/addresses/…/approve", expected="counted: one of two, then approved")
+                continue
+            body = pressed.json
+            counts = body.get("approvals") if isinstance(body.get("approvals"), dict) else {}
+            words.append("%s: %s%s — the page: %s" % (a.name, body.get("whitelistStatus"), (" (%s of %s)" % (counts.get("collected"), counts.get("required"))) if counts else "",
+                                                     json.dumps(page_words, ensure_ascii=False)))
+            self.next_step("the Payees room, after %s's press" % a.name, page_words or str(body.get("sentence") or body.get("whitelistStatus")))
+            if body.get("whitelistStatus") == "whitelisted":
+                break
+        return words, failures
 
     def station_r6(self) -> Outcome:
         v = self.founder()
@@ -2263,37 +2342,10 @@ class RealWorld:
             if status != "pending_promotion":
                 self.send_for_approval(v, name)
             words = [" | ".join(v.texts("status", within=self.payee_row(v, name)))]
-            for a in approvers:
-                a.goto(S.PAYEES_ROUTE)
-                arow = self.payee_row(a, name, S.STATUS_WORDS["pending_promotion"])
-                if not arow.count():
-                    break
-                pressed = a.press(S.APPROVE, within=arow, answer=("POST", r"^/v1/payees/addresses/[^/]+/approve$"), why="their own signature on the address")
-                self.save_credential(a)
-                # the row as the approver now reads it — its status, and the sentence the press left in it (one of two; then Whitelisted) — and any
-                # refusal: read once the page shows what the answer said
-                if pressed is not None and pressed.ok and isinstance(pressed.json, dict):
-                    shows = (S.STATUS_WORDS["whitelisted"] if pressed.json.get("whitelistStatus") == "whitelisted"
-                             else " ".join(str(pressed.json.get("sentence") or S.STATUS_WORDS["pending_promotion"]).split()))
-                    a.poll(lambda: shows in a.text_of(self.payee_row(a, name)))
-                else:
-                    a.poll(lambda: bool(a.refusals()))
-                page_words = " | ".join(t for t in [a.text_of(self.payee_row(a, name))] + a.refusals() if t)
-                if pressed is None or not pressed.ok or not isinstance(pressed.json, dict):
-                    failures += 1
-                    detail = ((pressed.json or {}).get("error") or {}).get("detail") if pressed and isinstance(pressed.json, dict) else None
-                    self.finding("%s's approval of %s was refused" % (a.name, name), "the page says %s; the platform said %s" % (
-                        json.dumps(page_words, ensure_ascii=False), json.dumps((detail or {}).get("platformSaid") if isinstance(detail, dict) else None)),
-                        kind_of(pressed.status, pressed.json) if pressed else UNREACHABLE, page=page_words, store=pressed.sentence() if pressed else "",
-                        route="POST /v1/payees/addresses/…/approve", expected="counted: one of two, then approved")
-                    continue
-                body = pressed.json
-                counts = body.get("approvals") if isinstance(body.get("approvals"), dict) else {}
-                words.append("%s: %s%s — the page: %s" % (a.name, body.get("whitelistStatus"), (" (%s of %s)" % (counts.get("collected"), counts.get("required"))) if counts else "",
-                                                         json.dumps(page_words, ensure_ascii=False)))
-                self.next_step("the Payees room, after %s's press" % a.name, page_words or str(body.get("sentence") or body.get("whitelistStatus")))
-                if body.get("whitelistStatus") == "whitelisted":
-                    break
+            # the row as each approver then reads it — its status, and the sentence the press left in it (one of two; then Whitelisted) — and any refusal
+            more, refused = self.collect_approvals(name, approvers)
+            words.extend(more)
+            failures += refused
             after = v.read(S.PAYEES_ROUTE_API, "the payee register after the approvals: %s whitelisted at the owner's wallet" % name)
             record = self.payee_record(after, name, owner)
             status = (record or {}).get("whitelistStatus")
@@ -2306,15 +2358,19 @@ class RealWorld:
         return Outcome("R6", FAIL if failures else PASS, "; ".join(said))
 
     @staticmethod
-    def payee_record(read: StoreRead, name: str, owner: str) -> Optional[Dict[str, Any]]:
-        """The address of the payee called `name` on the payments' chain at the owner's wallet, as the register holds it (the newest such row)."""
+    def payee_record(read: StoreRead, name: str, owner: str, chain: str = T.PAYEE_CHAIN) -> Optional[Dict[str, Any]]:
+        """
+        The address of the payee called `name` on `chain` at `owner`, as the register holds it (the newest such row): an EVM address compared folded, a
+        Solana one exactly — base58 is case-sensitive, and the estate stores it verbatim (Spec AER360-SOL-114 §3.4).
+        """
         payees = (read.json or {}).get("payees") if read.ok and isinstance(read.json, dict) else None
+        exact = T.chain_family(chain) == "solana"
         found = None
         for p in payees or []:
             if not isinstance(p, dict) or p.get("displayName") != name:
                 continue
             for a in p.get("addresses") or []:
-                if isinstance(a, dict) and str(a.get("chain")) == T.PAYEE_CHAIN and fold(a.get("address")) == fold(owner):
+                if isinstance(a, dict) and str(a.get("chain")) == chain and (str(a.get("address")) == owner if exact else fold(a.get("address")) == fold(owner)):
                     found = a
         return found
 
@@ -2755,6 +2811,882 @@ class RealWorld:
         return Outcome("R7b", FAIL if failures else PASS, "%s; %s" % (outcome.line, "; ".join(extra)))
 
     # ======================================================================================================================
+    # R5s, R6s, R7s-1, R7s-2, R7s-3 — the Solana road (Spec T29 and HRW-2, 24 October 2026, amended 30 October 2026), in a founder's shoes.
+    # ======================================================================================================================
+    @staticmethod
+    def refusal_code(x: Optional[Exchange]) -> Optional[str]:
+        """The code of a refusal the browser received, where the answer carries one in the estate's shape ({error: {code, message, …}})."""
+        if x is None or not isinstance(x.json, dict) or not isinstance(x.json.get("error"), dict):
+            return None
+        code = x.json["error"].get("code")
+        return str(code) if code else None
+
+    def solana_wallets_known(self) -> List[Dict[str, Any]]:
+        """The Solana wallets this leg knows: R5s's in this run, else state.json's (walletId, walletNumber, address, bornAt; no key)."""
+        if self.facts.get("solana_wallets"):
+            return list(self.facts["solana_wallets"])
+        stored = self.state.get("solana_wallets")
+        return [dict(w) for w in stored if isinstance(w, dict)] if isinstance(stored, list) else []
+
+    def remember_solana_wallets(self, wallets: List[Dict[str, Any]]) -> None:
+        self.facts["solana_wallets"] = wallets
+        self.state["solana_wallets"] = [{k: w.get(k) for k in ("walletId", "walletNumber", "walletName", "address", "bornAt")} for w in wallets]
+
+    def standing_solana_wallets(self, v: Visitor, why: str) -> Tuple[StoreRead, List[Dict[str, Any]]]:
+        """
+        The harness's own Solana wallets as the register lists them — keyed, on solana alone (aer360_harness.Runner.is_solana_row) — in the order this leg knows
+        them: state.json's rows where the register still lists each at the same address, else the register's Solana rows in wallet-number order (every Solana
+        wallet of this estate is the harness's own, since the estate is). A wallet that stands is taken on and never pressed for again (Spec T13 §1).
+        """
+        register = v.read(S.WALLETS_REGISTER_ROUTE, why)
+        rows = [r for r in self.register_wallets(register) if E.Runner.is_solana_row(r)]
+        by_id = {str(r.get("walletId")): r for r in rows}
+        out: List[Dict[str, Any]] = []
+        for known in self.solana_wallets_known():
+            row = by_id.get(str(known.get("walletId")))
+            if row is not None and str(row.get("address")) == str(known.get("address")):
+                out.append(dict(known, walletNumber=row.get("walletNumber"), walletName=row.get("name")))
+        if out:
+            return register, out
+
+        def number(row: Dict[str, Any]) -> Tuple[int, str]:
+            text = str(row.get("walletNumber") or "")
+            return (int(text) if text.isdigit() else 10 ** 9, text)
+
+        for row in sorted(rows, key=number):
+            out.append({"walletId": row.get("walletId"), "walletNumber": row.get("walletNumber"), "walletName": row.get("name"), "address": row.get("address"),
+                        "bornAt": None, "takenOn": "from the register"})
+        return register, out
+
+    def recall_solana_wallets(self, v: Visitor) -> List[Dict[str, Any]]:
+        """The two Solana wallets as R5s left them in this run, else as state.json and the register name them (a run resumed at R6s, R7s-1, R7s-2 or R7s-3)."""
+        if self.facts.get("solana_wallets"):
+            return self.facts["solana_wallets"]
+        _, wallets = self.standing_solana_wallets(v, "the wallet register, read because R5s left no record of a Solana wallet in this run (a run resumed here): "
+                                                    "the harness's own Solana wallets, keyed, on solana alone")
+        wallets = [dict(w, key=spec["key"], name=spec["name"]) for w, spec in zip(wallets, A.SOLANA_WALLETS)]
+        self.facts["solana_wallets"] = wallets
+        return wallets
+
+    def judge_solana_row(self, register: StoreRead, record: Dict[str, Any]) -> List[str]:
+        """
+        The register row read back for a Solana wallet (Spec T29 §3.1): chains ["solana"] alone, keyed, the address verbatim (base58 is case-sensitive), and
+        no recovery sentence anywhere in the row (the owner's ruling of 23 October 2026). Each failing is a finding; the words are the station's line.
+        """
+        rows = self.register_wallets(register)
+        row = next((r for r in rows if str(r.get("walletId")) == str(record.get("walletId"))), None)
+        if row is None:
+            self.finding("R5s: the register does not list the Solana wallet", "the page said %s was born and the wallet register lists no row for wallet %s" % (
+                record["name"], record.get("walletId")), SCREEN, store=register.text[:400], expected="the wallet row, keyed, on solana alone, with its address")
+            return ["the register lists no row for %s" % record["name"]]
+        chains = [str(c) for c in (row.get("chains") or [])]
+        if chains != [T.SOLANA_CHAIN]:
+            self.finding("R5s: the Solana wallet's row does not stand on solana alone", "%s's row carries chains %s" % (record["name"], json.dumps(chains)), SCREEN,
+                         store=json.dumps(row, ensure_ascii=False), expected='chains ["%s"]' % T.SOLANA_CHAIN)
+        if row.get("keyed") is not True:
+            self.finding("R5s: the Solana wallet's row is not keyed", "%s's row reads keyed %r, so no payment may leave it (Spec 110 item 4)" % (record["name"], row.get("keyed")), SCREEN,
+                         store=json.dumps(row, ensure_ascii=False), expected="keyed true: a wallet_keys row behind it")
+        if str(row.get("address")) != str(record.get("address")):
+            self.finding("R5s: the Solana wallet's address was not registered verbatim", "the page showed %s and the register reads %s" % (record.get("address"), row.get("address")), SCREEN,
+                         store=json.dumps(row, ensure_ascii=False), expected="the address as the page showed it (base58 is case-sensitive)")
+        if S.RECOVERY_WORDS.search(json.dumps(row, ensure_ascii=False)):
+            self.finding("R5s: a recovery sentence on a Solana wallet's row", "%s's register row speaks of recovery" % record["name"], SCREEN, store=json.dumps(row, ensure_ascii=False)[:300],
+                         expected="nothing about recovery on Solana (the owner's ruling of 23 October 2026)")
+        record.update({k: row.get(k) for k in ("walletId", "walletNumber") if row.get(k)})
+        record["walletName"] = row.get("name")
+        return ["the register: wallet %s on %s, keyed %s, address %s" % (row.get("walletNumber"), ", ".join(chains) or "no chain", row.get("keyed"), row.get("address"))]
+
+    def press_a_solana_wallet(self, v: Visitor, spec: Dict[str, Any], said: List[str]) -> Tuple[Optional[Dict[str, Any]], Optional[Exchange]]:
+        """
+        Create a new wallet with the network Solana, as the screen asks it since Spec AER360-SOL-114 (Wallets.tsx at d369926: the network first, then whose
+        wallet it is; `chain: 'solana'` on both steps of the press), then Create it under the passkey; the born status read once the page says it, its
+        address held to the base58 judgment; nothing on the card or in the answer speaking of recovery. Answers (the record, None), or (None, the refusing
+        answer) where the estate refused the press — a founder reads the refusal on the card, and the station says it by name.
+        """
+        v.goto(S.WALLETS_ROUTE)
+        card = v.card(S.NEW_WALLET_CARD)
+        if not v.has(S.CREATE_NEW_WALLET, within=card, seconds=10.0):
+            raise StationStop("the Wallets room offers no %r; the page says %s" % (S.CREATE_NEW_WALLET, json.dumps(v.main_text()[:400], ensure_ascii=False)))
+        v.press(S.CREATE_NEW_WALLET, within=card, why="the room's own press for a wallet, this one on Solana (%s)" % spec["name"])
+        v.must_appear(card.locator(S.CSS_LEGEND), "the press's questions")
+        questions = [" ".join(t.split()) for t in card.locator(S.CSS_LEGEND).all_inner_texts()]
+        self.next_step("the A new wallet card", " | ".join(questions))
+        if S.NETWORK_LEGEND not in questions:
+            raise StationStop("the press asks %s and not %r, so no Solana wallet can be asked for from the screen (Spec AER360-SOL-114 §3.3)" % (
+                json.dumps(questions, ensure_ascii=False), S.NETWORK_LEGEND))
+        v.choose(S.SOLANA_NETWORK, within=card)
+        v.choose(S.THIS_ESTATE, within=card)
+        card_words = v.text_of(card)
+        if S.RECOVERY_WORDS.search(card_words):
+            self.finding("R5s: the card speaks of recovery for a Solana wallet", "the A new wallet card reads %s" % json.dumps(card_words[:400], ensure_ascii=False), SCREEN,
+                         page=card_words[:400], expected="nothing about recovery on Solana (the owner's ruling of 23 October 2026)")
+        since = len(self.exchanges)
+        v.press(S.CREATE_IT, within=card, answer=("POST", r"^/v1/workspace/wallets(/options)?$"), why="the Solana wallet, under the passkey (%s)" % spec["name"], seconds=180.0)
+        self.save_credential(v)  # the ceremony moved the counter: saved before anything that could stop the station
+        born_words = v.page.get_by_role("status").filter(has_text=re.compile(r"^Wallet \S+ is born"))
+        v.poll(lambda: born_words.count() > 0 or bool(v.refusals(within=card)), 180.0)
+        answer = self.answered("POST", r"^/v1/workspace/wallets$", v.name, since) or self.answered("POST", r"^/v1/workspace/wallets/options$", v.name, since)
+        if not born_words.count():
+            refused = " | ".join(v.refusals(within=card))
+            self.next_step("the A new wallet card", refused)
+            said.append("%s: not born — the page says %s; the estate answered %s (%s)" % (
+                spec["name"], json.dumps(refused or "nothing", ensure_ascii=False), answer.sentence() if answer else "nothing", kind_of(answer.status, answer.json) if answer else UNREACHABLE))
+            return None, answer
+        status = v.text_of(born_words)
+        found = re.match(r"^Wallet (\S+) is born(?:: ([1-9A-HJ-NP-Za-km-z]{32,44}))?\.", status)
+        wallet = (answer.json or {}).get("wallet") if answer and isinstance(answer.json, dict) else None
+        record = {"key": spec["key"], "name": spec["name"], "walletId": (wallet or {}).get("walletId"), "walletNumber": found.group(1) if found else (wallet or {}).get("walletNumber"),
+                  "walletName": (wallet or {}).get("name"), "address": (found.group(2) if found and found.group(2) else (wallet or {}).get("address")), "bornAt": now_iso()}
+        fault, _ = T.judge_solana_address(record["address"])
+        if fault is not None:
+            self.finding("R5s: the address the page shows is not a Solana address", "%s: the page says %s, whose fault is %s" % (spec["name"], json.dumps(status, ensure_ascii=False), fault), SCREEN,
+                         page=status, store=json.dumps(wallet, ensure_ascii=False), expected="base58 of 32 to 44 characters decoding to exactly 32 bytes on the Ed25519 curve (packages/solana/src/address.ts)")
+        if answer is not None and S.RECOVERY_WORDS.search(json.dumps(answer.json, ensure_ascii=False)):
+            self.finding("R5s: a recovery sentence in a Solana wallet's birth", "the press's answer for %s speaks of recovery" % spec["name"], SCREEN, store=answer.text[:400],
+                         expected="nothing about recovery on Solana (the owner's ruling of 23 October 2026)")
+        said.append("%s: the press asked %s and no limit; %r chosen; the page says %s" % (
+            spec["name"], " and ".join(json.dumps(q, ensure_ascii=False) for q in questions) or "nothing", S.SOLANA_NETWORK, json.dumps(status, ensure_ascii=False)))
+        self.next_step("the Wallets room", status)
+        return record, None
+
+    def station_r5s(self) -> Outcome:
+        v = self.founder()
+        said: List[str] = []
+        findings_before = len(self.findings)
+        v.goto(S.WALLETS_ROUTE)
+        if v.heading() != S.WALLETS_HEADING:
+            raise StationStop("the Wallets room did not open: its heading reads %r" % v.heading())
+        _, standing = self.standing_solana_wallets(v, "the wallet register: a Solana wallet of the harness's own that already stands — keyed, on solana alone — is taken on and not pressed for again")
+        wallets: List[Dict[str, Any]] = []
+        for index, spec in enumerate(A.SOLANA_WALLETS):
+            if index < len(standing):
+                record = dict(standing[index], key=spec["key"], name=spec["name"])
+                wallets.append(record)
+                said.append("%s: wallet %s at %s stands (%s) — taken on, not pressed for again" % (
+                    spec["name"], record.get("walletNumber"), record.get("address"), ("born %s" % record["bornAt"]) if record.get("bornAt") else "an earlier run's, read from the register"))
+                continue
+            record, refused = self.press_a_solana_wallet(v, spec, said)
+            if record is None:
+                skipped = "R5s pressed for %s and the estate refused: %s" % (spec["name"], refused.sentence() if refused is not None else "no answer")
+                self.facts["solana_skipped"] = skipped
+                self.remember_solana_wallets(wallets)
+                said.append(T.SOLANA_SKIPPED_SENTENCE % skipped)
+                if self.refusal_code(refused) == T.SOLANA_ROAD_CLOSED and refused is not None:
+                    said.append(T.CLOSED_ROAD_TRUTH_TOLD % refused.sentence())
+                    return Outcome("R5s", FAIL if len(self.findings) > findings_before else PASS, "; ".join(said))
+                return Outcome("R5s", FAIL, "; ".join(said))
+            register = v.read(S.WALLETS_REGISTER_ROUTE, "the wallet register read back after the press: the row for wallet %s on solana alone, keyed, its address verbatim" % record.get("walletNumber"))
+            said.extend(self.judge_solana_row(register, record))
+            wallets.append(record)
+        self.remember_solana_wallets(wallets)
+        # each wallet's card on the page: the fund sentence is the founder's next step, and nothing on the card speaks of recovery
+        v.goto(S.WALLETS_ROUTE)
+        for w in wallets:
+            number = str(w.get("walletNumber"))
+            fund = " | ".join(v.texts("note", name=S.fund_wallet_note(number)))
+            if fund:
+                self.next_step("wallet %s's card" % number, fund)
+            card_words = v.text_of(v.page.locator(S.CSS_CARD).filter(has_text=str(w.get("address") or "—")))
+            if S.RECOVERY_WORDS.search(card_words):
+                self.finding("R5s: a Solana wallet's card speaks of recovery", "wallet %s's card reads %s" % (number, json.dumps(card_words[:400], ensure_ascii=False)), SCREEN,
+                             page=card_words[:400], expected="nothing about recovery on Solana (the owner's ruling of 23 October 2026)")
+        payment = A.solana_payment()
+        self.note(T.SOLANA_FUNDS_LINE % (wallets[0]["address"], T.sol_words(payment.lamports) if payment else A.SOLANA_AMOUNT_PLACEHOLDER, T.sol_words(T.FEE_RESERVE_LAMPORTS)))
+        said.append("the two written down in state.json (no key)")
+        return Outcome("R5s", FAIL if len(self.findings) > findings_before else PASS, "; ".join(said))
+
+    # -- R6s — the Solana payee: the harness's own second Solana wallet, added from the screen; the slips the page refuses itself ----------------------------
+    def payee_env_names(self, key: str) -> bool:
+        """Whether payee.env carries a key at all — read for the one word, never for its value, which is never printed (Spec T29 §0a.2)."""
+        try:
+            with open(self.payee_env_path, "r", encoding="utf-8") as handle:
+                return key in T.parse_env_file(handle.read())
+        except OSError:
+            return False
+
+    def add_the_solana_payee(self, v: Visitor, name: str, address: str, said: List[str]) -> int:
+        """
+        Add a payee as the founder does (PayeeRegistry.tsx): the name, the chain solana, the second Solana wallet's address pasted with a trailing space
+        (HRW-2 §4's first untidy fixture). The page's own judgment trims before it judges (shared/payeeaddress.ts), so the press sends it; the estate stores
+        it trimmed and verbatim. Answers the failures found (an address stored as pasted, or with its case changed).
+        """
+        typed = address + " "
+        card = v.card(S.ADD_PAYEE_CARD)
+        v.fill(S.PAYEE_NAME_LABEL, name, within=card)
+        v.fill(S.PAYEE_CHAIN_LABEL, T.SOLANA_CHAIN, within=card)
+        v.fill(S.PAYEE_ADDRESS_LABEL, typed, within=card)
+        created = v.press(S.ADD_PAYEE, within=card, answer=("POST", r"^/v1/payees$"), answer_optional=True, why="the Solana payee, at the harness's second Solana wallet, pasted with a trailing space")
+        if created is None:
+            words = " | ".join(v.refusals(within=card))
+            if words:
+                said.append("the page refused the address pasted with a trailing space before anything was sent: %s — pasted again as the page asks" % json.dumps(words, ensure_ascii=False))
+                self.next_step("the Add payee card", words)
+                v.fill(S.PAYEE_ADDRESS_LABEL, address, within=card)
+                created = v.press(S.ADD_PAYEE, within=card, answer=("POST", r"^/v1/payees$"), answer_optional=True, why="the payee, the address pasted again")
+            if created is None:
+                raise StationStop("Add payee sent nothing for %s within %d s: the page says %s" % (name, int(ACTION_TIMEOUT_SECONDS), json.dumps(
+                    " | ".join(v.refusals(within=card)) or "nothing", ensure_ascii=False)))
+        if not created.ok or not isinstance(created.json, dict):
+            raise StationStop("%s was not added: the page says %s; the estate answered %s (%s)" % (
+                name, json.dumps(" | ".join(v.refusals()) or "nothing", ensure_ascii=False), created.sentence(), kind_of(created.status, created.json)))
+        row_json = created.json.get("payee") if isinstance(created.json.get("payee"), dict) else {}
+        addresses = [a for a in (row_json.get("addresses") or []) if isinstance(a, dict)]
+        stored = str(addresses[0].get("address")) if addresses else ""
+        if stored == address:
+            said.append("%s's address was pasted with a trailing space and the estate stored it trimmed and verbatim, %s" % (name, stored))
+            return 0
+        self.finding("R6s: a Solana address pasted with a trailing space was not stored trimmed and verbatim", "%s's address was stored as %r" % (name, stored), SCREEN,
+                     store=json.dumps(addresses, ensure_ascii=False), expected="the address without the space, its case kept (%s)" % address)
+        return 1
+
+    def type_the_slips(self, v: Visitor, address: str, said: List[str]) -> int:
+        """
+        Spec T29 §3.2 and HRW-2 §4, at the screen: the three faults of a Solana address — a string of the wrong shape (a 0x address: one of the harness's own
+        derived test addresses, nobody's), a base58 string of thirty-one bytes, and thirty-two bytes off the curve (the real address with a byte flipped until
+        the harness's own check fails) — and the second untidy fixture, a Solana address pasted in an EVM payee's field. The page judges each before Add payee
+        sends anything (PayeeRegistry.tsx, shared/payeeaddress.ts payeeAddressRefusal), in the estate's own sentence for that fault; the register is read
+        after and must hold none of them. Answers the failures found.
+        """
+        slips = [("the wrong shape (a 0x address)", T.SOLANA_CHAIN, T.address("CHECKSUM_PROBE_ETHEREUM")),
+                 ("base58 of thirty-one bytes", T.SOLANA_CHAIN, T.short_variant(address)),
+                 ("thirty-two bytes off the curve", T.SOLANA_CHAIN, T.off_curve_variant(address)),
+                 ("a Solana address in an EVM payee's field", T.PAYEE_CHAIN, address)]
+        failures = 0
+        v.goto(S.PAYEES_ROUTE)
+        card = v.card(S.ADD_PAYEE_CARD)
+        for words, chain, slip in slips:
+            if chain == T.SOLANA_CHAIN:
+                fault, _ = T.judge_solana_address(slip)
+                expected = T.solana_address_malformed_sentence(fault or "shape")
+            else:
+                fault = "shape"
+                expected = T.evm_address_malformed_sentence(T.C9_NETWORK_CHOICE)  # the chain's display name, as the registry names PAYEE_CHAIN
+            v.fill(S.PAYEE_NAME_LABEL, "Solana slip: %s" % words, within=card)
+            v.fill(S.PAYEE_CHAIN_LABEL, chain, within=card)
+            v.fill(S.PAYEE_ADDRESS_LABEL, slip, within=card)
+            created = v.press(S.ADD_PAYEE, within=card, answer=("POST", r"^/v1/payees$"), answer_optional=True,
+                              why="a founder's slip, %s: the page's own judgment should refuse it before anything is sent" % words)
+            shown = " | ".join(v.refusals(within=card))
+            self.next_step("the Add payee card", shown)
+            if created is not None:
+                failures += 1
+                self.finding("R6s: the page did not refuse a Solana slip itself (%s)" % words,
+                             SOLANA_SLIP_SENT % ("%s (%s)" % (created.sentence(), kind_of(created.status, created.json)) if not created.ok else "201: the payee was created"),
+                             SCREEN if created.ok else kind_of(created.status, created.json), page=shown, store=created.sentence(), expected="refused at the page: \"%s\"; nothing sent" % expected)
+                said.append("%s (%s): sent — %s" % (words, fault, created.sentence()))
+                continue
+            if expected not in shown:
+                failures += 1
+                self.finding("R6s: the page refused a Solana slip in other words (%s)" % words, "the page says %s" % json.dumps(shown or "nothing", ensure_ascii=False), SCREEN,
+                             page=shown, expected=expected)
+                said.append("%s (%s): refused at the page in other words — %s" % (words, fault, json.dumps(shown, ensure_ascii=False)))
+                continue
+            said.append("%s (%s): refused at the page before anything was sent — \"%s\"" % (words, fault, expected))
+        register = v.read(S.PAYEES_ROUTE_API, "the payees register after the slips: none of the four on any row (the chain and the string together)")
+        on_rows: Set[Tuple[str, str]] = set()
+        if register.ok and isinstance(register.json, dict):
+            on_rows = {(str(a.get("chain")), str(a.get("address"))) for p in (register.json.get("payees") or []) if isinstance(p, dict) for a in (p.get("addresses") or []) if isinstance(a, dict)}
+        written = ["%s on %s" % (slip, chain) for _, chain, slip in slips if (chain, slip) in on_rows]
+        if written:
+            failures += 1
+            self.finding("R6s: a Solana slip was written to the register", "the register holds %s" % ", ".join(written), SCREEN, store=register.text[:400], expected="none of the slips in the register")
+        else:
+            said.append("none of the four written")
+        return failures
+
+    def station_r6s(self) -> Outcome:
+        v = self.founder()
+        if self.facts.get("solana_skipped"):
+            raise StationStop(T.SOLANA_SKIPPED_SENTENCE % self.facts["solana_skipped"], prerequisite=SOLANA_STATIONS_SKIPPED)
+        approvers = self.approvers()
+        wallets = self.recall_solana_wallets(v)
+        if len(wallets) < 2:
+            raise StationStop("no second Solana wallet of the harness's stands in the register (R5s births two: the first pays, the second is its payee), so there is no payee to add; "
+                              "nothing was pressed", prerequisite=NO_SOLANA_WALLET)
+        payee_address = str(wallets[1]["address"])
+        name = A.SOLANA_PAYEE_NAME
+        said: List[str] = []
+        failures = 0
+        if self.payee_env_names(T.SOLANA_PAYEE_KEY):
+            self.note(T.SOLANA_PAYEE_IGNORED_SENTENCE)
+            said.append("%s in payee.env is present and ignored (Spec T29 §0a.2)" % T.SOLANA_PAYEE_KEY)
+        said.append("the payee is the harness's second Solana wallet %s (wallet %s), never an address outside the estate (the owner's ruling of 29 October 2026)" % (
+            payee_address, wallets[1].get("walletNumber")))
+        register = v.read(S.PAYEES_ROUTE_API, "the payee register before %s is added: a payee of that name on solana at the second wallet's address, whitelisted by an earlier run, is taken on" % name)
+        standing = self.payee_record(register, name, payee_address, T.SOLANA_CHAIN)
+        status = (standing or {}).get("whitelistStatus")
+        v.goto(S.PAYEES_ROUTE)
+        if status == "whitelisted":
+            shown = v.text_of(self.payee_row(v, name, S.STATUS_WORDS["whitelisted"], T.SOLANA_CHAIN))
+            self.next_step("the Payees room", shown)
+            said.append("%s stands whitelisted on solana at %s (an earlier run's); taken on, not added again; its row reads %s" % (name, payee_address, json.dumps(shown, ensure_ascii=False)))
+            if not shown:
+                failures += 1
+                self.finding("%s is whitelisted in the store and not on the page" % name, "the Payees room shows no %s row for %s on solana" % (S.STATUS_WORDS["whitelisted"], name), SCREEN,
+                             store=json.dumps(standing, ensure_ascii=False), expected="the row, Whitelisted")
+        else:
+            if status in ("proposed", "pending_promotion"):
+                said.append("%s stands %s on solana (an earlier attempt's), taken on from there and not added again" % (name, status))
+                self.next_step("the Payees room", v.text_of(self.payee_row(v, name, chain=T.SOLANA_CHAIN)))
+            else:
+                failures += self.add_the_solana_payee(v, name, payee_address, said)
+            if status != "pending_promotion":
+                self.send_for_approval(v, name, T.SOLANA_CHAIN)
+            words = [" | ".join(v.texts("status", within=self.payee_row(v, name, chain=T.SOLANA_CHAIN)))]
+            more, refused = self.collect_approvals(name, approvers, T.SOLANA_CHAIN)
+            words.extend(more)
+            failures += refused
+            said.append("%s on solana: %s" % (name, "; ".join(w for w in words if w)))
+        after = v.read(S.PAYEES_ROUTE_API, "the payee register after the approvals: %s whitelisted on solana at the second wallet's address, verbatim, with its USDC signal (solanaUsdcAccount)" % name)
+        record = self.payee_record(after, name, payee_address, T.SOLANA_CHAIN)
+        status = (record or {}).get("whitelistStatus")
+        if status != "whitelisted":
+            failures += 1
+            self.finding("%s is not whitelisted" % name, "the register reads %r after the approvers' presses" % status, SCREEN, store=json.dumps(record, ensure_ascii=False),
+                         expected="whitelisted once two of the roster approve")
+        # the USDC signal beside the address (Spec AER360-SOL-114 §3.4): the register's solanaUsdcAccount, and the room's words — "has not received USDC yet" where it
+        # reads false, silence where it is null (the road closed) or true
+        signal: Any = record.get("solanaUsdcAccount") if record is not None and "solanaUsdcAccount" in record else "absent"
+        self.facts["solana_usdc_signal"] = signal
+        v.goto(S.PAYEES_ROUTE)
+        row_words = v.text_of(self.payee_row(v, name, chain=T.SOLANA_CHAIN))
+        says = S.HAS_NOT_RECEIVED_USDC in row_words
+        if signal is False and not says:
+            failures += 1
+            self.finding("R6s: the register says the payee has no USDC account and the room does not", "solanaUsdcAccount false; the row reads %s" % json.dumps(row_words, ensure_ascii=False), SCREEN,
+                         page=row_words, store=json.dumps(record, ensure_ascii=False), expected="the row saying %r (PayeeRegistry.tsx)" % S.HAS_NOT_RECEIVED_USDC)
+        elif signal is not False and says:
+            failures += 1
+            self.finding("R6s: the room says the payee has not received USDC and the register does not say so", "solanaUsdcAccount %s; the row reads %s" % (
+                json.dumps(signal) if signal != "absent" else "absent", json.dumps(row_words, ensure_ascii=False)), SCREEN, page=row_words, store=json.dumps(record, ensure_ascii=False),
+                expected="the room silent unless solanaUsdcAccount reads false")
+        signal_words = T.usdc_signal_words(signal) if signal != "absent" else "the register view carries no solanaUsdcAccount field"
+        said.append("solanaUsdcAccount %s — %s; the row reads %s" % (json.dumps(signal) if signal != "absent" else "absent from the view", signal_words, json.dumps(row_words, ensure_ascii=False)))
+        self.next_step("the Payees room", row_words)
+        self.facts["solana_payee"] = {"name": name, "addressId": (record or {}).get("id"), "address": payee_address, "status": status}  # beside R6's payees, never among them
+        self.state["solana_payee"] = dict(self.facts["solana_payee"])
+        failures += self.type_the_slips(v, payee_address, said)
+        return Outcome("R6s", FAIL if failures else PASS, "; ".join(said))
+
+    # -- R7s-1 — the SOL payment: the first Solana wallet pays the second, from the screen ------------------------------------------------------------------
+    def solana_payee_resolved(self, v: Visitor, payee_address: Optional[str]) -> Tuple[Optional[Dict[str, Any]], str]:
+        """The Solana payee: R6s's record in this run, else the register's row of the payee's name on solana at the second wallet's address, whitelisted."""
+        record = self.facts.get("solana_payee")
+        if isinstance(record, dict) and record.get("addressId") and record.get("status") == "whitelisted" and (payee_address is None or record.get("address") == payee_address):
+            return record, "this run's %s on solana" % A.SOLANA_PAYEE_NAME
+        register = v.read(S.PAYEES_ROUTE_API, "the payee register, read because R6s left no record of the Solana payee in this run: %r on solana at the second Solana wallet's address, whitelisted" % A.SOLANA_PAYEE_NAME)
+        row = self.payee_record(register, A.SOLANA_PAYEE_NAME, payee_address, T.SOLANA_CHAIN) if payee_address else None
+        if row is None:
+            return None, "no payee %r on solana at %s in the register" % (A.SOLANA_PAYEE_NAME, payee_address or "no address: R5s left no second Solana wallet")
+        if row.get("whitelistStatus") != "whitelisted":
+            return None, "the register's %s on solana stands %s, not whitelisted" % (A.SOLANA_PAYEE_NAME, row.get("whitelistStatus"))
+        if self.facts.get("solana_usdc_signal") is None and "solanaUsdcAccount" in row:
+            self.facts["solana_usdc_signal"] = row.get("solanaUsdcAccount")
+        record = {"name": A.SOLANA_PAYEE_NAME, "addressId": row.get("id"), "address": payee_address, "status": "whitelisted"}
+        self.facts["solana_payee"] = record
+        return record, "the register's %s on solana, whitelisted" % A.SOLANA_PAYEE_NAME
+
+    def overview_views(self, v: Visitor) -> Dict[str, Dict[str, Any]]:
+        """The overview as the store holds it (GET /v1/aer360/overview): each wallet's view by its id and by #walletNumber — its holdings per asset, or its absence sentence."""
+        read = v.read(S.OVERVIEW_ROUTE_API, "the overview as the store holds it: each wallet's holdings per asset (amountMinor, assetDecimals), or its absence sentence with no figure")
+        views: Dict[str, Dict[str, Any]] = {}
+        if read.ok and isinstance(read.json, dict):
+            for holder in read.json.get("holders") or []:
+                for w in (holder.get("wallets") or []) if isinstance(holder, dict) else []:
+                    if isinstance(w, dict):
+                        views[str(w.get("id"))] = w
+                        views["#%s" % w.get("walletNumber")] = w
+        return views
+
+    def read_holdings_on_the_page(self, v: Visitor, wallets: Sequence[Dict[str, Any]], why: str) -> Tuple[List[Dict[str, Any]], Optional[Exchange]]:
+        """
+        The Consolidation page, as a founder reads a wallet's holdings (Spec HRW-2 R7s-1, R7s-3; Aer360.tsx and Ledger.tsx at d369926): Re-read every wallet now
+        (POST /v1/aer360/refresh — the estate's two-source reader behind it; the wallets it could not read named in holdings.skipped with the refusal's code),
+        the estate's holder opened onto its ledger, and each Solana wallet's row group read — its SOL and USDC rows, or its absence sentence — beside the overview
+        as the store holds it. One reading per wallet asked for; never a node of the harness's own (Spec T29 §0a.3).
+        """
+        v.goto(S.CONSOLIDATION_ROUTE)
+        if v.heading() != S.LANDING_HEADING:
+            raise StationStop("the Consolidation page did not open: its heading reads %r" % v.heading())
+        refresh = v.press(S.REREAD_EVERY_WALLET, answer=("POST", r"^/v1/aer360/refresh$"), why=why, seconds=180.0)
+        if refresh is None or not refresh.ok:
+            raise StationStop("%r answered %s (%s); the page says %s" % (S.REREAD_EVERY_WALLET, refresh.sentence() if refresh else "nothing",
+                                                                        kind_of(refresh.status, refresh.json) if refresh else UNREACHABLE,
+                                                                        json.dumps(" | ".join(v.refusals()) or "nothing", ensure_ascii=False)))
+        holdings = refresh.json.get("holdings") if isinstance(refresh.json, dict) and isinstance(refresh.json.get("holdings"), dict) else {}
+        skipped_rows = [s for s in (holdings.get("skipped") or []) if isinstance(s, dict)]
+        v.must_appear(v.page.get_by_role("heading", name=S.EVERY_WALLET_HOLDER_HEADING, exact=True), "the section %r" % S.EVERY_WALLET_HOLDER_HEADING)
+        holder = v.page.get_by_role("button").filter(has_text=self.estate_name) if self.estate_name else v.page.get_by_role("button").filter(has_text="named wallet")
+        target = v.must_appear(holder, "the holder %r in the rail" % (self.estate_name or "of this estate"))
+        if target.first.get_attribute("aria-expanded") != "true":
+            v.guard()
+            target.first.click()
+            v.settle()
+            self.step("press", v.name, "opened the holder %r in the rail on %s — its ledger" % (self.estate_name or "of this estate", v.where()))
+        views = self.overview_views(v)
+        readings: List[Dict[str, Any]] = []
+        for w in wallets:
+            group_name = S.wallet_row_group(str(w.get("walletNumber")), str(w.get("walletName") or ""))
+            group = v.page.get_by_role("rowgroup", name=group_name, exact=True)
+            rows = [" ".join(r.inner_text().split()) for r in group.get_by_role("row").all()] if group.count() else []
+            words = " | ".join(r for r in rows if r)
+            view = views.get(str(w.get("walletId"))) or views.get("#%s" % w.get("walletNumber"))
+            skipped = [s for s in skipped_rows if str(s.get("wallet")) == str(w.get("walletName") or w.get("name"))]
+            reading: Dict[str, Any] = {"wallet": w.get("walletNumber"), "page": words, "group": group_name, "skipped": skipped, "lamports": None, "usdc": None,
+                                       "absence": (view or {}).get("absence"), "closed": any(str(s.get("reason")) == T.SOLANA_ROAD_CLOSED for s in skipped),
+                                       "refusal": next((str(s.get("reason")) for s in skipped), None), "page_lamports": None, "listed": group.count() > 0}
+            for pair in (view.get("holdings") or []) if view else []:
+                if not isinstance(pair, dict):
+                    continue
+                amount = str(pair.get("amountMinor") or "")
+                if str(pair.get("asset")).upper() == T.SOL and amount.isdigit():
+                    reading["lamports"] = int(amount)
+                if str(pair.get("asset")).upper() == T.PAYMENT_ASSET and amount.isdigit():
+                    reading["usdc"] = int(amount)
+            on_page = re.search(r"(?<![\w.])(\d+(?:\.\d+)?) SOL\b", words)
+            if on_page:
+                try:
+                    reading["page_lamports"] = T.lamports_of(on_page.group(1))
+                except ValueError:
+                    reading["page_lamports"] = None
+            if reading["lamports"] is not None and reading["page_lamports"] is not None and reading["page_lamports"] != reading["lamports"]:
+                self.finding("%s: the ledger and the overview disagree on wallet %s's SOL" % (self.current, w.get("walletNumber")),
+                             "the page shows %s and the store holds %s" % (T.sol_words(reading["page_lamports"]), T.sol_words(reading["lamports"])), SCREEN, page=words,
+                             store=json.dumps(view, ensure_ascii=False)[:400], expected="the same figure on the page and in the store")
+            if reading["lamports"] is not None:
+                reading["words"] = "wallet %s holds %s%s (the ledger: %s)" % (
+                    w.get("walletNumber"), T.sol_words(reading["lamports"]),
+                    (" and %s of %s" % (T.usdc_dollars(reading["usdc"]), T.PAYMENT_ASSET)) if reading["usdc"] is not None else " and no USDC reading", json.dumps(words, ensure_ascii=False))
+            elif reading["closed"]:
+                reading["words"] = "wallet %s: the refresh skipped it, %s — \"%s\" — and the ledger shows %s" % (
+                    w.get("walletNumber"), T.SOLANA_ROAD_CLOSED, T.SOLANA_REFUSAL_SENTENCES[T.SOLANA_ROAD_CLOSED], json.dumps(words or "no row group for it", ensure_ascii=False))
+            elif reading["refusal"]:
+                reading["words"] = "wallet %s: the refresh skipped it, %s; the ledger: %s" % (w.get("walletNumber"), reading["refusal"], json.dumps(words, ensure_ascii=False))
+            else:
+                reading["words"] = "wallet %s: no SOL figure in the overview (%s); the ledger: %s" % (
+                    w.get("walletNumber"), (view or {}).get("absence") or "the wallet is not listed", json.dumps(words or "no row group for it", ensure_ascii=False))
+            readings.append(reading)
+        self.step("page", v.name, "the Consolidation ledger", page=" | ".join(r["page"] or "no row group for wallet %s" % r["wallet"] for r in readings))
+        return readings, refresh
+
+    def wait_for_sol(self, v: Visitor, wallet: Dict[str, Any], lamports_needed: int) -> Dict[str, Any]:
+        """
+        Spec T29 §0a.3: the first wallet must hold the SOL it pays plus the 0.01 SOL reserve before the payment — the sponsor is unfunded, and the harness
+        funds nothing by a person's hand per run (Spec T23); the owner sends the SOL once, at his amount, from his own wallet. The wallet's SOL is read on the
+        Consolidation page, again every FUNDS_POLL_SECONDS for as many readings as --funds-wait allows; a wait that runs out records the station waiting and
+        moves nothing. A closed road is answered at once: there is nothing to wait for, and the review says so by name.
+        """
+        required = lamports_needed + T.FEE_RESERVE_LAMPORTS
+        reads = max(1, int(self.funds_wait // FUNDS_POLL_SECONDS))
+        readings, _ = self.read_holdings_on_the_page(v, [wallet], "the first Solana wallet's SOL before the payment: at least %s (the payment %s plus the %s reserve)" % (
+            T.sol_words(required), T.sol_words(lamports_needed), T.sol_words(T.FEE_RESERVE_LAMPORTS)))
+        reading = readings[0]
+        waited = 0
+        while reading["lamports"] is not None and reading["lamports"] < required and waited < reads:
+            waited += 1
+            self.sleep(FUNDS_POLL_SECONDS)
+            readings, _ = self.read_holdings_on_the_page(v, [wallet], "the first Solana wallet's SOL, read again while the harness waits for the owner's SOL (read %d of %d under --funds-wait)" % (
+                waited + 1, reads + 1))
+            reading = readings[0]
+        reading.update(required=required, waited=waited)
+        if reading["lamports"] is not None and reading["lamports"] < required:
+            raise StationStop(T.WAITING_FOR_SOL_SENTENCE % (wallet.get("address"), T.sol_words(reading["lamports"]), T.sol_words(lamports_needed), T.sol_words(T.FEE_RESERVE_LAMPORTS),
+                                                            T.sol_words(required), int(self.funds_wait)), prerequisite=WAITING_FOR_SOL)
+        return reading
+
+    def enter_a_solana_row(self, v: Visitor, payee_name: str, amount: str, invoice: str, pay_from: Optional[Dict[str, Any]]) -> None:
+        """
+        One SOL row typed as a founder types it (PaymentEntry.tsx): the reference left at its default; Pay from the Solana wallet named — or the funding
+        wallet where none is (R7s-2's probe of the curve belt); the Solana payee chosen from the list; chain solana, asset SOL, the amount as the book writes it.
+        """
+        v.goto(S.ENTRY_ROUTE)
+        if v.heading() != S.ENTRY_HEADING:
+            raise StationStop("Enter payments did not open: its heading reads %r" % v.heading())
+        self.step("page", v.name, "the run's reference left at its default (an empty reference is sent as %r)" % S.DEFAULT_REFERENCE)
+        has_pay_from = bool(v.page.get_by_label(S.PAY_FROM_LABEL, exact=True).count())
+        if pay_from is not None:
+            if not has_pay_from:
+                raise StationStop("Enter payments offers no %r, so the run would leave from the funding wallet and not the Solana wallet R5s made" % S.PAY_FROM_LABEL)
+            options = v.options_of(S.PAY_FROM_LABEL)
+            choice = next((o for o in options if o.startswith("%s · " % pay_from.get("walletNumber"))), None)
+            if choice is None:
+                raise StationStop("Pay from offers no option for wallet %s (it offers %s)" % (pay_from.get("walletNumber"), json.dumps(options, ensure_ascii=False)))
+            v.select(S.PAY_FROM_LABEL, choice)
+        elif has_pay_from:
+            v.select(S.PAY_FROM_LABEL, S.FUNDING_WALLET_OPTION)
+        card = v.card(S.payment_card(1))
+        options = v.options_of(S.PAYEE_LABEL, within=card)
+        wanted = S.payee_option(payee_name, T.SOLANA_CHAIN)
+        if wanted not in options:
+            raise StationStop("the Payee list of %s offers no %r (it offers %s)" % (S.payment_card(1), wanted, json.dumps(options, ensure_ascii=False)))
+        if options.count(wanted) > 1:
+            self.finding("%s: two payees read alike" % self.current, "the Payee list of %s offers %d entries reading %r" % (S.payment_card(1), options.count(wanted), wanted), SCREEN,
+                         page=json.dumps(options, ensure_ascii=False), expected="one entry for the harness's second Solana wallet")
+            raise StationStop("the Payee list offers %d entries reading %r, so nothing was chosen and nothing submitted" % (options.count(wanted), wanted))
+        v.select(S.PAYEE_LABEL, wanted, within=card)
+        v.fill(S.CHAIN_LABEL, T.SOLANA_CHAIN, within=card)
+        v.fill(S.ASSET_LABEL, T.SOL, within=card)
+        v.fill(S.AMOUNT_LABEL, amount, within=card)
+        v.fill(S.INVOICE_LABEL, invoice, within=card)
+
+    @staticmethod
+    def closed_road_refusal(review: Optional[Exchange]) -> Optional[Dict[str, Any]]:
+        """The review's SOLANA_ROAD_CLOSED refusal, where the gas gate's Solana leg refused the row by name (execution.ts solanaChainPreflight)."""
+        payload = review.json if review is not None and review.ok and isinstance(review.json, dict) else {}
+        for gate in payload.get("gates") or []:
+            for r in (gate.get("refusals") or []) if isinstance(gate, dict) else []:
+                if isinstance(r, dict) and r.get("code") == T.SOLANA_ROAD_CLOSED:
+                    return r
+        return None
+
+    @staticmethod
+    def solana_value_cents(payload: Dict[str, Any], reviewed: List[Dict[str, Any]]) -> int:
+        """What the estate values the SOL row at, in cents, from the review (the row's value, else the aggregate) — never a price of the harness's own."""
+        value = reviewed[0].get("value") if reviewed and isinstance(reviewed[0].get("value"), dict) else (payload.get("aggregate") if isinstance(payload.get("aggregate"), dict) else {})
+        text = str((value or {}).get("amountUsdMinor") or (value or {}).get("amountBaseMinor") or "")
+        if not text.isdigit():
+            raise StationStop("the review priced the Solana payment at no figure the harness can read (%r), so the one-dollar total cannot be counted; %r was not pressed" % (text, S.SUBMIT_RUN),
+                              prerequisite=NO_ROOM_UNDER_THE_DOLLAR)
+        return int(text)
+
+    def hold_the_solana_row_to_the_bound(self, reviewed: List[Dict[str, Any]], payee_address: str, lamports: int, cents: int) -> None:
+        """
+        THE BOUND ON A SOL ROW, held before Submit this run on the review the page received: one row, to the harness's own second Solana wallet, in SOL, in
+        the book's lamports (else the whole run stops, nothing pressed: a SCREEN fault); and with what this run has submitted at most RUN_CEILING_CENTS at the
+        estate's own valuation, beside the book's ONE_DOLLAR_MINOR with the USDC book counted (Spec T24; Spec T29 §0a.3) — else this station stops by name.
+        """
+        minor_per_cent = 10 ** (T.ASSET_DECIMALS[T.PAYMENT_ASSET] - 2)
+        if len(reviewed) != 1:
+            raise RunStop(SOLANA_BOUND_ROW % ("%d rows" % len(reviewed), "%s %s" % (T.sol_words(lamports), T.SOL), S.SUBMIT_RUN), kind=SCREEN)
+        row = reviewed[0]
+        if str(row.get("address") or "") != payee_address:
+            raise RunStop(SOLANA_BOUND_ADDRESS % (row.get("address") or "no address", payee_address, S.SUBMIT_RUN), kind=SCREEN)
+        if str(row.get("asset") or "").upper() != T.SOL or str(row.get("chain") or "").lower() != T.SOLANA_CHAIN or str(row.get("amountMinor") or "") != str(lamports):
+            raise RunStop(SOLANA_BOUND_ROW % (json.dumps({k: row.get(k) for k in ("chain", "asset", "amountMinor")}, ensure_ascii=False), T.sol_words(lamports), S.SUBMIT_RUN), kind=SCREEN)
+        already = int(self.facts.get("submitted_cents") or 0)
+        book_cents = A.payments_total_minor() // minor_per_cent
+        dollar_cents = T.ONE_DOLLAR_MINOR // minor_per_cent
+        if already + cents > RUN_CEILING_CENTS or book_cents + cents > dollar_cents:
+            raise StationStop("%s; this run has submitted %d cents of %s and the literal bound is %d cents (RUN_CEILING_CENTS), so %r was not pressed" % (
+                T.NO_ROOM_UNDER_THE_DOLLAR_SENTENCE % (T.PAYEE_CHAIN, E.usd(book_cents), E.usd(cents), E.usd(book_cents + cents)), already, T.PAYMENT_ASSET, RUN_CEILING_CENTS, S.SUBMIT_RUN),
+                prerequisite=NO_ROOM_UNDER_THE_DOLLAR)
+
+    def judge_the_solana_landing(self, v: Visitor, run_id: str, final: Dict[str, Any], page_words: List[str], payee_wallet: Dict[str, Any],
+                                 payee_before: Optional[Dict[str, Any]], lamports: int) -> Tuple[int, List[str]]:
+        """
+        Spec T29 §3.3's proofs, read as a founder reads them and as the store holds them: the run settled and the payment landed on its page; the hash a base58
+        signature of 64 bytes; the Trail card saying Payment 1 is being signed and Payment 1 landed with the signature (Runs.tsx at d369926), and the store's
+        trail carrying instruction.signing and instruction.confirmed with the signature as its words; the payee wallet's SOL risen by exactly the amount on the
+        Consolidation page. A refusal travels in the estate's words; the cluster's "denied" with no rule named is filed under the Group 100 findings (§0a.5).
+        """
+        failures = 0
+        said: List[str] = []
+        instructions = [i for i in (final.get("instructions") or []) if isinstance(i, dict)]
+        landed = [i for i in instructions if i.get("status") == T.INSTRUCTION_CONFIRMED_STATE]
+        if str(final.get("status")) == "draft":
+            failures += 1
+            self.finding("R7s-1: the run stays a draft", "the run's page says %s" % json.dumps(" | ".join(page_words), ensure_ascii=False), SCREEN, page=" | ".join(page_words),
+                         store=json.dumps(final, ensure_ascii=False)[:500], expected="submitted by the press that created it (Spec AER360-RUN-ROAD)")
+        for i in instructions:
+            if i.get("status") == T.INSTRUCTION_CONFIRMED_STATE:
+                continue
+            failures += 1
+            reason = str(i.get("failureReason") or "")
+            shown = next((w for w in page_words if (i.get("invoiceRef") or "") in w or (reason and reason[:40] in w)), "")
+            if T.PARTY_0_DENIED in reason:
+                self.finding("%s: the cluster refused the Solana payment and named no rule" % T.GROUP_100_FINDING_WORDS,
+                             "the run's page says %s; BIS 100's party 0 answered \"%s\" — the rule is unnamed; filed under the Group 100 findings, not the estate's (Spec T29 §0a.5)" % (
+                                 json.dumps(shown or " | ".join(page_words), ensure_ascii=False), T.PARTY_0_DENIED), REFUSED, page=shown, store=reason,
+                             expected="a refusal naming the rule it was judged under (the engine's lexicon, version 5)")
+            else:
+                self.finding("R7s-1: %s %s was not landed" % (i.get("invoiceRef"), i.get("status")), "the run's page says %s; the store holds %s" % (
+                    json.dumps(shown or " | ".join(page_words), ensure_ascii=False), json.dumps({k: i.get(k) for k in ("status", "failureReason", "txHash")}, ensure_ascii=False)),
+                    ANSWERED_WITH_ERROR if reason else SCREEN, page=shown, store=reason, expected="landed, with its signature as its hash")
+        missing: List[str] = []
+        signature = str(landed[0].get("txHash") or "") if landed else ""
+        if landed:
+            raw = T.base58_decode(signature)
+            if raw is None or len(raw) != T.SIGNATURE_BYTES:
+                missing.append("the hash %r is not a base58 signature of %d bytes" % (signature, T.SIGNATURE_BYTES))
+        # THE TRAIL on the run's own page, and as the store holds it (routes/views.ts runTrail)
+        v.goto(S.RUN_ROUTE % run_id)
+        trail_card = v.card(S.TRAIL_CARD)
+        items = [" ".join(t.split()) for t in trail_card.get_by_role("listitem").all_inner_texts()] if trail_card.count() else []
+        read = v.read(S.SET_ROUTE % run_id, "the run with its trail as the store holds it (routes/views.ts runTrail): %s with road solana, %s saying the signature" % (
+            T.INSTRUCTION_SIGNING, T.INSTRUCTION_CONFIRMED))
+        trail = [r for r in (((read.json or {}).get("set") or {}).get("trail") or []) if isinstance(r, dict)] if read.ok and isinstance(read.json, dict) else []
+        actions = [str(r.get("action")) for r in trail]
+        if landed:
+            signing_words = "Payment 1 %s" % S.TRAIL_WORDS[T.INSTRUCTION_SIGNING]
+            landed_words = "Payment 1 %s" % S.TRAIL_WORDS[T.INSTRUCTION_CONFIRMED]
+            if not trail_card.count():
+                missing.append("the run's page carries no %r card" % S.TRAIL_CARD)
+            else:
+                if not any(signing_words in t for t in items):
+                    missing.append("the trail on the page says no %r" % signing_words)
+                if not any(landed_words in t and signature in t for t in items):
+                    missing.append("the trail on the page says no %r with the signature" % landed_words)
+            if T.INSTRUCTION_SIGNING not in actions:
+                missing.append("no %s row in the run's trail as the store holds it" % T.INSTRUCTION_SIGNING)
+            confirmed = next((r for r in trail if r.get("action") == T.INSTRUCTION_CONFIRMED), None)
+            if confirmed is None or str(confirmed.get("said")) != signature:
+                missing.append("no %s row saying the signature in the run's trail as the store holds it" % T.INSTRUCTION_CONFIRMED)
+        self.step("page", v.name, "the Trail card on the run's page", page=" | ".join(items))
+        if items:
+            self.next_step("the run's Trail card", " | ".join(items))
+        # the payee wallet's SOL after, on the Consolidation page
+        after = self.read_holdings_on_the_page(v, [payee_wallet], "the payee wallet's SOL after the payment")[0][0]
+        before_lamports = payee_before["lamports"] if payee_before else None
+        if before_lamports is None or after["lamports"] is None:
+            missing.append("the payee wallet's SOL could not be read (%s)" % ((payee_before or {}).get("words") if before_lamports is None else after["words"]))
+        elif landed and after["lamports"] - before_lamports != lamports:
+            missing.append("the payee wallet's SOL did not rise by %s: %s → %s" % (T.sol_words(lamports), T.sol_words(before_lamports), T.sol_words(after["lamports"])))
+        elif not landed and after["lamports"] != before_lamports:
+            missing.append("the payee wallet's SOL moved although nothing landed: %s → %s" % (T.sol_words(before_lamports), T.sol_words(after["lamports"])))
+        if missing:
+            failures += 1
+            self.finding("R7s-1: a proof of the landing is missing", "; ".join(missing), SCREEN, page=" | ".join(items),
+                         expected="the signature a base58 string of 64 bytes; the trail's signing and landed rows, on the page and in the store; the payee wallet's SOL risen by exactly the amount")
+        said.append("%d of %d payment(s) landed (%s); the trail on the page: %s; the payee wallet %s → %s" % (
+            len(landed), len(instructions), signature or "no hash", json.dumps(" | ".join(items), ensure_ascii=False),
+            T.sol_words(before_lamports) if before_lamports is not None else "unread", T.sol_words(after["lamports"]) if after["lamports"] is not None else "unread"))
+        return failures, said
+
+    def station_r7s_1(self) -> Outcome:
+        v = self.founder()
+        if self.facts.get("solana_skipped"):
+            raise StationStop(T.SOLANA_SKIPPED_SENTENCE % self.facts["solana_skipped"], prerequisite=SOLANA_STATIONS_SKIPPED)
+        wallets = self.recall_solana_wallets(v)
+        if len(wallets) < 2:
+            raise StationStop("no two Solana wallets of the harness's stand in the register (R5s births the first, which pays, and the second, its payee); nothing was entered",
+                              prerequisite=NO_SOLANA_WALLET)
+        payer, payee_wallet = wallets[0], wallets[1]
+        said: List[str] = []
+        failures = 0
+        # §0a.6: the sandbox allowance, read before paying and never from a constant of the harness's own
+        allowance = v.read(S.SANDBOX_ALLOWANCE_ROUTE_API, "the sandbox's allowance as it stands (Spec AER360-117): allowanceUsdCents, spentUsdCents, leftUsdCents and the line the pages say; null for a live estate, held to none")
+        standing = allowance.json.get("allowance") if allowance.ok and isinstance(allowance.json, dict) and isinstance(allowance.json.get("allowance"), dict) else None
+        self.facts["solana_allowance"] = standing
+        said.append(("the sandbox allowance: %s" % standing.get("said")) if standing else ("the sandbox allowance: %s" % ("none — a live estate is held to no allowance" if allowance.ok else allowance.sentence())))
+        # §0a.3: the first wallet's address printed on one line, then the book's figure — the owner's, or the stop that names it
+        payment = A.solana_payment()
+        self.note(T.SOLANA_FUNDS_LINE % (payer["address"], T.sol_words(payment.lamports) if payment else A.SOLANA_AMOUNT_PLACEHOLDER, T.sol_words(T.FEE_RESERVE_LAMPORTS)))
+        if payment is None:
+            raise StationStop(T.SOLANA_AMOUNT_NOT_WRITTEN_SENTENCE, prerequisite=SOLANA_AMOUNT_NOT_WRITTEN)
+        said.append("the book's SOL amount: %s (%s, the owner's figure)" % (T.sol_words(payment.lamports), payment.invoice))
+        payee, resolved = self.solana_payee_resolved(v, str(payee_wallet.get("address")))
+        if payee is None:
+            raise StationStop("%s; nothing was entered" % resolved, prerequisite=NO_SOLANA_PAYEE)
+        said.append("the payee: %s at %s (wallet %s)" % (resolved, payee_wallet.get("address"), payee_wallet.get("walletNumber")))
+        # §0a.3: the wait for the owner's SOL — the payment plus the reserve, read on the Consolidation page, never a node of the harness's own
+        before = self.wait_for_sol(v, payer, payment.lamports)
+        payee_before: Optional[Dict[str, Any]] = None
+        if before["closed"]:
+            said.append(before["words"])
+        else:
+            said.append("before: %s%s" % (before["words"], (" (after %d further reading(s) while waiting)" % before["waited"]) if before.get("waited") else ""))
+            payee_before = self.read_holdings_on_the_page(v, [payee_wallet], "the payee wallet's SOL before the payment")[0][0]
+            said.append("the payee wallet before: %s" % payee_before["words"])
+        self.enter_a_solana_row(v, payment.payee_name, payment.amount, payment.invoice, pay_from=payer)
+        entered = [{"chain": T.SOLANA_CHAIN, "asset": T.SOL, "amountMinor": str(payment.lamports), "invoiceRef": payment.invoice}]
+        review, words = self.review_on_the_page(v, S.CHECK_RUN)
+        closed = self.closed_road_refusal(review)
+        if closed is not None:
+            # the road is closed, and the estate said so by name at the review (execution.ts solanaChainPreflight): truth told, zero moved
+            shown = " | ".join(v.refusals())
+            self.next_step("the review", shown)
+            self.facts["solana_closed"] = True
+            said.append(T.CLOSED_ROAD_TRUTH_TOLD % ("%s: %s" % (closed.get("code"), closed.get("message"))))
+            offered = v.control(S.SUBMIT_RUN).count() > 0
+            said.append("the page says %s; %r %s" % (json.dumps(shown, ensure_ascii=False), S.SUBMIT_RUN, "is enabled" if words.get("submit_enabled") else ("stands disabled" if offered else "is not offered")))
+            if words.get("submit_enabled"):
+                failures += 1
+                self.finding("R7s-1: Submit this run is enabled on a closed road", "the review refused %s and the page offers %r enabled" % (T.SOLANA_ROAD_CLOSED, S.SUBMIT_RUN), SCREEN,
+                             page=shown, expected="%r disabled where the review is not acceptable" % S.SUBMIT_RUN)
+            if closed.get("message") and closed["message"] not in shown:
+                failures += 1
+                self.finding("R7s-1: the page did not say the estate's sentence for the closed road", "the estate refused %s and the page says %s" % (T.SOLANA_ROAD_CLOSED, json.dumps(shown, ensure_ascii=False)),
+                             SCREEN, page=shown, expected=str(closed.get("message")))
+            self.state["solana_run"] = {"closed": True, "at": now_iso()}
+            return Outcome("R7s-1", FAIL if failures else PASS, "; ".join(said))
+        shortfall = self.gas_shortfall(review)
+        if shortfall is not None:
+            said.append(self.cure_gas(shortfall))
+            review, words = self.review_on_the_page(v, S.CHECK_AGAIN)
+            if self.gas_shortfall(review) is not None:
+                raise StationStop("the review refused %s again after the credit: %s (%s)" % (T.GAS_SHORTFALL, (self.gas_shortfall(review) or {}).get("message"), REFUSED))
+        verdict, spoken = self.answer_the_duplicate_screen(v, review, entered)
+        said.extend(spoken)
+        if verdict == "outside":
+            return Outcome("R7s-1", FAIL, "; ".join(said))
+        if verdict == "confirmed":
+            review = self.answered("POST", r"^/v1/sets/review$", v.name) or review
+            words = {"submit_enabled": v.control(S.SUBMIT_RUN).first.is_enabled() if v.control(S.SUBMIT_RUN).count() else False}
+        if not (review is not None and review.ok and isinstance(review.json, dict) and review.json.get("acceptable") is True) or not words.get("submit_enabled"):
+            page_words = " | ".join(v.refusals())
+            raise StationStop("the run cannot be submitted: the page says %s; the review %s (%s)" % (
+                json.dumps(page_words or v.text_of(v.card(S.REVIEW_CARD))[:300], ensure_ascii=False), review.sentence() if review and not review.ok else "is not acceptable",
+                kind_of(review.status, review.json) if review is not None and not review.ok else (ANSWERED_WITH_ERROR if review is not None else UNREACHABLE)))
+        # THE BOUND, held at the screen before the one press that moves money: the row to the harness's own second Solana wallet, in the book's lamports, under
+        # the one-dollar total at the estate's valuation (Spec T24; Spec T29 §0a.3) and under the sandbox allowance the estate reported (§0a.6)
+        reviewed = [r for r in (review.json.get("rows") or []) if isinstance(r, dict)]
+        cents = self.solana_value_cents(review.json, reviewed)
+        self.hold_the_solana_row_to_the_bound(reviewed, str(payee_wallet["address"]), payment.lamports, cents)
+        left_text = str((standing or {}).get("leftUsdCents") or "")
+        if standing is not None and left_text.isdigit() and cents > int(left_text):
+            raise StationStop(T.ALLOWANCE_SHORT_SENTENCE % (standing.get("said"), E.usd(cents)), prerequisite=ALLOWANCE_SHORT)
+        book_cents = A.payments_total_minor() // 10 ** (T.ASSET_DECIMALS[T.PAYMENT_ASSET] - 2)
+        said.append("the estate values the payment at %s; with the book's %s on %s that is %s of the one-dollar total (Spec T24)%s" % (
+            E.usd(cents), E.usd(book_cents), T.PAYEE_CHAIN, E.usd(book_cents + cents), ("; the allowance has %s left" % E.usd(int(left_text))) if left_text.isdigit() else ""))
+        approval = review.json.get("approval") if isinstance(review.json.get("approval"), dict) else {}
+        required = int(approval.get("approvalsRequired") or 0) if str(approval.get("approvalsRequired") or "0").isdigit() else 0
+        if required and not self.payment_approver_visitors():
+            raise StationStop("this run would wait for %d approval(s), and no approver the charter names at C11 (%s) has a session in this run, so nobody here could "
+                              "approve it; %r was not pressed" % (required, ", ".join(A.PEOPLE[k].name for k in self.payment_approvers()), S.SUBMIT_RUN),
+                              prerequisite=NO_APPROVER_SESSION)
+        approval_words = v.text_of(v.card(S.REVIEW_CARD).locator("p").filter(has_text=S.RUN_TOTAL_WORDS))
+        self.next_step("the review", "%s [%s]" % (approval_words, S.SUBMIT_RUN))
+        since = len(self.exchanges)
+        v.press(S.SUBMIT_RUN, answer=("POST", r"^/v1/sets$"), why="the Solana run created and submitted in one press (Spec AER360-RUN-ROAD)", seconds=120.0)
+        created = self.answered("POST", r"^/v1/sets$", v.name, since)
+        if created is None or not created.ok or not isinstance(created.json, dict):
+            page_words = " | ".join(v.refusals())
+            raise StationStop("Submit this run created no run: the page says %s; the estate answered %s (%s)" % (
+                json.dumps(page_words or "nothing", ensure_ascii=False), created.sentence() if created else "nothing", kind_of(created.status, created.json) if created else UNREACHABLE))
+        run = created.json.get("set") if isinstance(created.json.get("set"), dict) else {}
+        run_id = str(run.get("id"))
+        for i in run.get("instructions") or []:
+            if isinstance(i, dict) and i.get("id"):
+                self.facts["instructions_created"][str(i["id"])] = {"key": i.get("invoiceRef"), "set_id": run_id, **{k: i.get(k) for k in ("address", "chain", "asset", "amountMinor", "invoiceRef")}}
+        record = {"station": "R7s-1", "id": run_id, "reference": run.get("reference"), "createdAt": run.get("createdAt"), "invoices": [payment.invoice],
+                  "total_minor": payment.lamports, "asset": T.SOL, "cents": cents}
+        self.facts["runs"].append(record)
+        self.facts["submitted_cents"] = int(self.facts.get("submitted_cents") or 0) + cents  # counted once the run exists, whether or not it is sent
+        self.state.setdefault("runs", []).append({k: record[k] for k in ("station", "id", "reference", "createdAt")})
+        if not v.appears(v.page.get_by_role("status", name=S.RUN_STATUS_NAME, exact=True), 60.0):
+            raise StationStop("the press created run %s and the run's page did not open; the page reads %r at %s" % (run_id, v.heading(), v.where()))
+        submitted = self.answered("POST", r"^/v1/sets/[^/]+/submit$", v.name, since)
+        banner = " | ".join(v.texts("status", name=S.SUBMISSION_NAME))
+        said.append("run %s (reference %r) created and %s: the page says %s" % (
+            run_id, run.get("reference"), "submitted (%s)" % json.dumps(submitted.json, ensure_ascii=False) if submitted is not None and submitted.ok else
+            "not submitted (%s)" % (submitted.sentence() if submitted else "no submit in the browser's log"), json.dumps(banner or " | ".join(v.refusals()), ensure_ascii=False)))
+        self.next_step("the run's page", banner)
+        said.extend(self.approve_in_the_inbox(run_id, record["invoices"]))
+        final, page_words = self.follow_the_run(v, run_id)
+        instructions = [i for i in (final.get("instructions") or []) if isinstance(i, dict)]
+        landed = [i for i in instructions if i.get("status") == T.INSTRUCTION_CONFIRMED_STATE]
+        record.update(status=final.get("status"), landed=len(landed), hashes=[i.get("txHash") for i in landed])
+        refused, proofs = self.judge_the_solana_landing(v, run_id, final, page_words, payee_wallet, payee_before, payment.lamports)
+        failures += refused
+        said.extend(proofs)
+        self.state["solana_run"] = {"id": run_id, "signature": record["hashes"][0] if record["hashes"] else None, "landed": bool(landed), "at": now_iso()}
+        self.facts["solana_run"] = dict(record)
+        return Outcome("R7s-1", FAIL if failures else PASS, "; ".join(said))
+
+    # -- R7s-2 — the curve belt at the screen: a SOL row from the funding wallet, refused at the door before any road -------------------------------------------
+    def station_r7s_2(self) -> Outcome:
+        v = self.founder()
+        wallets = self.facts.get("solana_wallets") or ([] if self.facts.get("solana_skipped") else self.recall_solana_wallets(v))
+        payee_address = str(wallets[1]["address"]) if len(wallets) > 1 else None
+        payee, resolved = self.solana_payee_resolved(v, payee_address)
+        if payee is None:
+            raise StationStop("%s; the belt is judged on a SOL row to the Solana payee, so nothing was entered" % resolved, prerequisite=NO_SOLANA_PAYEE)
+        payment = A.solana_payment()
+        amount = payment.amount if payment else "0.000000001"  # one lamport: the belt is judged at the door before any figure matters
+        amount_words = T.sol_words(payment.lamports) if payment else "one lamport (the book names no SOL amount; the belt is judged at the door before any figure matters)"
+        failures = 0
+        self.enter_a_solana_row(v, A.SOLANA_PAYEE_NAME, amount, A.SOLANA_PROBE_INVOICE, pay_from=None)  # the funding wallet: an EVM key, secp256k1
+        review = v.press(S.CHECK_RUN, answer=("POST", r"^/v1/sets/review$"), why="the checks on a SOL row from the funding wallet — the curve belt should refuse at the door")
+        v.poll(lambda: bool(v.refusals()) or v.card(S.REVIEW_CARD).count() > 0)
+        shown = " | ".join(v.refusals())
+        self.next_step("Enter payments, after %s" % S.CHECK_RUN, shown)
+        sentence = T.SOLANA_REFUSAL_SENTENCES[T.WALLET_CURVE_MISMATCH]
+        refusal = (review.json.get("error") or {}) if review is not None and isinstance(review.json, dict) and isinstance(review.json.get("error"), dict) else {}
+        detail = refusal.get("detail") if isinstance(refusal.get("detail"), dict) else {}
+        right = review is not None and review.status == 422 and refusal.get("code") == T.WALLET_CURVE_MISMATCH and refusal.get("message") == sentence
+        expected = "422 %s: \"%s\" — the curve belt (payoutsets.ts assertCurveForChain), judged at the door before any road, open or closed; the detail naming curve %s and required %s" % (
+            T.WALLET_CURVE_MISMATCH, sentence, T.EVM_CURVE, T.SOLANA_CURVE)
+        if not right:
+            failures += 1
+            self.finding("R7s-2: a SOL payment from the funding wallet was not refused at the curve belt",
+                         ("the review answered 200: acceptable %s" % (review.json or {}).get("acceptable")) if review is not None and review.ok else ("the estate answered %s" % (review.sentence() if review else "nothing")),
+                         kind_of(review.status, review.json) if review is not None and not review.ok else (ANSWERED_WITH_ERROR if review is not None else UNREACHABLE),
+                         page=shown, store=review.sentence() if review else "", route="POST /v1/sets/review", expected=expected)
+        elif sentence not in shown:
+            failures += 1
+            self.finding("R7s-2: the page did not say the estate's sentence for the curve belt", "the estate refused %s and the page says %s" % (T.WALLET_CURVE_MISMATCH, json.dumps(shown or "nothing", ensure_ascii=False)),
+                         SCREEN, page=shown, expected=sentence)
+        submit = v.control(S.SUBMIT_RUN)
+        enabled = submit.count() > 0 and bool(submit.first.is_enabled())
+        if enabled:
+            failures += 1
+            self.finding("R7s-2: Submit this run is enabled after the belt refused", "the review was refused and the page offers %r enabled" % S.SUBMIT_RUN, SCREEN, page=shown,
+                         expected="%r not offered, or disabled" % S.SUBMIT_RUN)
+        register = v.read(S.SETS_ROUTE_API, "the runs register: no run carries %s — the belt dialled nothing" % A.SOLANA_PROBE_INVOICE)
+        dialled: List[str] = []
+        if register.ok and isinstance(register.json, dict):
+            dialled = [str(s.get("id")) for s in (register.json.get("sets") or []) if isinstance(s, dict)
+                       and any(str(i.get("invoiceRef")) == A.SOLANA_PROBE_INVOICE for i in (s.get("instructions") or []) if isinstance(i, dict))]
+        if dialled:
+            failures += 1
+            self.finding("R7s-2: the curve belt's probe dialled a run", "the register holds %s" % ", ".join(dialled), SCREEN, store=register.text[:400], expected="no run carrying %s" % A.SOLANA_PROBE_INVOICE)
+        verdict = ("refused %s, 422 — \"%s\" (curve %s, required %s: %s)" % (T.WALLET_CURVE_MISMATCH, refusal.get("message"), detail.get("curve"), detail.get("required"), detail.get("cause"))) if right else (
+            "answered %s — a finding" % (("200, acceptable %s" % (review.json or {}).get("acceptable")) if review is not None and review.ok else (review.sentence() if review else "nothing")))
+        return Outcome("R7s-2", FAIL if failures else PASS, "a SOL payment of %s to the Solana payee entered from %r (%s): %s; the page says %s; %r %s; %s" % (
+            amount_words, S.FUNDING_WALLET_OPTION, T.EVM_CURVE, verdict, json.dumps(shown, ensure_ascii=False), S.SUBMIT_RUN, "is enabled" if enabled else ("stands disabled" if submit.count() else "is not offered"),
+            "nothing dialled" if not dialled else "a run was created: %s" % ", ".join(dialled)))
+
+    # -- R7s-3 — Solana holdings, read in the Consolidation ledger ------------------------------------------------------------------------------------------
+    def station_r7s_3(self) -> Outcome:
+        v = self.founder()
+        if self.facts.get("solana_skipped"):
+            raise StationStop(T.SOLANA_SKIPPED_SENTENCE % self.facts["solana_skipped"], prerequisite=SOLANA_STATIONS_SKIPPED)
+        wallets = self.recall_solana_wallets(v)
+        if not wallets:
+            raise StationStop("no Solana wallet of the harness's stands in the register, so there are no holdings to read", prerequisite=NO_SOLANA_WALLET)
+        said: List[str] = []
+        findings_before = len(self.findings)
+        readings, _ = self.read_holdings_on_the_page(v, wallets, "the holdings after R7s-1: each Solana wallet's SOL and its USDC read live, through the estate's own road")
+        self.facts["solana_holdings"] = [{"wallet": r["wallet"], "lamports": r["lamports"], "usdc": r["usdc"], "closed": r["closed"], "absence": r["absence"], "page": r["page"]} for r in readings]
+        for w, r in zip(wallets, readings):
+            said.append(r["words"])
+            self.next_step("the Consolidation ledger, wallet %s" % w.get("walletNumber"), r["page"] or (r["absence"] or ""))
+            if not r["listed"]:
+                self.finding("R7s-3: the ledger lists no row group for the Solana wallet %s" % w.get("walletNumber"), "no row group named %r in the holder's ledger" % r["group"], SCREEN,
+                             expected="a row group named %r (Ledger.tsx), its SOL and USDC rows or its absence sentence" % r["group"])
+            elif r["closed"]:
+                if r["page_lamports"] is not None:
+                    self.finding("R7s-3: a SOL figure stands where the road is closed", "the refresh skipped wallet %s with %s and the ledger shows %s" % (
+                        w.get("walletNumber"), T.SOLANA_ROAD_CLOSED, json.dumps(r["page"], ensure_ascii=False)), SCREEN, page=r["page"], expected="the wallet's absence sentence, never a figure")
+            elif r["lamports"] is None:
+                self.finding("R7s-3: no SOL figure for the Solana wallet %s" % w.get("walletNumber"), r["words"], SCREEN, page=r["page"],
+                             expected="the wallet's SOL (and its USDC, zero where no token account stands) in the ledger after the refresh")
+            elif not re.search(r"\b%s\b" % T.SOL, r["page"]):
+                self.finding("R7s-3: the ledger shows no SOL row for the Solana wallet %s" % w.get("walletNumber"), "the store holds %s and the ledger reads %s" % (
+                    T.sol_words(r["lamports"]), json.dumps(r["page"], ensure_ascii=False)), SCREEN, page=r["page"], expected="a SOL row with the native amount beside its value")
+        if any(r["closed"] for r in readings):
+            said.append(T.CLOSED_ROAD_TRUTH_TOLD % ("%s: %s" % (T.SOLANA_ROAD_CLOSED, T.SOLANA_REFUSAL_SENTENCES[T.SOLANA_ROAD_CLOSED])))
+        # the Solana payee's USDC signal, unchanged since R6s
+        register = v.read(S.PAYEES_ROUTE_API, "the payee register: the Solana payee's solanaUsdcAccount unchanged since R6s")
+        row = self.payee_record(register, A.SOLANA_PAYEE_NAME, str(wallets[1]["address"]), T.SOLANA_CHAIN) if len(wallets) > 1 else None
+        if row is None:
+            said.append("the Solana payee's USDC signal: no row of %s on solana in the register" % A.SOLANA_PAYEE_NAME)
+        else:
+            signal: Any = row.get("solanaUsdcAccount") if "solanaUsdcAccount" in row else "absent"
+            signal_words = T.usdc_signal_words(signal) if signal != "absent" else "the register view carries no solanaUsdcAccount field"
+            earlier = self.facts.get("solana_usdc_signal")
+            if self.facts.get("solana_payee") is None and earlier is None:
+                said.append("the Solana payee's USDC signal: solanaUsdcAccount %s (%s); R6s did not run this run, so there is nothing to compare it with" % (
+                    json.dumps(signal) if signal != "absent" else "absent", signal_words))
+            elif signal != earlier:
+                self.finding("R7s-3: the Solana payee's USDC signal changed", "R6s read solanaUsdcAccount %s and the register now reads %s" % (json.dumps(earlier), json.dumps(signal)), SCREEN,
+                             store=json.dumps(row, ensure_ascii=False), expected="solanaUsdcAccount %s, as R6s read it" % json.dumps(earlier))
+                said.append("the Solana payee's USDC signal changed: %s → %s" % (json.dumps(earlier), json.dumps(signal)))
+            else:
+                said.append("the Solana payee's USDC signal unchanged: solanaUsdcAccount %s (%s)" % (json.dumps(signal) if signal != "absent" else "absent", signal_words))
+        return Outcome("R7s-3", FAIL if len(self.findings) > findings_before else PASS, "; ".join(said))
+
+    # ======================================================================================================================
     # R8 — The two legs agree; and the founder's next step, page by page, held against the Client Manual's words.
     # ======================================================================================================================
     def api_leg_report(self) -> Optional[Dict[str, Any]]:
@@ -3027,6 +3959,21 @@ class RealWorld:
             out.append("- Gas credited, each on the review's %s and once: %s." % (T.GAS_SHORTFALL, "; ".join(c["said"] for c in self.facts["gas_credits"])))
         if self.facts.get("receipt_ceilings"):
             out.append("- The write's ceilings: %s." % json.dumps(self.facts["receipt_ceilings"], ensure_ascii=False))
+        # the Solana road (Spec T29, HRW-2)
+        if self.facts.get("solana_wallets"):
+            out.append("- The Solana wallets this leg made or took on: %s (the first pays, the second is its payee; Spec T29)." % "; ".join(
+                "wallet %s, %s" % (w.get("walletNumber"), w.get("address")) for w in self.facts["solana_wallets"]))
+        if self.facts.get("solana_payee"):
+            out.append("- The Solana payee: %s on %s at %s — the harness's own second Solana wallet, never an address outside the estate (Spec T29 §0a.2)." % (
+                self.facts["solana_payee"].get("name"), T.SOLANA_CHAIN, self.facts["solana_payee"].get("address")))
+        if self.facts.get("solana_skipped"):
+            out.append("- The Solana stations after R5s were skipped by name: %s." % self.facts["solana_skipped"])
+        if self.facts.get("solana_closed"):
+            out.append("- The Solana road is closed on this estate, and the estate said so by name (%s); nothing moved on it." % T.SOLANA_ROAD_CLOSED)
+        if self.facts.get("solana_holdings"):
+            out.append("- The Solana holdings after R7s-1: %s." % "; ".join(
+                "wallet %s %s" % (h.get("wallet"), T.sol_words(h["lamports"]) if h.get("lamports") is not None else ("%s" % (h.get("absence") or ("skipped: %s" % T.SOLANA_ROAD_CLOSED if h.get("closed") else "no figure"))))
+                for h in self.facts["solana_holdings"]))
         if out:
             out.insert(0, "Summary:")
             out.insert(1, "")
@@ -3058,10 +4005,10 @@ class RealWorld:
 # The plan, printed without --i-mean-it: every station, what it presses and what it reads, with nothing opened and nothing sent.
 # ---------------------------------------------------------------------------
 def normalise_station(text: str) -> str:
-    """--from S5, R5, s7b, R7b: the API leg's numbers name the browser leg's stations (Spec HRW-1 §3: the same --from flag)."""
+    """--from S5, R5, s7b, R7b, S5s, R7s-1: the API leg's numbers name the browser leg's stations (Spec HRW-1 §3: the same --from flag; the Solana five keep their names)."""
     raw = str(text or "").strip()
-    found = re.match(r"^[RrSs](\d+)([bB]?)$", raw)
-    wanted = "R%s%s" % (found.group(1), found.group(2).lower()) if found else raw
+    found = re.match(r"^[RrSs](\d+)([bB]?)([sS]?)(?:-(\d+))?$", raw)
+    wanted = "R%s%s%s%s" % (found.group(1), found.group(2).lower(), found.group(3).lower(), ("-%s" % found.group(4)) if found.group(4) else "") if found else raw
     if wanted not in STATION_IDS:
         raise HarnessFault("no station called %s; the stations are %s (S<n> names the same station as R<n>)" % (raw, ", ".join(STATION_IDS)))
     return wanted
@@ -3072,6 +4019,8 @@ def plan_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None) -> List
     first = [p for p in A.payments() if p.key in T.REAL_WORLD_FIRST_PRESS]
     second = [p for p in A.payments() if p.key in T.REAL_WORLD_SECOND_PRESS]
     book = lambda rows: ", ".join("%s %s %s to %s" % (p.invoice, p.amount, T.PAYMENT_ASSET, p.payee_name) for p in rows)  # noqa: E731
+    sol = A.solana_payment()
+    sol_words = T.sol_words(sol.lamports) if sol else A.SOLANA_AMOUNT_PLACEHOLDER
     walk = {
         "R1": "open the one-time link the birth script printed (from --birth, never printed; the estate it names held to the harness's own first), the virtual authenticator answering the page's own "
               "request for a key — or %r where the page offers it; read the welcome; %r; then GET %s and GET %s" % (S.ENROLMENT_CREATE_ACTION, S.continue_label("<estate>"),
@@ -3097,6 +4046,26 @@ def plan_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None) -> List
               "Approver inbox; the run's page until landed; the owner's wallet read on the chain before and after" % (S.ENTRY_ROUTE, book(first), S.CHECK_RUN,
                                                                                                                        T.GAS_SHORTFALL, S.SUBMIT_RUN),
         "R7b": "the second %r of the day under the same default reference: %s — the screen must create it" % (S.SUBMIT_RUN, book(second)),
+        # the Solana road (Spec T29 and HRW-2)
+        "R5s": "%s: %r → %r at %r, %r at %r → %r, twice (the two Solana wallets: the first pays, the second is its payee); the address read (base58, 32 bytes, on the "
+               "curve; nothing about recovery); GET %s read back; the first wallet's address printed for the owner's SOL, %s plus the %s reserve" % (
+                   S.WALLETS_ROUTE, S.CREATE_NEW_WALLET, S.SOLANA_NETWORK, S.NETWORK_LEGEND, S.THIS_ESTATE, S.WHOSE_WALLET_LEGEND, S.CREATE_IT, S.WALLETS_REGISTER_ROUTE,
+                   sol_words, T.sol_words(T.FEE_RESERVE_LAMPORTS)),
+        "R6s": "%s: %r added on %s at the harness's second Solana wallet (pasted with a trailing space; %s in payee.env ignored where present), %r; %s press %r in their own "
+               "contexts; the row's USDC signal (%r where solanaUsdcAccount reads false); the three faults of a base58 address and a Solana address in an EVM payee's field, "
+               "each refused at the page in the estate's sentence before anything is sent; GET %s holds none of them" % (
+                   S.PAYEES_ROUTE, A.SOLANA_PAYEE_NAME, T.SOLANA_CHAIN, T.SOLANA_PAYEE_KEY, S.SEND_FOR_APPROVAL, " then ".join(A.PEOPLE[k].name for k in S.APPROVERS), S.APPROVE,
+                   S.HAS_NOT_RECEIVED_USDC, S.PAYEES_ROUTE_API),
+        "R7s-1": "GET %s (the allowance, never a constant); %s %s (%s) to the Solana payee from the first Solana wallet — the owner's figure (aer360_answers.SOLANA_PAYMENT_SOL; none written "
+                 "stops the station with the wallet's address printed); the wallet's SOL read on the Consolidation page (%r) until it holds the payment plus the %s reserve, under "
+                 "--funds-wait; %s: %r; the review held to the one-dollar total and the allowance at the estate's valuation; %r; the Approver inbox; the run's page and its %r card; "
+                 "the payee wallet's SOL after; a closed road (%s) recorded by name at the review, nothing moved" % (
+                     S.SANDBOX_ALLOWANCE_ROUTE_API, A.SOLANA_PAYMENT_INVOICE, sol_words, T.SOL, S.REREAD_EVERY_WALLET, T.sol_words(T.FEE_RESERVE_LAMPORTS), S.ENTRY_ROUTE, S.CHECK_RUN,
+                     S.SUBMIT_RUN, S.TRAIL_CARD, T.SOLANA_ROAD_CLOSED),
+        "R7s-2": "%s: a SOL row (%s) to the Solana payee from %r; %r → %s, 422, in the estate's sentence, read on the page; %r not offered; GET %s holds no run carrying %s" % (
+            S.ENTRY_ROUTE, A.SOLANA_PROBE_INVOICE, S.FUNDING_WALLET_OPTION, S.CHECK_RUN, T.WALLET_CURVE_MISMATCH, S.SUBMIT_RUN, S.SETS_ROUTE_API, A.SOLANA_PROBE_INVOICE),
+        "R7s-3": "%s: %r; the estate's holder opened; each Solana wallet's row group in the ledger (its SOL and USDC rows, or its absence sentence) beside GET %s; GET %s for the "
+                 "payee's USDC signal, unchanged since R6s" % (S.CONSOLIDATION_ROUTE, S.REREAD_EVERY_WALLET, S.OVERVIEW_ROUTE_API, S.PAYEES_ROUTE_API),
         "R8": "the API leg's newest report for the same estate (aer360-harness-<date>.md), station by station; each page's next step held against the Client Manual",
         "R9": "every run this run made and did not send — a draft, or one waiting for an approval — cancelled from its own page (%r) and read again; "
               "nothing else touched" % S.CANCEL_RUN,
@@ -3106,6 +4075,7 @@ def plan_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None) -> List
         out.append("%s %s — %s" % (station, title, ("skipped: resumed at %s" % STATION_IDS[start]) if index < start else walk[station]))
     out.append("The book on %s: %s in all, every payment to the owner's wallet (Spec T24)." % (
         T.PAYEE_CHAIN, T.usdc_dollars(sum(int(p.amount_minor) for p in first + second))))
+    out.append("The Solana payment: %s to the harness's own second Solana wallet, counted under the same dollar at the estate's valuation (Spec T29)." % sol_words)
     return out
 
 
@@ -3124,7 +4094,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--store", default=STORE_ROOT, help="the harness's store (default ~/.aer360-harness): admin.env, payee.env, and real-world/ for the credentials")
     parser.add_argument("--out", default=RUNS_DIR, help="where the run folder is written (default ~/Downloads/harness-runs)")
     parser.add_argument("--api-reports", dest="api_reports", default=API_REPORTS_DIR, help="the API leg's report folder, which R8 reads (default the working folder)")
+    parser.add_argument("--funds-wait", dest="funds_wait", type=float, default=FUNDS_WAIT_SECONDS, metavar="SECONDS",
+                        help="how long R7s-1 waits for the owner's SOL to reach the first Solana wallet, read on the Consolidation page (default %d s; Spec T29 §0a.3)" % int(FUNDS_WAIT_SECONDS))
     args = parser.parse_args(argv)
+    if args.funds_wait <= 0:
+        print("--funds-wait is a number of seconds above zero")
+        return 2
     try:
         start_at = normalise_station(args.start_at) if args.start_at else None
     except HarnessFault as err:
@@ -3135,7 +4110,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         for line in plan_lines(args.base, start_at):
             print(line)
         return 2
-    leg = RealWorld(args.base, os.path.expanduser(args.store), args.birth, start_at, args.headed, os.path.expanduser(args.out), args.api_reports)
+    leg = RealWorld(args.base, os.path.expanduser(args.store), args.birth, start_at, args.headed, os.path.expanduser(args.out), args.api_reports, funds_wait=args.funds_wait)
     try:
         leg.run()
     except KeyboardInterrupt:

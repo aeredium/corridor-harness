@@ -619,6 +619,57 @@ def approvals_account_answers() -> Dict[str, Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
+# The Solana road (Spec T29 and HRW-2, written 24 October 2026, amended 30 October 2026): two Solana wallets, one payee, one SOL payment.
+# ---------------------------------------------------------------------------
+# S5s presses Create a new wallet twice with the network Solana (Wallets.tsx: `chain: 'solana'` on both steps of the press) and whose wallet
+# This estate — beside the book's second wallet account (APPROVALS_ACCOUNT_NAME, Spec T19). The first is the wallet the SOL payment leaves,
+# the second is its payee: the proof's destination is a wallet on the threshold cluster, never a seed-phrase wallet of the owner's (the owner's
+# ruling of 29 October 2026, Spec T29 §0a.2), so the SOLANA_PAYEE key §3.2 drafted for payee.env is ignored where present and the report says
+# so. The estate names a pressed wallet itself ("Wallet <n>", fundingwallet.ts pressedWalletNameFor); the names here are the harness's own
+# words for the two, and the level and the beneficiary are what the press carries for This estate: level 1, no beneficiary.
+SOLANA_WALLET = {"key": "SOLANA_WALLET", "name": "Solana wallet", "whose": "estate", "level": 1, "beneficiary": None, "chain": T.SOLANA_CHAIN}
+SOLANA_WALLET_2 = {"key": "SOLANA_WALLET_2", "name": "Solana wallet 2", "whose": "estate", "level": 1, "beneficiary": None, "chain": T.SOLANA_CHAIN}
+SOLANA_WALLETS = (SOLANA_WALLET, SOLANA_WALLET_2)
+SOLANA_PAYEE_NAME = "Harness Holdings — Solana wallet 2"   # the payee S6s makes of the second wallet's address, on chain solana, whitelisted by the ceremony
+SOLANA_PAYMENT_INVOICE = "HH-S001"                          # S7s-1's one payment
+SOLANA_PROBE_INVOICE = "HH-S002"                            # S7s-2's probe: reviewed from the funding wallet and refused at the curve belt, never created
+# THE SOL AMOUNT IS THE OWNER'S FIGURE (Spec T29 §0a.3): written here by him as a plain decimal of SOL (for example "0.001"); the brief writes
+# none. While it is None, S7s-1 prints the wallet's address, stops before any review naming this field, and moves nothing; the dry run prints the
+# placeholder. The one-dollar total (Spec T24) counts this payment with S7's three at the estate's own valuation (never a price of the harness's
+# own), so a figure here needs room under the dollar that the book's USDC payments leave — on the book as T24 left it (0.50, 0.01 and 0.49) there
+# is none, and the owner lowers those three where he writes this one.
+SOLANA_PAYMENT_SOL: Optional[str] = None
+SOLANA_AMOUNT_PLACEHOLDER = "<aer360_answers.SOLANA_PAYMENT_SOL, the owner's figure in SOL>"
+
+
+class SolanaPayment(NamedTuple):
+    key: str
+    payee_key: str       # the wallet the payee is: SOLANA_WALLET_2
+    payee_name: str
+    amount: str          # a plain decimal of SOL
+    invoice: str
+    expect: str
+    why: str
+
+    @property
+    def lamports(self) -> int:
+        return T.lamports_of(self.amount)
+
+
+def solana_payment(amount: Optional[str] = None) -> Optional[SolanaPayment]:
+    """
+    The one Solana payment of the book (Spec T29 §3.3): SOL from the first Solana wallet to the second, under the hold at the estate's valuation,
+    signed through BIS 100 and broadcast by the estate. None while the owner has not written his figure (SOLANA_PAYMENT_SOL), read at call time.
+    """
+    figure = SOLANA_PAYMENT_SOL if amount is None else amount
+    if figure is None:
+        return None
+    return SolanaPayment("PS1", SOLANA_WALLET_2["key"], SOLANA_PAYEE_NAME, str(figure), SOLANA_PAYMENT_INVOICE, "proceeds to approval",
+                         "SOL from the first Solana wallet to the second, both the harness's own; under the hold at the estate's valuation; "
+                         "the fee the wallet's own lamports, topped up by the platform's sponsor where short of the 0.01 SOL reserve")
+
+
+# ---------------------------------------------------------------------------
 # The shape an answer takes once the estate has stored it (Spec T8).
 # ---------------------------------------------------------------------------
 def _stored_key(key: str) -> tuple:

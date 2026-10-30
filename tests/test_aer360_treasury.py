@@ -31,7 +31,7 @@ import aer360_harness as H  # noqa: E402
 import aer360_passkey as PK  # noqa: E402
 import aer360_tables as T  # noqa: E402
 from tests.test_aer360_double import (  # noqa: E402
-    AAP_ACCOUNT_ID, EstateDouble, OWNER_WALLET_FOR_TESTS, PLATFORM_ADMIN_INVALID, PLATFORM_BASE, PlatformDouble, TREASURY_ACCOUNT_ID, UsdcChainDouble, runner_on,
+    AAP_ACCOUNT_ID, EstateDouble, OWNER_WALLET_FOR_TESTS, PLATFORM_ADMIN_INVALID, PLATFORM_BASE, PlatformDouble, TREASURY_ACCOUNT_ID, UsdcChainDouble, credit_posts, runner_on,
 )
 
 SHORTFALL_MINOR = 1000000  # the three payments together, in USDC minor units: 0.50 + 0.01 + 0.49 — the one-dollar book of Spec T24 on a real chain
@@ -131,7 +131,7 @@ class TheTreasuryPaysAndTheThreePaymentsLand(unittest.TestCase):
         self.assertEqual(len(credits), 2, "one cure per refusal: the Treasury's and Holdings'")
 
     def test_the_admin_credit_road_received_one_credit_per_workspace_with_the_reason_and_the_credential_was_never_printed(self):
-        posts = self.double.platform.requests
+        posts = credit_posts(self.double.platform)  # the credits alone: the pre-flight reads the account's entries on the same platform (Spec T29 §0a.4)
         self.assertEqual([(r["method"], r["path"]) for r in posts], [("POST", T.ADMIN_CREDIT_ROUTE % TREASURY_ACCOUNT_ID), ("POST", T.ADMIN_CREDIT_ROUTE % AAP_ACCOUNT_ID)],
                          "the Treasury's cure first (its review refused), then Holdings' at P1's review, after S7a (Spec T26 §2)")
         # Spec T26 §2: each credit sits between the review that refused and the review asked again, and nothing else credits
@@ -238,7 +238,7 @@ class TheTreasuryIsShort(unittest.TestCase):
         self.assertIn("payments: %s — " % H.TREASURY_SHORT, o.line, "the summary line names the scenario and the missing prerequisite")
         self.assertFalse(any(sentence in n for n in runner.notes["S7"]), "Spec T19 §3: the note beside the stop is gone; its figures travel in the line")
         self.assertEqual([c.route for c in runner.calls if c.station == "S7" and c.method == "POST" and c.path.startswith("/v1/sets")], [], "nothing was submitted")
-        self.assertEqual(double.platform.requests, [], "no gas was credited either")
+        self.assertEqual(credit_posts(double.platform), [], "no gas was credited either")
         self.assertEqual(double.chain.transfers, [])
         self.assertEqual(double.chain.balance_of(double.treasury.source_account), 500000)
         self.assertTrue(any(n.startswith("the money was not counted: S7 did not read the balances before and after") for n in runner.notes["S10"]))
@@ -349,7 +349,7 @@ class HoldingsIsShortAndTheTreasuryIsNot(unittest.TestCase):
         o = outcomes["S7"]
         self.assertEqual(o.outcome, H.PASS, o.line)
         self.assertEqual((runner.facts["s7a"]["verdict"], runner.facts["s7a"]["available"], runner.facts["s7a"]["ceiling"]), ("proved", 0, 120))
-        posts = [(json.loads(r["body"])["amount_usd_cents"], r["path"], json.loads(r["body"])["idempotency_key"]) for r in double.platform.requests]
+        posts = [(json.loads(r["body"])["amount_usd_cents"], r["path"], json.loads(r["body"])["idempotency_key"]) for r in credit_posts(double.platform)]
         self.assertEqual(posts, [(1000, T.ADMIN_CREDIT_ROUTE % AAP_ACCOUNT_ID, "aer360-harness-%s-harness-holdings-gas-1" % runner.run_stamp)], "one cure, n counting the credits actually made")
         self.assertEqual((runner.facts["money"]["holdings"]["credited"], runner.facts["money"]["treasury"]["credited"]), (1000, 0))
         self.assertEqual([(c["who"], c["amount_usd_cents"], c["outcome"]) for c in runner.facts["gas_credits"]], [("Harness Holdings", 1000, "credited")])
@@ -389,7 +389,7 @@ class ThePlatformDidNotCreditWhatItSaid(unittest.TestCase):
                                                           "Your gas account holds US$0.00. This set needs at most US$0.40 of gas. Nothing was sent. Buy gas below."), sentence)
         self.assertTrue(o.line.endswith("; " + sentence), o.line)
         self.assertIn("S7a proved: the review refused GAS_SHORTFALL", o.line, "what S7 said before the stop travels with it")
-        self.assertEqual(len(double.platform.requests), 1, "one credit, which the platform said it made")
+        self.assertEqual(len(credit_posts(double.platform)), 1, "one credit, which the platform said it made")
         self.assertEqual([(c["who"], c["outcome"], c["balance_after"]["available_usd_cents"]) for c in runner.facts["gas_credits"]], [("Harness Holdings", "credited", 1000)])
         self.assertEqual(double.platform.balance(AAP_ACCOUNT_ID)["available_usd_cents"], 0, "the ledger holds nothing of it")
         self.assertEqual(double.sets, {}, "P1 was never created: the review refused twice")
@@ -440,7 +440,7 @@ class TheAdminCreditRoad(unittest.TestCase):
         self.assertTrue(o.line.endswith("the gas credit for Harness Treasury was not made: refused: the platform refused the admin credential (HTTP 401): %s — the answer will be the same until the credential in admin.env is replaced" % PLATFORM_ADMIN_INVALID), o.line)
         self.assertIn("; the review refused GAS_SHORTFALL (Your gas account holds US$0.00. This set needs at most US$0.40 of gas. Nothing was sent. Buy gas below.), which a gas credit cures; the gas credit for Harness Treasury was not made: refused:", o.line,
                       "Spec T26 §3.3: the refusal that needed the credit is named first")
-        self.assertEqual(len(double.platform.requests), 1)
+        self.assertEqual(len(credit_posts(double.platform)), 1)
         self.assertEqual(runner.facts["gas_credits"][0]["outcome"], "refused")
         self.assertNotIn("not-the-key", runner.report(), "the key, right or wrong, is redacted")
         self.assertEqual(T.parse_env_file("export A='x'\n# a comment\nB=\"y\"\n\nC=z=1\n"), {"A": "x", "B": "y", "C": "z=1"})
@@ -458,12 +458,12 @@ class TheAdminCreditRoad(unittest.TestCase):
         # and the same platform, unreachable, on a run whose accounts cover their sets: never asked (Spec T26 §3.3)
         double2, runner2, outcomes2 = run_against(platform=PlatformDouble(down=True), holdings_gas_cents=9971, treasury_gas_cents=11995)
         self.assertEqual(outcomes2["S7"].outcome, H.PASS, outcomes2["S7"].line)
-        self.assertEqual(double2.platform.requests, [], "the road that could not be reached on 4 October is not needed, so it is not asked")
+        self.assertEqual(credit_posts(double2.platform), [], "the road that could not be reached on 4 October is not needed, so it is not asked")
 
     def test_each_cure_is_sized_by_its_own_refusals_ceiling_and_made_once(self):
         double, runner, outcomes = run_against(quote_ceiling_usd_cents=1200)
         self.assertEqual(outcomes["S7"].outcome, H.PASS, outcomes["S7"].line)
-        posts = [(json.loads(r["body"])["amount_usd_cents"], r["path"]) for r in double.platform.requests]
+        posts = [(json.loads(r["body"])["amount_usd_cents"], r["path"]) for r in credit_posts(double.platform)]
         self.assertEqual(posts, [(3000, T.ADMIN_CREDIT_ROUTE % TREASURY_ACCOUNT_ID), (3000, T.ADMIN_CREDIT_ROUTE % AAP_ACCOUNT_ID)],
                          "Spec T26 §2: one cure per refusal, each the next ten dollars above twice its own refusal's ceiling of US$12.00 — not S7a's ceiling of US$36.00, which T14 sized Holdings' standing credit by")
         self.assertEqual(H.Runner.gas_credit_for(None), 1000)
@@ -577,7 +577,7 @@ class TheBirthRunStopsWithTheFundSentence(unittest.TestCase):
         self.assertIn("the interviews walked from the book with the Treasury's own name, approver and account approvers (25 and 18 questions)", o.line)
         self.assertIn("funding wallet: %s on double-stack-1, key %s (born by this run's press)" % (address, double.treasury.custody_key_id), o.line)
         self.assertTrue(any(n.startswith("%s — the estate's own words: Fund this account with USDC on arbitrum. Gas is bought separately, below." % sentence) for n in runner.notes["S7"]), runner.notes["S7"])
-        self.assertEqual(double.platform.requests, [], "nothing credited")
+        self.assertEqual(credit_posts(double.platform), [], "nothing credited")
         self.assertEqual(double.chain.transfers, [], "nothing sent")
         presses = [c for c in runner.calls if c.station == "S7" and c.route == "POST /v1/workspace/funding-wallet"]
         self.assertEqual(len(presses), 1, "the key allocated on the platform, once")
