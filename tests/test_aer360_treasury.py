@@ -425,7 +425,8 @@ class TheAdminCreditRoad(unittest.TestCase):
         self.assertEqual(o.outcome, H.PASS, o.line)
         self.assertEqual(double.platform.requests, [])
         self.assertTrue(all(runner.facts["sets"][k]["landed"] for k in ("P1", "P2", "P3")))
-        self.assertEqual(runner.notes["S7"], [])
+        # Spec T31 §1.4: S7a not provable is a note now; nothing else is said of the credential or the file
+        self.assertEqual([n for n in runner.notes["S7"] if not n.startswith(T.S7A_NOT_PROVABLE_PROBE)], [])
 
     def test_a_wrong_key_is_the_platforms_refusal_in_its_words_and_the_same_on_retry(self):
         double = EstateDouble()

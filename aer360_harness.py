@@ -6172,7 +6172,7 @@ class Runner:
         if started.ok and isinstance(started.json, dict):
             draft_id = str((started.json.get("interview") or {}).get("id"))
             draft_state = (started.json.get("interview") or {}).get("state")
-            if draft_state in ("in_progress",) and (started.json.get("page") or {}).get("question", {}).get("questionId") == "A1":
+            if draft_state in ("in_progress",) and ((started.json.get("page") or {}).get("question") or {}).get("questionId") == "A1":
                 drafts.append(("policy", draft_id))
                 probes += 1
                 probe = "an answer for a question the interview did not serve (B4 while A9 is unanswered)"
@@ -6187,7 +6187,7 @@ class Runner:
                 self.refused_or_finding(probe, {}, answer, "refused: nothing compiles before the read-back is confirmed under a passkey")
             else:
                 self.note("S11", "the policy draft came back in state %r at %s, not a fresh draft; the draft probes were not made on it" % (
-                    draft_state, (started.json.get("page") or {}).get("question", {}).get("questionId")))
+                    draft_state, ((started.json.get("page") or {}).get("question") or {}).get("questionId")))  # a draft at its read-back serves no question (Spec T31: S3 stopped at the confirm)
         account = self.request(founder, "POST", "/v1/onboarding/interviews", {"interviewType": "wallet_account"}, "S11")
         self.probe_step("a probe draft of the wallet account interview", account, {"interviewType": "wallet_account"}, "a fresh draft, deleted at the end of S11", founder.name)
         if account.ok and isinstance(account.json, dict):

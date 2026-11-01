@@ -2826,13 +2826,13 @@ class EstateDouble:
         addresses = sorted(self.addresses_of_caller(credential_id))
         return addresses[0].lower() if addresses else None
 
-    def change_roster(self, change: Dict[str, Any]) -> List[Dict[str, str]]:
+    def roster_of_change(self, change: Dict[str, Any]) -> List[Dict[str, str]]:
         """The roster of the charter the change AMENDS, fixed for the life of the change: A8's census as the compiler wrote it (changeApprovers)."""
         return self.parse_roster((change["standing"] or {}).get("changeApprovers") or (change["standing"] or {}).get("signers") or [])
 
     def change_facts(self, change: Dict[str, Any]) -> Dict[str, Any]:
         """`changeFactsOf`: the roster, the confirmer, who approved, who may still, and how many more the count needs."""
-        roster = self.change_roster(change)
+        roster = self.roster_of_change(change)  # `change_roster` is the double's dial for the multisig roster (Spec T15); this is the change's own
         confirmer = next((p for p in roster if p["email"].lower() == (change["confirmerEmail"] or "")), None)
         others = [p for p in roster if confirmer is None or p["email"].lower() != confirmer["email"].lower()]
         approved = {a["email"] for a in change["approvals"]}
