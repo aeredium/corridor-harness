@@ -1815,10 +1815,12 @@ class RealWorld:
                     line.get("questionId"), shown[1] if shown else None, line.get("spoken")), SCREEN, page=json.dumps(shown, ensure_ascii=False) if shown else "",
                     store=json.dumps(line, ensure_ascii=False), expected="the same sentence")
         amending = False
+        # Spec T31 §1.3: the read-back book learnt Spec AER360-CAT-16 — in the sandbox, which the read-back's own realm says, the ceiling's line is the sandbox's
+        sandbox = E.is_sandbox_read_back((received.json or {}).get("realm") if received is not None and isinstance(received.json, dict) else None, served)
         for which, (line_id, prompt) in E.CEILING_READBACK_LINES.items():
             cents = A.MONEY["company_ceiling_cents"] if which == "perPayment" else A.MONEY["daily_total_cents"]
             partner = A.MONEY["daily_total_cents"] if which == "perPayment" else A.MONEY["company_ceiling_cents"]
-            expected = E.ceiling_read_back_sentence(which, cents, partner, amending)
+            expected = E.ceiling_read_back_sentence(which, cents, partner, amending, sandbox=sandbox)
             shown = next((l for l in lines if l[0] == prompt), None)
             if shown is None or shown[1] != expected:
                 failures += 1

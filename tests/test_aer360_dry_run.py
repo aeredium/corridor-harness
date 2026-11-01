@@ -116,7 +116,8 @@ class DryRunTest(unittest.TestCase):
         self.assertIn(H.ESTATE_STATES_NO_CATALOG_VERSION, [l for l in lines if l.startswith("S3 — POST /v1/onboarding/interviews {")][0])
         s3_all = [l for l in lines if l.startswith("S3 — ")]
         order = [l.split(" — ", 1)[1].split(" ", 1)[1].split(" ")[0] for l in s3_all if "→" in l]
-        self.assertEqual(order[0], "/v1/onboarding/interviews")
+        self.assertEqual(order[0], "/v1/charter-changes", "Spec T31 §1.2: a change an earlier run left pending is finished before the interview begins")
+        self.assertEqual(order[order.index("/v1/onboarding/interviews") - 1], "/v1/onboarding/interviews/<waiting", "the interview begins after S3's head")
         self.assertTrue(any("/readback" in l for l in s3_all))
         self.assertTrue(any("/confirm/options" in l for l in s3_all))
         self.assertTrue(any("/confirm " in l for l in s3_all))
@@ -219,7 +220,8 @@ class DryRunTest(unittest.TestCase):
         """Spec T8: --dry unchanged in its calls. The fixture is the dry run at main after PR #5, its expectations cut off at the arrow."""
         with open(FROZEN_CALLS, "r", encoding="utf-8") as handle:
             frozen = handle.read().splitlines()
-        self.assertEqual(len(frozen), 281, "Spec T14 rewrote S7 (159 → 193); Spec T18 adds S7's conditional register read for a run resumed at S7 (193 → 194); Spec T19 adds S5's head — the ceremonies read and the conditional finish — and S14 (194 → 231); "
+        self.assertEqual(len(frozen), 285, "Spec T31 adds S3's head — the charter changes read, the approvals, the read after each and the conditional Finish the write (281 → 285); "
+                                            "Spec T14 rewrote S7 (159 → 193); Spec T18 adds S7's conditional register read for a run resumed at S7 (193 → 194); Spec T19 adds S5's head — the ceremonies read and the conditional finish — and S14 (194 → 231); "
                                             "Spec T24 adds S6's payee.env read, S7's conditional one, and the runs register read before the one-off (231 → 234); "
                                             "Spec T26 drops the three standing credit lines and prints one conditional cure per workspace, the admin.env line moved to where it is read (234 → 233); "
                                             "Spec T27 adds S3's answers to C2 and C3 between C9 and C10 (233 → 235); "
@@ -231,7 +233,13 @@ class DryRunTest(unittest.TestCase):
         self.assertEqual(stations.index("S5s"), stations.index("S6") - 8)
         self.assertEqual(stations.index("S6s"), stations.index("S7") - 12)
         self.assertEqual(stations.index("S7s-1"), stations.index("S8") - 21)
-        self.assertEqual(len([s for s in stations if s not in ("S5s", "S6s", "S7s-1", "S7s-2", "S7s-3")]), 240, "the EVM stations' 240 lines of Spec T28 stand as they were")
+        self.assertEqual(len([s for s in stations if s not in ("S5s", "S6s", "S7s-1", "S7s-2", "S7s-3")]), 244, "the EVM stations' 240 lines of Spec T28 stand as they were, and Spec T31's four of S3's head beside them")
+        # Spec T31 §1.2: S3's head, before its interview begins — the four lines stand directly after S2's and before the interview's start
+        head = stations.index("S3")
+        self.assertEqual(frozen[head], "S3 — GET /v1/charter-changes (as Harriet Founder)")
+        self.assertTrue(frozen[head + 1].startswith("S3 — POST /v1/charter-changes/<change id>/approve/options {} then …/approve "), frozen[head + 1])
+        self.assertEqual(frozen[head + 2], "S3 — GET /v1/charter-changes (as Harriet Founder) — after each approval")
+        self.assertEqual(frozen[head + 4], 'S3 — POST /v1/onboarding/interviews {"interviewType": "policy"}')
         # Spec T27: the two new lines are S3's, in the catalog's order, and nothing else in the calls moved
         ceilings = [i for i, l in enumerate(frozen) if '"questionId": "C2"' in l or '"questionId": "C3"' in l]
         self.assertEqual([frozen[i] for i in ceilings], ['S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C2", "value": {"cents": "10000"}}',

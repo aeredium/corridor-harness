@@ -2,6 +2,10 @@ S1 — POST /v1/auth/invite/options {"token": "<token from --invite>", "issuedAt
 S1 — [passkey] a new P-256 key for Harriet Founder (openssl ecparam -genkey -name prime256v1), attestation none, flags UP|UV|AT, COSE ES256
 S1 — POST /v1/auth/invite/verify {"token": "<token>", "issuedAtMs": "<issuedAtMs from options>", "response": "<RegistrationResponseJSON>"}
 S2 — GET /v1/journey
+S3 — GET /v1/charter-changes (as Harriet Founder)
+S3 — POST /v1/charter-changes/<change id>/approve/options {} then …/approve {"issuedAtMs": "<issuedAtMs>", "response": "<assertion by the approver's passkey over the challenge>"} (as each approver the change names who is not the confirmer, in the order Ben Signatory, Cora Clerk, Ada Approver, Harriet Founder, with a stored passkey) — only for a change standing pending, an earlier run's or this run's compile's 202
+S3 — GET /v1/charter-changes (as Harriet Founder) — after each approval
+S3 — POST /v1/onboarding/interviews/<waiting interview>/compile {} (as Harriet Founder) — only for a change listed approved, its write unfinished
 S3 — POST /v1/onboarding/interviews {"interviewType": "policy"}
 S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "A1", "value": {"text": "Harness Holdings Pty Ltd"}}
 S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "A4", "value": {"text": "Australia"}}

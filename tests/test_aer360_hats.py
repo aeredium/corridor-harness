@@ -52,13 +52,31 @@ def fixture_answers(interview_type):
     return [(q.id, A.ANSWERS[interview_type][q.id], "prompt of %s" % q.id, q.kind) for q in A.expected_walk(interview_type)]
 
 
-# Spec T27: what the estate says each of the company's ceilings becomes on a fresh estate, word for word for the book's US$100 and US$1,000
-# (aeredium/AERAccounts b523cbf: services/onboarding.ts readback, services/charterceilings.ts ceilingReadBackSentence)
+# Spec T27: what the estate says each of the company's ceilings becomes, word for word for the book's US$100 and US$1,000 — since Spec T31, as Spec
+# AER360-CAT-16 speaks it in the sandbox the fixture's realm line opens (aeredium/AERAccounts a80ac13: services/onboarding.ts readback,
+# services/charterceilings.ts sandboxCeilingReadBackSentence, packages/shared/src/realm.ts and derivedvolumes.ts): each ceiling recorded as the
+# production figure, and C3 followed first by the sandbox figure's line and the derived week and month; O1 by its own derived week and month.
 CEILING_LINES_ON_A_FRESH_ESTATE = {
     "C2": {"questionId": "C2_WRITTEN", "prompt": "What the company ceiling becomes", "synthetic": True,
-           "spoken": "Written to the signing platform as the per-payment limit of every signing entry this estate draws up on its own account: US$100. No single payment above it is approved, on any network."},
+           "spoken": "Recorded as your production figure: US$100 per payment. While your estate is in the sandbox, every signing entry this estate draws up on its own "
+                     "account carries US$100 per payment instead; your figure is written to them when your estate goes live, with nothing further from you."},
     "C3": {"questionId": "C3_WRITTEN", "prompt": "What the daily total becomes", "synthetic": True,
-           "spoken": "Written to the signing platform as the daily limit of the same entries: US$1,000. No payment that takes a day’s total above it is approved."},
+           "spoken": "Recorded as your production figure: US$1,000 per day. While your estate is in the sandbox, every signing entry this estate draws up on its own "
+                     "account carries US$100 per day instead; your figure is written to them when your estate goes live, with nothing further from you."},
+}
+LINES_BESIDE_ON_A_SANDBOX_ESTATE = {
+    "policy": {
+        "C2": [CEILING_LINES_ON_A_FRESH_ESTATE["C2"]],
+        "C3": [{"questionId": "SANDBOX_FIGURE", "prompt": "What this figure does while your estate is in the sandbox", "synthetic": True,
+                "spoken": "Recorded as your production figure. In the sandbox this is replaced by US$100."},
+               {"questionId": "DERIVED_WEEK_MONTH", "prompt": "The weekly and monthly figures, derived from this one", "synthetic": True,
+                "spoken": "US$1,000 per day, so US$7,000 per week and US$31,000 per month. To change the weekly or monthly figure, change the daily figure."},
+               CEILING_LINES_ON_A_FRESH_ESTATE["C3"]],
+    },
+    "wallet_account": {
+        "O1": [{"questionId": "DERIVED_WEEK_MONTH", "prompt": "The weekly and monthly figures, derived from this one", "synthetic": True,
+                "spoken": "US$50 per day, so US$350 per week and US$1,550 per month. To change the weekly or monthly figure, change the daily figure."}],
+    },
 }
 
 
@@ -69,8 +87,8 @@ def fixture_readback(interview_type):
         if qid == "C19" and value.get("choice") == A.VENUE_NO:
             # the estate's own line after a No (services/onboarding.ts, VENUE_DOOR_READBACK_QUESTION_ID)
             lines.append({"questionId": "C19_DOOR", "prompt": "What happens to a venue’s contract entered as a payee", "spoken": H.VENUE_DOOR_READBACK_SENTENCE, "synthetic": True})
-        if interview_type == "policy" and qid in CEILING_LINES_ON_A_FRESH_ESTATE:
-            lines.append(dict(CEILING_LINES_ON_A_FRESH_ESTATE[qid]))  # Spec T27: directly after the answer it speaks of
+        for beside in LINES_BESIDE_ON_A_SANDBOX_ESTATE[interview_type].get(qid, []):
+            lines.append(dict(beside))  # Spec T27, Spec T31: directly after the answer it speaks of, in the order the read-back lays them
     return lines
 
 
