@@ -439,11 +439,26 @@ class EstateHarnessReadmeTest(unittest.TestCase):
 
 
 class ChangelogTest(unittest.TestCase):
+    T31_TITLE = "## Spec T31 — The estate harness learns AER360-118 and CAT-16, and never strands its estate (1 November 2026)"
+
+    def test_the_changelog_records_spec_t31_first_and_names_every_change(self):
+        text = read("CHANGELOG.md")
+        self.assertEqual(text.index("## "), text.index(self.T31_TITLE), "the newest entry first")
+        entry = text.split(self.T31_TITLE, 1)[1].split("## Spec T29 and HRW-2", 1)[0]
+        for words in ("`aer360_answers.py`", "`aer360_harness.py`", "`tests/test_aer360_double.py`", "`tests/test_the_estate_harness_learns_118_and_cat_16.py`",
+                      "`tests/fixtures/aer360-readback-2026-11-01.json`", "`lines_beside`", "`charter_change_that_waits`", "`finish_charter_change`",
+                      "`finish_the_changes_that_wait`", "`audit_lines_beside`", "`expectation_of_the_charter`", "`press_once_more_on_the_counter`",
+                      "`SPEC_118_COUNTS_THE_CONFIRMER`", "281 → 285", "a80ac13", "Not touched", "No secret"):
+            self.assertIn(words, entry, words)
+        section = read("README.md")
+        self.assertIn("**The estate harness learns AER360-118 and CAT-16, and never strands its estate (Spec T31, 1 November 2026).**", section)
+        self.assertLess(section.index("(Spec T31, 1 November 2026).**"), section.index("**Running it.**"))
+
     def test_the_changelog_records_spec_t29_and_hrw_2_and_names_every_change(self):
         text = read("CHANGELOG.md")
         title = "## Spec T29 and HRW-2 — The two legs of the estate harness learn the Solana road (24 October 2026, amended 30 October 2026)"
         self.assertIn(title, text)
-        self.assertEqual(text.index("## "), text.index(title), "the newest entry first")
+        self.assertLess(text.index(self.T31_TITLE), text.index(title), "Spec T31's entry stands before it, the newest first")
         hrw1 = "## Spec HRW-1 — Harness Real World"
         self.assertLess(text.index(title), text.index(hrw1))
         entry = text.split(title, 1)[1].split(hrw1, 1)[0]

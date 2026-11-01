@@ -310,26 +310,27 @@ class GasIsCreditedOnlyWhenShort(unittest.TestCase):
         self.assertEqual(self.double.platform.balance(TREASURY_ACCOUNT_ID)["balance_usd_cents"], 11964)
         self.assertEqual(len([c for c in self.runner.calls if c.station == "S7" and c.route == "POST /v1/sets/review"]), 5, "the Treasury's, S7a's and the three payments', each asked once")
 
-    def test_s7a_is_a_finding_under_s7_never_a_fail_and_names_both_figures(self):
+    def test_s7a_not_provable_is_a_note_under_s7_never_a_finding_and_names_both_figures(self):
+        """Spec T31 §1.4: "not provable this run" moves from the findings to the notes; the station's outcome is the payments' alone."""
         s7a = self.runner.facts["s7a"]
         self.assertEqual((s7a["verdict"], s7a["available"], s7a["ceiling"]), ("not provable", 9971, 120))
         self.assertEqual(s7a["said"], "%s: %s" % (T.S7A_NOT_PROVABLE_PROBE, S7A_FINDING))
         self.assertEqual(s7a["said"], "S7a not provable this run: " + S7A_FINDING)
         self.assertIn("; S7a not provable this run: %s; " % S7A_FINDING, self.outcomes["S7"].line)
-        self.assertEqual([(f.station, f.probe, f.said, f.route) for f in self.runner.findings if f.station == "S7"],
-                         [("S7", "S7a not provable this run", S7A_FINDING, "POST /v1/sets/review")])
+        self.assertEqual([f for f in self.runner.findings if f.station == "S7"], [], "not provable is a note, not a finding (Spec T31 §1.4)")
+        self.assertIn("S7a not provable this run: %s" % S7A_FINDING, self.runner.notes["S7"])
         self.assertEqual([(f.station, f.probe) for f in self.runner.findings],
-                         [("S7", "S7a not provable this run"), ("S10", "read-back (policy) of A5"), ("S11", "a payee address with a wrong checksum")])
-        self.assertIn("  S7 finding: S7a not provable this run: %s" % S7A_FINDING, self.said, "said on the terminal as a finding, not as a fail")
+                         [("S10", "read-back (policy) of A5"), ("S11", "a payee address with a wrong checksum")])
+        self.assertIn("  S7 note: S7a not provable this run: %s" % S7A_FINDING, self.said, "said on the terminal as a note, not as a fail")
         self.assertFalse(any(l.startswith("S7 — fail") for l in self.said), [l for l in self.said if l.startswith("S7 —")])
         report = self.runner.report()
         s7 = report.split("## S7 — Payments", 1)[1].split("## S8 — ", 1)[0]
-        self.assertIn("### Findings\n\n- **S7a not provable this run** — %s\n  - Route: POST /v1/sets/review" % S7A_FINDING, s7)
-        self.assertIn("Findings in this run: 3 (S7 1, S10 1, S11 1).", report)
-        self.assertNotIn("Findings under S10 and S11", report)
+        self.assertNotIn("- **S7a not provable this run** —", s7)
+        self.assertIn("S7a not provable this run: %s" % S7A_FINDING, s7, "the note stands in S7's section")
+        self.assertIn("Findings in this run: 2 (S10 1, S11 1).", report)
         read = H.read_report(self.runner.write_report())
         self.assertEqual(read["outcomes"]["S7"], "pass")
-        self.assertIn({"station": "S7", "probe": "S7a not provable this run", "said": S7A_FINDING}, read["findings"], "the finding reads back for the next run's last-run column")
+        self.assertNotIn({"station": "S7", "probe": "S7a not provable this run", "said": S7A_FINDING}, read["findings"], "a note never reads back as a finding still open")
 
     def test_s10_reconciles_each_gas_account_with_nothing_credited(self):
         notes = [n for n in self.runner.notes["S10"] if n.startswith("money moved (Spec T14 §5)")]

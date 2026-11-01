@@ -13,6 +13,12 @@ The sentences below are the estate's own, copied from its code at b523cbf and he
 (aer360_harness.ceiling_read_back_sentence) nor the double's (tests/test_aer360_double.ceiling_read_back_sentence) is tested against itself:
 services/charterceilings.ts (ceilingWrittenSentence, STANDING_CEILING_KEPT, ceilingReadBackSentence) and packages/shared/src/explain.ts
 (CHARTER_CEILINGS_REQUIRED, CEILING_ZERO_REFUSED, CHARTER_CEILINGS_REFUSED_AT_COMPILE).
+
+Spec T31 (1 November 2026): the estate speaks Spec AER360-CAT-16 now (aeredium/AERAccounts a80ac13), and the double with it by default. In the
+sandbox — the double's realm — each ceiling's line is "Recorded as your production figure: …" whatever stood before, and C3 is followed first by
+the sandbox figure's line and the derived week and month, so the kept and written forms are the live realm's alone; they are held here on a read-back
+said for the live realm, and Spec AER360-118 rewrote the kept sentence. `cat16=False` is the estate before Spec AER360-CAT-16, whose sandbox
+read-back the book now reads as five findings in the estate's words.
 """
 import os
 import sys
@@ -33,6 +39,16 @@ WRITTEN_C2 = ("Written to the signing platform as the per-payment limit of every
 WRITTEN_C3 = "Written to the signing platform as the daily limit of the same entries: US$1,000. No payment that takes a day’s total above it is approved."
 KEPT = ("Where such a limit already stands above zero, this write leaves it as it stands: changing a limit that stands is a change of the company’s "
         "rules, which your change quorum (C12) must agree to, and this estate has no road for that change yet.")
+# Spec AER360-118 rewrote the kept sentence ("a sentence has to stay true") and added the quorum's (services/charterceilings.ts at a80ac13)
+KEPT_118 = ("Where such a limit already stands above zero, this write leaves it as it stands: changing a limit that stands is a change of the company’s "
+            "rules, which your change quorum (C12) must agree to, and this write carries no such agreement.")
+CHANGED_BY_QUORUM = ("Where such a limit already stands above zero, this change replaces it: a limit that stands is changed only with the agreement of your "
+                     "change quorum (C12), and this change is written when that agreement is given.")
+# Spec AER360-CAT-16 in the sandbox (services/charterceilings.ts sandboxCeilingReadBackSentence at a80ac13), for the book's US$100 and US$1,000
+SANDBOX_C2 = ("Recorded as your production figure: US$100 per payment. While your estate is in the sandbox, every signing entry this estate draws up on its own "
+              "account carries US$100 per payment instead; your figure is written to them when your estate goes live, with nothing further from you.")
+SANDBOX_C3 = ("Recorded as your production figure: US$1,000 per day. While your estate is in the sandbox, every signing entry this estate draws up on its own "
+              "account carries US$100 per day instead; your figure is written to them when your estate goes live, with nothing further from you.")
 ROUNDED = " That is your figure rounded up to the next whole dollar, because the platform holds whole dollars, so the ceiling is never smaller than yours."
 NOT_WRITTEN_BESIDE_C3 = ("Not written to the signing platform while the daily total (C3) is not answered above zero: the platform refuses every payment "
                          "while either limit of a signing entry stands at zero, so this estate writes the two together or not at all.")
@@ -66,18 +82,25 @@ class TheReadBackSentenceIsTheEstates(unittest.TestCase):
     """ceilingReadBackSentence, word for word, in the harness's re-statement and in the double's, held to the estate's literals."""
 
     def test_both_restatements_speak_the_estates_sentence_in_both_forms_and_beside_a_partner_not_answered(self):
-        for say in (H.ceiling_read_back_sentence, D.ceiling_read_back_sentence):
+        for say, kept in ((H.ceiling_read_back_sentence, KEPT_118), (D.ceiling_read_back_sentence, KEPT)):  # the harness reads a80ac13; the double's live form is b523cbf's
             self.assertEqual(say("perPayment", "10000", "100000", False), WRITTEN_C2, say.__module__)
             self.assertEqual(say("perDay", "100000", "10000", False), WRITTEN_C3, say.__module__)
-            self.assertEqual(say("perPayment", "10000", "100000", True), WRITTEN_C2 + " " + KEPT, say.__module__)
-            self.assertEqual(say("perDay", "100000", "10000", True), WRITTEN_C3 + " " + KEPT, say.__module__)
+            self.assertEqual(say("perPayment", "10000", "100000", True), WRITTEN_C2 + " " + kept, say.__module__)
+            self.assertEqual(say("perDay", "100000", "10000", True), WRITTEN_C3 + " " + kept, say.__module__)
             # whole dollars, rounded UP from the cents, grouped as en-US groups them, and the rounding said
             self.assertEqual(say("perPayment", "10001", "100000", False), WRITTEN_C2.replace("US$100.", "US$101." + ROUNDED), say.__module__)
             self.assertEqual(say("perDay", "123456789", "1", False), WRITTEN_C3.replace("US$1,000.", "US$1,234,568." + ROUNDED), say.__module__)
             # BOTH OR NEITHER: beside a partner not answered above zero, nothing is written, and the read-back says why — kept or not
             self.assertEqual(say("perPayment", "10000", None, False), NOT_WRITTEN_BESIDE_C3, say.__module__)
             self.assertEqual(say("perDay", "100000", "0", True), NOT_WRITTEN_BESIDE_C2, say.__module__)
-        self.assertEqual(H.STANDING_CEILING_KEPT, KEPT)
+        self.assertEqual(H.STANDING_CEILING_KEPT, KEPT_118)
+        # Spec T31: Spec AER360-118's quorum sentence where the change quorum stands behind the write, and Spec AER360-CAT-16's in the sandbox, before any promise
+        self.assertEqual(H.ceiling_read_back_sentence("perPayment", "10000", "100000", True, by_quorum=True), WRITTEN_C2 + " " + CHANGED_BY_QUORUM)
+        for amending in (False, True):
+            self.assertEqual(H.ceiling_read_back_sentence("perPayment", "10000", "100000", amending, sandbox=True), SANDBOX_C2)
+            self.assertEqual(H.ceiling_read_back_sentence("perDay", "100000", None, amending, sandbox=True), SANDBOX_C3, "the sandbox's sentence comes before the partner's test")
+            self.assertEqual(D.cat16_sandbox_ceiling_sentence("perPayment", "10000"), SANDBOX_C2)
+            self.assertEqual(D.cat16_sandbox_ceiling_sentence("perDay", "100000"), SANDBOX_C3)
         self.assertEqual((H.CEILING_READBACK_LINES["perPayment"], H.CEILING_READBACK_LINES["perDay"]),
                          (("C2_WRITTEN", "What the company ceiling becomes"), ("C3_WRITTEN", "What the daily total becomes")))
         self.assertEqual((D.CHARTER_CEILINGS_REQUIRED, D.CEILING_ZERO_REFUSED, D.CHARTER_CEILINGS_REFUSED_AT_COMPILE), (REQUIRED, ZERO_REFUSED, REFUSED_AT_COMPILE))
@@ -111,14 +134,15 @@ class AFreshEstateAtVersion15(unittest.TestCase):
         self.assertEqual(order[order.index("C9"):order.index("C10") + 1], ["C9", "C2", "C3", "C10"])
         self.assertEqual(self.runner.facts["interview_began"]["policy"], "in_progress")
 
-    def test_the_read_back_says_each_ceiling_is_written_directly_after_it(self):
+    def test_the_read_back_says_what_each_ceiling_becomes_after_it_in_the_sandboxs_words(self):
+        """Spec T31: in the sandbox, as Spec AER360-CAT-16 speaks it — C2_WRITTEN directly after C2, and C3_WRITTEN three lines after C3."""
         lines = lines_of(self.runner)
         ids = [l["questionId"] for l in lines]
-        self.assertEqual(ids[ids.index("C2"):ids.index("C3") + 2], ["C2", "C2_WRITTEN", "C3", "C3_WRITTEN"])
+        self.assertEqual(ids[ids.index("C2"):ids.index("C3") + 4], ["C2", "C2_WRITTEN", "C3", "SANDBOX_FIGURE", "DERIVED_WEEK_MONTH", "C3_WRITTEN"])
         self.assertEqual(line(lines, "C2")["spoken"], "US$100 and 00 cents.")
         self.assertEqual(line(lines, "C3")["spoken"], "US$1,000 and 00 cents.")
-        self.assertEqual(line(lines, "C2_WRITTEN"), {"questionId": "C2_WRITTEN", "prompt": "What the company ceiling becomes", "spoken": WRITTEN_C2, "synthetic": True})
-        self.assertEqual(line(lines, "C3_WRITTEN"), {"questionId": "C3_WRITTEN", "prompt": "What the daily total becomes", "spoken": WRITTEN_C3, "synthetic": True})
+        self.assertEqual(line(lines, "C2_WRITTEN"), {"questionId": "C2_WRITTEN", "prompt": "What the company ceiling becomes", "spoken": SANDBOX_C2, "synthetic": True})
+        self.assertEqual(line(lines, "C3_WRITTEN"), {"questionId": "C3_WRITTEN", "prompt": "What the daily total becomes", "spoken": SANDBOX_C3, "synthetic": True})
 
     def test_s10_reads_the_two_lines_back_on_a_fresh_estate_and_finds_nothing(self):
         self.assertIs(self.runner.earlier_policy_stood_written(), False, "S2 read the journey at stage 1, policy_interview not done")
@@ -144,20 +168,9 @@ class AFreshEstateAtVersion15(unittest.TestCase):
         self.assertEqual(sum(s["amount_minor"] for s in self.runner.facts["sets"].values()), T.ONE_DOLLAR_MINOR)
 
 
-class AnEstateThatForgetsItsWrittenCharter(EstateDouble):
-    """An estate whose read-back says the ceilings are written even where an earlier Policy Interview stands written — the kept clause dropped."""
-
-    def __init__(self, **kwargs):
-        super().__init__(currency_spoken_as_code=True, **kwargs)
-
-    def readback(self, iv, check_standing=True):
-        return [dict(l, spoken=l["spoken"].replace(" " + D.STANDING_CEILING_KEPT, "")) if l["questionId"] in ("C2_WRITTEN", "C3_WRITTEN") else l
-                for l in super().readback(iv, check_standing)]
-
-
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
 class AnEstateWhoseCharterStandsWritten(unittest.TestCase):
-    """A second run: the Policy Interview is answered again over a written charter, so the read-back says the standing limits are kept."""
+    """A second run: the Policy Interview is answered again over a written charter; in the sandbox the read-back's form is the sandbox's still (Spec T31)."""
 
     @classmethod
     def setUpClass(cls):
@@ -167,30 +180,43 @@ class AnEstateWhoseCharterStandsWritten(unittest.TestCase):
         cls.runner = runner_on(cls.double, cls.tmp)  # the second full run signs in with the stored passkeys
         cls.outcomes = {o.station: o for o in cls.runner.run()}
 
-    def test_the_first_run_was_written_and_the_second_reads_back_kept(self):
-        self.assertEqual(line(lines_of(self.first), "C2_WRITTEN")["spoken"], WRITTEN_C2)
+    def test_the_first_run_was_written_and_the_second_reads_back_the_sandboxs_form_still(self):
+        self.assertEqual(line(lines_of(self.first), "C2_WRITTEN")["spoken"], SANDBOX_C2)
         self.assertIn("this estate has walked before", self.outcomes["S2"].line)
         self.assertEqual(self.outcomes["S3"].outcome, H.PASS, self.outcomes["S3"].line)
         self.assertNotEqual(self.runner.facts["interview"]["policy"], self.first.facts["interview"]["policy"], "a written charter is amended by a new interview")
         lines = lines_of(self.runner)
-        self.assertEqual(line(lines, "C2_WRITTEN")["spoken"], WRITTEN_C2 + " " + KEPT)
-        self.assertEqual(line(lines, "C3_WRITTEN")["spoken"], WRITTEN_C3 + " " + KEPT)
+        self.assertEqual(line(lines, "C2_WRITTEN")["spoken"], SANDBOX_C2, "in the sandbox the figure is recorded, whatever stood before (Spec AER360-CAT-16, ruling five)")
+        self.assertEqual(line(lines, "C3_WRITTEN")["spoken"], SANDBOX_C3)
         self.assertIs(self.runner.earlier_policy_stood_written(), True, "S2 read the journey at stage 1 done, and S3 began an interview in progress")
         self.assertEqual(self.outcomes["S10"].outcome, H.PASS, self.outcomes["S10"].line)
         self.assertEqual(ceiling_findings(self.runner), [])
 
-    def test_an_estate_that_says_written_over_a_written_charter_is_a_finding_in_its_words(self):
-        double = AnEstateThatForgetsItsWrittenCharter()
-        tmp = tempfile.mkdtemp()
-        run(double, tmp)
-        runner = runner_on(double, tmp)
-        outcomes = {o.station: o for o in runner.run()}
-        self.assertEqual(outcomes["S10"].outcome, H.FAIL, outcomes["S10"].line)
-        found = ceiling_findings(runner)
-        self.assertEqual([f.probe for f in found], ["read-back (policy) of C2: what the company ceiling becomes", "read-back (policy) of C3: what the daily total becomes"])
-        self.assertEqual(found[0].expected, WRITTEN_C2 + " " + KEPT)
-        self.assertEqual(found[0].said, "the read-back's C2_WRITTEN line says %r — the written form, though S2 found an earlier Policy Interview standing written "
-                                        "(the journey's stage 1 done before S3)" % WRITTEN_C2)
+
+@unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
+class AnEstateBeforeCat16(unittest.TestCase):
+    """Spec T31 §1.3: the estate before Spec AER360-CAT-16 (cat16=False), read by the book as amended — each line it speaks that the book does not carry is a finding."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.double = EstateDouble(currency_spoken_as_code=True, cat16=False)
+        cls.runner, cls.outcomes = run(cls.double, tempfile.mkdtemp())
+
+    def test_the_written_form_in_the_sandbox_is_five_findings_in_the_estates_words(self):
+        self.assertEqual(self.outcomes["S10"].outcome, H.FAIL, self.outcomes["S10"].line)
+        found = ceiling_findings(self.runner)
+        self.assertEqual([f.probe for f in found], [
+            "read-back (policy) of C2: what the company ceiling becomes",
+            "read-back (policy) of C3: what this figure does while your estate is in the sandbox",
+            "read-back (policy) of C3: the weekly and monthly figures, derived from this one",
+            "read-back (policy) of C3: what the daily total becomes",
+            "read-back (policy) of C3: what the daily total becomes (where it stands)"])
+        self.assertEqual((found[0].expected, found[0].said), (SANDBOX_C2, "the read-back's C2_WRITTEN line says %r" % WRITTEN_C2))
+        self.assertEqual(found[1].said, "the read-back carries no line (SANDBOX_FIGURE) saying what this figure does while your estate is in the sandbox")
+        self.assertEqual(found[3].said, "the read-back's C3_WRITTEN line says %r" % WRITTEN_C3)
+        self.assertEqual(found[4].expected, "the line directly after C3's line and its SANDBOX_FIGURE and DERIVED_WEEK_MONTH lines")
+        account = [f.probe for f in self.runner.findings if f.station == "S10" and f.probe.startswith("read-back (wallet_account)")]
+        self.assertEqual(account, ["read-back (wallet_account) of O1: the weekly and monthly figures, derived from this one"])
 
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")
@@ -241,20 +267,34 @@ class TheReadBackHeldToTheTwoLines(unittest.TestCase):
     def audit(self, lines, amending=False):
         return [f for f in H.audit_readback("policy", self.answers, lines, amending) if "C2" in f["probe"] or "C3" in f["probe"]]
 
+    def live(self, written_c2, written_c3):
+        """The same read-back as the live realm says it (no realm line, no sandbox figure's line), each ceiling's line in the words given."""
+        out = []
+        for l in self.lines:
+            if l["questionId"] in ("REALM", "SANDBOX_FIGURE"):
+                continue
+            out.append(dict(l, spoken=written_c2) if l["questionId"] == "C2_WRITTEN" else dict(l, spoken=written_c3) if l["questionId"] == "C3_WRITTEN" else l)
+        return out
+
     def test_a_read_back_without_the_two_lines_is_two_findings(self):
         found = self.audit([l for l in self.lines if l["questionId"] not in ("C2_WRITTEN", "C3_WRITTEN")])
         self.assertEqual([(f["probe"], f["expected"], f["said"]) for f in found], [
-            ("read-back (policy) of C2: what the company ceiling becomes", WRITTEN_C2, "the read-back carries no line (C2_WRITTEN) saying what the company ceiling becomes"),
-            ("read-back (policy) of C3: what the daily total becomes", WRITTEN_C3, "the read-back carries no line (C3_WRITTEN) saying what the daily total becomes")])
+            ("read-back (policy) of C2: what the company ceiling becomes", SANDBOX_C2, "the read-back carries no line (C2_WRITTEN) saying what the company ceiling becomes"),
+            ("read-back (policy) of C3: what the daily total becomes", SANDBOX_C3, "the read-back carries no line (C3_WRITTEN) saying what the daily total becomes")])
 
     def test_a_figure_other_than_the_books_is_a_finding_carrying_the_estates_words(self):
-        other = WRITTEN_C2.replace("US$100.", "US$1,000.")
+        other = SANDBOX_C2.replace("US$100 per payment. While", "US$1,000 per payment. While")
         found = self.audit([dict(l, spoken=other) if l["questionId"] == "C2_WRITTEN" else l for l in self.lines])
         self.assertEqual([(f["probe"], f["sent"], f["expected"], f["said"]) for f in found], [
-            ("read-back (policy) of C2: what the company ceiling becomes", {"cents": "10000"}, WRITTEN_C2, "the read-back's C2_WRITTEN line says %r" % other)])
-        kept_on_a_fresh_estate = self.audit([dict(l, spoken=WRITTEN_C3 + " " + KEPT) if l["questionId"] == "C3_WRITTEN" else l for l in self.lines])
+            ("read-back (policy) of C2: what the company ceiling becomes", {"cents": "10000"}, SANDBOX_C2, "the read-back's C2_WRITTEN line says %r" % other)])
+        # Spec T31 §1.3: the sentence the book expected before Spec AER360-CAT-16 is a finding in the sandbox, whatever stood before
+        written_in_the_sandbox = self.audit([dict(l, spoken=WRITTEN_C3) if l["questionId"] == "C3_WRITTEN" else l for l in self.lines])
+        self.assertEqual([f["said"] for f in written_in_the_sandbox], ["the read-back's C3_WRITTEN line says %r" % WRITTEN_C3])
+        # and on the live realm the kept form on a fresh estate is the finding it was
+        kept_on_a_fresh_estate = [f for f in H.audit_readback("policy", self.answers, self.live(WRITTEN_C2, WRITTEN_C3 + " " + KEPT_118), False, realm="live")
+                                  if "C2" in f["probe"] or "C3" in f["probe"]]
         self.assertEqual([f["said"] for f in kept_on_a_fresh_estate], [
-            "the read-back's C3_WRITTEN line says %r — the kept form, though S2 found no earlier Policy Interview standing written (the journey's stage 1 not done before S3)" % (WRITTEN_C3 + " " + KEPT)])
+            "the read-back's C3_WRITTEN line says %r — the kept form, though S2 found no earlier Policy Interview standing written (the journey's stage 1 not done before S3)" % (WRITTEN_C3 + " " + KEPT_118)])
 
     def test_a_line_standing_elsewhere_or_under_another_heading_is_a_finding(self):
         moved = [l for l in self.lines if l["questionId"] != "C2_WRITTEN"] + [line(self.lines, "C2_WRITTEN")]
@@ -264,29 +304,29 @@ class TheReadBackHeldToTheTwoLines(unittest.TestCase):
         headed = self.audit([dict(l, prompt="What the ceiling is") if l["questionId"] == "C3_WRITTEN" else l for l in self.lines])
         self.assertEqual([(f["probe"], f["said"]) for f in headed], [("read-back (policy) of C3: what the daily total becomes (the prompt)", "the read-back's C3_WRITTEN line is headed 'What the ceiling is'")])
 
-    def test_where_the_harness_did_not_see_how_the_estate_stood_either_form_is_admitted_and_noted(self):
-        for spoken_c2, form in ((WRITTEN_C2, "written"), (WRITTEN_C2 + " " + KEPT, "kept")):
-            lines = [dict(l, spoken=spoken_c2) if l["questionId"] == "C2_WRITTEN" else l for l in self.lines]
-            found = [f for f in self.audit(lines, amending=None) if "C2" in f["probe"]]
+    def test_where_the_harness_did_not_see_how_the_estate_stood_either_form_is_admitted_and_noted_on_the_live_realm(self):
+        for spoken_c2, form in ((WRITTEN_C2, "written"), (WRITTEN_C2 + " " + KEPT_118, "kept")):
+            found = [f for f in H.audit_readback("policy", self.answers, self.live(spoken_c2, WRITTEN_C3), None, realm="live") if "C2" in f["probe"]]
             self.assertEqual(len(found), 1, found)
             self.assertTrue(found[0]["not_compared"])
             self.assertEqual(found[0]["said"], "the estate spoke the %s form (C2_WRITTEN); this run did not read the journey before S3 began the interview, so whether an earlier "
                                                "Policy Interview stood written is not known here and the form was not judged" % form)
-        wrong = self.audit([dict(l, spoken="Nothing is written.") if l["questionId"] == "C2_WRITTEN" else l for l in self.lines], amending=None)
-        self.assertEqual([f.get("not_compared") for f in wrong if "C2" in f["probe"]], [None], "a sentence of neither form is still a finding")
-        self.assertEqual(wrong[0]["expected"], "%s — or, where an earlier Policy Interview stands written, %s" % (WRITTEN_C2, WRITTEN_C2 + " " + KEPT))
+        wrong = [f for f in H.audit_readback("policy", self.answers, self.live("Nothing is written.", WRITTEN_C3), None, realm="live") if "C2" in f["probe"]]
+        self.assertEqual([f.get("not_compared") for f in wrong], [None], "a sentence of neither form is still a finding")
+        self.assertEqual(wrong[0]["expected"], "%s — or, where an earlier Policy Interview stands written, %s" % (WRITTEN_C2, WRITTEN_C2 + " " + KEPT_118))
+        # in the sandbox there is one form, so nothing is left unjudged (Spec T31)
+        self.assertEqual(self.audit(self.lines, amending=None), [])
 
-    def test_a_run_resumed_at_s3_admits_the_kept_form_and_says_why_it_was_not_judged(self):
+    def test_a_run_resumed_at_s3_reads_the_sandboxs_one_form_and_judges_it(self):
         tmp = tempfile.mkdtemp()
         double = EstateDouble(currency_spoken_as_code=True)
         run(double, tmp)
         runner, outcomes = run(double, tmp, start_at="S3")
         self.assertEqual(outcomes["S2"].outcome, H.SKIPPED)
         self.assertIsNone(runner.earlier_policy_stood_written())
-        self.assertEqual(line(lines_of(runner), "C2_WRITTEN")["spoken"], WRITTEN_C2 + " " + KEPT, "the estate knows its charter stands written")
+        self.assertEqual(line(lines_of(runner), "C2_WRITTEN")["spoken"], SANDBOX_C2, "in the sandbox the form does not depend on what stood before")
         self.assertEqual(outcomes["S10"].outcome, H.PASS, outcomes["S10"].line)
-        self.assertIn("read-back (policy) of C2: what the company ceiling becomes: the estate spoke the kept form (C2_WRITTEN); this run did not read the journey before S3 "
-                      "began the interview, so whether an earlier Policy Interview stood written is not known here and the form was not judged", runner.notes["S10"])
+        self.assertFalse(any("form was not judged" in n for n in runner.notes["S10"]))
 
 
 class AnEstateAtALaterCatalog(EstateDouble):

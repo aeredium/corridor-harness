@@ -371,6 +371,8 @@ STATUS = {
     T.WALLET_CURVE_MISMATCH: 422,
     # spec 110 (payoutsets.ts resolveSetSource): a run naming a wallet this estate holds no key for, or none at all
     "WALLET_NOT_FOUND": 404,
+    # Spec AER360-118 (http.ts at a80ac13): one change in flight, and a change that is not this workspace's or not pending
+    "CHARTER_CHANGE_WAITING": 409, "CHARTER_CHANGE_NOT_LISTED": 404,
 }
 MESSAGES = {
     "NOT_AUTHENTICATED": "You are not signed in.",
@@ -439,7 +441,23 @@ MESSAGES = {
     T.SOLANA_TOPUP_FAILED: "The Solana network did not carry the sponsor’s fee top-up. Nothing left the wallet; the platform’s signed top-up stands unbroadcast, and a new run asks it again.",
     T.SOLANA_TOPUP_EXPIRED: "The sponsor’s fee top-up passed its last valid block height without landing on the Solana network, so this attempt is over. Nothing left the wallet; the retry broadcasts the platform’s same signed bytes again.",
     "WALLET_NOT_FOUND": "No wallet of this estate's goes by that id.",
+    # refusals.ts REFUSAL_MESSAGES at a80ac13 (Spec AER360-118), word for word
+    "CHARTER_CHANGE_WAITING": "A charter change is waiting for the approval of the people your charter names. It must be approved or withdrawn before another is begun.",
+    "CHARTER_CHANGE_NOT_LISTED": "No charter change of this estate waits under that id. Nothing was signed.",
 }
+# Spec AER360-118 (packages/shared/src/refusals.ts at a80ac13): the sentences a press on a charter change is refused in, word for word
+CHANGE_ALREADY_APPROVED_BY_YOU = "You have already approved this change."
+
+
+def confirmer_agreed_sentence(waiting_on: Sequence[str]) -> str:
+    """`confirmerAgreedSentence`: the confirm is the confirmer's agreement, and it counts once — its first sentence word for word; `approvalOf`'s words approximated."""
+    return ("You confirmed this change under your passkey, and that confirmation is your agreement; it counts once. It is waiting for the approval of %s." % (
+        H.names_in_words(list(waiting_on)) if waiting_on else "the people your charter names"))
+
+
+def change_approved_by_sentence(names: Sequence[str]) -> str:
+    """`changeApprovedBySentence`: a reader the change's roster does not name."""
+    return "This change is approved by %s; you are not among them." % (H.names_in_words(list(names)) if names else "the people your charter names")
 # Spec AER360-SOL-114, as the API double stands in for it (Spec T29's tests). The Solana address judgment's sentences (shared/payeeaddress.ts), the
 # press's network refusal (fundingwallet.ts judgePressAnswers) and the curve belt's cause (payoutsets.ts) are the harness's own table's, held to the
 # source by tests/test_the_harness_walks_the_solana_road.py; the double speaks them from there so the two cannot drift apart.
@@ -689,6 +707,43 @@ def ceiling_read_back_sentence(which: str, cents: str, partner_cents: Any, amend
     partner = "the daily total (C3)" if which == "perPayment" else "the company ceiling (C2)"
     return ("Not written to the signing platform while %s is not answered above zero: the platform refuses every payment while either limit of a "
             "signing entry stands at zero, so this estate writes the two together or not at all." % partner)
+
+
+# Spec T31 — the read-back as Spec AER360-CAT-16 speaks it (aeredium/AERAccounts a80ac13), re-stated from the estate's code and never borrowed from the
+# harness's book: packages/shared/src/realm.ts (SANDBOX_PAYMENT_CEILING_USD_CENTS, SANDBOX_FIGURE_RECORDED_SENTENCE), services/sandboxlaw.ts
+# (SANDBOX_REPLACED_FIGURES), services/questioncatalog.ts (DAILY_FIGURE_QUESTION_IDS), packages/shared/src/derivedvolumes.ts and money.ts usdCentsSaid,
+# services/charterceilings.ts sandboxCeilingReadBackSentence.
+CAT16_SANDBOX_ALLOWANCE_USD_CENTS = 10000
+CAT16_SANDBOX_REPLACED_FIGURES = {"policy": ("C2", "C3"), "wallet_account": ("O2", "P3", "T1", "AG2", "WO4", "O1", "X2", "AG3")}
+CAT16_DAILY_FIGURE_QUESTION_IDS = {"policy": ("C3",), "wallet_account": ("O1", "X2", "AG3")}
+CAT16_SANDBOX_FIGURE_RECORDED_SENTENCE = "Recorded as your production figure. In the sandbox this is replaced by US$100."
+CAT16_NO_DAILY_FIGURE_DERIVES_NOTHING = ("No daily figure is written, so no weekly or monthly figure is derived from it. Write a daily figure and the "
+                                         "weekly and monthly figures follow, seven and thirty-one times it.")
+
+
+def cat16_usd_cents_said(cents: int) -> str:
+    """`usdCentsSaid`: US$, the whole dollars grouped by threes, and the cents only where there are any."""
+    whole, rest = divmod(int(cents), 100)
+    groups: List[str] = []
+    digits = str(whole)
+    while digits:
+        groups.insert(0, digits[-3:])
+        digits = digits[:-3]
+    return "US$%s%s" % (",".join(groups) or "0", "" if rest == 0 else ".%02d" % rest)
+
+
+def cat16_derived_volumes_sentence(day_cents: str) -> str:
+    """`derivedVolumesSentence`: seven and thirty-one times the day, in cents, then the one way to change them."""
+    day = int(day_cents)
+    return "%s per day, so %s per week and %s per month. To change the weekly or monthly figure, change the daily figure." % (
+        cat16_usd_cents_said(day), cat16_usd_cents_said(day * 7), cat16_usd_cents_said(day * 31))
+
+
+def cat16_sandbox_ceiling_sentence(which: str, cents: str) -> str:
+    """`sandboxCeilingReadBackSentence`: the figure recorded as the production figure, the entries carrying the allowance meanwhile."""
+    per = "per payment" if which == "perPayment" else "per day"
+    return ("Recorded as your production figure: US${:,} {}. While your estate is in the sandbox, every signing entry this estate draws up on its own account "
+            "carries US$100 {} instead; your figure is written to them when your estate goes live, with nothing further from you.").format((int(cents) + 99) // 100, per, per)
 
 
 def tiers_need_three_people(figure: str, named: int) -> str:
@@ -1375,8 +1430,21 @@ class EstateDouble:
                  refuses_payee_addresses: Sequence[str] = (), settle_after_reads: int = 0, acknowledgement_ignored: bool = False,
                  acknowledged_review_refused: bool = False, new_wallet_usdc_cents: int = 0, solana_road: str = "open", solana_wallet_lamports: int = 50_000_000,
                  solana_usd_cents_per_sol: int = SOLANA_USD_CENTS_PER_SOL, solana_fault: Optional[str] = None, assigned_groups: Sequence[str] = (T.PRODUCTION_SIGNING_GROUP,),
-                 sandbox_allowance_usd_cents: int = 1000, solana_allowed: bool = True, solana: Optional[SolanaChainDouble] = None):
+                 sandbox_allowance_usd_cents: int = 1000, solana_allowed: bool = True, solana: Optional[SolanaChainDouble] = None,
+                 cat16: bool = True, change_quorum: bool = False, confirmer_counts: Optional[bool] = None):
         self.currency_spoken_as_code = currency_spoken_as_code  # False: main's default arm (JSON); True: Spec 88's code
+        # Spec T31's dials. `cat16`: the read-back as Spec AER360-CAT-16 speaks it (aeredium/AERAccounts a80ac13, services/onboarding.ts readback) — in the
+        # sandbox each ceiling "Recorded as your production figure", the sandbox figure's line beside a figure above the US$100 allowance, the week and the
+        # month derived beside every daily figure; False is the estate before it (b523cbf), which spoke "Written to the signing platform…". `change_quorum`:
+        # the estate after Spec AER360-118 holds an amendment of a written charter whose change quorum (C12) asks more than the confirmer's agreement — the
+        # compile answers 202 with the change, the Approver inbox lists it, and the approval that meets the count writes it; False (the default, so the
+        # suites written before it walk as they did) writes every amendment at its compile, as the estate did before Spec AER360-118, though its inbox
+        # answers (an empty list). `confirmer_counts`: whether the confirmer's own agreement counts for one (the approval law's verdict); None reads the
+        # standing charter's C15 (requesterCountsAsSigner), as confirmerCountsForOne does.
+        self.cat16 = cat16
+        self.change_quorum = change_quorum
+        self.confirmer_counts = confirmer_counts
+        self.charter_changes: List[Dict[str, Any]] = []
         # Spec T29's dials (Spec AER360-SOL-114 at d369926). `solana_road`: "open" (two endpoints agreeing), "closed" (SOLANA_RPC_URLS names fewer than two: every
         # Solana door refuses SOLANA_ROAD_CLOSED, the review's Solana leg first) or "stopped" (the two sources disagreed: SOLANA_SOURCES_DISAGREE). `solana_wallet_lamports`:
         # what the owner funds the FIRST Solana wallet with at its birth — the harness funds nothing (Spec T23) — so a figure below the payment plus the 0.01 SOL reserve
@@ -1799,6 +1867,14 @@ class EstateDouble:
             return self.list_interview_ceremonies(headers)
         if route == "GET /v1/onboarding/charter":
             return self.charter_standing(headers)
+        # Spec AER360-118's door (routes/charterchanges.ts): the Approver inbox for charter changes, and one approval under passkey
+        if route == "GET %s" % H.CHARTER_CHANGES_ROUTE:
+            return self.list_charter_changes(headers)
+        m = re.match(r"^/v1/charter-changes/([^/]+)/approve(/options)?$", path)
+        if m and method == "POST":
+            if m.group(2):
+                return self.change_approve_options(headers, m.group(1))
+            return self.approve_charter_change(headers, m.group(1), body)
         if route == "POST /v1/invites":
             return self.mint_invite(headers, body)
         if route == "GET /v1/invites":
@@ -2048,6 +2124,10 @@ class EstateDouble:
         interview_type = (body or {}).get("interviewType")
         if interview_type not in ("policy", "wallet_account"):
             raise Malformed("interviewType: Invalid enum value. Expected 'policy' | 'wallet_account', received '%s'" % interview_type)
+        # ONE CHANGE IN FLIGHT (Spec AER360-118): while a charter change stands pending, Change the charter is refused in words
+        waiting = self.pending_change() if interview_type == "policy" else None
+        if waiting is not None:
+            raise Refusal("CHARTER_CHANGE_WAITING", detail={"changeId": waiting["id"], "confirmedBy": waiting["confirmedBy"], "confirmedAt": waiting["confirmedAt"]})
         in_flight = [iv for iv in self.interviews.values() if iv["interviewType"] == interview_type and iv["state"] not in ("written", "abandoned")]
         if in_flight:
             iv = sorted(in_flight, key=lambda i: i["createdAt"])[-1]
@@ -2443,6 +2523,18 @@ class EstateDouble:
             else:
                 spoken = ", ".join(v.get("people") or []) or "No one chosen."
             lines.append({"questionId": q.id, "prompt": PROMPTS.get(q.id, {}).get("prompt", q.id), "spoken": spoken})
+            # SPEC AER360-CAT-16 (Spec T31): beside a figure the sandbox replaces, above the allowance, the page's sentence repeated; beside every
+            # daily figure, the week and the month derived from it — in that order, directly after the answer (services/onboarding.ts at a80ac13)
+            if self.cat16 and kind in ("money", "count"):
+                cents = v.get("cents")
+                if q.id in CAT16_SANDBOX_REPLACED_FIGURES[iv["interviewType"]] and figure_above_zero(cents) and int(cents) > CAT16_SANDBOX_ALLOWANCE_USD_CENTS:
+                    lines.append({"questionId": "SANDBOX_FIGURE", "prompt": "What this figure does while your estate is in the sandbox",
+                                  "spoken": CAT16_SANDBOX_FIGURE_RECORDED_SENTENCE, "synthetic": True})
+            if self.cat16 and q.id in CAT16_DAILY_FIGURE_QUESTION_IDS[iv["interviewType"]]:
+                day = v.get("cents")
+                lines.append({"questionId": "DERIVED_WEEK_MONTH", "prompt": "The weekly and monthly figures, derived from this one",
+                              "spoken": cat16_derived_volumes_sentence(day) if isinstance(day, str) and day.isdigit() else CAT16_NO_DAILY_FIGURE_DERIVES_NOTHING,
+                              "synthetic": True})
             if q.id in ("C10", "WQ"):
                 lines.append({"questionId": "HELD_WAIT", "prompt": "What happens while a payment waits for them", "spoken": HELD_PAYMENT_WAITS, "synthetic": True})
             # Spec 92's lines — each a line in the read-back, never a question, where the answer it speaks about is
@@ -2456,7 +2548,9 @@ class EstateDouble:
                 partner = (latest.get(CEILING_QUESTION_IDS["perDay" if per_payment else "perPayment"]) or {}).get("value") or {}
                 lines.append({"questionId": "C2_WRITTEN" if per_payment else "C3_WRITTEN",
                               "prompt": "What the company ceiling becomes" if per_payment else "What the daily total becomes",
-                              "spoken": ceiling_read_back_sentence("perPayment" if per_payment else "perDay", v["cents"], partner.get("cents"), amending),
+                              # Spec AER360-CAT-16 (Spec T31): the double's realm is the sandbox, so the sandbox's sentence, before any promise of a write
+                              "spoken": (cat16_sandbox_ceiling_sentence("perPayment" if per_payment else "perDay", v["cents"]) if self.cat16 else
+                                         ceiling_read_back_sentence("perPayment" if per_payment else "perDay", v["cents"], partner.get("cents"), amending)),
                               "synthetic": True})
             if q.id == "WO1" and v.get("choice") == A.HOLDER_PERSON and str((v.get("person") or {}).get("email") or "").strip():
                 person = v["person"]
@@ -2513,6 +2607,17 @@ class EstateDouble:
 
     def compile(self, caller: Dict[str, Any], interview_id: str) -> Tuple[int, Any]:
         iv = self.load_interview(interview_id)
+        if iv["state"] == H.INTERVIEW_AWAITING_CHANGE_APPROVALS:
+            # A CHANGE WAITING FOR ITS QUORUM (Spec AER360-118, items 3 and 5): Finish the write while the count is short is refused in the wait's words;
+            # once the count is met, the author's Finish the write IS the quorum's write
+            change = next((c for c in self.charter_changes if c["interviewId"] == interview_id and c["state"] in ("pending", "approved")), None)
+            if change is None:
+                raise Refusal("INTERVIEW_NOT_OPEN", detail={"state": iv["state"], "cause": "this interview waits for a charter change this estate no longer holds; reopen it and confirm again"})
+            if change["state"] == "pending":
+                raise Refusal("CHARTER_CHANGE_WAITING", detail={"changeId": change["id"], "confirmedBy": change["confirmedBy"]})
+            status, answered = self.quorum_write(caller, iv, change)
+            written = self.interviews[interview_id]
+            return 200, {"charter": written["compiledCharter"], "receipt": written.get("writeReceipt"), "seat": None}
         if iv["state"] == "awaiting_approvals" and iv.get("compiledCharter"):
             # THE WAIT IS RESUMED, NOT RECOMPILED (Spec 109, item 2): Finish the write presents the list to the platform again and authors nothing anew
             return self.write_interview(caller, iv, "compile")
@@ -2525,6 +2630,9 @@ class EstateDouble:
         charter = self.compile_charter(iv["interviewType"], latest, iv.get("catalogVersion"))
         iv["compiledCharter"] = charter
         iv["state"] = "compiled"
+        held = self.hold_for_change_quorum(caller, iv)  # Spec AER360-118: before the write, where the change quorum asks more than the confirmer
+        if held is not None:
+            return 202, held
         return self.write_interview(caller, iv, "compile")
 
     def write_interview(self, caller: Dict[str, Any], iv: Dict[str, Any], road: str, pending_tx_id: Optional[str] = None) -> Tuple[int, Any]:
@@ -2706,6 +2814,172 @@ class EstateDouble:
                     callerMaySign=state == "awaiting" and mine is not None and not caller_has_signed, callerHasSigned=caller_has_signed,
                     callerName=self.seat_name(mine, names) if mine else None)
         return dict(view, sentence=interview_ceremony_sentence(view))
+
+    # -- a charter change waits for its quorum (Spec AER360-118 at a80ac13: routes/charterchanges.ts, services/charterchanges.ts; Spec T31) -------------
+    def change_email_of(self, credential_id: str) -> Optional[str]:
+        """
+        The address a credential answers to on the change's roster: the founder's key is the census's founder (the birth script's key carries no
+        invitation here), every other key the invitation it redeemed (`addressesOfCaller`) — as `enrolledCredentialsByEmail` resolves the roster.
+        """
+        if credential_id == self.founder_credential:
+            return A.PEOPLE[A.FOUNDER].email.lower()
+        addresses = sorted(self.addresses_of_caller(credential_id))
+        return addresses[0].lower() if addresses else None
+
+    def change_roster(self, change: Dict[str, Any]) -> List[Dict[str, str]]:
+        """The roster of the charter the change AMENDS, fixed for the life of the change: A8's census as the compiler wrote it (changeApprovers)."""
+        return self.parse_roster((change["standing"] or {}).get("changeApprovers") or (change["standing"] or {}).get("signers") or [])
+
+    def change_facts(self, change: Dict[str, Any]) -> Dict[str, Any]:
+        """`changeFactsOf`: the roster, the confirmer, who approved, who may still, and how many more the count needs."""
+        roster = self.change_roster(change)
+        confirmer = next((p for p in roster if p["email"].lower() == (change["confirmerEmail"] or "")), None)
+        others = [p for p in roster if confirmer is None or p["email"].lower() != confirmer["email"].lower()]
+        approved = {a["email"] for a in change["approvals"]}
+        approved_by = [p for p in others if p["email"].lower() in approved]
+        may_still = [p for p in others if p["email"].lower() not in approved]
+        needed = max(change["approvalsRequired"] - (1 if change["confirmerCounts"] else 0) - len(approved_by), 0)
+        return {"roster": roster, "confirmer": confirmer, "approvedBy": approved_by, "mayStillApprove": may_still, "needed": needed}
+
+    def charter_change_view(self, change: Dict[str, Any], caller: Dict[str, Any]) -> Dict[str, Any]:
+        """`changeViewFor`: the change as this reader reads it (wire.ts CharterChangeView) — every sentence composed here."""
+        facts = self.change_facts(change)
+        iv = self.interviews[change["interviewId"]]
+        reader = self.change_email_of(caller["credentialId"])
+        is_confirmer = caller["credentialId"] == change["confirmedByCredentialId"] or (reader is not None and reader == change["confirmerEmail"])
+        person = next((p for p in facts["roster"] if p["email"].lower() == reader), None) if reader else None
+        has_approved = reader is not None and reader in {a["email"] for a in change["approvals"]}
+        names = lambda people: [p["name"] or p["email"] for p in people]  # noqa: E731
+        if is_confirmer:
+            blocked: Optional[str] = confirmer_agreed_sentence(names(facts["mayStillApprove"]))
+        elif person is None:
+            blocked = change_approved_by_sentence(names(facts["roster"]))
+        elif has_approved:
+            blocked = CHANGE_ALREADY_APPROVED_BY_YOU
+        elif change["state"] != "pending":
+            blocked = "This change is %s; nothing is left to approve." % change["state"]
+        else:
+            blocked = None
+        lines = [l for l in self.readback(iv, check_standing=False) if not l.get("synthetic")]
+        count = "%d of %d approvals recorded." % (len(facts["approvedBy"]), change["approvalsRequired"])
+        return {"id": change["id"], "interviewId": change["interviewId"], "amends": None, "state": change["state"], "confirmedBy": change["confirmedBy"],
+                "confirmedAt": change["confirmedAt"], "title": "Charter change, confirmed by %s" % change["confirmedBy"],
+                "now": [{"prompt": l["prompt"], "spoken": l["spoken"]} for l in lines], "carried": 0, "carriedLines": [],
+                "approvalsRequired": change["approvalsRequired"], "approvedBy": names(facts["approvedBy"]), "confirmerCounts": change["confirmerCounts"],
+                "needed": facts["needed"], "mayStillApprove": names(facts["mayStillApprove"]), "notEmailed": [], "countSentence": count,
+                "callerMayApprove": blocked is None, "callerHasApproved": has_approved, "callerIsConfirmer": is_confirmer, "callerIsAuthor": "author" in caller["roles"],
+                "blockedSentence": blocked, "authorName": iv.get("startedByDisplayName") or "", "writeError": change.get("writeError"), "sentence": count}
+
+    def pending_change(self) -> Optional[Dict[str, Any]]:
+        return next((c for c in self.charter_changes if c["state"] == "pending"), None)
+
+    def hold_for_change_quorum(self, caller: Dict[str, Any], iv: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        `holdForChangeQuorum` (routes/onboarding.ts): an amendment of a written charter whose change quorum asks more than the confirmer's agreement is
+        not written — a change is opened, the interview stands awaiting_change_approvals, and the compile answers 202 with the change. None where the
+        estate writes it as before: no charter stands written, or the confirmer's agreement meets the count.
+        """
+        if not self.change_quorum or iv["interviewType"] != "policy":
+            return None
+        standing = self.newest_written_policy_charter()
+        if standing is None:
+            return None
+        quorum = next((g.get("quorum") for g in standing.get("mutationGovernance") or [] if g.get("scope") == "all"), None)
+        required = int(quorum) if isinstance(quorum, int) else 1
+        counts = self.confirmer_counts if self.confirmer_counts is not None else bool(standing.get("requesterCountsAsSigner"))
+        if required - (1 if counts else 0) <= 0:
+            return None
+        confirmer = iv.get("confirmedByCredentialId") or caller["credentialId"]
+        email = self.change_email_of(confirmer)
+        named = next((p for p in self.parse_roster(standing.get("changeApprovers") or []) if p["email"].lower() == email), None) if email else None
+        change = {"id": str(uuid.uuid4()), "interviewId": iv["id"], "state": "pending", "confirmedByCredentialId": confirmer, "confirmerEmail": email,
+                  "confirmedBy": (named or {}).get("name") or iv.get("startedByDisplayName") or "", "confirmedAt": self._now_iso(),
+                  "approvalsRequired": required, "confirmerCounts": counts, "approvals": [], "standing": standing, "writeError": None}
+        self.charter_changes.append(change)
+        iv.update(state=H.INTERVIEW_AWAITING_CHANGE_APPROVALS, updatedAt=time.time())
+        self.append_trail("onboarding.change_opened", confirmer, {"changeId": change["id"], "interviewId": iv["id"], "approvalsRequired": str(required),
+                                                                  "confirmerCounts": str(counts).lower()})
+        return {"state": H.INTERVIEW_AWAITING_CHANGE_APPROVALS, "interviewId": iv["id"], "change": self.charter_change_view(change, caller)}
+
+    def list_charter_changes(self, headers: Dict[str, str]) -> Tuple[int, Any]:
+        """GET /v1/charter-changes (viewer): every change of this estate that waits or stands approved, as the caller may read and sign it."""
+        caller = self.require_caller(headers, "viewer")
+        return 200, {"changes": [self.charter_change_view(c, caller) for c in self.charter_changes if c["state"] in ("pending", "approved")]}
+
+    def admit_change_press(self, headers: Dict[str, str], change_id: str) -> Dict[str, Any]:
+        """ONE GATE, STATED ONCE: the change is this workspace's and stands pending — else CHARTER_CHANGE_NOT_LISTED with the cause in words."""
+        caller = self.require_caller(headers, "viewer", mutating=True)
+        change = next((c for c in self.charter_changes if c["id"] == change_id), None)
+        if change is None:
+            raise Refusal("CHARTER_CHANGE_NOT_LISTED", detail={"changeId": change_id, "state": "missing", "cause": "this change is not held; nothing is left to approve"})
+        if change["state"] != "pending":
+            raise Refusal("CHARTER_CHANGE_NOT_LISTED", detail={"changeId": change_id, "state": change["state"], "cause": (
+                "all approvals are in; the write is what remains" if change["state"] == "approved" else "this change is %s; nothing is left to approve" % change["state"])})
+        return {"caller": caller, "change": change}
+
+    def change_challenge(self, change_id: str, issued_at: Any, credential_id: str) -> str:
+        """The digest one approval is bound to: `charter-change:<workspace id>:<change id>:<issuedAtMs>`, the approver's credential, purpose `charter.change`."""
+        return self.challenge(H.CHARTER_CHANGE_PURPOSE, "%s|%s" % (H.CHARTER_CHANGE_BINDING % (WORKSPACE_ID, change_id, issued_at), credential_id), 0)
+
+    def change_approve_options(self, headers: Dict[str, str], change_id: str) -> Tuple[int, Any]:
+        press = self.admit_change_press(headers, change_id)
+        caller = press["caller"]
+        issued_at = int(time.time() * 1000)
+        own = [w for w, row in self.passkeys.items() if row["credentialId"] == caller["credentialId"]]
+        return 200, {"options": {"challenge": self.change_challenge(change_id, issued_at, caller["credentialId"]), "rpId": self.rp_id, "timeout": 60000,
+                                 "userVerification": "required", "allowCredentials": [{"id": w, "type": "public-key", "transports": ["internal"]} for w in own]},
+                     "issuedAtMs": issued_at}
+
+    def approve_charter_change(self, headers: Dict[str, str], change_id: str, body: Any) -> Tuple[int, Any]:
+        """
+        `approveCharterChange` behind passkeysign.ts: the assertion verified against the same binding; the change judged pending again; the reader judged —
+        the confirmer refused as already agreed, a person off the roster refused in the roster's words, one who approved refused from the record; then one
+        approval, and where it meets the count the same request writes the change as the presser (finishQuorumWrite) and answers `written`.
+        """
+        press = self.admit_change_press(headers, change_id)
+        caller, change = press["caller"], press["change"]
+        body = body or {}
+        for field in ("issuedAtMs", "response"):
+            if field not in body:
+                raise Malformed("%s: Required" % field)
+        self.assert_fresh(body["issuedAtMs"])
+        expected = self.change_challenge(change_id, body["issuedAtMs"], caller["credentialId"])
+        response = body["response"] or {}
+        if not isinstance(response.get("id"), str) or not response["id"]:
+            raise Refusal("STEP_UP_INVALID", detail={"cause": "assertion carried no credential id"})
+        stored = self.passkeys.get(response["id"])
+        if not stored or stored["credentialId"] != caller["credentialId"]:
+            raise Refusal("STEP_UP_INVALID", detail={"cause": "the asserting passkey is not the approving credential"})
+        try:
+            stored["signCount"] = PK.verify_assertion(response, expected, self.origin, self.rp_id, stored["publicKey"], stored["signCount"])
+        except PK.PasskeyRefused as err:
+            raise Refusal("STEP_UP_INVALID", detail={"cause": str(err)[:200]})
+        stored["lastAuthAtMs"] = body["issuedAtMs"]
+        view = self.charter_change_view(change, caller)
+        if view["callerIsConfirmer"] or view["callerHasApproved"]:
+            raise Refusal("APPROVER_ALREADY_SIGNED", view["blockedSentence"] or CHANGE_ALREADY_APPROVED_BY_YOU, {"changeId": change_id, "credentialId": caller["credentialId"]})
+        if not view["callerMayApprove"]:
+            raise Refusal("ROLE_NOT_GRANTED", view["blockedSentence"], {"changeId": change_id, "credentialId": caller["credentialId"], "required": "approver",
+                                                                       "question": "C12", "rosterQuestion": "A8"}, provenance={"source": "charter"})
+        email = self.change_email_of(caller["credentialId"])
+        change["approvals"].append({"credentialId": caller["credentialId"], "email": email, "at": self._now_iso()})
+        facts = self.change_facts(change)
+        self.append_trail("onboarding.change_approved", caller["credentialId"], {"changeId": change_id, "interviewId": change["interviewId"],
+                                                                                "approvalsRequired": str(change["approvalsRequired"]), "recorded": str(len(facts["approvedBy"])),
+                                                                                "needed": str(facts["needed"])})
+        iv = self.interviews[change["interviewId"]]
+        if facts["needed"] > 0:
+            return 200, {"state": H.INTERVIEW_AWAITING_CHANGE_APPROVALS, "interviewId": iv["id"], "change": self.charter_change_view(change, caller)}
+        change["state"] = "approved"
+        return self.quorum_write(caller, iv, change)
+
+    def quorum_write(self, caller: Dict[str, Any], iv: Dict[str, Any], change: Dict[str, Any]) -> Tuple[int, Any]:
+        """`finishQuorumWrite`: the change's interview written as the presser — the change `written`, the interview `written`; the answer says so."""
+        iv["state"] = "compiled"
+        status, _ = self.write_interview(caller, iv, "compile")
+        change["state"] = "written"
+        self.append_trail("onboarding.change_written", caller["credentialId"], {"changeId": change["id"], "interviewId": iv["id"]})
+        return 200, {"state": "written", "interviewId": iv["id"], "change": self.charter_change_view(change, caller)}
 
     def list_interview_ceremonies(self, headers: Dict[str, str]) -> Tuple[int, Any]:
         """GET /v1/onboarding/ceremonies (viewer): every write of this estate that waits for approvals, as the caller may read and sign it; another workspace's is absent by construction."""

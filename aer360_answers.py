@@ -135,12 +135,24 @@ WHAT THE SPEC DECIDED, AND WHAT THE BOOK DECIDED WHERE THE SPEC LEFT IT TO THE H
   book is held by the band and none asks a second hand: the expectation words say so, and Spec 69's hold on
   the one-off is provable only where the owner's wallet is new to the estate — S7 reads the runs register
   before paying it and says which it found.
+
+  SPEC T31 (1 November 2026, from the three estate runs of 31 October and 1 November): THE READ-BACK BOOK
+  LEARNS SPEC AER360-CAT-16. The auditor's three findings of those runs were the book's, not the estate's: the
+  read-back no longer says that C2 and C3 are "Written to the signing platform…" while the estate stands in
+  the sandbox, but "Recorded as your production figure: US$100 per payment. While your estate is in the
+  sandbox, every signing entry this estate draws up on its own account carries US$100 per payment instead; …"
+  and the daily line alike; and C3 is followed first by the sandbox figure's line ("What this figure does
+  while your estate is in the sandbox", where the figure is above the US$100 allowance) and the week and the
+  month derived from the day ("US$1,000 per day, so US$7,000 per week and US$31,000 per month. To change the
+  weekly or monthly figure, change the daily figure."), so C3_WRITTEN stands three lines after C3. The lines
+  said beside an answer are carried here, at the end of this file (`lines_beside`), with their source; the
+  auditor compares against them as strictly as it compared against Spec T27's, and no answer changes.
 """
 from __future__ import annotations
 
 import os
 import sys
-from typing import Any, Dict, List, NamedTuple, Optional, Sequence
+from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import aer360_tables as T  # noqa: E402
@@ -803,3 +815,148 @@ def all_question_ids(interview_type: str) -> List[str]:
 def kind_of(interview_type: str, question_id: str) -> Optional[str]:
     q = question(interview_type, question_id)
     return q.kind if q else None
+
+
+# ---------------------------------------------------------------------------
+# THE READ-BACK BOOK (Spec T27, moved here and taught Spec AER360-CAT-16 by Spec T31, 1 November 2026).
+# ---------------------------------------------------------------------------
+# The lines the read-back says BESIDE an answer, that no question asks: what a ceiling becomes (Spec AER360-115), what a figure does while
+# the estate is in the sandbox, and the week and the month derived from a daily figure (Spec AER360-CAT-16 and the owner's rulings of 29
+# October 2026, amended 30 October). Read from aeredium/AERAccounts main at a80ac13 (PR #144), not from memory:
+#
+#   apps/server/src/services/onboarding.ts   readback(): for each answer, in this order, the answer's own line; SANDBOX_FIGURE ("What this
+#                                            figure does while your estate is in the sandbox") beside a money or count answer the sandbox
+#                                            replaces, where the figure is above the allowance (sandboxFigureRecorded); DERIVED_WEEK_MONTH ("The
+#                                            weekly and monthly figures, derived from this one") beside every daily figure; then, for C2 and C3
+#                                            above zero, C2_WRITTEN or C3_WRITTEN (ceilingReadBackSentence). Every one is synthetic.
+#   apps/server/src/services/sandboxlaw.ts   SANDBOX_REPLACED_FIGURES: C2 and C3; O2, P3, T1, AG2, WO4, O1, X2 and AG3.
+#   apps/server/src/services/questioncatalog.ts  DAILY_FIGURE_QUESTION_IDS: C3; O1, X2 and AG3.
+#   apps/server/src/services/charterceilings.ts  ceilingReadBackSentence: in the sandbox, sandboxCeilingReadBackSentence — "Recorded as your
+#                                            production figure: …" — before any promise of a write; elsewhere ceilingWrittenSentence, and, where an
+#                                            earlier Policy Interview stands written, STANDING_CEILING_KEPT, or STANDING_CEILING_CHANGED_BY_QUORUM where
+#                                            the change quorum stands behind the write (Spec AER360-118 rewrote the first and added the second).
+#   packages/shared/src/realm.ts             SANDBOX_PAYMENT_CEILING_USD_CENTS = 10000 (ruling four, "Add a zero. Make it 100.") and
+#                                            SANDBOX_FIGURE_RECORDED_SENTENCE.
+#   packages/shared/src/derivedvolumes.ts    derivedVolumesSentence: seven and thirty-one times the day, in cents, and the one way to change them.
+#   packages/shared/src/money.ts             usdCentsSaid: "US$" and the whole dollars grouped by threes, the cents only where there are any.
+#
+# The allowance is the realm's law, read from its one home in the estate, and no figure of the owner's; the book answers C2 and C3 as Spec T27
+# set them, and this section writes no answer. A line here the estate does not speak, or a line the estate speaks in other words or in another
+# place, is a finding of S10 (aer360_harness.audit_lines_beside); the comparison is strict, as Spec T27's was.
+READBACK_BOOK_SOURCE = ("aeredium/AERAccounts main at a80ac13 (PR #144, Spec AER360-CAT-16 and its amendment of 30 October 2026): services/onboarding.ts "
+                        "readback, services/charterceilings.ts, services/sandboxlaw.ts, packages/shared/src/realm.ts, derivedvolumes.ts, money.ts")
+SANDBOX_REALM = "sandbox"                    # packages/shared/src/realm.ts SANDBOX_REALM: the word the read-back's `realm` carries
+REALM_READBACK_QUESTION_ID = "REALM"         # services/onboarding.ts: the synthetic first line, said only in the sandbox
+SANDBOX_ALLOWANCE_USD_CENTS = 10000          # realm.ts SANDBOX_PAYMENT_CEILING_USD_CENTS (Spec AER360-CAT-16, ruling four): US$100
+SANDBOX_REPLACED_FIGURES: Dict[str, Tuple[str, ...]] = {"policy": ("C2", "C3"), "wallet_account": ("O2", "P3", "T1", "AG2", "WO4", "O1", "X2", "AG3")}
+DAILY_FIGURE_QUESTION_IDS: Dict[str, Tuple[str, ...]] = {"policy": ("C3",), "wallet_account": ("O1", "X2", "AG3")}
+DAYS_IN_A_WEEK = 7                           # derivedvolumes.ts DAYS_IN_A_WEEK (ruling two)
+DAYS_IN_A_MONTH = 31                         # derivedvolumes.ts DAYS_IN_A_MONTH (ruling two)
+
+
+def usd_cents_said(cents: Any) -> str:
+    """`usdCentsSaid` (money.ts): US$, the whole dollars grouped by threes with commas, and the cents only where there are any."""
+    value = int(cents)
+    whole, rest = divmod(abs(value), 100)
+    return "%sUS$%s%s" % ("-" if value < 0 else "", "{:,}".format(whole), "" if rest == 0 else ".%02d" % rest)
+
+
+def dollars_ceiling_of(cents: Any) -> int:
+    """`dollarsCeilingOf` (aapclient.ts): a figure in cents as the whole dollars the platform holds, rounded UP, so the ceiling is never smaller than the figure."""
+    return (int(cents) + 99) // 100
+
+
+def whole_cents(value: Any) -> Optional[int]:
+    """A figure as the answer store carries it — a whole number of cents in a string — or None for a blank or anything else."""
+    cents = value.get("cents") if isinstance(value, dict) else value
+    if isinstance(cents, str) and cents.isdigit() and cents.isascii():
+        return int(cents)
+    return None
+
+
+SANDBOX_FIGURE_READBACK_QUESTION_ID = "SANDBOX_FIGURE"
+SANDBOX_FIGURE_PROMPT = "What this figure does while your estate is in the sandbox"
+SANDBOX_FIGURE_RECORDED_SENTENCE = "Recorded as your production figure. In the sandbox this is replaced by %s." % usd_cents_said(SANDBOX_ALLOWANCE_USD_CENTS)
+DERIVED_VOLUMES_READBACK_QUESTION_ID = "DERIVED_WEEK_MONTH"
+DERIVED_VOLUMES_PROMPT = "The weekly and monthly figures, derived from this one"
+DERIVED_CHANGE_THE_DAILY_FIGURE = "To change the weekly or monthly figure, change the daily figure."
+NO_DAILY_FIGURE_DERIVES_NOTHING = ("No daily figure is written, so no weekly or monthly figure is derived from it. Write a daily figure and the "
+                                   "weekly and monthly figures follow, seven and thirty-one times it.")
+
+
+def derived_volumes_sentence(daily_cents: Any) -> str:
+    """`derivedVolumesSentence` (derivedvolumes.ts): "US$X per day, so US$7X per week and US$31X per month", then the one way to change them."""
+    day = int(daily_cents)
+    return "%s per day, so %s per week and %s per month. %s" % (
+        usd_cents_said(day), usd_cents_said(day * DAYS_IN_A_WEEK), usd_cents_said(day * DAYS_IN_A_MONTH), DERIVED_CHANGE_THE_DAILY_FIGURE)
+
+
+# The company's two ceilings (Spec AER360-115; Spec T27): the questions, the line said beside each, and the sentences of charterceilings.ts.
+CEILING_QUESTION_IDS = {"perPayment": "C2", "perDay": "C3"}  # questioncatalog.ts CEILING_QUESTION_IDS
+CEILING_READBACK_LINES = {"perPayment": ("C2_WRITTEN", "What the company ceiling becomes"), "perDay": ("C3_WRITTEN", "What the daily total becomes")}
+CEILING_WRITTEN_SENTENCES = {  # charterceilings.ts ceilingWrittenSentence: the figure, then the rounding clause where the answer carried cents
+    "perPayment": ("Written to the signing platform as the per-payment limit of every signing entry this estate draws up on its own account: %s.%s "
+                   "No single payment above it is approved, on any network."),
+    "perDay": "Written to the signing platform as the daily limit of the same entries: %s.%s No payment that takes a day’s total above it is approved.",
+}
+CEILING_ROUNDED_UP = (" That is your figure rounded up to the next whole dollar, because the platform holds whole dollars, so the ceiling is never "
+                      "smaller than yours.")
+# Spec AER360-118 rewrote the kept sentence ("…and this estate has no road for that change yet" until it built the road) and added the quorum's.
+STANDING_CEILING_KEPT = ("Where such a limit already stands above zero, this write leaves it as it stands: changing a limit that stands is a change of "
+                         "the company’s rules, which your change quorum (C12) must agree to, and this write carries no such agreement.")
+STANDING_CEILING_CHANGED_BY_QUORUM = ("Where such a limit already stands above zero, this change replaces it: a limit that stands is changed only with the "
+                                      "agreement of your change quorum (C12), and this change is written when that agreement is given.")
+CEILING_PARTNER_UNANSWERED = ("Not written to the signing platform while %s is not answered above zero: the platform refuses every payment while "
+                              "either limit of a signing entry stands at zero, so this estate writes the two together or not at all.")
+
+
+def sandbox_ceiling_read_back_sentence(which: str, cents: Any) -> str:
+    """`sandboxCeilingReadBackSentence` (charterceilings.ts; Spec AER360-CAT-16, ruling five): recorded as the production figure, the allowance on the entries meanwhile."""
+    per = "per payment" if which == "perPayment" else "per day"
+    return ("Recorded as your production figure: US$%s %s. While your estate is in the sandbox, every signing entry this estate draws up on its own "
+            "account carries %s %s instead; your figure is written to them when your estate goes live, with nothing further from you." % (
+                "{:,}".format(dollars_ceiling_of(cents)), per, usd_cents_said(SANDBOX_ALLOWANCE_USD_CENTS), per))
+
+
+def ceiling_read_back_sentence(which: str, cents: Any, partner_cents: Any, amending: bool = False, by_quorum: bool = False, sandbox: bool = False) -> str:
+    """
+    `ceilingReadBackSentence` (charterceilings.ts at a80ac13), word for word. In the sandbox the sandbox's sentence, before any promise of a
+    write (Spec AER360-CAT-16, ruling five). Elsewhere, beside a partner answered above zero, the figure the platform will hold — and, where an
+    earlier Policy Interview of the estate stands written (`amending`), that a standing limit is replaced by the change quorum's agreement
+    (`by_quorum`, Spec AER360-118) or kept; beside a partner not answered above zero, that nothing is written and why.
+    """
+    if sandbox:
+        return sandbox_ceiling_read_back_sentence(which, cents)
+    partner = whole_cents(partner_cents)
+    if partner is not None and partner > 0:
+        written = CEILING_WRITTEN_SENTENCES[which] % ("US${:,}".format(dollars_ceiling_of(cents)), "" if int(cents) % 100 == 0 else CEILING_ROUNDED_UP)
+        if not amending:
+            return written
+        return "%s %s" % (written, STANDING_CEILING_CHANGED_BY_QUORUM if by_quorum else STANDING_CEILING_KEPT)
+    named = ("the daily total (%s)" % CEILING_QUESTION_IDS["perDay"]) if which == "perPayment" else ("the company ceiling (%s)" % CEILING_QUESTION_IDS["perPayment"])
+    return CEILING_PARTNER_UNANSWERED % named
+
+
+def lines_beside(interview_type: str, question_id: str, value: Any, partner_value: Any = None, sandbox: bool = False,
+                 amending: bool = False, by_quorum: bool = False) -> List[Dict[str, str]]:
+    """
+    The lines the read-back says directly after an answer's own line, in the order it lays them (services/onboarding.ts readback at a80ac13),
+    for the lines this book carries: SANDBOX_FIGURE where the sandbox replaces the figure and the figure is above the allowance; DERIVED_WEEK_MONTH
+    beside a daily figure; and, for C2 and C3 above zero in a Policy Interview, the line saying what the ceiling becomes. `partner_value` is the
+    other ceiling's answer (C3 beside C2, C2 beside C3). Each line is {questionId, prompt, spoken}; none where the answer has none beside it.
+    """
+    out: List[Dict[str, str]] = []
+    kind = kind_of(interview_type, question_id)
+    cents = whole_cents(value)
+    if sandbox and kind in ("money", "count") and question_id in SANDBOX_REPLACED_FIGURES.get(interview_type, ()) and cents is not None \
+            and cents > SANDBOX_ALLOWANCE_USD_CENTS:
+        out.append({"questionId": SANDBOX_FIGURE_READBACK_QUESTION_ID, "prompt": SANDBOX_FIGURE_PROMPT, "spoken": SANDBOX_FIGURE_RECORDED_SENTENCE})
+    if question_id in DAILY_FIGURE_QUESTION_IDS.get(interview_type, ()):
+        out.append({"questionId": DERIVED_VOLUMES_READBACK_QUESTION_ID, "prompt": DERIVED_VOLUMES_PROMPT,
+                    "spoken": NO_DAILY_FIGURE_DERIVES_NOTHING if cents is None else derived_volumes_sentence(cents)})
+    if interview_type == "policy" and question_id in CEILING_QUESTION_IDS.values() and cents is not None and cents > 0:
+        which = "perPayment" if question_id == CEILING_QUESTION_IDS["perPayment"] else "perDay"
+        line_id, prompt = CEILING_READBACK_LINES[which]
+        out.append({"questionId": line_id, "prompt": prompt,
+                    "spoken": ceiling_read_back_sentence(which, str(cents), partner_value, amending, by_quorum, sandbox)})
+    return out

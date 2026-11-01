@@ -250,6 +250,25 @@ none was, never "the estate asked ? signature(s)". Pathfinder's S11, which share
 is unchanged, and a Pathfinder run resumed at S4 to S10, which funds its agent again under the same reference, meets the screen there as
 the live estate has always made it.
 
+Spec T31 (1 November 2026, from the three estate runs of 31 October and 1 November on production): the estate harness learns AER 360 Spec
+AER360-118 and Spec AER360-CAT-16, and never strands its estate. (1) S3's compile of an amendment answered 202 in Spec AER360-118's shape — the
+charter change that waits for its quorum, `{state: awaiting_change_approvals, interviewId, change}` — which the harness read as a malformed Spec 109
+body; `charter_change_that_waits` reads it, and `finish_charter_change` finishes it by the estate's road as the people it names (GET
+/v1/charter-changes as the founder; for each approver other than the confirmer, in SIGNERS_IN_ORDER's order, POST …/approve/options and …/approve
+under their own passkey, once; the change read again after each press and the count judged as T19 judges a ceremony's). The count is a reading,
+not a verdict: S3's line and S10's note say approvalsRequired, how many approvals wrote the change and whether the confirmer is counted among them,
+beside what the spec intends (SPEC_118_COUNTS_THE_CONFIRMER: services/charterchanges.ts counts the confirmer's own agreement for one where the approval
+law says so, C15); only a change written on fewer approvals than that is S10's finding against the estate. (2) T19 §2 extended: before S3 begins an
+interview, a change an earlier run left pending is finished first by the same code, or S3 stops "FAILED — prerequisite: a charter change stands
+pending and could not be finished", naming it; the withdraw road is never taken. (3) The read-back book (aer360_answers.py, `lines_beside`) learns
+Spec AER360-CAT-16: in the sandbox each ceiling's line reads "Recorded as your production figure: …", and C3 is followed first by the sandbox figure's
+line and the derived week and month, so C3_WRITTEN stands three lines after C3; S10 compares against the book as amended, as strictly as before.
+(4) S7's expectations are derived from the charter the harness answered in S5 and the sandbox allowance (`expectation_of_the_charter`) and appended at
+the end of each payment's part of the line beside what the estate answered — the parenthetical keeps the book's word, on the owner's ruling of 1
+November 2026, because a test file the session's policy refuses pins it — and S7a "not provable this run" is a note, no longer a finding. (5) A press
+the estate refuses STEP_UP_INVALID because "Response counter value N was lower than expected M" has the person's passkey counter set to M (never
+lowered), saved at once, noted, and is made once more, once (`press_once_more_on_the_counter`); S10 carries the note as a reading.
+
 Runs on the Mac's own Python 3.9.6 with the standard library only: urllib.request, http.cookiejar,
 json, hashlib, secrets, base64, struct, subprocess. The one binary it calls is /usr/bin/openssl,
 through aer360_passkey.py. Nothing to install; nothing is shipped to any box.
@@ -333,20 +352,41 @@ VENUE_DOOR_READBACK_SENTENCE = "You answered No: such an address will be refused
 # CEILING_PER_PAYMENT_READBACK_QUESTION_ID and CEILING_PER_DAY_READBACK_QUESTION_ID, synthetic), in the sentence of services/charterceilings.ts,
 # ceilingReadBackSentence: the per-payment and daily limits of the estate's own signing entries, in whole US dollars rounded up (aapclient.ts,
 # dollarsCeilingOf), grouped as en-US groups them — and, where an earlier Policy Interview of the estate stands written (earlierPolicyStandsWritten),
-# that a limit already standing is kept.
-CEILING_QUESTION_IDS = {"perPayment": "C2", "perDay": "C3"}  # questioncatalog.ts CEILING_QUESTION_IDS
-CEILING_READBACK_LINES = {"perPayment": ("C2_WRITTEN", "What the company ceiling becomes"), "perDay": ("C3_WRITTEN", "What the daily total becomes")}
-CEILING_WRITTEN_SENTENCES = {  # charterceilings.ts ceilingWrittenSentence: the figure, then the rounding clause where the answer carried cents
-    "perPayment": ("Written to the signing platform as the per-payment limit of every signing entry this estate draws up on its own account: %s.%s "
-                   "No single payment above it is approved, on any network."),
-    "perDay": "Written to the signing platform as the daily limit of the same entries: %s.%s No payment that takes a day’s total above it is approved.",
-}
-CEILING_ROUNDED_UP = (" That is your figure rounded up to the next whole dollar, because the platform holds whole dollars, so the ceiling is never "
-                      "smaller than yours.")
-STANDING_CEILING_KEPT = ("Where such a limit already stands above zero, this write leaves it as it stands: changing a limit that stands is a change of "
-                         "the company’s rules, which your change quorum (C12) must agree to, and this estate has no road for that change yet.")
-CEILING_PARTNER_UNANSWERED = ("Not written to the signing platform while %s is not answered above zero: the platform refuses every payment while "
-                              "either limit of a signing entry stands at zero, so this estate writes the two together or not at all.")
+# that a limit already standing is kept. Spec T31: the sentences live in the read-back book (aer360_answers.py, `lines_beside`), which learned Spec
+# AER360-CAT-16 — in the sandbox each ceiling is "Recorded as your production figure", and C3 is followed first by the sandbox figure's line and the
+# derived week and month — and Spec AER360-118's two standing sentences; the names below are the book's, kept for the readers that use them here.
+CEILING_QUESTION_IDS = A.CEILING_QUESTION_IDS
+CEILING_READBACK_LINES = A.CEILING_READBACK_LINES
+CEILING_WRITTEN_SENTENCES = A.CEILING_WRITTEN_SENTENCES
+CEILING_ROUNDED_UP = A.CEILING_ROUNDED_UP
+STANDING_CEILING_KEPT = A.STANDING_CEILING_KEPT
+STANDING_CEILING_CHANGED_BY_QUORUM = A.STANDING_CEILING_CHANGED_BY_QUORUM
+CEILING_PARTNER_UNANSWERED = A.CEILING_PARTNER_UNANSWERED
+# Spec T31 §1.1 — A CHARTER CHANGE WAITS FOR ITS QUORUM (AER 360 Spec AER360-118, aeredium/AERAccounts 83d9d42, PR #140; read at main a80ac13:
+# routes/charterchanges.ts, services/charterchanges.ts, packages/shared/src/wire.ts CharterChangeWaitView and CharterChangeView). An amendment of the
+# charter whose standing charter asks for more agreement than the confirmer's (C12, with A8's roster, and C15 for whether the confirmer counts) is not
+# written at its compile: the compile answers 202 {state: awaiting_change_approvals, interviewId, change}, the change is held in the Approver inbox, and
+# the approval that meets the count writes it in the same request (state `written`). The roads are the inbox's, each approval under the approver's own
+# passkey (passkeysign.ts, purpose `charter.change`, the digest `charter-change:<workspace id>:<change id>:<issuedAtMs>`).
+INTERVIEW_AWAITING_CHANGE_APPROVALS = "awaiting_change_approvals"  # wire.ts INTERVIEW_AWAITING_CHANGE_APPROVALS
+CHARTER_CHANGES_ROUTE = "/v1/charter-changes"                       # GET: every change of the estate that waits or stands approved, as the caller reads it
+CHARTER_CHANGE_APPROVE_OPTIONS_ROUTE = "/v1/charter-changes/%s/approve/options"
+CHARTER_CHANGE_APPROVE_ROUTE = "/v1/charter-changes/%s/approve"
+CHARTER_CHANGE_PURPOSE = "charter.change"                           # routes/charterchanges.ts: the step-up's purpose
+CHARTER_CHANGE_BINDING = "charter-change:%s:%s:%s"                  # the digest one approval is bound to: workspace, change, issuedAtMs
+CHARTER_CHANGE_NOT_LISTED = "CHARTER_CHANGE_NOT_LISTED"             # 404-class: the change is not this workspace's, or not pending (approved, written, withdrawn)
+CHARTER_CHANGE_WAITING = "CHARTER_CHANGE_WAITING"                   # one change in flight: a second amendment is refused while one stands pending
+CHARTER_CHANGE_PREREQUISITE = "a charter change stands pending and could not be finished"  # Spec T31 §1.2: S3's stop where an earlier run's change cannot be finished
+# What Spec AER360-118 intends of the count (services/charterchanges.ts, the header "WHO MAY APPROVE, AND WHO IS ASKED", and changeFactsOf /
+# approveCharterChange: needed = approvalsRequired − (confirmerCounts ? 1 : 0) − recorded), said in the report beside what the estate did.
+SPEC_118_COUNTS_THE_CONFIRMER = (
+    "Spec AER360-118 counts the confirmer's own agreement — the confirm itself, under passkey — for one of the eyes exactly where the approval law "
+    "says it does (services/charterchanges.ts: confirmerCountsForOne, C15, else the charter's arithmetic); it is never a recorded approval and never "
+    "counted twice, so a change is written when approvalsRequired less one for the confirmer (where the confirmer counts) approvals are recorded")
+# Spec T31 §1.5 — the passkey counter the estate expects. @simplewebauthn/server refuses an assertion whose counter is not above the stored one in
+# these words, which the estate carries as STEP_UP_INVALID's cause: the harness adopts the estate's figure (never lowering its own) and presses once more.
+COUNTER_LOWER_THAN_EXPECTED = re.compile(r"Response counter value (\d+) was lower than expected (\d+)")
+STEP_UP_INVALID = "STEP_UP_INVALID"
 # Where an invitation's seconds go (Spec T8): routes/invites.ts mints the invitation, awaits the email's
 # dispatch (attemptDispatch), stamps the row, and only then answers 201. A fact to report, not a finding.
 INVITATION_SENDS_FIRST = "the invitation road sends the email before it answers, which is where its four seconds go"
@@ -672,6 +712,42 @@ def under_the_tiers(amount: str, holder_alone_cents: Optional[str], two_signatur
             return "under the tiers: up to the two-signature figure (%s) of a wallet held by no one, one approver's passkey" % usd(two)
         return "under the tiers: two signatures (above %s, up to %s)" % (usd(holder_alone_cents), usd(two))
     return "under the tiers: three signatures (above %s)" % usd(two)
+
+
+# Spec T31 §1.4: the destination rule a wallet account's charter compiles from O3's "Yes" (onboardingcompiler.ts, whitelistMode): a payment to a
+# destination this estate has never paid waits for an approver (Spec 69); the other modes hold nothing for a new destination here.
+HOLDS_NEW_DESTINATIONS = "hold_non_listed"
+
+
+def expectation_of_the_charter(amount_cents: int, day_before_cents: int, hold_cents: Optional[int], daily_cents: Optional[int], one_off: bool,
+                               paid_before: Optional[bool], whitelist_mode: Optional[str], allowance_left_cents: Optional[int],
+                               allowance_words: str = "left of the sandbox allowance") -> Dict[str, Any]:
+    """
+    Spec T31 §1.4: what the charter the harness answered expects of one payment, derived from that charter and never from the book's fixed words —
+    the per-payment hold (amountsUsdCents.holdOverPerTx, O2), the daily figure (dailyTotal, O1, the run's earlier payments of the day counted in
+    `day_before_cents`), the destinations rule (whitelistMode, O3) and the sandbox allowance (`allowance_left_cents`, with `allowance_words` saying
+    which figure it is: what the estate said is left, where this run read it, else the realm's US$100 for one payment). In the order
+    the estate meets them: a payment that takes the allowance past what is left is refused at its review; a declared one-off to a destination the
+    estate has never paid waits for the approver (Spec 69), and one to a destination it has paid before is not held; a payment at or above the
+    per-payment hold waits for the approver, as one taking the day past its figure does; any other proceeds. Returns the word S7's line says after
+    "expected to", and `waits` (None where the review refuses), which S7 sets beside what the estate answered — a reading, never a verdict.
+    """
+    if allowance_left_cents is not None and amount_cents > allowance_left_cents:
+        return {"word": "be refused at its review: it is worth more than the %s %s" % (usd(allowance_left_cents), allowance_words), "waits": None}
+    destination = ""
+    if one_off and whitelist_mode == HOLDS_NEW_DESTINATIONS:
+        if paid_before is False:
+            return {"word": "wait for the approver: a declared one-off to a destination this estate has never paid (Spec 69)", "waits": True}
+        if paid_before is None:
+            return {"word": "wait for the approver where the destination is new to this estate (Spec 69)", "waits": True}
+        destination = "; a declared one-off to a destination this estate has paid before, which Spec 69 does not hold"
+    if hold_cents is not None and amount_cents >= hold_cents:
+        return {"word": "wait for the approver: at or above the per-payment hold of %s" % usd(hold_cents), "waits": True}
+    if daily_cents is not None and day_before_cents + amount_cents > daily_cents:
+        return {"word": "wait for the approver: it takes the day past its %s" % usd(daily_cents), "waits": True}
+    held = ("under the per-payment hold of %s" % usd(hold_cents)) if hold_cents is not None else "with no per-payment hold"
+    day = (" and within the day's %s" % usd(daily_cents)) if daily_cents is not None else ""
+    return {"word": "proceed: %s%s%s" % (held, day, destination), "waits": False}
 
 
 # ---------------------------------------------------------------------------
@@ -1029,6 +1105,9 @@ class Runner:
             # Spec T19: the writes that wait — the ceremonies as GET /v1/onboarding/ceremonies last answered them, what the pre-S5 finish
             # did, and S14's own record (the interview, the 202, the reads, the signatures, the finish, the trail rows)
             "ceremonies": None, "finished_before_s5": [], "awaiting": None,
+            # Spec T31: every charter change S3 met (Spec AER360-118) — an earlier run's finished first, and this run's own — with its presses and the count
+            # read; the charter changes as GET /v1/charter-changes last answered them; and each passkey counter adopted from the estate's word (§1.5)
+            "charter_changes": [], "charter_changes_read": None, "counters_adopted": [],
             # Spec T29: the Solana road — S1's pre-flight (the readiness, the plan's signing group, the account's allowed chains), the two wallets S5s
             # pressed for or took on, the payee S6s made of the second and its USDC signal, S7s-1's payment and the allowance it read, S7s-3's reading,
             # and why the stations after S5s were skipped, where they were
@@ -1580,7 +1659,10 @@ class Runner:
         write that waits for the client's own approvers (AER 360 Spec 109) — is accepted where `accept_wait` is set, S14 alone, and returned
         as the estate answered it (`{state, interviewId, ceremonies}`, no charter, no receipt); anywhere else it stops the station with
         "the write is waiting for approvals; <station> expects a write that finishes". An interview handed back standing
-        `awaiting_approvals` is pressed again under the same rule: Finish the write asks the platform again; it does not sign.
+        `awaiting_approvals` is pressed again under the same rule: Finish the write asks the platform again; it does not sign. Spec T31 §1.1: a
+        Policy Interview's 202 in Spec AER360-118's shape — `{state: awaiting_change_approvals, interviewId, change}`, the charter change that waits
+        for its quorum — is returned as the estate answered it, and S3 finishes it (`finish_charter_change`); and the confirm is one press with its
+        options, made once more where the estate refuses the passkey's counter as low and says the figure it expects (§1.5).
         """
         walked_back: Dict[str, str] = {}  # Spec T12 §1: a question walked back to once, so a second is a failure and never a loop
         state = page.get("state")
@@ -1596,14 +1678,21 @@ class Runner:
                 if not readback.ok or not isinstance(readback.json, dict):
                     raise StationStop("GET readback answered %s" % readback.sentence())
                 self.facts["readback"][interview_type] = readback.json
-                options = self.request(who, "POST", "/v1/onboarding/interviews/%s/confirm/options" % interview_id, {}, station)
-                self.step(station, options, "200 with the digest-bound challenge, issuedAtMs and the digest",
-                          "answered" if options.ok else options.sentence(), {}, who.name)
-                if not options.ok or not isinstance(options.json, dict):
-                    raise StationStop("POST confirm/options answered %s" % options.sentence())
-                challenge = str((options.json.get("options") or {}).get("challenge"))
-                body = {"issuedAtMs": options.json.get("issuedAtMs"), "response": self.assertion_for(who, challenge, station)}
-                confirmed = self.request(who, "POST", "/v1/onboarding/interviews/%s/confirm" % interview_id, body, station)
+                sent: Dict[str, Any] = {}
+
+                def confirm_press() -> Answer:
+                    # Spec T31 §1.5: the options and the confirm as one press, so a counter the estate refuses as low is pressed once more whole
+                    options = self.request(who, "POST", "/v1/onboarding/interviews/%s/confirm/options" % interview_id, {}, station)
+                    self.step(station, options, "200 with the digest-bound challenge, issuedAtMs and the digest",
+                              "answered" if options.ok else options.sentence(), {}, who.name)
+                    if not options.ok or not isinstance(options.json, dict):
+                        raise StationStop("POST confirm/options answered %s" % options.sentence())
+                    challenge = str((options.json.get("options") or {}).get("challenge"))
+                    sent["body"] = {"issuedAtMs": options.json.get("issuedAtMs"), "response": self.assertion_for(who, challenge, station)}
+                    return self.request(who, "POST", "/v1/onboarding/interviews/%s/confirm" % interview_id, sent["body"], station)
+
+                confirmed = self.press_once_more_on_the_counter(station, who, confirm_press)
+                body = sent.get("body")
                 walk = self.walk_back_of(confirmed)
                 if walk is not None:
                     state = self.follow_walk_back(station, interview_type, interview_id, who, confirmed, walk, walked_back).get("state")
@@ -1619,17 +1708,28 @@ class Runner:
                     state = self.follow_walk_back(station, interview_type, interview_id, who, compiled, walk, walked_back).get("state")
                     continue
                 waiting = self.write_that_waits(compiled)
+                change_wait = self.charter_change_that_waits(compiled)  # Spec T31 §1.1: the second shape of a 202, Spec AER360-118's
                 if accept_wait:
                     expected = ("HTTP 202 with state %s, interviewId and ceremonies — the write that waits for the client's approvers (Spec 109), no charter and no "
                                 "receipt — or HTTP 200 with the compiled charter, the write receipt and the seat where the platform applied the list" % T.INTERVIEW_AWAITING_APPROVALS)
                 else:
                     expected = ("HTTP 200 with the compiled charter, the write receipt and the seat; a 202 (state %s — the write that waits for the client's approvers, "
                                 "Spec 109) is not a write that finishes and stops %s (Spec T19 §2)" % (T.INTERVIEW_AWAITING_APPROVALS, station))
-                if waiting is not None:
+                if interview_type == "policy":
+                    expected += ("; or, for an amendment whose standing charter asks more than the confirmer's agreement (C12), HTTP 202 with state %s, interviewId and "
+                                 "the change — the charter change that waits for its quorum (Spec AER360-118), finished by the approvers it names (Spec T31 §1.1)" % INTERVIEW_AWAITING_CHANGE_APPROVALS)
+                if change_wait is not None:
+                    result = "HTTP 202, the charter change waits for its quorum: %s" % self.charter_change_words(change_wait.get("change") or {})
+                elif waiting is not None:
                     result = "HTTP 202, the write waits: %s" % self.ceremony_words(self.first_ceremony_of(waiting))
                 else:
                     result = ("HTTP %d, compiled and written" % compiled.status) if compiled.ok else compiled.sentence()
                 self.step(station, compiled, expected, result, {}, who.name)
+                if change_wait is not None:
+                    self.facts["interview_state"][interview_type] = INTERVIEW_AWAITING_CHANGE_APPROVALS
+                    if interview_type != "policy":
+                        raise StationStop("POST compile answered HTTP 202 with a charter change (state %s), which only a Policy Interview's amendment opens" % INTERVIEW_AWAITING_CHANGE_APPROVALS)
+                    return change_wait
                 # THE STATUS IS ASSERTED, NOT ONLY THE BODY (Spec T19 §2, as T19 words it): 200 for a write that finishes, 202 for the write that waits
                 if compiled.status == 202 and waiting is None:
                     raise StationStop("POST compile answered HTTP 202 without the write that waits' body (state %s, interviewId, ceremonies)" % T.INTERVIEW_AWAITING_APPROVALS)
@@ -1654,6 +1754,28 @@ class Runner:
                 and isinstance(answer.json.get("ceremonies"), list) and answer.json.get("interviewId"):
             return answer.json
         return None
+
+    @staticmethod
+    def charter_change_that_waits(answer: Answer) -> Optional[Dict[str, Any]]:
+        """
+        Spec T31 §1.1: the 202 body of a charter change that waits for its quorum (Spec AER360-118, wire.ts CharterChangeWaitView:
+        `{state: 'awaiting_change_approvals', interviewId, change: {id, state, confirmedBy, confirmedAt, approvalsRequired, approvedBy, title, now,
+        carried, carriedLines, …}}`), or None — HTTP 202, the state and the change, all three.
+        """
+        if answer.status == 202 and isinstance(answer.json, dict) and answer.json.get("state") == INTERVIEW_AWAITING_CHANGE_APPROVALS \
+                and isinstance(answer.json.get("change"), dict) and answer.json.get("interviewId"):
+            return answer.json
+        return None
+
+    @staticmethod
+    def charter_change_words(view: Dict[str, Any]) -> str:
+        """One charter change as a line speaks it: the change in short form, its state, the count required, who approved, who confirmed and whether the confirmer counts."""
+        approved = [str(n) for n in view.get("approvedBy") or []]
+        counts = view.get("confirmerCounts")
+        return "the charter change %s… %s, approvalsRequired %s, approvedBy %s, confirmed by %s at %s%s" % (
+            T.credential_short_form(view.get("id")), view.get("state"), view.get("approvalsRequired"), ("[%s]" % ", ".join(approved)) if approved else "[]",
+            view.get("confirmedBy"), view.get("confirmedAt"),
+            "" if counts is None else ("; the confirmer counts" if counts else "; the confirmer does not count"))
 
     @staticmethod
     def first_ceremony_of(body: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1734,17 +1856,33 @@ class Runner:
 
     def station_s3(self) -> Outcome:
         founder = self.founder()
+        # Spec T31 §1.2 (Spec T19 §2 extended): the harness never strands its estate — a charter change an earlier run left pending is finished first
+        finished_first = self.finish_the_changes_that_wait("S3", founder)
         interview_id, page, answered = self.walk_interview("S3", "policy", founder)
         compiled = self.confirm_and_compile("S3", "policy", interview_id, founder, page)
+        change_record: Optional[Dict[str, Any]] = None
+        if compiled.get("state") == INTERVIEW_AWAITING_CHANGE_APPROVALS:
+            # Spec T31 §1.1: the charter change this run's compile opened, finished by the people it names, as T19 finishes a wallet-account write
+            change_record = self.finish_charter_change("S3", compiled.get("change") or {}, founder, opened_this_run=True)
+            if change_record["written"]:
+                self.facts["interview_state"]["policy"] = "written"
         standing = self.request(founder, "GET", "/v1/onboarding/charter", None, "S3")
         self.step("S3", standing, "standsWritten true with inForceSince", json.dumps(standing.json) if standing.ok else standing.sentence(), None, founder.name)
         self.facts["charter_standing"] = standing.json if isinstance(standing.json, dict) else None
         view = self.read_journey("S3", founder)
         current = view.get("currentStage")
         charter = compiled.get("charter") or {}
-        detail = "policy interview: %d questions answered, read-back %d lines, charter compiled (%s; quorum %s; networks recorded %s, allowed %s), journey stage %s of %s" % (
-            answered, len((self.facts["readback"].get("policy") or {}).get("lines") or []), charter.get("name"), charter.get("quorum"),
-            charter.get("recordedChains"), charter.get("allowedChains"), current, view.get("stageCount"))
+        lines_read = (self.facts["readback"].get("policy") or {}).get("lines") or []
+        if change_record is None:
+            detail = "policy interview: %d questions answered, read-back %d lines, charter compiled (%s; quorum %s; networks recorded %s, allowed %s), journey stage %s of %s" % (
+                answered, len(lines_read), charter.get("name"), charter.get("quorum"),
+                charter.get("recordedChains"), charter.get("allowedChains"), current, view.get("stageCount"))
+        else:
+            detail = ("policy interview: %d questions answered, read-back %d lines, the compile answered 202 — the charter change waits for its quorum (Spec AER360-118): %s; %s; "
+                      "journey stage %s of %s" % (answered, len(lines_read), change_record["said"], change_record["count_words"], current, view.get("stageCount")))
+        if finished_first:
+            # Spec T31 §1.2: said in S3's line, first, as finish_the_writes_that_wait says it for S5
+            detail = "policy interview: %s; %s" % (finished_first, detail[len("policy interview: "):])
         # Spec T11: the book's catalog version beside the estate's — which the estate does not state, so what it served stands for it.
         # Spec T27 §4: where the interview asks neither of the two version 15 added, the sentence names both versions.
         asked = [q for q, _, _, _ in self.facts["answers"]["policy"]] + [str(l.get("questionId")) for l in (self.facts["readback"].get("policy") or {}).get("lines") or []
@@ -1752,10 +1890,23 @@ class Runner:
         detail += "; %s, and the estate served %d question(s), every one known to the book%s (%s)" % (
             self.book_version_words(), answered, version_15_words(asked), ESTATE_STATES_NO_CATALOG_VERSION)
         problems: List[str] = []
-        # Spec T18 §2: the recorded networks are judged against exactly ['aeredium', PAYEE_CHAIN]; allowed is printed above, not judged
-        difference = recorded_networks_difference(charter.get("recordedChains"))
-        if difference:
-            problems.append(difference)
+        if change_record is None:
+            # Spec T18 §2: the recorded networks are judged against exactly ['aeredium', PAYEE_CHAIN]; allowed is printed above, not judged
+            difference = recorded_networks_difference(charter.get("recordedChains"))
+            if difference:
+                problems.append(difference)
+        else:
+            # Spec T31 §1.1: the station passes when the change is written by the people it names and the read-back carries the answers sent; the
+            # 202 carries no charter and the browser's roads answer none after the quorum's write, so the networks are not judged here (S10 notes it)
+            self.note("S3", "the compile answered 202 with the charter change and no charter (Spec AER360-118), and no road a browser walks answers the charter "
+                            "after the quorum's write; the recorded networks and the charter's figures were not compared in this run")
+            if not change_record["written"]:
+                problems.append("the charter change was not written: %s" % change_record["said"])
+            problems.extend(p["said"] for p in change_record["problems"])
+            spoken_ids = {str(l.get("questionId")) for l in lines_read if not l.get("synthetic")}
+            dropped = [q for q, _, _, _ in self.facts["answers"]["policy"] if q not in spoken_ids]
+            if dropped:
+                problems.append("the read-back the change was confirmed on carries no line for %s, which this run answered" % ", ".join(dropped))
         if not (isinstance(standing.json, dict) and standing.json.get("standsWritten") is True):
             problems.append("GET /v1/onboarding/charter says %s" % (json.dumps(standing.json) if standing.json is not None else standing.sentence()))
         if not isinstance(current, int) or current < 2:
@@ -2932,14 +3083,25 @@ class Runner:
         then the press with issuedAtMs and the passkey's assertion, once and never retried (an assertion cannot be sent twice). Returns the
         answer and its body where it counted — `{state, interviewId, ceremonies}`, `written` where this signature finished the write.
         """
-        opened = self.request(signer, "POST", T.INTERVIEW_CEREMONY_SIGN_OPTIONS_ROUTE % (interview_id, pending_tx_id), {}, station)
-        self.step(station, opened, "200 with options (the challenge the estate derives from %s under the purpose %s) and issuedAtMs" % (
-            T.INTERVIEW_CEREMONY_BINDING % ("<workspace id>", interview_id, pending_tx_id, "<issuedAtMs>"), T.INTERVIEW_CEREMONY_PURPOSE),
-            "answered" if opened.ok else opened.sentence(), {}, signer.name)
-        if not opened.ok or not isinstance(opened.json, dict) or not isinstance(opened.json.get("options"), dict):
-            return opened, None
-        assertion = self.assertion_for(signer, str(opened.json["options"].get("challenge")), station)
-        body = {"issuedAtMs": opened.json.get("issuedAtMs"), "response": assertion}
+        sent: Dict[str, Any] = {}
+
+        def press() -> Answer:
+            opened = self.request(signer, "POST", T.INTERVIEW_CEREMONY_SIGN_OPTIONS_ROUTE % (interview_id, pending_tx_id), {}, station)
+            self.step(station, opened, "200 with options (the challenge the estate derives from %s under the purpose %s) and issuedAtMs" % (
+                T.INTERVIEW_CEREMONY_BINDING % ("<workspace id>", interview_id, pending_tx_id, "<issuedAtMs>"), T.INTERVIEW_CEREMONY_PURPOSE),
+                "answered" if opened.ok else opened.sentence(), {}, signer.name)
+            if not opened.ok or not isinstance(opened.json, dict) or not isinstance(opened.json.get("options"), dict):
+                sent.pop("body", None)
+                return opened
+            assertion = self.assertion_for(signer, str(opened.json["options"].get("challenge")), station)
+            sent["body"] = {"issuedAtMs": opened.json.get("issuedAtMs"), "response": assertion}
+            return self.request(signer, "POST", T.INTERVIEW_CEREMONY_SIGN_ROUTE % (interview_id, pending_tx_id), sent["body"], station, retry=False)
+
+        # Spec T31 §1.5: a counter the estate refuses as low, with the figure it expects, is adopted and the press made once more
+        signed = self.press_once_more_on_the_counter(station, signer, press)
+        if "body" not in sent:
+            return signed, None
+        body = sent["body"]
         required, collected = view.get("requiredSignatures"), view.get("signaturesCollected") or 0
         if second:
             expected = ("409 %s: the platform's record already carries %s's signature, %s of %s stand and nothing is signed again (Spec 109, item 4); "
@@ -2949,7 +3111,6 @@ class Runner:
                         "the same request finished the write as %s (Spec 109, item 4); a refusal (%s, %s, %s, %s, %s) is judged for Rule 13 and reported in the "
                         "estate's words, never retried" % (signer.name, T.INTERVIEW_AWAITING_APPROVALS, (collected or 0) + 1, required, signer.name,
                                                             T.CEREMONY_NOT_LISTED, T.CEREMONY_CLOSED, APPROVER_ALREADY_SIGNED, SIGNATURE_NOT_COUNTED, PLATFORM_REFUSED))
-        signed = self.request(signer, "POST", T.INTERVIEW_CEREMONY_SIGN_ROUTE % (interview_id, pending_tx_id), body, station, retry=False)
         counted = signed.ok and isinstance(signed.json, dict)
         if counted:
             answered = self.first_ceremony_of(signed.json)
@@ -2959,6 +3120,287 @@ class Runner:
             result = self.refusal_judged(signed)
         self.step(station, signed, expected, result, body, signer.name)
         return signed, (signed.json if counted else None)
+
+    # -- the charter change that waits for its quorum (Spec T31 §1.1 and §1.2; AER 360 Spec AER360-118): S3's head, and S3's own --------------
+    def read_charter_changes(self, station: str, who: Person, expected: str) -> Tuple[Answer, Optional[List[Dict[str, Any]]]]:
+        """GET /v1/charter-changes as this person (Spec AER360-118, item 4): every change of the estate that waits or stands approved, as the caller reads it."""
+        answer = self.request(who, "GET", CHARTER_CHANGES_ROUTE, None, station)
+        body = answer.json if answer.ok and isinstance(answer.json, dict) else None
+        listed = body.get("changes") if body is not None else None
+        views = [v for v in listed if isinstance(v, dict)] if isinstance(listed, list) else None
+        if views is not None:
+            result = "%d change(s) listed%s" % (len(views), (": " + "; ".join(self.charter_change_words(v) for v in views)) if views else "")
+            self.facts["charter_changes_read"] = {"station": station, "who": who.name, "changes": views}
+        else:
+            result = answer.sentence()
+        self.step(station, answer, expected, result, None, who.name)
+        return answer, views
+
+    def finish_the_changes_that_wait(self, station: str, founder: Person) -> str:
+        """
+        Spec T31 §1.2 (Spec T19 §2 extended): before S3 begins an interview, GET /v1/charter-changes as the founder; a change standing pending — or
+        approved, its write unfinished — is finished by §1.1's road (`finish_charter_change`, the same code), and its finishing is said in S3's line.
+        A change that cannot be finished stops S3 with "FAILED — prerequisite: a charter change stands pending and could not be finished", naming
+        the change. The withdraw road is never taken: the founder confirmed the change, so it is finished, never discarded. An estate before Spec
+        AER360-118 has no such door; that is noted and S3 walks on. Returns the words for S3's line, or "" where nothing stood.
+        """
+        answer, views = self.read_charter_changes(station, founder, "every charter change of the estate that waits for its quorum or stands approved (Spec AER360-118): one "
+                                                  "an earlier run left is finished here before %s begins its interview, never withdrawn; a fresh estate lists none" % station)
+        if views is None:
+            if self.route_not_found(answer):
+                self.note(station, "the estate has no Approver inbox for charter changes (GET %s answered %s): an estate before AER 360 Spec AER360-118, so nothing "
+                                   "was finished" % (CHARTER_CHANGES_ROUTE, answer.sentence()))
+                return ""
+            raise StationStop("GET %s answered %s" % (CHARTER_CHANGES_ROUTE, answer.sentence()))
+        standing = [v for v in views if v.get("state") in ("pending", "approved")]
+        said: List[str] = []
+        for view in standing:
+            record = self.finish_charter_change(station, view, founder, opened_this_run=False)
+            said.append("a charter change from an earlier run stood %s and was finished first: %s; %s" % (record["state_found"], record["said"], record["count_words"]))
+            if not record["written"]:
+                raise StationStop("%s: %s" % (self.charter_change_words(view), record["said"]), prerequisite=CHARTER_CHANGE_PREREQUISITE)
+        return "; ".join(said)
+
+    def finish_charter_change(self, station: str, view: Dict[str, Any], founder: Person, opened_this_run: bool) -> Dict[str, Any]:
+        """
+        Spec T31 §1.1: one charter change, finished by the estate's road as the people it names. The founder reads GET /v1/charter-changes; then, for each
+        approver the harness holds a session for, other than the confirmer, in SIGNERS_IN_ORDER's order (and among those the change says may still
+        approve, where it says), POST …/approve/options, the passkey's assertion and POST …/approve with {issuedAtMs, response}, once and never retried;
+        after each press the change is read again and the count judged as Spec T19 §1 judges a ceremony's — approvedBy one longer than before, state
+        pending until the count is met, `written` when it is. A change standing approved (its count met and its write unfinished) is finished by the
+        founder's Finish the write, which is the quorum's write (routes/onboarding.ts). Every refusal is judged for Rule 13 and told in the estate's
+        words. The count is a reading, not a verdict (`read_the_count`). Returns the record, which S3's line and S10 read.
+        """
+        change_id = str(view.get("id"))
+        record: Dict[str, Any] = {
+            "changeId": change_id, "interviewId": view.get("interviewId"), "opened_this_run": opened_this_run, "state_found": view.get("state"),
+            "confirmedBy": view.get("confirmedBy"), "confirmedAt": view.get("confirmedAt"), "approvalsRequired": view.get("approvalsRequired"),
+            "approvedBy_found": [str(n) for n in view.get("approvedBy") or []], "confirmerCounts": view.get("confirmerCounts"),
+            "now": [l for l in view.get("now") or [] if isinstance(l, dict)], "carried": view.get("carried"),
+            "carriedLines": [l for l in view.get("carriedLines") or [] if isinstance(l, dict)],
+            "presses": [], "approved_by": [], "approvedBy_final": None, "written": False, "written_by": None, "approvals_that_wrote": None,
+            "confirmer_counted": None, "spec_count": None, "fewer_than_the_spec": None, "problems": [], "said": "", "count_words": ""}
+        self.facts["charter_changes"].append(record)
+        spoken: List[str] = []
+        if opened_this_run:
+            spoken.append("opened by this run's compile: %s (the read-back's %d line(s) answered now and %s carried)" % (
+                self.charter_change_words(view), len(record["now"]), record["carried"]))
+        _, views = self.read_charter_changes(station, founder, "the change %s… as the Approver inbox lists it: state pending (or approved, its write unfinished), approvalsRequired, "
+                                             "approvedBy, mayStillApprove, confirmerCounts (Spec AER360-118, item 4)" % T.credential_short_form(change_id))
+        listed = next((v for v in views or [] if str(v.get("id")) == change_id), None)
+        if listed is not None:
+            view = listed
+        elif views is not None:
+            self.change_problem(station, record, "the charter change %s…: the inbox" % T.credential_short_form(change_id), None,
+                                "GET %s lists the change the compile answered" % CHARTER_CHANGES_ROUTE, "the inbox lists %d change(s), not this one" % len(views))
+        # the confirmer: the founder where the change says the reader confirmed it, else the person it names (the confirm is their agreement, and counts once)
+        confirmer = founder if view.get("callerIsConfirmer") is True else self.person_named(view.get("confirmedBy"))
+        state = view.get("state")
+        if state == "approved":
+            pressed = self.press_finish_the_write(station, founder, str(view.get("interviewId")),
+                                                  "200: the count was met and the write did not finish; the author's Finish the write is the quorum's write (Spec AER360-118, item 5)")
+            if pressed.ok and isinstance(pressed.json, dict) and self.charter_change_that_waits(pressed) is None and self.write_that_waits(pressed) is None:
+                record.update(written=True, written_by=founder.name, approvals_that_wrote=len(view.get("approvedBy") or []))
+                record["approvedBy_final"] = [str(n) for n in view.get("approvedBy") or []]
+                spoken.append("the change stood approved (its count met, its write unfinished); the founder pressed Finish the write and it was written")
+            else:
+                spoken.append("the change stood approved; the founder's Finish the write answered %s" % (self.refusal_judged(pressed) if pressed.status >= 400 else pressed.sentence()))
+        elif state != "pending":
+            spoken.append("the change reads %s, so there is nothing to approve" % state)
+        else:
+            may = view.get("mayStillApprove")
+            named = [str(n) for n in may] if isinstance(may, list) else None
+            for name in named or []:
+                if self.person_named(name) is None:
+                    spoken.append("%s is named as able to approve and is not a person of the harness" % name)
+            candidates = [self.people[k] for k in SIGNERS_IN_ORDER if self.people[k] is not confirmer and (named is None or self.people[k].name in named)]
+            for person in candidates:
+                if not self.session_for(person, station):
+                    spoken.append("%s is named as able to approve and has no session to approve with (%s)" % (
+                        person.name, "no passkey is stored for them" if person.passkey is None else "their stored passkey's sign-in was refused"))
+                    continue
+                before = [str(n) for n in view.get("approvedBy") or []]
+                pressed, body = self.approve_charter_change_as(station, person, change_id, view)
+                record["presses"].append(self.press_record(person, pressed, body))
+                if body is None:
+                    spoken.append("%s: %s" % (person.name, self.refusal_judged(pressed) if pressed.status >= 400 else pressed.sentence()))
+                    if (pressed.refusal or {}).get("code") == CHARTER_CHANGE_NOT_LISTED:
+                        break
+                    continue
+                answered_state = body.get("state")
+                answered = body.get("change") if isinstance(body.get("change"), dict) else {}
+                record["approved_by"].append(person.name)
+                if answered_state == "written":
+                    record.update(written=True, written_by=person.name, approvals_that_wrote=len(before) + 1, approvedBy_final=before + [person.name])
+                    spoken.append("%s approved and the change was written on that approval" % person.name)
+                elif answered_state == INTERVIEW_AWAITING_CHANGE_APPROVALS:
+                    after = [str(n) for n in answered.get("approvedBy") or []]
+                    if len(after) != len(before) + 1:
+                        self.change_problem(station, record, "%s's approval: the count" % person.name, pressed,
+                                            "approvedBy one longer than the %d before the press (Spec T19 §1's judgment)" % len(before), "approvedBy %s" % json.dumps(after, ensure_ascii=False))
+                    if answered.get("state") != "pending":
+                        self.change_problem(station, record, "%s's approval: the state" % person.name, pressed,
+                                            "state pending until the count is met", "state %s, with the answer awaiting further approvals" % json.dumps(answered.get("state")))
+                    spoken.append("%s approved (approvedBy %s of approvalsRequired %s)" % (person.name, len(after), answered.get("approvalsRequired", view.get("approvalsRequired"))))
+                elif answered_state == T.INTERVIEW_AWAITING_APPROVALS:
+                    spoken.append("%s approved and the count was met; the quorum's write met a platform ceremony (Spec 109), which the change's own road does not "
+                                  "finish here: %s" % (person.name, self.ceremony_words(self.first_ceremony_of(body))))
+                    break
+                else:
+                    spoken.append("%s's approval answered state %s, which Spec AER360-118 does not name" % (person.name, json.dumps(answered_state)))
+                    break
+                # the change read again after each press (Spec T31 §1.1): absent once written, else one approval longer and still pending
+                _, again_views = self.read_charter_changes(station, founder, "the change %s… read again after %s's approval: absent where it was written, else approvedBy %d and "
+                                                           "state pending" % (T.credential_short_form(change_id), person.name, len(before) + 1))
+                again = next((v for v in again_views or [] if str(v.get("id")) == change_id), None)
+                if record["written"]:
+                    if again is not None:
+                        self.change_problem(station, record, "the charter change %s… after the approval that wrote it" % T.credential_short_form(change_id), None,
+                                            "the inbox lists the change no longer: a written change neither waits nor stands approved", "it is listed %s" % self.charter_change_words(again))
+                    break
+                if again is None:
+                    if again_views is not None:
+                        self.change_problem(station, record, "the charter change %s… after %s's approval" % (T.credential_short_form(change_id), person.name), None,
+                                            "the change listed pending with approvedBy %d" % (len(before) + 1), "the inbox no longer lists it, though the approval answered it waiting")
+                    break
+                again_approved = [str(n) for n in again.get("approvedBy") or []]
+                if len(again_approved) != len(before) + 1 or again.get("state") != "pending":
+                    self.change_problem(station, record, "the charter change %s… read again after %s's approval" % (T.credential_short_form(change_id), person.name), None,
+                                        "approvedBy %d and state pending" % (len(before) + 1), "approvedBy %s and state %s" % (json.dumps(again_approved, ensure_ascii=False), json.dumps(again.get("state"))))
+                view = again
+            if not record["written"] and view.get("state") == "pending":
+                spoken.append("the change stands pending with approvedBy %s of approvalsRequired %s, and nobody else it names can approve here" % (
+                    json.dumps([str(n) for n in view.get("approvedBy") or []], ensure_ascii=False), view.get("approvalsRequired")))
+        self.read_the_count(record)
+        record["said"] = "; ".join(spoken) if spoken else "nothing was pressed"
+        return record
+
+    def session_for(self, person: Person, station: str) -> bool:
+        """
+        Spec T31 §1.1: a session for an approver the change names. S3 stands before S4, so on a run that is not resumed only the founder is signed in when
+        a change waits: a person with a passkey stored at this estate signs in with it, on their own credential, as `resume` signs them in; a person with
+        none has no session, and the line says so. Nothing is enrolled here.
+        """
+        if person.signed_in:
+            return True
+        if person.passkey is None:
+            return False
+        try:
+            verified, _ = self.sign_in(person, station)
+        except (StationStop, HarnessError) as err:
+            self.note(station, "%s could not sign in to approve the charter change: %s" % (person.name, err))
+            return False
+        self.step(station, verified, "a session for %s, signed in with the stored passkey to approve the charter change (Spec T31 §1.1)" % person.name,
+                  "signed in" if verified.ok else verified.sentence(), None, person.name)
+        return person.signed_in
+
+    def change_problem(self, station: str, record: Dict[str, Any], probe: str, answer: Optional[Answer], expected: str, said: str) -> None:
+        """One answer of the charter change's road judged wanting (Spec T31 §1.1): a finding in the estate's words, and a problem on the change's record."""
+        record["problems"].append({"probe": probe, "expected": expected, "said": said})
+        self.finding(station, probe, None, answer, expected, said)
+
+    @staticmethod
+    def read_the_count(record: Dict[str, Any]) -> None:
+        """
+        Spec T31 §1.1: THE COUNT IS A READING, NOT A VERDICT. approvalsRequired, how many recorded approvals wrote the change, and whether the confirmer
+        is counted among them — read off the change's own confirmerCounts (the approval law's verdict), or, where the change does not say, off the
+        book's C15. What Spec AER360-118 intends (SPEC_118_COUNTS_THE_CONFIRMER): approvalsRequired less one where the confirmer counts. A change
+        written on fewer approvals than that is marked for S10's finding against the estate; one written on exactly that, with the confirmer counted,
+        is the spec's intent and is no finding.
+        """
+        required = record.get("approvalsRequired")
+        wrote = record.get("approvals_that_wrote")
+        counts = record.get("confirmerCounts")
+        counts_from = "the change's confirmerCounts"
+        if counts is None:
+            counts = (A.POLICY_ANSWERS.get("C15") or {}).get("choice") == "Yes"
+            counts_from = "the book's C15 (the change does not say)"
+        if not record.get("written") or not isinstance(required, int) or isinstance(required, bool) or not isinstance(wrote, int):
+            record["count_words"] = "approvalsRequired %s; the change was not written, so no count wrote it; the confirmer %s, by %s" % (
+                required, "counts" if counts else "does not count", counts_from)
+            return
+        spec_count = max(required - (1 if counts else 0), 0)
+        names = record.get("approvedBy_final") or []
+        record.update(spec_count=spec_count, confirmer_counted=wrote < required, fewer_than_the_spec=wrote < spec_count)
+        record["count_words"] = ("the count read: approvalsRequired %d; the change was written on %d approval(s)%s; the confirmer (%s) is %scounted among them, by %s; "
+                                 "%s — so the spec's count is %d recorded approval(s), and the estate %s" % (
+                                     required, wrote, (" (%s)" % ", ".join(names)) if names else "", record.get("confirmedBy"), "" if wrote < required else "not ",
+                                     counts_from, SPEC_118_COUNTS_THE_CONFIRMER, spec_count,
+                                     "wrote it on fewer, which S10 reports" if wrote < spec_count else "wrote it on that count, as the spec intends"))
+
+    def approve_charter_change_as(self, station: str, person: Person, change_id: str, view: Dict[str, Any]) -> Tuple[Answer, Optional[Dict[str, Any]]]:
+        """
+        One approval of a charter change, as the person (Spec AER360-118, item 3; passkeysign.ts): the options road first, whose challenge the estate derives
+        from `charter-change:<workspace id>:<change id>:<issuedAtMs>` under the purpose `charter.change`, then the press with issuedAtMs and the passkey's
+        assertion — once, never retried, but for one press more where the estate refuses the passkey's counter as low and says the figure it expects
+        (Spec T31 §1.5). Returns the answer and its body where it counted: {state, interviewId, change}, `written` where it met the count.
+        """
+        required = view.get("approvalsRequired")
+        before = len(view.get("approvedBy") or [])
+        expected = ("200: %s's approval recorded — state %s with the change pending and approvedBy %d of approvalsRequired %s, or state written where the count is met and the same "
+                    "request wrote the change (Spec AER360-118, item 5); a refusal (%s, %s, %s) is judged for Rule 13 and told in the estate's words, never retried" % (
+                        person.name, INTERVIEW_AWAITING_CHANGE_APPROVALS, before + 1, required, CHARTER_CHANGE_NOT_LISTED, APPROVER_ALREADY_SIGNED, STEP_UP_INVALID))
+        sent: Dict[str, Any] = {}
+
+        def press() -> Answer:
+            opened = self.request(person, "POST", CHARTER_CHANGE_APPROVE_OPTIONS_ROUTE % change_id, {}, station)
+            self.step(station, opened, "200 with options (the challenge the estate derives from %s under the purpose %s) and issuedAtMs" % (
+                CHARTER_CHANGE_BINDING % ("<workspace id>", change_id, "<issuedAtMs>"), CHARTER_CHANGE_PURPOSE),
+                "answered" if opened.ok else self.refusal_judged(opened) if opened.status >= 400 else opened.sentence(), {}, person.name)
+            if not opened.ok or not isinstance(opened.json, dict) or not isinstance(opened.json.get("options"), dict):
+                sent.pop("body", None)
+                return opened
+            assertion = self.assertion_for(person, str(opened.json["options"].get("challenge")), station)
+            sent["body"] = {"issuedAtMs": opened.json.get("issuedAtMs"), "response": assertion}
+            return self.request(person, "POST", CHARTER_CHANGE_APPROVE_ROUTE % change_id, sent["body"], station, retry=False)
+
+        answer = self.press_once_more_on_the_counter(station, person, press)
+        if "body" not in sent:
+            return answer, None  # the options road refused, and its step says so
+        counted = answer.ok and isinstance(answer.json, dict)
+        if counted:
+            change = answer.json.get("change") if isinstance(answer.json.get("change"), dict) else {}
+            result = ("written: the count met and the change written on this approval" if answer.json.get("state") == "written" else
+                      "recorded: state %s, the change %s with approvedBy %s" % (answer.json.get("state"), change.get("state"), json.dumps(change.get("approvedBy"), ensure_ascii=False)))
+        else:
+            result = self.refusal_judged(answer)
+        self.step(station, answer, expected, result, sent["body"], person.name)
+        return answer, (answer.json if counted else None)
+
+    # -- the passkey counter the estate expects (Spec T31 §1.5) ------------------------------------------------------------------------
+    @staticmethod
+    def counter_told(answer: Answer) -> Optional[Tuple[int, int]]:
+        """The counter the store held and the one the estate expects, where the estate refused the press STEP_UP_INVALID saying so; else None."""
+        refusal = answer.refusal
+        if not refusal or refusal.get("code") != STEP_UP_INVALID:
+            return None
+        detail = refusal.get("detail") if isinstance(refusal.get("detail"), dict) else {}
+        found = COUNTER_LOWER_THAN_EXPECTED.search(" ".join(str(x) for x in (detail.get("cause"), refusal.get("message")) if x))
+        return (int(found.group(1)), int(found.group(2))) if found else None
+
+    def press_once_more_on_the_counter(self, station: str, person: Person, press: Callable[[], Answer]) -> Answer:
+        """
+        Spec T31 §1.5: one press — its options and its assertion — made again, once, where the estate refused it STEP_UP_INVALID because "Response
+        counter value N was lower than expected M": the person's software passkey counter is set to M (never lowered), saved at once, and a note says
+        "the estate expected counter M for <person> and the store held N; adopted M" — a reading, carried into S10, never a finding against the estate.
+        A second refusal of the same shape is returned as the estate said it, and the station judges it as before; nothing else of the passkey changes.
+        """
+        answer = press()
+        told = self.counter_told(answer)
+        if told is None or person.passkey is None:
+            return answer
+        held, expected = told
+        person.passkey.sign_count = max(int(person.passkey.sign_count), expected)
+        self.save_passkey(person)
+        adopted = int(person.passkey.sign_count)
+        self.step(station, answer, "the press counted, or a refusal in the estate's words", "refused for the passkey's counter: %s — the counter adopted and the press made "
+                  "once more (Spec T31 §1.5)" % answer.sentence(), None, person.name)
+        self.note(station, "the estate expected counter %d for %s and the store held %d; adopted %d" % (expected, person.name, held, adopted))
+        self.facts["counters_adopted"].append({"station": station, "who": person.name, "held": held, "expected": expected, "adopted": adopted})
+        again = press()
+        if self.counter_told(again) is not None:
+            self.note(station, "the estate refused %s's passkey counter again after the adoption (%s); the press is not made a third time" % (person.name, again.sentence()))
+        return again
 
     # -- S6 Payees ----------------------------------------------------------------------
     # Spec T9 (20 September 2026): who presses after Ada, and how a count is spoken. Ben Signatory, who signs
@@ -3638,6 +4080,61 @@ class Runner:
         holder_named = (A.ACCOUNT_ANSWERS.get("WO1") or {}).get("choice") == A.HOLDER_PERSON
         return ((A.ACCOUNT_ANSWERS.get("WO3") or {}).get("cents") if holder_named else None), (A.ACCOUNT_ANSWERS.get("WO4") or {}).get("cents"), "the answer book"
 
+    def expectation_words(self, station: str, record: Dict[str, Any]) -> str:
+        """
+        Spec T31 §1.4, as the owner ruled on 1 November 2026 (option b): the expectation derived from the charter the harness answered, appended at the end
+        of the payment's part of S7's line beside what the estate answered at the submit — the parenthetical keeps the book's word. Where the two part
+        company it is a note, a reading and never a verdict: the station's outcome stays the payments' own.
+        """
+        expectation = record.get("expectation")
+        if not isinstance(expectation, dict):
+            return ""
+        submitted = record.get("submitted")
+        agrees: Optional[bool] = None
+        if not record.get("set_id"):
+            did = "created no run, so what it would have asked is not known"
+        elif not isinstance(submitted, dict):
+            did = "never submitted the run, so what it would have asked is not known"
+        else:
+            status = submitted.get("status")
+            waited = status == "pending_approval"
+            did = ("held it for approval (status %s, approvalsRequired %s)" if waited else "asked no second hand (status %s, approvalsRequired %s)") % (
+                status, submitted.get("approvalsRequired"))
+            agrees = expectation.get("waits") is not None and expectation.get("waits") == waited
+        if agrees is False:
+            self.note(station, "%s: a reading, not a verdict — the charter the harness answered expects it to %s, and the estate %s (Spec T31 §1.4)" % (
+                record.get("key"), expectation["word"], did))
+        return "; the charter the harness answered expects it to %s (%s), and the estate %s" % (expectation["word"], record.get("expectation_from"), did)
+
+    def charter_terms(self) -> Dict[str, Any]:
+        """
+        Spec T31 §1.4: the terms S7's expectations are derived from — the charter the harness answered in S5 (amountsUsdCents.holdOverPerTx and
+        dailyTotal, whitelistMode), or, where this run compiled none (a run resumed past S5), the answers the harness gives to O2, O1 and O3; and the
+        sandbox allowance — what the estate said is left where this run read it, else, in the sandbox, the realm's own US$100 for one payment
+        (Spec AER360-CAT-16, ruling four). No call of its own: S7's road is the estate's, and this reads what the run already holds.
+        """
+        charter = self.facts["charter"].get("wallet_account") or {}
+        amounts = charter.get("amountsUsdCents") if isinstance(charter.get("amountsUsdCents"), dict) else None
+        if amounts is not None:
+            terms: Dict[str, Any] = {"hold": A.whole_cents(amounts.get("holdOverPerTx")), "daily": A.whole_cents(amounts.get("dailyTotal")),
+                                     "mode": charter.get("whitelistMode"), "from": "the charter the harness answered in S5"}
+        else:
+            terms = {"hold": A.whole_cents(A.ACCOUNT_ANSWERS.get("O2")), "daily": A.whole_cents(A.ACCOUNT_ANSWERS.get("O1")),
+                     "mode": HOLDS_NEW_DESTINATIONS if (A.ACCOUNT_ANSWERS.get("O3") or {}).get("choice") == "Yes" else None,
+                     "from": "the answers the harness gives to O2, O1 and O3 (no account charter compiled in this run)"}
+        read = (self.facts.get("solana") or {}).get("allowance")
+        left = A.whole_cents(str(read.get("leftUsdCents"))) if isinstance(read, dict) and read.get("leftUsdCents") is not None else None
+        realm = (self.facts.get("workspace") or {}).get("realm") if isinstance(self.facts.get("workspace"), dict) else None
+        if realm is None and isinstance(self.facts.get("workspace"), dict):
+            realm = (self.facts["workspace"].get("workspace") or {}).get("realm") if isinstance(self.facts["workspace"].get("workspace"), dict) else None
+        if left is not None:
+            terms.update(allowance=left, allowance_words="left of the sandbox allowance, as the estate said it")
+        elif realm == A.SANDBOX_REALM:
+            terms.update(allowance=A.SANDBOX_ALLOWANCE_USD_CENTS, allowance_words="the sandbox allows for one payment (realm.ts SANDBOX_PAYMENT_CEILING_USD_CENTS)")
+        else:
+            terms.update(allowance=None, allowance_words="")
+        return terms
+
     # -- the owner's own wallet, the payee on a real chain (Spec T24 §1, §2) -------------------------------------------------------------
     def read_owner_payee(self, station: str) -> Tuple[Optional[str], Optional[str]]:
         """
@@ -4055,7 +4552,7 @@ class Runner:
         US$… This set needs at most US$… of gas. Nothing was sent. Buy gas below." — the first the figure the harness read from GET
         /v1/gas/account, the second the gate's own ceilingUsdCents; and no payment may have left: the runs register carries no new run
         and Holdings' USDC is unchanged. Proved, S7a passes. A gate that admits the set because the balance already covers the ceiling is
-        a finding under S7, never a fail and never a cause for a credit (Spec T26 §3.2: "S7a not provable this run: Harness Holdings' gas
+        a note under S7 since Spec T31 §1.4 (a finding before it), never a fail and never a cause for a credit (Spec T26 §3.2: "S7a not provable this run: Harness Holdings' gas
         account holds US$X, and this set needs at most US$Y; the gate admitted the set, which is right" — the estate did right; the
         refusal cannot be met this run). A refusal naming other figures, a refusal for another cause, or a payment that left fails S7
         naming it. Spec T28: the review's duplicate screen is read and each warning judged, as at every review S7 makes; where all name
@@ -4101,7 +4598,8 @@ class Runner:
             said = T.S7A_NOT_PROVABLE_SENTENCE % (T.format_usd_cents(available),
                                                    T.format_usd_cents(ceiling) if ceiling is not None else "a ceiling the gate's evidence does not state (%s)" % evidence)
             record.update(verdict="not provable", ceiling=ceiling, said="%s: %s" % (T.S7A_NOT_PROVABLE_PROBE, said))
-            self.finding("S7", T.S7A_NOT_PROVABLE_PROBE, body, review, expected, said, fails=False)
+            # Spec T31 §1.4: not provable is a note, not a finding — the estate did right, and the station's outcome is the payments' alone
+            self.note("S7", "%s: %s" % (T.S7A_NOT_PROVABLE_PROBE, said))
         elif shortfall is None:
             result = "the gate refused, but not for want of gas: %s" % ("; ".join("%s: %s" % (r.get("code"), r.get("message")) for r in refusals) or gate.get("evidence"))
             record.update(verdict="failed", said="S7a failed: " + result)
@@ -4339,17 +4837,29 @@ class Runner:
 
     def sign_the_run(self, runner: "Runner", signer: Person, set_id: str, station: str) -> Dict[str, Any]:
         """One signer's press on a waiting run: the digest-bound challenge, then the approval with the passkey's assertion — once, never retried; a refusal in the estate's words."""
-        challenge = runner.request(signer, "POST", "/v1/approvals/%s/challenge" % set_id, {}, station)
         expected = ("the digest-bound challenge %s's passkey signs; or a refusal in the estate's words — ROLE_NOT_GRANTED where the estate admits the approver standing alone, "
                     "SUBMITTER_MAY_NOT_APPROVE where the charter says so — never retried" % signer.name)
+        sent: Dict[str, Any] = {}
+
+        def press() -> Answer:
+            challenge = runner.request(signer, "POST", "/v1/approvals/%s/challenge" % set_id, {}, station)
+            sent["challenge"] = challenge
+            if not challenge.ok or not isinstance(challenge.json, dict):
+                runner.step(station, challenge, expected, challenge.sentence(), {}, signer.name)
+                sent.pop("body", None)
+                return challenge
+            runner.step(station, challenge, expected, "answered", {}, signer.name)
+            sent["body"] = {"response": runner.assertion_for(signer, str(challenge.json.get("challenge")), station)}
+            return runner.request(signer, "POST", "/v1/approvals/%s/approve" % set_id, sent["body"], station, retry=False)
+
+        # Spec T31 §1.5: a counter the estate refuses as low, with the figure it expects, is adopted and the press made once more
+        approved = runner.press_once_more_on_the_counter(station, signer, press)
+        challenge = sent["challenge"]
         record: Dict[str, Any] = {"who": signer.name, "key": signer.key, "credential": signer.credential_id, "status": challenge.status, "refusal_code": None, "status_after": None, "given": None, "said": None}
-        if not challenge.ok or not isinstance(challenge.json, dict):
-            runner.step(station, challenge, expected, challenge.sentence(), {}, signer.name)
+        if "body" not in sent:
             record.update(refusal_code=(challenge.refusal or {}).get("code") if challenge.refusal else None, said="%s refused (%s)" % (signer.name, challenge.sentence()))
             return record
-        runner.step(station, challenge, expected, "answered", {}, signer.name)
-        body = {"response": runner.assertion_for(signer, str(challenge.json.get("challenge")), station)}
-        approved = runner.request(signer, "POST", "/v1/approvals/%s/approve" % set_id, body, station, retry=False)
+        body = sent["body"]
         runner.step(station, approved, "status approved where %s's signature meets approvalsRequired, else pending_approval with approvalsGiven" % signer.name,
                     "answered" if approved.ok else approved.sentence(), body, signer.name)
         record["status"] = approved.status
@@ -4753,6 +5263,10 @@ class Runner:
             return True
 
         records: List[Dict[str, Any]] = []
+        # Spec T31 §1.4: each payment's expectation derived from the charter the harness answered and the sandbox allowance, said at the end of its part
+        # of the line beside what the estate answered; the parenthetical keeps the book's word (the owner's ruling of 1 November 2026, option b)
+        terms = self.charter_terms()
+        day_before = 0
         for payment in payments:
             row = self.pay_row(payment)
             tier_words = under_the_tiers(payment.amount, holder_alone, two_signatures)
@@ -4766,11 +5280,16 @@ class Runner:
             expect_words = "%s; %s; expected to %s (figures from %s)" % (tier_words, self.road_words(payment.key), payment.expect, tiers_read_from)
             if one_off_words:
                 expect_words = "%s; %s" % (one_off_words, expect_words)
+            amount_cents = int(T.minor_units(payment.amount, 2))
+            paid_before = (self.facts.get("one_off") or {}).get("paid_before") if T.pays_a_real_chain() else False  # the testnet's one-off is a fresh address (fresh_unlisted_key)
+            expectation = expectation_of_the_charter(amount_cents, day_before, terms["hold"], terms["daily"], "oneOff" in row, paid_before, terms["mode"],
+                                                     terms["allowance"], terms["allowance_words"])
+            day_before += amount_cents
             record = self.pay(self, clerk, payment.key, row, int(payment.amount_minor), address, signers, expect_words,
                               lambda address=address: self.read_token_balance("S7", clerk.name, T.PAYEE_CHAIN, token, address), more_gas=more_gas_for_holdings,
                               confirm_repeats=True)
             record.update(expect=payment.expect, tier_words=tier_words, amount=payment.amount, resolved=self.resolution_words(payment.key) if payment.payee_key else None,
-                          payee_words=T.payee_words(), one_off_words=one_off_words or None)
+                          payee_words=T.payee_words(), one_off_words=one_off_words or None, expectation=expectation, expectation_from=terms["from"])
             self.facts["sets"][payment.key] = record
             records.append(record)
         trail = self.read_trail(self, self.founder() if self.people[A.FOUNDER].signed_in else clerk, "S7",
@@ -4791,9 +5310,9 @@ class Runner:
                 asked_words = "the run %s stands a draft, never submitted, so the estate named no count of signatures" % record["set_id"]
             else:
                 asked_words = "the run %s was created and the estate named no count of signatures for it" % record["set_id"]
-            said.append("%s (%s %s to %s, %s, expected to %s): %s%s%s; %s and %s; %s" % (
+            said.append("%s (%s %s to %s, %s, expected to %s): %s%s%s; %s and %s; %s%s" % (
                 record["key"], record["amount"], T.PAYMENT_ASSET, record["payee"], record.get("payee_words") or T.payee_words(), record["expect"], one_off_words, paid_words,
-                record["said"], asked_words, self.road_words(record["key"]), record["tier_words"]))
+                record["said"], asked_words, self.road_words(record["key"]), record["tier_words"], self.expectation_words("S7", record)))
             money["payments"].append({"key": record["key"], "amount_minor": record["amount_minor"], "landed": record["landed"], "gas_debit_cents": record.get("gas_debit_cents"),
                                       "user_op_hash": record.get("user_op_hash"), "tx_hash": record.get("tx_hash")})
             if not record["landed"]:
@@ -5208,7 +5727,8 @@ class Runner:
             line_ids = [str(l.get("questionId")) for l in lines if not l.get("synthetic")]
             if readback:
                 amending = self.earlier_policy_stood_written() if interview_type == "policy" else None
-                for f in audit_readback(interview_type, answers, lines, amending):
+                # Spec T31: the realm the read-back route answered beside its lines, and whether it named approvers for the change (Spec AER360-118)
+                for f in audit_readback(interview_type, answers, lines, amending, realm=readback.get("realm"), by_quorum=bool(readback.get("approvers"))):
                     if f.get("not_compared"):
                         self.note("S10", "%s: %s" % (f["probe"], f["said"]))
                     else:
@@ -5226,6 +5746,21 @@ class Runner:
                     self.finding("S10", f["probe"], f["sent"], None, f["expected"], f["said"])
             else:
                 self.note("S10", "no compiled charter recorded for the %s interview; the charter comparison was not made" % interview_type)
+        # Spec T31 §1.1: each charter change S3 met, the count read beside what Spec AER360-118 intends — a finding against the estate only where it
+        # wrote the change on fewer approvals than the spec's count; the confirmer counted as the spec counts it is a reading, never a finding
+        for change in self.facts["charter_changes"]:
+            self.note("S10", "charter change %s… (%s): %s" % (T.credential_short_form(change.get("changeId")),
+                                                              "opened by this run" if change.get("opened_this_run") else "left by an earlier run", change.get("count_words")))
+            if change.get("fewer_than_the_spec"):
+                self.finding("S10", "the charter change %s…: the count that wrote it" % T.credential_short_form(change.get("changeId")), None, None,
+                             "%d recorded approval(s): approvalsRequired %s, less one for the confirmer where the confirmer counts — %s" % (
+                                 change.get("spec_count"), change.get("approvalsRequired"), SPEC_118_COUNTS_THE_CONFIRMER),
+                             "the estate wrote the change on %s approval(s) (%s), fewer than the spec's count" % (
+                                 change.get("approvals_that_wrote"), ", ".join(change.get("approvedBy_final") or []) or "nobody"))
+        # Spec T31 §1.5: each passkey counter adopted from the estate's word — a reading of the harness's own store, never a finding against the estate
+        for told in self.facts["counters_adopted"]:
+            self.note("S10", "a reading, not a finding: at %s the estate expected counter %d for %s and the store held %d; adopted %d (Spec T31 §1.5)" % (
+                told["station"], told["expected"], told["who"], told["held"], told["adopted"]))
         if founder.signed_in:
             journey = self.read_journey("S10", founder)
             standing = self.request(founder, "GET", "/v1/onboarding/charter", None, "S10")
@@ -6236,81 +6771,119 @@ def readback_disagreements(probe: str, kind: str, value: Dict[str, Any], expecte
     return [{"probe": probe, "sent": value, "expected": expected, "said": "the read-back says %r" % said}]
 
 
-def ceiling_read_back_sentence(which: str, cents: str, partner_cents: Any, amending: bool) -> str:
+def ceiling_read_back_sentence(which: str, cents: str, partner_cents: Any, amending: bool, by_quorum: bool = False, sandbox: bool = False) -> str:
     """
-    Spec T27: `ceilingReadBackSentence` (services/charterceilings.ts at b523cbf), word for word — what the read-back says a ceiling becomes. Beside a
-    partner answered above zero, `ceilingWrittenSentence`: the figure the platform will hold, in whole US dollars rounded UP from the cents
-    (`dollarsCeilingOf`) and grouped as `toLocaleString('en-US')` groups it, with the rounding clause where the answer carried cents — and, where an
-    earlier Policy Interview of the estate stands written (`amending`), STANDING_CEILING_KEPT after it. Beside a partner not answered above zero,
-    that nothing is written and why: the estate writes the two together or not at all.
+    Spec T27: `ceilingReadBackSentence` (services/charterceilings.ts), word for word — what the read-back says a ceiling becomes. Spec T31: the
+    sentence is the read-back book's (aer360_answers.ceiling_read_back_sentence, read at a80ac13): in the sandbox, "Recorded as your production
+    figure: …" (Spec AER360-CAT-16, ruling five); elsewhere the figure the platform will hold beside a partner answered above zero — with, where an
+    earlier Policy Interview of the estate stands written (`amending`), Spec AER360-118's sentence for a write the change quorum stands behind
+    (`by_quorum`) or the kept one — and, beside a partner not answered above zero, that nothing is written and why.
     """
-    def above_zero(value: Any) -> bool:
-        return isinstance(value, str) and re.fullmatch(r"[0-9]+", value) is not None and int(value) > 0
-
-    if above_zero(partner_cents):
-        written = CEILING_WRITTEN_SENTENCES[which] % ("US${:,}".format((int(cents) + 99) // 100), "" if int(cents) % 100 == 0 else CEILING_ROUNDED_UP)
-        return "%s %s" % (written, STANDING_CEILING_KEPT) if amending else written
-    partner = ("the daily total (%s)" % CEILING_QUESTION_IDS["perDay"]) if which == "perPayment" else ("the company ceiling (%s)" % CEILING_QUESTION_IDS["perPayment"])
-    return CEILING_PARTNER_UNANSWERED % partner
+    return A.ceiling_read_back_sentence(which, cents, partner_cents, amending, by_quorum, sandbox)
 
 
-def audit_ceiling_lines(run_answered: Dict[str, Tuple[Dict[str, Any], str, str]], book: Dict[str, Dict[str, Any]], lines: Sequence[Dict[str, Any]],
-                        amending: Optional[bool]) -> List[Dict[str, Any]]:
+def is_sandbox_read_back(realm: Any, lines: Sequence[Dict[str, Any]]) -> bool:
     """
-    Spec T27 §3.2: a Policy Interview served at catalog version 15 — C2 or C3 among this run's answers or the read-back's lines — reads back, directly
-    after each of the two, the line saying what it becomes (CEILING_READBACK_LINES), in `ceilingReadBackSentence`'s words: the "written" form on a
-    fresh estate, the "kept" form where an earlier Policy Interview of the estate stands written (`amending`). A line missing, standing elsewhere,
-    under another prompt, or saying anything else — a figure other than the book's US$100 and US$1,000 among it — is a finding carrying the
-    estate's words. Where `amending` is None (this run did not see how the estate stood before S3), either form is admitted and the one the estate
-    spoke is recorded as not compared (not_compared=True), which S10 writes as a note. An interview of catalog version 14 or before asks neither
-    question and is answered as before: nothing here.
+    Spec T31: whether the read-back was said for an estate in the sandbox — the realm the read-back route answers beside its lines (routes/onboarding.ts:
+    {realm, lines, amends, approvers}), or, where none was recorded, the realm's own first line, which the estate says only in the sandbox (REALM).
+    """
+    if isinstance(realm, str) and realm:
+        return realm == A.SANDBOX_REALM
+    return any(str(l.get("questionId")) == A.REALM_READBACK_QUESTION_ID for l in lines)
+
+
+def lower_first(text: str) -> str:
+    return text[:1].lower() + text[1:]
+
+
+def audit_lines_beside(interview_type: str, run_answered: Dict[str, Tuple[Dict[str, Any], str, str]], book: Dict[str, Dict[str, Any]],
+                       lines: Sequence[Dict[str, Any]], amending: Optional[bool], sandbox: bool = False, by_quorum: bool = False) -> List[Dict[str, Any]]:
+    """
+    The lines the read-back says beside an answer, held to the read-back book (aer360_answers.lines_beside) in content, heading and place.
+
+    Spec T27 §3.2: a Policy Interview served at catalog version 15 — C2 or C3 among this run's answers or the read-back's lines — reads back after
+    each of the two the line saying what it becomes (CEILING_READBACK_LINES): the "written" form on a fresh estate, the "kept" form where an earlier
+    Policy Interview stands written (`amending`); where `amending` is None (this run did not see how the estate stood before S3) either form is
+    admitted and the one spoken is recorded as not compared (not_compared=True), which S10 writes as a note.
+
+    Spec T31 §1.3 (Spec AER360-CAT-16): in the sandbox (`sandbox`) each ceiling's line is the sandbox's single form, "Recorded as your production
+    figure: …", whatever stood before; a figure the sandbox replaces, above the allowance, is followed by the sandbox figure's line; and every daily
+    figure (C3; O1, X2, AG3) by the week and the month derived from it — in that order, directly after the answer's own line, so C3_WRITTEN stands
+    three lines after C3 where the figure is above the allowance. A line missing, standing elsewhere, under another heading or saying anything else
+    is a finding carrying the estate's words; nothing is loosened, and an interview of catalog version 14 or before is held to no ceiling line.
     """
     findings: List[Dict[str, Any]] = []
-    asked = {str(l.get("questionId")) for l in lines if not l.get("synthetic")} | set(run_answered)
-    if not any(q in asked for q in A.ADDED_IN_V15["policy"]):
-        return findings
     ids = [str(l.get("questionId")) for l in lines]
+    asked = {str(l.get("questionId")) for l in lines if not l.get("synthetic")} | set(run_answered)
     value_of = lambda qid: run_answered[qid][0] if qid in run_answered else book.get(qid)  # noqa: E731
-    for which, (line_id, prompt) in CEILING_READBACK_LINES.items():
-        qid = CEILING_QUESTION_IDS[which]
+    ceilings = list(CEILING_QUESTION_IDS.values()) if interview_type == "policy" and any(q in asked for q in A.ADDED_IN_V15["policy"]) else []
+    figures = [q for q in A.SANDBOX_REPLACED_FIGURES.get(interview_type, ()) + A.DAILY_FIGURE_QUESTION_IDS.get(interview_type, ()) if q in asked]
+    order = [q.id for q in A.CATALOGS.get(interview_type, []) if q.id in ceilings or q.id in figures]
+    ceiling_line_ids = {line_id for line_id, _ in CEILING_READBACK_LINES.values()}
+    unknown_form = amending is None and not sandbox
+    claimed: set = set()
+    for qid in order:
         value = value_of(qid)
-        cents = (value or {}).get("cents")
-        if not (isinstance(cents, str) and re.fullmatch(r"[0-9]+", cents) and int(cents) > 0):
-            continue  # only a figure above zero becomes a limit (readback's own condition); a blank or a zero speaks for itself on its own line
-        partner_cents = (value_of(CEILING_QUESTION_IDS["perDay" if which == "perPayment" else "perPayment"]) or {}).get("cents")
-        forms = ([ceiling_read_back_sentence(which, cents, partner_cents, amending)] if amending is not None
-                 else [ceiling_read_back_sentence(which, cents, partner_cents, False), ceiling_read_back_sentence(which, cents, partner_cents, True)])
-        expected = forms[0] if len(forms) == 1 else "%s — or, where an earlier Policy Interview stands written, %s" % (forms[0], forms[1])
-        probe = "read-back (policy) of %s: %s" % (qid, prompt[0].lower() + prompt[1:])
-        if line_id not in ids:
-            findings.append({"probe": probe, "sent": value, "expected": expected,
-                             "said": "the read-back carries no line (%s) saying %s" % (line_id, prompt[0].lower() + prompt[1:])})
+        if not isinstance(value, dict):
             continue
-        at = ids.index(line_id)
-        line = lines[at]
-        said = str(line.get("spoken"))
-        if said not in forms:
-            other = ceiling_read_back_sentence(which, cents, partner_cents, not amending) if amending is not None else None
-            why = ("" if said != other else " — the %s form, though S2 found %s" % (
-                "written" if amending else "kept",
-                "an earlier Policy Interview standing written (the journey's stage 1 done before S3)" if amending
-                else "no earlier Policy Interview standing written (the journey's stage 1 not done before S3)"))
-            findings.append({"probe": probe, "sent": value, "expected": expected, "said": "the read-back's %s line says %r%s" % (line_id, said, why)})
-        elif amending is None:
-            findings.append({"probe": probe, "sent": value, "expected": None, "not_compared": True,
-                             "said": "the estate spoke the %s form (%s); this run did not read the journey before S3 began the interview, so whether an "
-                                     "earlier Policy Interview stood written is not known here and the form was not judged" % (
-                                         "kept" if said == forms[1] else "written", line_id)})
-        if str(line.get("prompt")) != prompt:
-            findings.append({"probe": probe + " (the prompt)", "sent": None, "expected": prompt, "said": "the read-back's %s line is headed %r" % (line_id, line.get("prompt"))})
-        if qid in ids and at != ids.index(qid) + 1:
-            findings.append({"probe": probe + " (where it stands)", "sent": None, "expected": "the line directly after %s's" % qid,
-                             "said": "the read-back's %s line stands at line %d and %s's at line %d" % (line_id, at + 1, qid, ids.index(qid) + 1)})
+        partner_qid = None
+        if qid in CEILING_QUESTION_IDS.values():
+            partner_qid = CEILING_QUESTION_IDS["perDay"] if qid == CEILING_QUESTION_IDS["perPayment"] else CEILING_QUESTION_IDS["perPayment"]
+        partner = value_of(partner_qid) if partner_qid else None
+        expected_lines = A.lines_beside(interview_type, qid, value, partner, sandbox, bool(amending), by_quorum)
+        other_lines = A.lines_beside(interview_type, qid, value, partner, sandbox, not bool(amending), by_quorum)
+        at_answer = ids.index(qid) if qid in ids else None
+        before: List[str] = []
+        for k, wanted in enumerate(expected_lines, 1):
+            line_id, prompt = wanted["questionId"], wanted["prompt"]
+            is_ceiling_line = line_id in ceiling_line_ids
+            forms = [wanted["spoken"]]
+            if unknown_form and is_ceiling_line and other_lines[k - 1]["spoken"] not in forms:
+                forms = [A.lines_beside(interview_type, qid, value, partner, False, False, by_quorum)[k - 1]["spoken"],
+                         A.lines_beside(interview_type, qid, value, partner, False, True, by_quorum)[k - 1]["spoken"]]
+            expected = forms[0] if len(forms) == 1 else "%s — or, where an earlier Policy Interview stands written, %s" % (forms[0], forms[1])
+            probe = "read-back (%s) of %s: %s" % (interview_type, qid, lower_first(prompt))
+            want_at = at_answer + k if at_answer is not None else None
+            if want_at is not None and want_at < len(ids) and ids[want_at] == line_id and want_at not in claimed:
+                at: Optional[int] = want_at
+            else:
+                at = next((j for j, x in enumerate(ids) if x == line_id and j not in claimed and (at_answer is None or j > at_answer)), None)
+                if at is None:
+                    at = next((j for j, x in enumerate(ids) if x == line_id and j not in claimed), None)
+            if at is None:
+                findings.append({"probe": probe, "sent": value, "expected": expected,
+                                 "said": "the read-back carries no line (%s) saying %s" % (line_id, lower_first(prompt))})
+                before.append(line_id)
+                continue
+            claimed.add(at)
+            line = lines[at]
+            said = str(line.get("spoken"))
+            if said not in forms:
+                why = ""
+                if is_ceiling_line and not sandbox and amending is not None and said == other_lines[k - 1]["spoken"]:
+                    why = " — the %s form, though S2 found %s" % (
+                        "written" if amending else "kept",
+                        "an earlier Policy Interview standing written (the journey's stage 1 done before S3)" if amending
+                        else "no earlier Policy Interview standing written (the journey's stage 1 not done before S3)")
+                findings.append({"probe": probe, "sent": value, "expected": expected, "said": "the read-back's %s line says %r%s" % (line_id, said, why)})
+            elif len(forms) > 1:
+                findings.append({"probe": probe, "sent": value, "expected": None, "not_compared": True,
+                                 "said": "the estate spoke the %s form (%s); this run did not read the journey before S3 began the interview, so whether an "
+                                         "earlier Policy Interview stood written is not known here and the form was not judged" % (
+                                             "kept" if said == forms[1] else "written", line_id)})
+            if str(line.get("prompt")) != prompt:
+                findings.append({"probe": probe + " (the prompt)", "sent": None, "expected": prompt, "said": "the read-back's %s line is headed %r" % (line_id, line.get("prompt"))})
+            if at_answer is not None and at != at_answer + k:
+                place = ("the line directly after %s's" % qid) if not before else ("the line directly after %s's line and its %s %s" % (
+                    qid, names_in_words(before), "line" if len(before) == 1 else "lines"))
+                findings.append({"probe": probe + " (where it stands)", "sent": None, "expected": place,
+                                 "said": "the read-back's %s line stands at line %d and %s's at line %d" % (line_id, at + 1, qid, at_answer + 1)})
+            before.append(line_id)
     return findings
 
 
 def audit_readback(interview_type: str, answers: Sequence[Tuple[str, Dict[str, Any], str, str]], lines: Sequence[Dict[str, Any]],
-                   amending: Optional[bool] = None) -> List[Dict[str, Any]]:
+                   amending: Optional[bool] = None, realm: Optional[str] = None, by_quorum: bool = False) -> List[Dict[str, Any]]:
     """
     The read-back compared by content, line by line (Spec T8), with the expectation for every line the estate
     speaks taken from the book (A.ANSWERS) for every question the read-back carries, whether or not this run
@@ -6320,8 +6893,11 @@ def audit_readback(interview_type: str, answers: Sequence[Tuple[str, Dict[str, A
     book knows is rendered from the book; a line the book does not know is a finding as before. An answer of a kind
     with no rendering is not compared (not_compared=True), which S10 records as a note. The provenance count — how
     many lines came from this run and how many from the book — is written by S10, which holds the counts. Spec T27:
-    a Policy Interview served at catalog version 15 is held to the two ceiling lines as well (`audit_ceiling_lines`),
-    `amending` saying whether an earlier Policy Interview of the estate stood written (None where it is not known).
+    a Policy Interview served at catalog version 15 is held to the two ceiling lines as well, `amending` saying whether
+    an earlier Policy Interview of the estate stood written (None where it is not known). Spec T31: every line the
+    read-back book carries beside an answer (`audit_lines_beside`) — Spec AER360-CAT-16's in the sandbox, which `realm`
+    (the read-back route's own word) or, unrecorded, the realm's first line says; `by_quorum` where the read-back named
+    approvers, so a standing limit is the change quorum's to replace (Spec AER360-118).
     """
     findings: List[Dict[str, Any]] = []
     book = A.ANSWERS.get(interview_type, {})
@@ -6364,9 +6940,9 @@ def audit_readback(interview_type: str, answers: Sequence[Tuple[str, Dict[str, A
                              "said": "the read-back carries no line (%s) saying what the payee door will do with a venue's contract" % VENUE_DOOR_READBACK_QUESTION_ID})
         elif str(door.get("spoken")) != VENUE_DOOR_READBACK_SENTENCE:
             findings.append({"probe": probe, "sent": c19, "expected": VENUE_DOOR_READBACK_SENTENCE, "said": "the read-back's door line says %r" % door.get("spoken")})
-    # Spec T27: the company's two ceilings, where the Policy Interview asks them (catalog version 15), each with the line saying what it becomes
-    if interview_type == "policy":
-        findings.extend(audit_ceiling_lines(run_answered, book, lines, amending))
+    # Spec T27: the company's two ceilings, where the Policy Interview asks them (catalog version 15), each with the line saying what it becomes;
+    # Spec T31: and every other line the read-back book carries beside an answer — the sandbox figure's, the derived week and month (Spec AER360-CAT-16)
+    findings.extend(audit_lines_beside(interview_type, run_answered, book, lines, amending, is_sandbox_read_back(realm, lines), by_quorum))
     return findings
 
 
@@ -7086,6 +7662,24 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
         line("S1", "POST /v1/auth/login/verify %s → expect 200: a session in %s" % (_j({"nonce": "<nonce>", "issuedAtMs": "<issuedAtMs>", "response": "<AuthenticationResponseJSON over authenticatorData ‖ SHA-256(clientDataJSON)>"}), A.ESTATE["company"]))
     # S2
     line("S2", "GET /v1/journey → expect currentStage 1 of %d, the current stage policy_interview" % JOURNEY_STAGE_COUNT)
+    # S3's head — Spec T31 §1.2 (Spec T19 §2 extended): a charter change an earlier run left pending is finished before S3 begins its interview, by the
+    # road §1.1 finishes this run's own (Spec AER360-118), or S3 stops at the missing prerequisite; the change is never withdrawn
+    line("S3", "GET %s (as %s) → expect every charter change of the estate that waits for its quorum or stands approved (Spec AER360-118): id, interviewId, state, "
+               "confirmedBy, confirmedAt, approvalsRequired, approvedBy, confirmerCounts, mayStillApprove, now, carried; one standing pending is finished here (below) "
+               "before S3 begins its interview, never withdrawn, or S3 stops: \"FAILED — prerequisite: %s\", naming the change; a fresh estate lists none; an estate "
+               "before Spec AER360-118 answers the route unknown, which is noted (Spec T31 §1.2)" % (CHARTER_CHANGES_ROUTE, founder.name, CHARTER_CHANGE_PREREQUISITE))
+    signer_names = ", ".join(A.PEOPLE[k].name for k in SIGNERS_IN_ORDER)
+    line("S3", "POST %s {} then …/approve %s (as each approver the change names who is not the confirmer, in the order %s, with a stored passkey) — only for a change "
+               "standing pending, an earlier run's or this run's compile's 202 → expect 200: state %s with the change pending and approvedBy one longer, until the count is "
+               "met, then state written; a refusal (%s, %s, %s) is judged for Rule 13 and told in the estate's words, never retried; a counter the estate refuses as low "
+               "is adopted and the press made once more (Spec T31 §1.5)" % (
+                   CHARTER_CHANGE_APPROVE_OPTIONS_ROUTE % "<change id>", _j({"issuedAtMs": "<issuedAtMs>", "response": "<assertion by the approver's passkey over the challenge>"}),
+                   signer_names, INTERVIEW_AWAITING_CHANGE_APPROVALS, CHARTER_CHANGE_NOT_LISTED, APPROVER_ALREADY_SIGNED, STEP_UP_INVALID))
+    line("S3", "GET %s (as %s) — after each approval → expect the change absent once written, else listed pending with approvedBy one longer; the count read in S3's line and "
+               "S10's note: approvalsRequired, how many approvals wrote it, and whether the confirmer is counted among them, beside what Spec AER360-118 intends (Spec T31 §1.1)" % (
+                   CHARTER_CHANGES_ROUTE, founder.name))
+    line("S3", "POST /v1/onboarding/interviews/<waiting interview>/compile {} (as %s) — only for a change listed approved, its write unfinished → expect 200: the author's "
+               "Finish the write is the quorum's write (Spec AER360-118, item 5)" % founder.name)
     # S3
     line("S3", "POST /v1/onboarding/interviews %s → expect 200: the interview id and its first page; the answer book answers catalog version %d, and %s" % (
         _j({"interviewType": "policy"}), A.CATALOG_VERSION_ANSWERED, ESTATE_STATES_NO_CATALOG_VERSION))
@@ -7096,12 +7690,16 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
             continue
         line("S3", "POST /v1/onboarding/interviews/<policy interview>/answers %s → expect 200: the next page (%s)" % (_j({"questionId": q.id, "value": A.POLICY_ANSWERS[q.id]}), q.kind))
     ceilings = {which: "US${:,}".format((int(A.POLICY_ANSWERS[qid]["cents"]) + 99) // 100) for which, qid in CEILING_QUESTION_IDS.items()}
-    line("S3", "GET /v1/onboarding/interviews/<policy interview>/readback → expect the charter in plain sentences, the sandbox realm first; directly after C2 and C3 (catalog version 15) the lines %s and %s saying what each becomes — %s per payment and %s a day written to the signing platform as the limits of the estate's own signing entries, the standing limits kept where an earlier Policy Interview stands written (Spec T27; compared in S10)" % (
-        CEILING_READBACK_LINES["perPayment"][0], CEILING_READBACK_LINES["perDay"][0], ceilings["perPayment"], ceilings["perDay"]))
+    line("S3", "GET /v1/onboarding/interviews/<policy interview>/readback → expect the charter in plain sentences, the sandbox realm first; directly after C2 and C3 (catalog version 15) the lines %s and %s saying what each becomes — %s per payment and %s a day written to the signing platform as the limits of the estate's own signing entries, the standing limits kept where an earlier Policy Interview stands written (Spec T27; compared in S10); "
+               "in the sandbox, as Spec AER360-CAT-16 speaks them: each \"Recorded as your production figure\", the entries carrying the sandbox's %s meanwhile, and C3 followed first by "
+               "%s and %s, so C3_WRITTEN stands three lines after C3 (Spec T31 §1.3; compared in S10)" % (
+        CEILING_READBACK_LINES["perPayment"][0], CEILING_READBACK_LINES["perDay"][0], ceilings["perPayment"], ceilings["perDay"], A.usd_cents_said(A.SANDBOX_ALLOWANCE_USD_CENTS),
+        A.SANDBOX_FIGURE_READBACK_QUESTION_ID, A.DERIVED_VOLUMES_READBACK_QUESTION_ID))
     line("S3", "POST /v1/onboarding/interviews/<policy interview>/confirm/options {} → expect the digest-bound challenge, issuedAtMs, digest")
     line("S3", "POST /v1/onboarding/interviews/<policy interview>/confirm %s → expect 200: state confirmed" % _j({"issuedAtMs": "<issuedAtMs>", "response": "<assertion by the founder's passkey over the challenge>"}))
-    line("S3", "POST /v1/onboarding/interviews/<policy interview>/compile {} → expect 200: charter (name, quorum 1, signers, recordedChains exactly %s — judged, naming any difference (Spec T18 §2); allowedChains aeredium-testnet, printed and not judged; amountsUsdCents.denyCeiling %s and dailyTotal %s from C2 and C3, compared in S10 (Spec T27)), receipt, seat" % (
-        expected_recorded_networks(), A.POLICY_ANSWERS["C2"]["cents"], A.POLICY_ANSWERS["C3"]["cents"]))
+    line("S3", "POST /v1/onboarding/interviews/<policy interview>/compile {} → expect 200: charter (name, quorum 1, signers, recordedChains exactly %s — judged, naming any difference (Spec T18 §2); allowedChains aeredium-testnet, printed and not judged; amountsUsdCents.denyCeiling %s and dailyTotal %s from C2 and C3, compared in S10 (Spec T27)), receipt, seat; or, amending a written charter whose change quorum (C12) asks more than the "
+               "confirmer's agreement, 202: state %s, interviewId and the change — the charter change that waits for its quorum (Spec AER360-118), finished by the approvals above "
+               "(Spec T31 §1.1)" % (expected_recorded_networks(), A.POLICY_ANSWERS["C2"]["cents"], A.POLICY_ANSWERS["C3"]["cents"], INTERVIEW_AWAITING_CHANGE_APPROVALS))
     line("S3", "GET /v1/onboarding/charter → expect standsWritten true")
     line("S3", "GET /v1/journey → expect currentStage 2 of %d" % JOURNEY_STAGE_COUNT)
     # S4 — Spec T10: every person is brought in on their own credential
