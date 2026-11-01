@@ -260,7 +260,8 @@ class TheWalk(unittest.TestCase):
         for which, (_, prompt) in E.CEILING_READBACK_LINES.items():
             cents = A.MONEY["company_ceiling_cents"] if which == "perPayment" else A.MONEY["daily_total_cents"]
             partner = A.MONEY["daily_total_cents"] if which == "perPayment" else A.MONEY["company_ceiling_cents"]
-            self.assertIn("the read-back says %r: %r" % (prompt, E.ceiling_read_back_sentence(which, cents, partner, False)), line)
+            # Spec T31: the double speaks Spec AER360-CAT-16 in its sandbox, and the book with it — each ceiling recorded as the production figure
+            self.assertIn("the read-back says %r: %r" % (prompt, E.ceiling_read_back_sentence(which, cents, partner, False, sandbox=True)), line)
         self.assertIn("C2's note: ", line)
         self.assertIn("C3's note: ", line)
 
@@ -1344,7 +1345,9 @@ class TheDocuments(unittest.TestCase):
         text = read(os.path.join(ROOT, "CHANGELOG.md"))
         title = "## Spec T29 and HRW-2 — The two legs of the estate harness learn the Solana road (24 October 2026, amended 30 October 2026)"
         self.assertIn("%s\n\n%s\n" % (title, SECTION_6_T29), text)
-        self.assertEqual(text.index("## "), text.index(title), "the newest entry first")
+        t31 = "## Spec T31 — The estate harness learns AER360-118 and CAT-16, and never strands its estate (1 November 2026)"
+        self.assertEqual(text.index("## "), text.index(t31), "the newest entry first: Spec T31's, then T29's")
+        self.assertLess(text.index(t31), text.index(title))
         entry = text.split(title, 1)[1].split("## Spec HRW-1", 1)[0]
         for words in ("`aer360_real_world.py`", "`aer360_screens.py`", "`aer360_tables.py`", "`aer360_answers.py`", "`aer360_harness.py`", "`tests/real_world_double.py`",
                       "`tests/real_world_screens.py`", "`tests/test_the_harness_walks_the_solana_road.py`", "`tests/test_harness_real_world.py`", "**Auditor**", "**Attacker**",
