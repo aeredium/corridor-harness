@@ -463,7 +463,9 @@ class TheCounterIsToldByTheEstate(unittest.TestCase):
         self.assertEqual(outcomes["S3"].outcome, H.FAIL, outcomes["S3"].line)
         self.assertIn("STEP_UP_INVALID", outcomes["S3"].line)
         self.assertEqual(len([c for c in runner.calls if c.station == "S3" and c.route.endswith("/confirm")]), 2, "the one press made again once, never a third time")
-        self.assertEqual(len(runner.facts["counters_adopted"]), 1)
+        # once for S3's press; a later station's own press (S5's confirm, the store still behind the estate's record) is a press of its own, told once in its turn
+        self.assertEqual(len([t for t in runner.facts["counters_adopted"] if t["station"] == "S3"]), 1)
+        self.assertTrue(any("the press is not made a third time" in n for n in runner.notes["S3"]))
 
 
 if __name__ == "__main__":
