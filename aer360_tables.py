@@ -886,3 +886,251 @@ WRONG_SIGNING_GROUP_SENTENCE = ("the workspace %s (account %s) stands on %s, not
                                 "(Spec T29 §0a.4; the journal of 29 October 2026 shows a Harness Holdings row standing on group-3); nothing was pressed")
 CLOSED_ROAD_TRUTH_TOLD = "the road is closed, and the estate said so by name: %s — truth told, zero moved"
 
+
+# ---------------------------------------------------------------------------
+# BITCOIN, HELD AND NOT PAID (Spec T32, 14 November 2026): the estate harness learns that an estate holds bitcoin. Every code, route, word and
+# sentence below is taken from the estate's own specification — Spec AER360-BTC-1 (aeredium/AERAccounts), with its security reading of 12 November
+# 2026 (brief AER360-BTC-1b) and its second reading and the owner's ruling of 13 November 2026 (brief AER360-BTC-1c) — as the builder brief of Spec
+# T32 carries it whole, and the section each came from is named beside it. NOT ONE IS READ FROM THE ESTATE'S CODE: aeredium/AERAccounts stands
+# outside this harness's working folder. So where the specification names a thing and gives neither its words nor its field — the read-back's
+# sentence beside a Yes, the closed road's whole sentence, the met stop's, the limit's, the field names of the two reads, the road that creates an
+# import, the body of the deposit door — no word is written here for it: the station reads the estate's answer at the run, prints it, and holds it
+# only to what the specification does say.
+#   §1  the question C9B of catalog version 20, compulsory, Yes or No, in Part C straight after C9 (the book carries its words, aer360_answers.py);
+#       Yes compiles heldNetworks ['bitcoin'] on a live charter and ['bitcoin-testnet'] on a sandbox one, with recordedHeldNetworks ['bitcoin']
+#       beside it; No, or never asked, writes neither; nothing is added to allowedChains or recordedChains; the read-back says, beside a Yes, what
+#       the answer does.
+#   §2  two rows of a third family, `bitcoin`: `bitcoin` (asset BTC) and `bitcoin-testnet` (test network 4, sandbox only), both payouts false; BTC
+#       is eight decimals; every payment door refuses a Bitcoin row BITCOIN_HELD_NOT_PAID (422) in a sentence of its own, before
+#       CHAIN_RECEIVABLE_ONLY and NETWORK_NOT_OFFERED — the payee door, the counterparty door, a run's review and its creation, the run road, the
+#       import.
+#   §3  the address: the native SegWit address (P2WPKH) of the wallet key's own public point, bech32 (BIP-173), `bc1q…` on bitcoin and `tb1q…` on
+#       bitcoin-testnet; derived at each read, never typed, stored or editable; shown only where the charter says the company holds bitcoin.
+#   §4  the road, read only, through two sources that must agree: closed (BITCOIN_ROAD_CLOSED, 503, naming BITCOIN_SOURCES), stopped
+#       (BITCOIN_SOURCES_DISAGREE, 503) or open; a source that does not answer is silence, never a refusal.
+#   §5, §6  the holding under the two-column law, and the two reads: GET /v1/aer360/bitcoin (whether the estate holds bitcoin and, where it does,
+#       each wallet in the reader's sight with its address or the sentence for its absence; it reads no chain) and GET
+#       /v1/aer360/bitcoin/wallets/:walletId (one wallet's reading, on demand).
+#   The reading of 12 November: Finding 1 (a stop told two ways, `met` and `latched`), Finding 3 (BITCOIN_READS_LIMITED, 429), Finding 8 (the main
+#       network's row closed by the constant BITCOIN_MAIN_NETWORK_OPEN until brief AER360-BTC-2: held true, open false, no wallets, one sentence).
+#   The reading of 13 November: historyWhole on the wallet's reading; the silence of tips that stood a block apart (cause 'tips_apart').
+# ---------------------------------------------------------------------------
+BITCOIN_SPEC = ("Spec AER360-BTC-1 with its security reading of 12 November 2026 and its second reading of 13 November 2026, as the builder brief "
+                "of Spec T32 carries it whole")
+BITCOIN_CHAIN = "bitcoin"                    # §2: the row a live estate holds on — Bitcoin, asset BTC, payouts false
+BITCOIN_TESTNET_CHAIN = "bitcoin-testnet"    # §2: the row a sandbox estate holds on — test network 4, sandbox only, payouts false
+BITCOIN_CHAINS = (BITCOIN_CHAIN, BITCOIN_TESTNET_CHAIN)
+BTC = "BTC"                                  # §2: the rows' asset
+BTC_DECIMALS = 8                             # §2: "BTC is eight decimals in money.ts"
+ASSET_DECIMALS[BTC] = BTC_DECIMALS
+BITCOIN_ADDRESS_PREFIXES = {BITCOIN_CHAIN: "bc1q", BITCOIN_TESTNET_CHAIN: "tb1q"}  # §3: bc1q… on bitcoin and tb1q… on bitcoin-testnet
+BECH32_ALPHABET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"  # BIP-173, which §3 names: the thirty-two characters an address is spelled in after its separator
+# §3: witness version 0 over the HASH160 (twenty bytes) of the key's point — the prefix's two letters, the separator 1, the version's q, the
+# thirty-two characters that carry twenty bytes five bits at a time, and the checksum's six
+BITCOIN_P2WPKH_LENGTH = 42
+BITCOIN_SPEC_EXAMPLE_ADDRESS = "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4"  # §4: "BIP-173's own example address", the one address the specification writes out
+HELD_NETWORKS_FIELD = "heldNetworks"                    # §1: the compiled charter's field for a Yes
+RECORDED_HELD_NETWORKS_FIELD = "recordedHeldNetworks"   # §1: the live-day intent beside it, as recordedChains stands to allowedChains
+BITCOIN_LIST_ROUTE = "/v1/aer360/bitcoin"               # §6: whether the estate holds bitcoin, and each wallet in the reader's sight
+BITCOIN_WALLET_ROUTE = "/v1/aer360/bitcoin/wallets/%s"  # §6: one wallet's reading — the founder's "Read this wallet's bitcoin"
+BITCOIN_HELD_NOT_PAID = "BITCOIN_HELD_NOT_PAID"         # "The refusals": 422, a judgment, the same on retry
+BITCOIN_ROAD_CLOSED = "BITCOIN_ROAD_CLOSED"             # "The refusals": 503, a deployment fault, naming BITCOIN_SOURCES
+BITCOIN_SOURCES_DISAGREE = "BITCOIN_SOURCES_DISAGREE"   # "The refusals": 503, a stop
+BITCOIN_READS_LIMITED = "BITCOIN_READS_LIMITED"         # Finding 3: 429, saying the figure and how long to wait
+BITCOIN_WALLET_NOT_FOUND = "WALLET_NOT_FOUND"           # §6: a wallet outside the reader's sight
+BITCOIN_REFUSAL_STATUSES = {BITCOIN_HELD_NOT_PAID: 422, BITCOIN_ROAD_CLOSED: 503, BITCOIN_SOURCES_DISAGREE: 503, BITCOIN_READS_LIMITED: 429}
+BITCOIN_SOURCES_SETTING = "BITCOIN_SOURCES"             # §4: the setting a closed road's refusal names
+# Finding 8 (which reworded §2's "held and moved"): the judgment every payment door says of a Bitcoin row, "followed by what the door did not do"
+BITCOIN_HELD_NOT_PAID_SENTENCE = ("Bitcoin is held on this estate as a store of value and is not a method of payment, because a Bitcoin payment takes "
+                                  "about an hour to be final.")
+# Finding 8: what no sentence of the estate says of bitcoin while nothing can sign a Bitcoin spend, compared in lower case
+BITCOIN_NEVER_SAID = ("can be moved from here", "held and moved")
+# Finding 1: the latched stop — every read after the one that met the difference, whoever asks. The specification gives it with the figures of one
+# stop ("the movements of an address", tips 1,002 and 1,002, a bound of 1 block); the read, the tips and the bound are the stop's own, so they are
+# the matcher's wildcards here. Its detail holds these four keys and no other.
+BITCOIN_SOURCES_LATCHED_SENTENCE = ("The sources this service reads Bitcoin through did not answer alike on <the read>. Their tips stood at <tip> and "
+                                    "<tip>, and the bound between them is <bound>. The Bitcoin road is stopped: nothing is read on it, and it opens by "
+                                    "itself once the sources answer alike again.")
+BITCOIN_LATCHED_DETAIL_KEYS = ("network", "read", "tips", "lagBlocks")
+# Finding 8: BITCOIN_ADDRESS_OPENS_LATER_SENTENCE, the one sentence a live estate that said Yes is answered while the main network's row is closed
+BITCOIN_ADDRESS_OPENS_LATER_SENTENCE = ("Your charter says that your company will hold bitcoin, and that answer is kept. No Bitcoin address is shown yet: "
+                                        "your company's Bitcoin address opens when moving bitcoin out is built, so that no bitcoin is sent to an address "
+                                        "this estate cannot yet move it from. Nothing is asked of you until then.")
+# The reading of 13 November, Finding 1: bitcoinTipsApartSentence, the silence of sources that stood a block apart (cause 'tips_apart'), never a stop
+BITCOIN_TIPS_APART_SENTENCE = ("The sources this service reads Bitcoin through stood a block apart while this address was read, so what each says the "
+                               "address holds is said of a different block. The balance is not stated on one source alone, so nothing is shown. Nothing "
+                               "is wrong with the wallet; ask again in a moment.")
+BITCOIN_STATE_SILENT = "silent"              # §4: "the read answers `silent`" — a source that did not answer; told as silence, never as a refusal
+BITCOIN_STATE_ROW_CLOSED = "row_closed"      # Finding 8: a reading asked of a closed row
+BITCOIN_CAUSE_TIPS_APART = "tips_apart"      # the reading of 13 November: the silence's cause where the tips were not one block
+BITCOIN_HISTORY_WHOLE_FIELD = "historyWhole"  # the reading of 13 November: the one field of a wallet's reading the specification names
+BITCOIN_READINGS_AT_MOST = 3                 # the harness's own bound: how many wallets S5b-2 asks a reading of, each one press of the founder's (the limit is 20 a minute, Finding 3)
+BITCOIN_PROBE_SATOSHIS = 1                   # what a Bitcoin row offered to a payment door names: one satoshi, which no door may take
+BITCOIN_ADDRESS_LOOK = re.compile(r"^(bc|tb)1[0-9a-z]{6,90}$", re.IGNORECASE)  # a string that sets out to be a bech32 address of either network
+
+
+def bitcoin_network_for_realm(realm: Any) -> str:
+    """§1, "The one reader": `bitcoin-testnet` for a sandbox estate, `bitcoin` for a live one — the workspace row's realm at the moment of reading."""
+    return BITCOIN_TESTNET_CHAIN if str(realm or "").strip().lower() == "sandbox" else BITCOIN_CHAIN
+
+
+def is_bitcoin_chain(chain: Any) -> bool:
+    """§2, isBitcoinChain: one of the two rows of the family `bitcoin`."""
+    return str(chain or "").strip().lower() in BITCOIN_CHAINS
+
+
+def bitcoin_address_fault(address: Any, network: Any) -> Optional[str]:
+    """
+    The address the estate shows for a holding, held to the form §3 gives an address of `network`: None where it has that form, else the fault in
+    words. The form is the prefix (`bc1q` on bitcoin, `tb1q` on bitcoin-testnet), lower case, the length of a P2WPKH address and bech32's alphabet.
+    The checksum is not recomputed here: the harness carries no bech32 of its own, and this judgment is of the form the deployment serves, which
+    is what tells a test network's address from the real network's.
+    """
+    if not isinstance(address, str) or not address:
+        return "it is no address at all"
+    prefix = BITCOIN_ADDRESS_PREFIXES.get(str(network))
+    if prefix is None:
+        return "%r is not one of the two Bitcoin rows" % (network,)
+    if address != address.lower():
+        return "it is not written in lower case"
+    if not address.startswith(prefix):
+        for other, other_prefix in BITCOIN_ADDRESS_PREFIXES.items():
+            if other != network and address.startswith(other_prefix):
+                return "it begins %s, the form of %s, and this estate's row is %s, whose addresses begin %s" % (other_prefix, other, network, prefix)
+        return "it does not begin %s, as an address of %s does" % (prefix, network)
+    if len(address) != BITCOIN_P2WPKH_LENGTH:
+        return "it is %d characters long, and the native SegWit address of a key is %d" % (len(address), BITCOIN_P2WPKH_LENGTH)
+    outside = sorted({ch for ch in address[len(prefix) - 1:] if ch not in BECH32_ALPHABET})
+    if outside:
+        return "it carries %s, which bech32's alphabet does not hold" % ", ".join(repr(ch) for ch in outside)
+    return None
+
+
+def bitcoin_addresses_in(value: Any) -> List[str]:
+    """
+    Every string anywhere in an answer that sets out to be a bech32 address of either Bitcoin network, in the order found and each once — the
+    address a wallet's entry shows, under whatever field the estate names it (the specification names none).
+    """
+    found: List[str] = []
+
+    def walk(inner: Any) -> None:
+        if isinstance(inner, dict):
+            for child in inner.values():
+                walk(child)
+        elif isinstance(inner, list):
+            for child in inner:
+                walk(child)
+        elif isinstance(inner, str) and BITCOIN_ADDRESS_LOOK.match(inner) and inner not in found:
+            found.append(inner)
+
+    walk(value)
+    return found
+
+
+_NOT_FOUND = object()
+
+
+def deep_find(value: Any, key: str, default: Any = None) -> Any:
+    """The first value an answer carries under `key`, at any depth, a dict's own key before its children's; `default` where it carries none."""
+    if isinstance(value, dict):
+        if key in value:
+            return value[key]
+        children: List[Any] = list(value.values())
+    elif isinstance(value, list):
+        children = list(value)
+    else:
+        return default
+    for child in children:
+        found = deep_find(child, key, _NOT_FOUND)
+        if found is not _NOT_FOUND:
+            return found
+    return default
+
+
+def deep_strings(value: Any) -> List[str]:
+    """Every string an answer carries, at any depth, in the order found."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [text for child in value.values() for text in deep_strings(child)]
+    if isinstance(value, list):
+        return [text for child in value for text in deep_strings(child)]
+    return []
+
+
+def sentences_in(value: Any) -> List[str]:
+    """The strings of an answer that are sentences — words, a space among them, ending in a full stop — and so never a name, an id or an address."""
+    return [text.strip() for text in deep_strings(value) if " " in text.strip() and len(text.strip()) >= 20 and text.strip()[-1] in ".!?"]
+
+
+def bitcoin_sources_named(value: Any) -> Optional[int]:
+    """
+    How many sources a reading says answered: the first value found under a key whose name carries the word `source` — a whole number as it
+    stands, a list by its length — or None where the answer names none the harness can read. §6 gives the screen's words for the "as of" (the
+    block the sources agreed at, how many sources, and the moment) and not the wire's field, so the key is found by its word.
+    """
+    if isinstance(value, dict):
+        for key, inner in value.items():
+            if "source" in str(key).lower():
+                if isinstance(inner, bool):
+                    continue
+                if isinstance(inner, int):
+                    return inner
+                if isinstance(inner, list):
+                    return len(inner)
+                if isinstance(inner, str) and inner.isdigit():
+                    return int(inner)
+        children: List[Any] = list(value.values())
+    elif isinstance(value, list):
+        children = list(value)
+    else:
+        return None
+    for child in children:
+        found = bitcoin_sources_named(child)
+        if found is not None:
+            return found
+    return None
+
+
+def btc_words(satoshis: Any) -> str:
+    """Satoshis as a plain decimal of BTC with the coin's name, by string arithmetic: 1 → "0.00000001 BTC", 150000000 → "1.5 BTC", 0 → "0 BTC"."""
+    n = int(satoshis)
+    if n < 0:
+        raise ValueError("a balance is a non-negative integer of satoshis: %r" % (satoshis,))
+    text = str(n).rjust(BTC_DECIMALS + 1, "0")
+    whole, fraction = text[:-BTC_DECIMALS], text[-BTC_DECIMALS:].rstrip("0")
+    return "%s%s BTC" % (whole, ("." + fraction) if fraction else "")
+
+
+# The sentences the Bitcoin stations say (Spec T32), word for word, so a test holds each.
+BITCOIN_STATIONS_SKIPPED_SENTENCE = "skipped by name: at %s %s"  # the station where the estate said so, then what it said (the three sentences below)
+BITCOIN_NOT_KNOWN_WORDS = "the estate answers no Bitcoin road (GET %s: %s), so it stands before Spec AER360-BTC-1 and holds no bitcoin"
+BITCOIN_NOT_HELD_WORDS = "the estate answers that it does not hold bitcoin (GET %s: held false)"
+BITCOIN_ROAD_CLOSED_WORDS = "the estate answers that the Bitcoin road is closed on this deployment (%s)"
+BITCOIN_ROW_CLOSED_WORDS = ("the main network's row is closed until moving bitcoin out is built (Spec AER360-BTC-1, Finding 8), so the estate shows no "
+                            "address and offers no reading, and the founder's screen asks none")
+BITCOIN_CHARTER_NOT_READ_SENTENCE = ("skipped: S3 left no read-back of the Policy Interview in this run, so the charter's naming of bitcoin was not "
+                                     "read here; whether the estate holds bitcoin is the estate's own answer at S5b-1")
+BITCOIN_QUESTION_NOT_ASKED_SENTENCE = ("skipped: this Policy Interview did not ask %s (\"%s\"), which catalog version 20 added (Spec AER360-BTC-1 §1), "
+                                       "so it stands at a catalog version before 20 and its charter names no bitcoin; the book answers the question "
+                                       "%s where an estate asks it")
+BITCOIN_ADDRESS_FOR_A_PERSON_LINE = ("the Bitcoin address the estate shows for wallet %s, for a person: %s (%s) — derived by the estate from the "
+                                     "wallet's own key at this read; the harness invents no address and asks no faucet, and nothing is sent to it "
+                                     "by the harness (Spec T32)")
+BITCOIN_NO_ADDRESS_FOR_A_PERSON_LINE = "no Bitcoin address to print for a person: %s (Spec T32)"
+BITCOIN_SPEC_ADDRESS_WORDS = ("the specification's own example address (BIP-173's, Spec AER360-BTC-1 §4) on %s, since the estate shows this run no "
+                              "address of its own; never an address of the harness's invention")
+BITCOIN_OWN_ADDRESS_WORDS = "the address the estate itself shows for wallet %s on %s"
+BITCOIN_SILENCE_WORDS = "a silence, reported as a silence and never as a pass: %s"
+BITCOIN_IMPORT_NOT_WALKED_SENTENCE = (
+    "skipped by name: the imported file's door is not walked. The specification names the import's review (POST /v1/imports/:importId/review) and "
+    "the import's own row-numbered words, and gives neither the road that creates an import nor its body nor its CSV header; none of them is in "
+    "this repository, and the harness sends the estate no shape from memory. Nothing was offered and nothing is claimed of this door (Spec T32, "
+    "CONTESTED; the owner was asked on 14 November 2026)")
+BITCOIN_DEPOSIT_NOT_WALKED_SENTENCE = (
+    "skipped by name: the deposit door is not walked. The specification says under its judgment calls \"The deposit door is untouched\" — POST "
+    "/v1/deposits records money that has already arrived and is not one of the doors Spec AER360-BTC-1 changed — and names no code, no sentence "
+    "and no body for a deposit in bitcoin; a door that records rather than refuses would write down a deposit that never arrived, so the harness "
+    "types none. Nothing was offered and nothing is claimed of this door (Spec T32, CONTESTED: the brief asks a refusal and the specification "
+    "names none; the owner's to rule)")
+

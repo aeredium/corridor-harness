@@ -88,9 +88,10 @@ class TheFoundersRoad(unittest.TestCase):
         self.assertIn("charter compiled (Harness Holdings Pty Ltd; quorum 1", o.line)
         self.assertIn("journey stage 2 of 7", o.line)
         # Spec T11 §5: the book's version beside the estate's, which the estate does not state; Spec T27: both 15, so the sentence names one
-        self.assertIn("; the answer book answers catalog version 15, and the estate served 25 question(s), every one known to the book (%s)" % H.ESTATE_STATES_NO_CATALOG_VERSION, o.line)
+        # Spec T32: the book answers version 20; this double is the estate at version 15, which never asks version 20's one question (C9B)
+        self.assertIn("; the answer book answers catalog version 20, and the estate served 25 question(s), every one known to the book (%s)" % H.ESTATE_STATES_NO_CATALOG_VERSION, o.line)
         given = [q for q, _, _, _ in self.runner.facts["answers"]["policy"]]
-        self.assertEqual(given, [q.id for q in A.expected_walk("policy")], "the estate served the questions the book expected, in order")
+        self.assertEqual(given, [q.id for q in A.expected_walk("policy") if q.id not in A.ADDED_IN_V20["policy"]], "the estate served the questions the book expected of a version-15 estate, in order")
         self.assertIn("C11A", given)
         self.assertIn("C19", given)
         self.assertEqual(given[given.index("C9") + 1:given.index("C10")], ["C2", "C3"], "Spec T27: the company's ceilings after the networks and before the approvers")

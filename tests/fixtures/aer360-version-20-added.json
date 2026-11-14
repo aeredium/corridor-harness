@@ -1,0 +1,24 @@
+{
+  "what": "The one question AER 360 catalog version 20 added to the Policy Interview (Spec AER360-BTC-1, Bitcoin held as a store of value): C9B, in Part C straight after C9 and not inside it, a single choice of Yes or No, compulsory. Its prompt and its options are section 1's own words; its note is the one the security reading of 12 November 2026 reworded inside version 20 (Finding 8), before the version shipped. Read from the specification as the builder brief of Spec T32 carries it whole (14 November 2026), NOT from questioncatalog.ts, which stands outside the harness's working folder: the part's name is the one the record of version 15 gives Part C, and the field names are those of that record. The records of 21 September and of version 15 stay in their own files, untouched.",
+  "catalog": {
+    "version": 20,
+    "source": "Spec AER360-BTC-1, section 1 and Finding 8, as the builder brief of Spec T32 carries it",
+    "addedInVersion20": {"policy": ["C9B"], "wallet_account": []},
+    "servedAfter": "C9",
+    "servedBefore": "C2"
+  },
+  "added": {
+    "policy": [
+      {
+        "questionId": "C9B",
+        "part": "Part C — The company’s rules",
+        "kind": "single_choice",
+        "prompt": "Will this company hold bitcoin as a store of value?",
+        "options": ["Yes", "No"],
+        "note": "Some companies keep part of their value in bitcoin, as a store of value, and your charter records whether yours will. Bitcoin is not a method of payment here, because a Bitcoin payment takes about an hour to be final. This is bitcoin on the Bitcoin network; wrapped bitcoin is not offered.",
+        "required": true
+      }
+    ],
+    "wallet_account": []
+  }
+}

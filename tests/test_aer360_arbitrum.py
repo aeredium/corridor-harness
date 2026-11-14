@@ -398,7 +398,8 @@ class TheRegisterDouble(unittest.TestCase):
         self.assertIn(first_northwind, paid_ids, "the first run's whitelisted record on arbitrum")
         self.assertNotIn(on_ethereum["id"], paid_ids)
         self.assertEqual({double.addresses[i]["chain"] for i in paid_ids}, {"arbitrum"})
-        self.assertEqual(len(H.dry_lines()), 285, "the conditional register read is one dry line under S7 (193 → 194); Spec T19 adds S5's head and S14 (194 → 231); Spec T24 adds the payee.env reads and the one-off's register read (231 → 234); "
+        self.assertEqual(len(H.dry_lines()), 299, "Spec T32 adds S3's answer to C9B and the Bitcoin stations' thirteen lines (285 → 299); "
+                                                   "the conditional register read is one dry line under S7 (193 → 194); Spec T19 adds S5's head and S14 (194 → 231); Spec T24 adds the payee.env reads and the one-off's register read (231 → 234); "
                                                    "Spec T26 drops the three standing gas credits for two conditional cures (234 → 233); Spec T27 adds S3's answers to C2 and C3 (233 → 235); "
                                                    "Spec T28 adds S7's five conditional second reviews, each with the founder's acknowledgement (235 → 240); Spec T29 adds the Solana road's five stations (240 → 281); "
                                                    "Spec T31 adds S3's head (281 → 285)")

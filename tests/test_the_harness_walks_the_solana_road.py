@@ -236,7 +236,9 @@ class TheCurveAndTheAlphabet(unittest.TestCase):
         self.assertEqual([w["chain"] for w in A.SOLANA_WALLETS], ["solana", "solana"])
         self.assertEqual(A.payments_total_minor(), T.ONE_DOLLAR_MINOR, "the USDC book stands as Spec T24 left it")
         self.assertEqual(A.payments_total_minor(SOLANA_BOOK), 800000)
-        self.assertEqual([s for s, _ in H.STATIONS], ["S1", "S2", "S3", "S4", "S5", "S5s", "S6", "S6s", "S7", "S7s-1", "S7s-2", "S7s-3", "S8", "S9", "S10", "S11", "S12", "S14"])
+        # Spec T32: the Bitcoin stations joined the leg beside the Solana five, with the letter b; the Solana stations stand where Spec T29 put them
+        self.assertEqual([s for s, _ in H.STATIONS], ["S1", "S2", "S3", "S3b", "S4", "S5", "S5s", "S5b-1", "S5b-2", "S6", "S6s", "S6b", "S7", "S7s-1", "S7s-2", "S7s-3",
+                                                       "S7b-1", "S7b-2", "S7b-3", "S7b-4", "S8", "S9", "S10", "S11", "S12", "S14"])
 
 
 @unittest.skipUnless(PK.openssl_available(), "the Mac's /usr/bin/openssl is not on this machine")

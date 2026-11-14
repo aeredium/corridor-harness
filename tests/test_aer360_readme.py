@@ -441,9 +441,14 @@ class EstateHarnessReadmeTest(unittest.TestCase):
 class ChangelogTest(unittest.TestCase):
     T31_TITLE = "## Spec T31 — The estate harness learns AER360-118 and CAT-16, and never strands its estate (1 November 2026)"
 
+    T32_TITLE = "## Spec T32 — The estate harness learns that an estate holds bitcoin (14 November 2026)"
+
     def test_the_changelog_records_spec_t31_first_and_names_every_change(self):
         text = read("CHANGELOG.md")
-        self.assertEqual(text.index("## "), text.index(self.T31_TITLE), "the newest entry first")
+        # Spec T32's entry is the newest since 14 November 2026; Spec T31's stands directly after it
+        self.assertEqual(text.index("## "), text.index(self.T32_TITLE), "the newest entry first")
+        self.assertLess(text.index(self.T32_TITLE), text.index(self.T31_TITLE))
+        self.assertNotIn("\n## ", text.split(self.T32_TITLE, 1)[1].split(self.T31_TITLE, 1)[0], "no entry stands between Spec T32's and Spec T31's")
         entry = text.split(self.T31_TITLE, 1)[1].split("## Spec T29 and HRW-2", 1)[0]
         for words in ("`aer360_answers.py`", "`aer360_harness.py`", "`tests/test_aer360_double.py`", "`tests/test_the_estate_harness_learns_118_and_cat_16.py`",
                       "`tests/fixtures/aer360-readback-2026-11-01.json`", "`lines_beside`", "`charter_change_that_waits`", "`finish_charter_change`",

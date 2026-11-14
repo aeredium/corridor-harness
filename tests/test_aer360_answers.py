@@ -39,6 +39,7 @@ ANSWER_BOOK = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 THE_SEVEN = {("policy", "C11A"), ("policy", "C11C"), ("policy", "C19"), ("wallet_account", "WO1"), ("wallet_account", "WO2"),
              ("wallet_account", "WO3"), ("wallet_account", "WO4")}
 THE_TWO = {("policy", "C2"), ("policy", "C3")}  # Spec T27: what catalog version 15 added (Spec AER360-115)
+THE_ONE = {("policy", "C9B")}  # Spec T32: what catalog version 20 added (Spec AER360-BTC-1 §1)
 
 
 def served_fixture():
@@ -112,10 +113,12 @@ class TheBookCoversTheCatalog(unittest.TestCase):
             for qid in book:
                 if (interview_type, qid) not in asked:
                     extra.add((interview_type, qid))
-        self.assertEqual(extra, THE_SEVEN | THE_TWO,
-                         "the book answers nothing version 11 never asked, save the seven Spec 92 added (Spec T11) and the two Spec AER360-115 added (Spec T27)")
+        self.assertEqual(extra, THE_SEVEN | THE_TWO | THE_ONE,
+                         "the book answers nothing version 11 never asked, save the seven Spec 92 added (Spec T11), the two Spec AER360-115 added (Spec T27) "
+                         "and the one Spec AER360-BTC-1 added (Spec T32)")
         self.assertEqual({(t, q) for t, qs in A.ADDED_IN_V14.items() for q in qs}, THE_SEVEN)
         self.assertEqual({(t, q) for t, qs in A.ADDED_IN_V15.items() for q in qs}, THE_TWO)
+        self.assertEqual({(t, q) for t, qs in A.ADDED_IN_V20.items() for q in qs}, THE_ONE)
 
     def test_every_choice_is_one_the_live_catalog_offers(self):
         for interview_type, book in A.ANSWERS.items():
@@ -206,16 +209,19 @@ class TheBookIsTheSpecsEstate(unittest.TestCase):
         version-14 estate served 23 (the run of 21 September served 23 policy pages and 17 account pages before WO1 was answered); the wallet
         account's walk is unchanged at 18, WO3 opening behind a named holder.
         """
+        # Spec T32: a version-20 estate serves the book one page more — C9B straight after C9 — and an estate before version 20 the same walk less it
         self.assertEqual([q.id for q in A.expected_walk("policy")],
+                         ["A1", "A4", "A5", "A8", "A9", "A11", "B1", "B2", "B3", "C9S", "C9", "C9B", "C2", "C3", "C10", "C11", "C11A", "C15", "C19", "C18", "C12", "C12A", "D0", "R0", "R1", "G1"])
+        self.assertEqual([q.id for q in A.expected_walk("policy") if q.id not in A.ADDED_IN_V20["policy"]],
                          ["A1", "A4", "A5", "A8", "A9", "A11", "B1", "B2", "B3", "C9S", "C9", "C2", "C3", "C10", "C11", "C11A", "C15", "C19", "C18", "C12", "C12A", "D0", "R0", "R1", "G1"])
         self.assertEqual([q.id for q in A.expected_walk("wallet_account")],
                          ["W0", "WN", "W1", "O1", "O2", "O3", "O4", "PN0", "PN1", "WQ", "WA1", "WA2", "WO1", "WO2", "WO3", "WO4", "WCW", "WG1"])
         self.assertNotIn("C16", [q.id for q in A.expected_walk("policy")], "version 12 retired the pair, and version 15 never serves it")
         self.assertNotIn("C11C", [q.id for q in A.expected_walk("policy")], "C11C is asked only behind C11A's third answer, which the book does not choose")
-        self.assertEqual(len(A.expected_walk("policy")), 25, "23 + 2")
+        self.assertEqual(len(A.expected_walk("policy")), 26, "23 + 2 + 1")
         self.assertEqual(len(A.expected_walk("wallet_account")), 18)
-        # a version-14 estate serves the same walk less the two version 15 added, and the book answers it as before
-        self.assertEqual([q.id for q in A.expected_walk("policy") if q.id not in A.ADDED_IN_V15["policy"]],
+        # a version-14 estate serves the same walk less the two version 15 added and the one version 20 added, and the book answers it as before
+        self.assertEqual([q.id for q in A.expected_walk("policy") if q.id not in A.ADDED_IN_V15["policy"] + A.ADDED_IN_V20["policy"]],
                          ["A1", "A4", "A5", "A8", "A9", "A11", "B1", "B2", "B3", "C9S", "C9", "C10", "C11", "C11A", "C15", "C19", "C18", "C12", "C12A", "D0", "R0", "R1", "G1"])
 
     def test_the_whitelist_roster_is_the_a8_census_and_its_quorum_is_c12(self):
@@ -455,8 +461,8 @@ class TheBookAnswersCatalogVersion15(unittest.TestCase):
         self.assertFalse(any(p["questionId"] in ("C2", "C3") for pages in list(served["served"].values()) + list(served["added"].values()) for p in pages))
 
     def test_the_book_states_version_15(self):
-        self.assertEqual(A.CATALOG_VERSION_ANSWERED, 15)
-        self.assertEqual(A.CATALOG_VERSION_READ, 15)
+        self.assertEqual(A.CATALOG_VERSION_ANSWERED, 20, "Spec T32: the book answers version 20's one question, read from the estate's specification")
+        self.assertEqual(A.CATALOG_VERSION_READ, 15, "what was read from the estate's code stays version 15")
         self.assertIn("b523cbf", A.CATALOG_SOURCE, "the merge commit of AERAccounts PR #137")
         self.assertIn("CATALOG_VERSION = 15", A.CATALOG_SOURCE)
         self.assertEqual(A.ADDED_IN_V15, {"policy": ("C2", "C3"), "wallet_account": ()})
@@ -480,11 +486,11 @@ class TheBookAnswersCatalogVersion15(unittest.TestCase):
 
     def test_the_policy_walk_places_the_two_after_c9_and_before_c10(self):
         ids = [q.id for q in A.expected_walk("policy")]
-        self.assertEqual(ids[ids.index("C9S"):ids.index("C10") + 1], ["C9S", "C9", "C2", "C3", "C10"])
-        self.assertEqual(len(ids), 25)
+        self.assertEqual(ids[ids.index("C9S"):ids.index("C10") + 1], ["C9S", "C9", "C9B", "C2", "C3", "C10"], "Spec T32: C9B stands straight after C9, before the two")
+        self.assertEqual(len(ids), 26)
         self.assertEqual(len(A.expected_walk("wallet_account")), 18, "the wallet account's walk is unchanged")
         catalog_ids = [q.id for q in A.POLICY_CATALOG]
-        self.assertEqual(catalog_ids[catalog_ids.index("C9") + 1:catalog_ids.index("C10")], ["C2", "C3"])
+        self.assertEqual(catalog_ids[catalog_ids.index("C9") + 1:catalog_ids.index("C10")], ["C9B", "C2", "C3"])
 
     def test_the_company_ceilings_are_never_beneath_the_wallets_own_figures(self):
         """Spec T27 §2, the Attacker: the book cannot answer the company's ceilings beneath its own wallet's figures."""

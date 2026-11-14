@@ -269,6 +269,27 @@ November 2026, because a test file the session's policy refuses pins it — and 
 the estate refuses STEP_UP_INVALID because "Response counter value N was lower than expected M" has the person's passkey counter set to M (never
 lowered), saved at once, noted, and is made once more, once (`press_once_more_on_the_counter`); S10 carries the note as a reading.
 
+Spec T32 (14 November 2026, on the owner's words of that day, after the estate's Bitcoin work was merged: "Instead of guessing, why don't you go and
+check the repository for the harness, and if it does not know Bitcoin, then add that in the code? And let's merge it and run it."): the estate harness
+learns that an estate holds bitcoin. The estate's Spec AER360-BTC-1, with its two security readings, is the contract, read from the specification as
+the brief carries it whole and never from the estate's code, which stands outside the harness's working folder (aer360_tables.py, BITCOIN_SPEC). An
+estate may hold bitcoin as a store of value; the charter names it; the estate shows the holding's address; the holding is read, never moved, through
+two sources that must agree; and bitcoin is not a way to pay. The book answers the catalog's new question, C9B, Yes (aer360_answers.py, catalog
+version 20), and eight stations walk it as Spec T29's five walk Solana, numbered with a b beside S3, S5, S6 and S7 so nothing moves: S3b The charter
+names bitcoin (the read-back and the compiled charter S3 read, held to the question's own words and to heldNetworks); S5b-1 Bitcoin address (GET
+/v1/aer360/bitcoin: the address the estate shows, held to the form of the network the deployment serves — tb1q in the sandbox, bc1q live — or the
+estate's one sentence where the main network's row is closed, printed for a person, never invented, no faucet asked); S5b-2 Bitcoin reading (GET
+/v1/aer360/bitcoin/wallets/:walletId, as the founder's "Read this wallet's bitcoin": a reading, or the closed road, the stopped road and the limit each
+in its own code, or a silence, told apart as the specification tells them, a silence never a pass); S6b, S7b-1 and S7b-3, a payee, a set's review
+and a run each offered one satoshi on the estate's Bitcoin row and each refused BITCOIN_HELD_NOT_PAID in the estate's sentence, matched with the
+harness's sentence matcher (corridor_harness.matches_sentence), nothing written and nothing moved; and S7b-2 and S7b-4, the imported file and the
+deposit, which say by name that their door's shape is not in the specification and are skipped. Where the estate answers that it does not hold
+bitcoin, or that the Bitcoin road is closed on this deployment, the Bitcoin stations after that answer stop with one sentence that says which and
+are skipped — counted as skipped in the closing table and the summary, never as passed. S10 reads the new law back: the C9B line through the book,
+and heldNetworks in the compiled charter (audit_charter). Every sentence and every code matched is the specification's; what the specification
+names without its words is printed from the estate's answer and held only to what the specification does say, and each such reading is said in the
+station's line. Nothing of a station that existed changes.
+
 Runs on the Mac's own Python 3.9.6 with the standard library only: urllib.request, http.cookiejar,
 json, hashlib, secrets, base64, struct, subprocess. The one binary it calls is /usr/bin/openssl,
 through aer360_passkey.py. Nothing to install; nothing is shipped to any box.
@@ -297,6 +318,7 @@ import aer360_answers as A  # noqa: E402
 import aer360_estate_road as R  # noqa: E402  (the payee road S6 walks, shared with Pathfinder's S11 since Spec T23)
 import aer360_passkey as PK  # noqa: E402
 import aer360_tables as T  # noqa: E402
+from corridor_harness import matches_sentence  # noqa: E402  (the harness's sentence matcher, Spec T1 §7: the Bitcoin stations match the estate's sentences with it, Spec T32)
 
 # ---------------------------------------------------------------------------
 # Constants read from the AER 360 code.
@@ -458,6 +480,9 @@ NO_ROOM_UNDER_THE_DOLLAR = "no room under the one-dollar total"  # S7s-1: the bo
 ALLOWANCE_SHORT = "the sandbox allowance is short"         # S7s-1: the estate's allowance road says less is left than the payment is worth (§0a.6)
 FUNDS_WAIT_SECONDS = 180.0                                 # --funds-wait's default: how long S7s-1 waits for the owner's SOL to reach the wallet (Pathfinder's bound, Spec T23)
 FUNDS_POLL_SECONDS = 15.0                                  # between two reads of the wallet's lamports through the estate's holdings road while it waits (no-op under the test clock)
+# Spec T32 (Bitcoin held as a store of value, 14 November 2026): what S5b-2 names where a source did not answer. A silence is reported as a silence
+# and never as a pass: the station could not run to its judgment for want of an answering source, which is FAILED — prerequisite, naming it.
+BITCOIN_SOURCES_SILENT = "a Bitcoin source was silent"     # S5b-2: the estate answered a silence for a wallet it was asked to read (Spec AER360-BTC-1 §4: silence is not a refusal)
 SPEC_106_NOT_LIVE_PREREQUISITE = "AER 360 Spec 106 not live"  # S3's precondition (Spec T18 §4), checked before anything is amended
 SPEC_109_NOT_LIVE_PREREQUISITE = "AER 360 Spec 109 not live"  # S14's first line: the estate has no door onto the writes that wait
 # Spec T28 (8 October 2026, on the owner's ruling of that day, agreed with one bound so the yes is never blind): the estate's fifth creation gate,
@@ -483,11 +508,15 @@ ISO_INSTANT = re.compile(r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.
 S_RECOVERY = re.compile(r"recover", re.IGNORECASE)  # Spec T29 §3.1: the one word nothing a Solana wallet's routes answer may carry (the owner's ruling of 23 October 2026)
 
 STATIONS: List[Tuple[str, str]] = [
-    ("S1", "Enrol"), ("S2", "Journey"), ("S3", "Policy Interview"), ("S4", "People"),
+    # Spec T32: the Bitcoin stations join the leg as Spec T29's joined it, with the letter b — S3b beside S3, S5b-1 and S5b-2 beside S5 (after the
+    # Solana wallet), S6b beside S6, S7b-1 to S7b-4 beside S7 — so that no existing station is renumbered and --from keeps its meaning
+    ("S1", "Enrol"), ("S2", "Journey"), ("S3", "Policy Interview"), ("S3b", "The charter names bitcoin"), ("S4", "People"),
     # Spec T29: the Solana road's stations join the leg beside S5, S6 and S7, numbered S5s, S6s, S7s-1, S7s-2 and S7s-3 so that no existing
     # station moves and --from keeps its meaning
-    ("S5", "Wallet account"), ("S5s", "Solana wallet"), ("S6", "Payees"), ("S6s", "Solana payee"),
+    ("S5", "Wallet account"), ("S5s", "Solana wallet"), ("S5b-1", "Bitcoin address"), ("S5b-2", "Bitcoin reading"),
+    ("S6", "Payees"), ("S6s", "Solana payee"), ("S6b", "A payee in bitcoin"),
     ("S7", "Payments"), ("S7s-1", "SOL payment"), ("S7s-2", "The curve belt"), ("S7s-3", "Solana holdings"),
+    ("S7b-1", "A payment set in bitcoin"), ("S7b-2", "An imported file in bitcoin"), ("S7b-3", "A payment run in bitcoin"), ("S7b-4", "A deposit in bitcoin"),
     ("S8", "Journey and readiness"),
     ("S9", "The tour"), ("S10", "The auditor"), ("S11", "The attacker"), ("S12", "The optimizer"),
     # Spec T19: the write that waits for approvals, walked after the three hats — a second wallet account at a quorum of two, signed by two people
@@ -1113,6 +1142,12 @@ class Runner:
             # and why the stations after S5s were skipped, where they were
             "solana": {"preflight": {}, "wallets": [], "payee": None, "usdc_signal": None, "payment": None, "allowance": None, "skipped": None,
                        "holdings": None, "closed": False},
+            # Spec T32: the Bitcoin holding — whether this run's compiled charter names bitcoin (S3b); the estate's standing as GET /v1/aer360/bitcoin
+            # answered it (read at S5b-1, or by the first later station of a run resumed past it): what kind of answer it was, held, open, the row of
+            # the estate's realm, each wallet with its address or the sentence for its absence; the readings S5b-2 took; and why the Bitcoin stations
+            # after one of them were skipped, where they were, and at which station the estate said so
+            "bitcoin": {"charter_named": None, "read": False, "kind": None, "held": None, "open": None, "network": None, "wallets": [], "said": None,
+                        "readings": [], "skipped": None, "skipped_at": None},
         }
         self.started_at = now_iso()
         self.last_run_report: Optional[Dict[str, Any]] = None
@@ -2890,6 +2925,8 @@ class Runner:
                 ("wallet %s at %s is its payee" % (wallets[1].get("walletNumber"), wallets[1].get("address"))) if len(wallets) > 1 else "no second wallet stands", paid))
         elif solana.get("skipped"):
             lines.append("Solana (Spec T29): %s" % (T.SOLANA_SKIPPED_SENTENCE % solana["skipped"]))
+        # Spec T32: the Bitcoin holding — the address the estate shows, for a person; or why the Bitcoin stations were skipped, counted as skipped
+        lines.extend(self.bitcoin_summary_lines())
         return lines
 
     @staticmethod
@@ -5672,6 +5709,610 @@ class Runner:
                 said.append("the Solana payee's USDC signal unchanged: solanaUsdcAccount %s (%s)" % (json.dumps(signal) if signal != "absent" else "absent", signal_words))
         return Outcome("S7s-3", FAIL if len(self.findings) > findings_before else PASS, "; ".join(said))
 
+    # -- Bitcoin, held and not paid (Spec T32, 14 November 2026; the estate's Spec AER360-BTC-1 with its two readings) ---------------------------
+    # Eight stations beside S3, S5, S6 and S7, as Spec T29's five stand beside S5, S6 and S7, with the letter b. The contract is the estate's own
+    # specification as the brief carries it whole (aer360_tables.py, BITCOIN_SPEC); the estate's code was not read, so the field names of the two
+    # reads are found by the specification's own words and whatever the specification names without its words is printed, not matched. No station
+    # here writes to the store, presses for a wallet, asks a faucet or sends anything to an address: bitcoin is held and read, never moved.
+    BITCOIN_STATION_IDS = ("S3b", "S5b-1", "S5b-2", "S6b", "S7b-1", "S7b-2", "S7b-3", "S7b-4")
+
+    def workspace_realm(self) -> Optional[str]:
+        """
+        The realm of the workspace as this run has read it — the founder's session (auth.ts answers the workspace with every session), else the
+        workspace view a station kept — or None where neither states one. Spec AER360-BTC-1 §1 reads the held network with the realm of the
+        moment: bitcoin-testnet for a sandbox estate, bitcoin for a live one.
+        """
+        founder = self.people.get(A.FOUNDER)
+        session = founder.session if founder is not None and isinstance(founder.session, dict) else {}
+        for view in (session.get("workspace"), self.facts.get("workspace")):
+            if not isinstance(view, dict):
+                continue
+            inner = view.get("workspace") if isinstance(view.get("workspace"), dict) else view
+            realm = inner.get("realm")
+            if isinstance(realm, str) and realm:
+                return realm
+        return None
+
+    def served_question(self, station: str, question_id: str) -> Optional[Dict[str, Any]]:
+        """
+        A question as the estate served it in this run, read off the calls already recorded — the page that serves a question is the answer to
+        the one before it, or the interview's first page — so nothing is asked of the estate again. None where no recorded page of `station`
+        serves it.
+        """
+        marker = '"%s"' % question_id
+        for call in self.calls:
+            if call.station != station or marker not in call.text:
+                continue
+            try:
+                body = json.loads(call.text)
+            except ValueError:
+                continue
+            if not isinstance(body, dict):
+                continue
+            for page in (body, body.get("page")):
+                question = page.get("question") if isinstance(page, dict) else None
+                if isinstance(question, dict) and str(question.get("questionId")) == question_id:
+                    return question
+        return None
+
+    # -- S3b The charter names bitcoin (Spec T32 item 2; Spec AER360-BTC-1 §1 and §7) -----------------------------------------------------------
+    def station_s3b(self) -> Outcome:
+        """
+        The charter read back, and bitcoin found named as the specification's section 1 and section 7 word it: the question as the estate served
+        it (its prompt, its two options, its note), the read-back's line for it and the line beside a Yes, and the compiled charter's heldNetworks
+        and recordedHeldNetworks (`audit_bitcoin_named`). The station makes no call: it reads what S3 read in this run. Where S3 left no read-back,
+        or the Policy Interview did not ask C9B — an estate before catalog version 20 — the station is skipped and says which.
+        """
+        bitcoin = self.facts["bitcoin"]
+        readback = self.facts["readback"].get("policy")
+        readback = readback if isinstance(readback, dict) else {}
+        lines = [l for l in (readback.get("lines") or []) if isinstance(l, dict)]
+        qid = A.HOLD_BITCOIN_QUESTION_ID
+        if not lines:
+            return Outcome("S3b", SKIPPED, T.BITCOIN_CHARTER_NOT_READ_SENTENCE)
+        answered = any(q == qid for q, _, _, _ in self.facts["answers"]["policy"])
+        spoken = any(str(l.get("questionId")) == qid and not l.get("synthetic") for l in lines)
+        if not answered and not spoken:
+            bitcoin["charter_named"] = False
+            return Outcome("S3b", SKIPPED, T.BITCOIN_QUESTION_NOT_ASKED_SENTENCE % (qid, A.HOLD_BITCOIN_PROMPT, A.POLICY_ANSWERS[qid]["choice"]))
+        charter = self.facts["charter"].get("policy")
+        charter = charter if isinstance(charter, dict) and charter else None
+        if charter is not None and isinstance(charter.get("realm"), str) and charter.get("realm"):
+            sandbox = charter["realm"] == A.SANDBOX_REALM
+        else:
+            sandbox = is_sandbox_read_back(readback.get("realm"), lines)
+        found, said, named = audit_bitcoin_named(lines, charter, sandbox, self.served_question("S3", qid))
+        for f in found:
+            self.finding("S3b", f["probe"], f["sent"], None, f["expected"], f["said"])
+        bitcoin["charter_named"] = named
+        return Outcome("S3b", FAIL if found else PASS, "; ".join(said))
+
+    # -- S5b-1 Bitcoin address (Spec T32 item 3; Spec AER360-BTC-1 §3, §6 and Finding 8) --------------------------------------------------------
+    def skip_the_bitcoin_stations(self, station: str, why: str) -> None:
+        """
+        Spec T32 item 6: the estate answered that it does not hold bitcoin, or that the Bitcoin road is closed on this deployment, so the Bitcoin
+        stations after `station` stop with one sentence that says which — and are reported skipped, never passed. The first answer stands.
+        """
+        bitcoin = self.facts["bitcoin"]
+        if not bitcoin["skipped"]:
+            bitcoin.update(skipped=why, skipped_at=station)
+
+    def judge_bitcoin_road_refusal(self, station: str, answer: Answer) -> str:
+        """
+        One of the Bitcoin road's three refusals of a read, told apart as the specification tells them apart ("The refusals"; Findings 1 and 3 of
+        the reading of 12 November 2026): BITCOIN_ROAD_CLOSED, 503, a deployment fault naming BITCOIN_SOURCES; BITCOIN_SOURCES_DISAGREE, 503, a
+        stop — in its latched form, whose sentence the specification gives with the stop's own read, tips and bound, and whose detail holds
+        network, read, tips and lagBlocks and no other key and nothing of any wallet, or in its met form, the stop's own sentence for the one
+        caller whose read met the difference, of which the specification gives the sense and not the words; BITCOIN_READS_LIMITED, 429, saying
+        the figure and how long to wait. Returns the words for the station's line; whatever differs from the specification is a finding that
+        names both.
+        """
+        refusal = answer.refusal or {}
+        code = str(refusal.get("code"))
+        message = str(refusal.get("message") or "")
+        detail = refusal.get("detail") if isinstance(refusal.get("detail"), dict) else {}
+        status = T.BITCOIN_REFUSAL_STATUSES.get(code)
+        if status is not None and answer.status != status:
+            self.finding(station, "%s answered under another status" % code, None, answer, "the specification: %s is answered HTTP %d" % (code, status),
+                         "the estate answered HTTP %d" % answer.status)
+        told = "%s, %d — \"%s\"" % (code, answer.status, message)
+        if code == T.BITCOIN_ROAD_CLOSED:
+            if T.BITCOIN_SOURCES_SETTING not in answer.text:
+                self.finding(station, "a closed Bitcoin road that does not name its setting", None, answer,
+                             "the specification (§4): a closed road refuses %s naming %s" % (T.BITCOIN_ROAD_CLOSED, T.BITCOIN_SOURCES_SETTING),
+                             "the estate says \"%s\" and names no %s" % (message, T.BITCOIN_SOURCES_SETTING))
+            return ("the estate's refusal as expected: %s — the Bitcoin road is closed on this deployment, a deployment fault and no judgment of the "
+                    "wallet; nothing was read" % told)
+        if code == T.BITCOIN_SOURCES_DISAGREE:
+            if matches_sentence(T.BITCOIN_SOURCES_LATCHED_SENTENCE, message):
+                keys = sorted(str(k) for k in detail)
+                if keys != sorted(T.BITCOIN_LATCHED_DETAIL_KEYS):
+                    self.finding(station, "the latched stop's detail", None, answer,
+                                 "the specification (Finding 1): the latched refusal's detail holds %s and no other key" % ", ".join(T.BITCOIN_LATCHED_DETAIL_KEYS),
+                                 "the estate's detail holds %s" % (", ".join(keys) or "no key"))
+                shown = T.bitcoin_addresses_in(refusal)
+                if shown:
+                    self.finding(station, "the latched stop names an address", None, answer,
+                                 "the specification (Finding 1): the latched refusal carries the network, the read, the two tips and the bound, and nothing of any wallet",
+                                 "the estate's refusal carries %s" % ", ".join(shown))
+                form = "the latched form, told to every read after the one that met the difference: the network, the read, the tips and the bound, and nothing of any wallet"
+            else:
+                form = ("the met form, the stop's own sentence for the caller whose read met the difference — the specification gives its sense (the read, "
+                        "what each source answered, the tips) and not its words, so it is printed and not matched")
+            return "the estate's refusal as expected: %s — the sources did not answer alike and the Bitcoin road is stopped (%s); nothing was read" % (told, form)
+        if code == T.BITCOIN_READS_LIMITED:
+            if not any(ch.isdigit() for ch in message):
+                self.finding(station, "a limit that names no figure", None, answer,
+                             "the specification (Finding 3): %s says the figure and how long to wait" % T.BITCOIN_READS_LIMITED, "the estate says \"%s\"" % message)
+            return "the estate's refusal as expected: %s — the readings of this caller are limited, and nothing was read" % told
+        return "refused: %s" % answer.sentence()
+
+    def read_bitcoin_standing(self, station: str, who: Person) -> Dict[str, Any]:
+        """
+        GET /v1/aer360/bitcoin, as the founder's Wallets screen reads it with the page (Spec AER360-BTC-1 §6; it reads no chain): whether the
+        estate holds bitcoin and, where it does, each wallet in the reader's sight with its address or the sentence for its absence — held to
+        the specification, and kept in facts["bitcoin"] for the stations after. The kinds of answer: `absent` (no such road: an estate before
+        Spec AER360-BTC-1) and `not_held` (held false), each of which skips the Bitcoin stations after; `closed_road` (BITCOIN_ROAD_CLOSED),
+        which skips them too; `stopped` and `limited`, the road's other two refusals; `row_closed` (held true, open false, no wallets and the
+        one sentence — the main network's row, Finding 8); `wallets` (held true, each wallet judged); and `unread`, an answer that says none of
+        these, which is a finding. The address is found in a wallet's entry by its form and the sentence by being one, since the specification
+        names neither field; nothing is invented.
+        """
+        bitcoin = self.facts["bitcoin"]
+        realm = self.workspace_realm()
+        network = T.bitcoin_network_for_realm(realm)
+        prefix = T.BITCOIN_ADDRESS_PREFIXES[network]
+        answer = self.request(who, "GET", T.BITCOIN_LIST_ROUTE, None, station, retry=False)
+        body = answer.json if isinstance(answer.json, dict) else None
+        code = (answer.refusal or {}).get("code")
+        kind = "unread"
+        held: Optional[bool] = None
+        opened: Any = None
+        wallets: List[Dict[str, Any]] = []
+        said: List[str] = []
+        if self.route_not_found(answer):
+            kind = "absent"
+            said.append(T.BITCOIN_NOT_KNOWN_WORDS % (T.BITCOIN_LIST_ROUTE, answer.sentence()))
+            self.skip_the_bitcoin_stations(station, said[0])
+        elif code in (T.BITCOIN_ROAD_CLOSED, T.BITCOIN_SOURCES_DISAGREE, T.BITCOIN_READS_LIMITED):
+            kind = {T.BITCOIN_ROAD_CLOSED: "closed_road", T.BITCOIN_SOURCES_DISAGREE: "stopped", T.BITCOIN_READS_LIMITED: "limited"}[code]
+            said.append(self.judge_bitcoin_road_refusal(station, answer))
+            if kind == "closed_road":
+                self.skip_the_bitcoin_stations(station, T.BITCOIN_ROAD_CLOSED_WORDS % answer.sentence())
+        elif not answer.ok or body is None or not isinstance(body.get("held"), bool):
+            unanswered = not answer.ok or body is None
+            heard = answer.sentence() if unanswered else "the answer carries held %s among the keys %s" % (
+                json.dumps((body or {}).get("held")), ", ".join(sorted(str(k) for k in (body or {}))) or "none")
+            said.append("the estate did not answer whether it holds bitcoin: %s" % heard)
+            self.finding(station, "whether the estate holds bitcoin", None, answer,
+                         "the specification (§6): GET %s answers whether the estate holds bitcoin — held true or false" % T.BITCOIN_LIST_ROUTE, heard)
+        elif body["held"] is False:
+            kind, held = "not_held", False
+            said.append(T.BITCOIN_NOT_HELD_WORDS % T.BITCOIN_LIST_ROUTE)
+            shown = T.bitcoin_addresses_in(body)
+            if shown:
+                self.finding(station, "an address shown by an estate that holds no bitcoin", None, answer,
+                             "the specification (§3): the address is shown only on an estate whose charter says the company holds bitcoin",
+                             "the estate answers held false and shows %s" % ", ".join(shown))
+            if bitcoin.get("charter_named") is True:
+                self.finding(station, "the charter names bitcoin and the estate answers that it holds none", None, answer,
+                             "the specification (§1, the one reader): held is read from the newest written Policy Interview's charter, and this run's compiled "
+                             "charter carries %s" % T.HELD_NETWORKS_FIELD, "the estate answers held false")
+            self.skip_the_bitcoin_stations(station, said[0])
+        else:
+            held = True
+            opened = body.get("open")
+            listed = [w for w in body["wallets"] if isinstance(w, dict)] if isinstance(body.get("wallets"), list) else []
+            if opened is False:
+                kind = "row_closed"
+                in_the_words = matches_sentence(T.BITCOIN_ADDRESS_OPENS_LATER_SENTENCE, answer.text)
+                if not in_the_words:
+                    self.finding(station, "the closed row's sentence", None, answer,
+                                 "the specification (Finding 8, BITCOIN_ADDRESS_OPENS_LATER_SENTENCE): \"%s\"" % T.BITCOIN_ADDRESS_OPENS_LATER_SENTENCE,
+                                 "the estate says: %s" % (" | ".join(T.sentences_in(body)) or "no sentence at all"))
+                shown = T.bitcoin_addresses_in(body)
+                if listed or shown:
+                    self.finding(station, "a closed row that shows a wallet or an address", None, answer,
+                                 "the specification (Finding 8): held true, open false and no wallets — no address is derived for, or shown to, any estate while "
+                                 "the row is closed", "the estate lists %d wallet(s) and shows %s" % (len(listed), ", ".join(shown) or "no address"))
+                if network != T.BITCOIN_CHAIN:
+                    self.finding(station, "a closed row on a sandbox estate", None, answer,
+                                 "the specification (Finding 8): the main network's row alone is closed, and a sandbox estate sees its %s test network address" % prefix,
+                                 "this estate's realm is %s and the estate answers open false" % (realm or "not stated"))
+                if in_the_words:
+                    said.append("held true, open false and no address: the main network's row is closed until moving bitcoin out is built, and the estate says so "
+                                "in the specification's sentence — \"%s\"" % T.BITCOIN_ADDRESS_OPENS_LATER_SENTENCE)
+                else:
+                    said.append("held true and open false, in other words than the specification's: %s" % (" | ".join(T.sentences_in(body)) or "no sentence at all"))
+            else:
+                kind = "wallets"
+                if network == T.BITCOIN_CHAIN:
+                    self.finding(station, "the main network's row answered open", None, answer,
+                                 "the specification (Finding 8): BITCOIN_MAIN_NETWORK_OPEN is false until brief AER360-BTC-2, so a live estate that said Yes is "
+                                 "answered held true, open false, no wallets and one sentence",
+                                 "this estate's realm is %s and the estate answers open %s with %d wallet(s)" % (realm or "not stated", json.dumps(opened), len(listed)))
+                said.append("held true%s on %s (the realm is %s): %d wallet(s) in the founder's sight" % (
+                    "" if opened is None else ", open %s" % json.dumps(opened), network, realm or "not stated, so the row is taken as the main network's", len(listed)))
+                for entry in listed:
+                    shown = T.bitcoin_addresses_in(entry)
+                    sentences = T.sentences_in(entry)
+                    wallet = {"walletId": entry.get("walletId") or entry.get("id"),
+                              "label": str(entry.get("walletNumber") or entry.get("name") or entry.get("walletId") or entry.get("id") or "unnumbered"),
+                              "address": shown[0] if shown else None, "fault": None, "sentence": sentences[0] if sentences else None}
+                    if wallet["address"] is not None:
+                        wallet["fault"] = T.bitcoin_address_fault(wallet["address"], network)
+                        if wallet["fault"]:
+                            self.finding(station, "the address shown for wallet %s is not of the form of %s" % (wallet["label"], network), None, answer,
+                                         "the specification (§3): the native SegWit address of the wallet's key, %s… on %s, the row of this estate's realm" % (prefix, network),
+                                         "the estate shows %r: %s" % (wallet["address"], wallet["fault"]))
+                            said.append("wallet %s shows %s — not of the form of %s: %s" % (wallet["label"], wallet["address"], network, wallet["fault"]))
+                        else:
+                            said.append("wallet %s shows %s, of the form of %s (%s…)" % (wallet["label"], wallet["address"], network, prefix))
+                    elif wallet["sentence"] is not None:
+                        said.append("wallet %s shows no address and says why: \"%s\"" % (wallet["label"], wallet["sentence"]))
+                    else:
+                        self.finding(station, "wallet %s is shown with neither an address nor a sentence" % wallet["label"], None, answer,
+                                     "the specification (§6): each wallet in the reader's sight with its address or the sentence for its absence",
+                                     "the wallet's entry carries the keys %s" % (", ".join(sorted(str(k) for k in entry)) or "none"))
+                        said.append("wallet %s shows neither an address nor a sentence" % wallet["label"])
+                    wallets.append(wallet)
+        expected = ("whether the estate holds bitcoin and, where it does, each wallet in the founder's sight with its address or the sentence for its absence "
+                    "(%s, §6): held true with each address of the form of %s (%s…), the row of this estate's realm (%s); held true, open false, no wallets and "
+                    "the one sentence where the main network's row is closed (Finding 8); held false, or no such road, and the Bitcoin stations after are "
+                    "skipped by name; %s (503) where the road is closed on this deployment, and they are skipped as well" % (
+                        T.BITCOIN_SPEC, network, prefix, realm or "not stated", T.BITCOIN_ROAD_CLOSED))
+        bitcoin.update(read=True, kind=kind, held=held, open=opened, network=network, wallets=wallets, said="; ".join(said))
+        self.step(station, answer, expected, bitcoin["said"] or answer.sentence(), None, who.name)
+        return bitcoin
+
+    def bitcoin_prologue(self, station: str) -> Optional[Outcome]:
+        """
+        What every Bitcoin station after S5b-1 does first: the estate's standing read where this run has not read it (a run resumed past S5b-1),
+        once; then, where the estate answered that it does not hold bitcoin or that the road is closed on this deployment, the station's skip, in
+        the one sentence that says which (Spec T32 item 6). None where the station is to walk.
+        """
+        before = len(self.findings)
+        bitcoin = self.facts["bitcoin"]
+        if not bitcoin["read"]:
+            self.read_bitcoin_standing(station, self.founder())
+        if bitcoin["skipped"]:
+            return Outcome(station, SKIPPED if len(self.findings) == before else FAIL, T.BITCOIN_STATIONS_SKIPPED_SENTENCE % (bitcoin["skipped_at"], bitcoin["skipped"]))
+        return None
+
+    def station_s5b_1(self) -> Outcome:
+        founder = self.founder()
+        before = len(self.findings)
+        bitcoin = self.read_bitcoin_standing("S5b-1", founder)
+        failed = len(self.findings) > before
+        kind, words = bitcoin["kind"], str(bitcoin["said"])
+        if kind in ("absent", "not_held"):
+            return Outcome("S5b-1", FAIL if failed else SKIPPED, "%s; the Bitcoin stations after it are skipped with it, counted as skipped and never as passed" % (
+                T.BITCOIN_STATIONS_SKIPPED_SENTENCE % (bitcoin["skipped_at"], bitcoin["skipped"])))
+        if kind == "closed_road":
+            return Outcome("S5b-1", FAIL if failed else PASS, "%s; no address was shown, and the Bitcoin stations after this one are skipped by name" % words)
+        if kind in ("stopped", "limited"):
+            return Outcome("S5b-1", FAIL if failed else PASS, "%s; no address was shown in this run" % words)
+        if kind == "row_closed":
+            self.note("S5b-1", T.BITCOIN_NO_ADDRESS_FOR_A_PERSON_LINE % T.BITCOIN_ROW_CLOSED_WORDS)
+            return Outcome("S5b-1", FAIL if failed else PASS, "the estate's sentence as expected: %s" % words)
+        if kind == "wallets":
+            shown = [w for w in bitcoin["wallets"] if w.get("address") and not w.get("fault")]
+            for wallet in shown:
+                self.note("S5b-1", T.BITCOIN_ADDRESS_FOR_A_PERSON_LINE % (wallet["label"], wallet["address"], bitcoin["network"]))
+            if not shown:
+                self.note("S5b-1", T.BITCOIN_NO_ADDRESS_FOR_A_PERSON_LINE % "no wallet in the founder's sight shows an address of the estate's row")
+            return Outcome("S5b-1", FAIL if failed else PASS, words)
+        return Outcome("S5b-1", FAIL, words)
+
+    # -- S5b-2 Bitcoin reading (Spec T32 item 4; Spec AER360-BTC-1 §4 to §6 and its two readings) ------------------------------------------------
+    def read_bitcoin_wallet(self, station: str, who: Person, wallet: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        One wallet's reading, as the founder's "Read this wallet's bitcoin" asks it: GET /v1/aer360/bitcoin/wallets/:walletId, once, never retried
+        (a press is one reading). The answer is told apart as the specification tells it apart: a reading (it carries historyWhole, the one field
+        the specification names on it); a silence (it answers `silent`, with its sentence, and bitcoinTipsApartSentence where the cause is
+        'tips_apart') — reported as a silence, never a pass; the road's three refusals (`judge_bitcoin_road_refusal`); or an answer with a
+        sentence and no reading, for a wallet that shows no address. Returns {kind, words, sentence}; a difference from the specification is a
+        finding that names both.
+        """
+        label = str(wallet.get("label"))
+        answer = self.request(who, "GET", T.BITCOIN_WALLET_ROUTE % wallet.get("walletId"), None, station, retry=False)
+        body = answer.json if isinstance(answer.json, dict) else None
+        code = (answer.refusal or {}).get("code")
+        expected = ("the wallet's reading (%s, §4 to §6): %s true or false and the reading of the address the list showed, two sources or more where the answer "
+                    "names them; or %s, %s (503) or %s (429), each the estate's refusal as expected; or a silence (%s), reported as a silence and never as a pass" % (
+                        T.BITCOIN_SPEC, T.BITCOIN_HISTORY_WHOLE_FIELD, T.BITCOIN_ROAD_CLOSED, T.BITCOIN_SOURCES_DISAGREE, T.BITCOIN_READS_LIMITED, T.BITCOIN_STATE_SILENT))
+        sentence = answer.sentence()
+        if code in (T.BITCOIN_ROAD_CLOSED, T.BITCOIN_SOURCES_DISAGREE, T.BITCOIN_READS_LIMITED):
+            kind = {T.BITCOIN_ROAD_CLOSED: "closed_road", T.BITCOIN_SOURCES_DISAGREE: "stopped", T.BITCOIN_READS_LIMITED: "limited"}[code]
+            words = "wallet %s: %s" % (label, self.judge_bitcoin_road_refusal(station, answer))
+        elif not answer.ok or body is None:
+            kind = "unread"
+            words = "wallet %s: the estate answered %s, which is neither a reading, a silence nor one of the road's refusals" % (label, answer.sentence())
+            self.finding(station, "the reading of wallet %s" % label, None, answer, expected, answer.sentence())
+        else:
+            strings = T.deep_strings(body)
+            sentences = T.sentences_in(body)
+            sentence = " ".join(sentences)
+            whole = T.deep_find(body, T.BITCOIN_HISTORY_WHOLE_FIELD)
+            if T.BITCOIN_STATE_SILENT in strings:
+                kind = "silent"
+                cause = T.deep_find(body, "cause")
+                if not sentences:
+                    self.finding(station, "a silence with no sentence for wallet %s" % label, None, answer,
+                                 "the specification (§4, §6): a silent source is an answer with a sentence, the silence in its own sentence", "the estate answered silent and said no sentence")
+                if cause == T.BITCOIN_CAUSE_TIPS_APART and not matches_sentence(T.BITCOIN_TIPS_APART_SENTENCE, answer.text):
+                    self.finding(station, "the silence of tips that stood apart, for wallet %s" % label, None, answer,
+                                 "the specification (the reading of 13 November, bitcoinTipsApartSentence): \"%s\"" % T.BITCOIN_TIPS_APART_SENTENCE,
+                                 "the estate says: %s" % (sentence or "no sentence at all"))
+                words = "wallet %s: %s%s" % (label, T.BITCOIN_SILENCE_WORDS % (("\"%s\"" % sentence) if sentence else "the estate answered silent and said no sentence"),
+                                             (" (cause %s)" % cause) if cause else "")
+            elif T.BITCOIN_STATE_ROW_CLOSED in strings:
+                kind = "row_closed"
+                words = "wallet %s: the reading answered %s — \"%s\"" % (label, T.BITCOIN_STATE_ROW_CLOSED, sentence)
+                self.finding(station, "a reading that answers a closed row for wallet %s" % label, None, answer,
+                             "the specification (Finding 8): %s is the reading of a closed row, and the list answered this estate an open one" % T.BITCOIN_STATE_ROW_CLOSED,
+                             "the list showed wallet %s and its reading answers %s" % (label, T.BITCOIN_STATE_ROW_CLOSED))
+            elif whole is not None:
+                kind = "reading"
+                if not isinstance(whole, bool):
+                    self.finding(station, "%s of wallet %s's reading" % (T.BITCOIN_HISTORY_WHOLE_FIELD, label), None, answer,
+                                 "the specification (the reading of 13 November): %s true, or false where the history is longer than the bound" % T.BITCOIN_HISTORY_WHOLE_FIELD,
+                                 "the reading carries %s %s" % (T.BITCOIN_HISTORY_WHOLE_FIELD, json.dumps(whole, ensure_ascii=False)))
+                sources = T.bitcoin_sources_named(body)
+                if sources is not None and sources < 2:
+                    self.finding(station, "the sources of wallet %s's reading" % label, None, answer,
+                                 "the specification (§4): every read is asked of every source the setting names, and a network is open only where two different hosts are named",
+                                 "the reading names %d source(s)" % sources)
+                read_of = T.bitcoin_addresses_in(body)
+                if read_of and wallet.get("address") and wallet["address"] not in read_of:
+                    self.finding(station, "wallet %s's reading is of another address" % label, None, answer,
+                                 "the reading of the address the list showed for this wallet, %s" % wallet["address"], "the reading names %s" % ", ".join(read_of))
+                words = "wallet %s: a reading — %s %s; %s; the estate's answer, for a person: %s" % (
+                    label, T.BITCOIN_HISTORY_WHOLE_FIELD, json.dumps(whole),
+                    ("%d sources answered and agree" % sources) if sources is not None else
+                    "not compared: the answer names its sources under no key the harness can read (the specification gives the screen's words for them, not the wire's field)",
+                    json.dumps(self.secrets.redact(body), ensure_ascii=False)[:600])
+            else:
+                kind = "no_reading"
+                words = "wallet %s: no reading — %s" % (label, ("\"%s\"" % sentence) if sentence else "the estate said no sentence")
+                if wallet.get("address"):
+                    self.finding(station, "wallet %s shows an address and its reading is none" % label, None, answer,
+                                 "the specification: the wallet's reading answers %s, or a silence, or one of the road's refusals" % T.BITCOIN_HISTORY_WHOLE_FIELD,
+                                 "the answer carries the keys %s" % (", ".join(sorted(str(k) for k in body)) or "none"))
+                elif not sentences:
+                    self.finding(station, "wallet %s shows no address and its reading says nothing" % label, None, answer,
+                                 "the specification (§6): no address is an answer with a sentence", "the answer carries the keys %s" % (", ".join(sorted(str(k) for k in body)) or "none"))
+        self.step(station, answer, expected, words, None, who.name)
+        return {"kind": kind, "words": words, "sentence": sentence, "wallet": label}
+
+    def station_s5b_2(self) -> Outcome:
+        founder = self.founder()
+        before = len(self.findings)
+        skipped = self.bitcoin_prologue("S5b-2")
+        if skipped is not None:
+            return skipped
+        bitcoin = self.facts["bitcoin"]
+        if bitcoin["kind"] == "row_closed":
+            return Outcome("S5b-2", SKIPPED if len(self.findings) == before else FAIL, "skipped by name: %s" % T.BITCOIN_ROW_CLOSED_WORDS)
+        with_id = [w for w in bitcoin["wallets"] if w.get("walletId")]
+        asked = [w for w in with_id if w.get("address") and not w.get("fault")][:T.BITCOIN_READINGS_AT_MOST] or with_id[:1]
+        if not asked:
+            return Outcome("S5b-2", SKIPPED if len(self.findings) == before else FAIL,
+                           "skipped by name: the estate listed no wallet a reading could be asked of (%s)" % (bitcoin["said"] or "GET %s said nothing" % T.BITCOIN_LIST_ROUTE))
+        readings: List[Dict[str, Any]] = []
+        for wallet in asked:
+            reading = self.read_bitcoin_wallet("S5b-2", founder, wallet)
+            readings.append(reading)
+            if reading["kind"] in ("closed_road", "stopped", "limited"):
+                break  # the road's answer is the deployment's or the caller's, not this wallet's: another wallet would hear it again
+        bitcoin["readings"] = readings
+        said = "; ".join(r["words"] for r in readings)
+        closed = next((r for r in readings if r["kind"] == "closed_road"), None)
+        if closed is not None:
+            self.skip_the_bitcoin_stations("S5b-2", T.BITCOIN_ROAD_CLOSED_WORDS % closed["sentence"])
+            said += "; the Bitcoin stations after this one are skipped by name"
+        if len(self.findings) > before:
+            return Outcome("S5b-2", FAIL, said)
+        if any(r["kind"] == "silent" for r in readings):
+            raise StationStop(said, prerequisite=BITCOIN_SOURCES_SILENT)
+        if any(r["kind"] in ("reading", "closed_road", "stopped", "limited") for r in readings):
+            return Outcome("S5b-2", PASS, said)
+        return Outcome("S5b-2", SKIPPED, "skipped by name: no reading was taken, because no wallet in the founder's sight shows a Bitcoin address — %s" % said)
+
+    # -- S6b, S7b-1 to S7b-4: held, not paid (Spec T32 item 5; Spec AER360-BTC-1 §2, "The refusals" and Finding 8) -------------------------------
+    # One station for each door a payment enters by. Each offers the door one Bitcoin row — one satoshi, on the estate's own row, to the address the
+    # estate itself shows for the holding — and expects BITCOIN_HELD_NOT_PAID, 422, in the estate's judgment sentence, matched with the harness's
+    # sentence matcher so that what the door did not do may follow it. Nothing is paid and nothing moves; a row the estate wrongly kept is a
+    # finding, left as the estate made it and never submitted, approved or executed. Two doors are not walked and say so by name (S7b-2, S7b-4).
+    def bitcoin_offer(self) -> Tuple[str, str, str]:
+        """
+        The row and the address a door station offers, and the words for which they are: the address the estate itself shows for the holding on
+        the row of its realm, read at S5b-1; or, where the estate shows this run none (the row closed, or no wallet's key point on the trail),
+        the one address the specification writes out — BIP-173's own example, on the main network's row. The harness invents no address.
+        """
+        bitcoin = self.facts["bitcoin"]
+        own = next((w for w in bitcoin["wallets"] if w.get("address") and not w.get("fault")), None)
+        if own is not None:
+            return str(bitcoin["network"]), str(own["address"]), T.BITCOIN_OWN_ADDRESS_WORDS % (own["label"], bitcoin["network"])
+        return T.BITCOIN_CHAIN, T.BITCOIN_SPEC_EXAMPLE_ADDRESS, T.BITCOIN_SPEC_ADDRESS_WORDS % T.BITCOIN_CHAIN
+
+    @staticmethod
+    def bitcoin_row(chain: str, address: str, invoice: str) -> Dict[str, Any]:
+        """One Bitcoin row as a payment door is offered it: a declared one-off of one satoshi to `address` on `chain`, under the harness's own reference."""
+        return {"oneOff": {"chain": chain, "address": address, "declared": True, "payeeName": A.BITCOIN_ONE_OFF_NAME},
+                "asset": T.BTC, "chain": chain, "amountMinor": str(T.BITCOIN_PROBE_SATOSHIS), "invoiceRef": invoice}
+
+    @staticmethod
+    def refusals_in(value: Any, code: str) -> List[Dict[str, Any]]:
+        """Every refusal of `code` an answer carries, at any depth — a review's gate rows among them (setgates.ts lays a row's refusal on its gate)."""
+        found: List[Dict[str, Any]] = []
+
+        def walk(inner: Any) -> None:
+            if isinstance(inner, dict):
+                if inner.get("code") == code and isinstance(inner.get("message"), str):
+                    found.append(inner)
+                for child in inner.values():
+                    walk(child)
+            elif isinstance(inner, list):
+                for child in inner:
+                    walk(child)
+
+        walk(value)
+        return found
+
+    @staticmethod
+    def held_not_paid_said(message: str) -> bool:
+        """The estate's judgment sentence, matched with the harness's sentence matcher, and none of the words Finding 8 says no sentence says."""
+        return matches_sentence(T.BITCOIN_HELD_NOT_PAID_SENTENCE, message) and not any(never in message.lower() for never in T.BITCOIN_NEVER_SAID)
+
+    def judge_held_not_paid(self, station: str, door: str, sent: Any, answer: Answer, who: Person) -> Tuple[bool, str]:
+        """
+        One payment door's answer to a Bitcoin row, held to the specification: refused BITCOIN_HELD_NOT_PAID, 422, in the estate's judgment
+        sentence followed by what the door did not do. An acceptance, another code (CHAIN_RECEIVABLE_ONLY's "not yet" among them), another
+        status or another sentence is a finding that names both. Returns whether the refusal was as expected, and the words.
+        """
+        refusal = answer.refusal or {}
+        code, message = refusal.get("code"), str(refusal.get("message") or "")
+        status = T.BITCOIN_REFUSAL_STATUSES[T.BITCOIN_HELD_NOT_PAID]
+        expected = ("%d %s: \"%s\" followed by what the door did not do (%s, section 2 and Finding 8), matched with the harness's sentence matcher; nothing "
+                    "written and nothing moved" % (status, T.BITCOIN_HELD_NOT_PAID, T.BITCOIN_HELD_NOT_PAID_SENTENCE, T.BITCOIN_SPEC))
+        right = answer.status == status and code == T.BITCOIN_HELD_NOT_PAID and self.held_not_paid_said(message)
+        if right:
+            verdict = "the estate's refusal as expected — %s, %d — \"%s\"" % (code, answer.status, message)
+        else:
+            heard = ("HTTP %d, and nothing was refused" % answer.status) if answer.ok else "HTTP %d — %s" % (answer.status, answer.sentence())
+            verdict = "not refused as the specification says: %s — a finding" % heard
+            self.finding(station, "%s did not refuse a Bitcoin row as the specification says" % door, sent, answer, expected, "the door answered %s" % heard)
+        self.step(station, answer, expected, verdict, sent, who.name)
+        return right, verdict
+
+    def runs_carrying(self, station: str, who: Person, invoice: str) -> Tuple[Answer, List[str]]:
+        """The runs register read after a Bitcoin row was offered: the ids of the runs that carry the row's reference — none, where the door created nothing."""
+        register = self.request(who, "GET", "/v1/sets", None, station)
+        self.step(station, register, "the runs register: no run carries %s — nothing was created" % invoice, "answered" if register.ok else register.sentence(), None, who.name)
+        carrying: List[str] = []
+        if register.ok and isinstance(register.json, dict):
+            carrying = [str(s.get("id")) for s in (register.json.get("sets") or []) if isinstance(s, dict)
+                        and any(str(i.get("invoiceRef")) == invoice for i in (s.get("instructions") or []) if isinstance(i, dict))]
+        return register, carrying
+
+    def station_s6b(self) -> Outcome:
+        founder = self.founder()
+        before = len(self.findings)
+        skipped = self.bitcoin_prologue("S6b")
+        if skipped is not None:
+            return skipped
+        chain, address, offered = self.bitcoin_offer()
+        body = {"displayName": A.BITCOIN_PAYEE_PROBE_NAME, "defaultAsset": T.BTC, "defaultChain": chain, "addresses": [{"chain": chain, "address": address}]}
+        answer = self.request(founder, "POST", "/v1/payees", body, "S6b")
+        right, verdict = self.judge_held_not_paid("S6b", "the payee door (POST /v1/payees)", body, answer, founder)
+        register = self.request(founder, "GET", "/v1/payees", None, "S6b")
+        self.step("S6b", register, "the payees register after the refusal: no payee stands on a Bitcoin row, and none at the address offered",
+                  "answered" if register.ok else register.sentence(), None, founder.name)
+        written: List[str] = []
+        if register.ok and isinstance(register.json, dict):
+            for payee in register.json.get("payees") or []:
+                if not isinstance(payee, dict):
+                    continue
+                for row in payee.get("addresses") or []:
+                    if isinstance(row, dict) and (T.is_bitcoin_chain(row.get("chain")) or str(row.get("address")) == address):
+                        written.append("%s on %s (%s)" % (row.get("address"), row.get("chain"), payee.get("displayName")))
+        if written:
+            self.finding("S6b", "a payee stands on a Bitcoin row", body, register,
+                         "no payee on a Bitcoin row: bitcoin is held on this estate and is not a method of payment (%s, section 2)" % T.BITCOIN_SPEC,
+                         "the register holds %s" % "; ".join(written))
+        words = "a payee offered on %s at %s — %s: %s; %s" % (
+            chain, address, offered, verdict, "nothing written" if not written else "the register holds %s" % "; ".join(written))
+        return Outcome("S6b", PASS if right and len(self.findings) == before else FAIL, words)
+
+    def station_s7b_1(self) -> Outcome:
+        clerk = self.clerk()
+        before = len(self.findings)
+        skipped = self.bitcoin_prologue("S7b-1")
+        if skipped is not None:
+            return skipped
+        chain, address, offered = self.bitcoin_offer()
+        body = {"pays": [self.bitcoin_row(chain, address, A.BITCOIN_SET_INVOICE)], "duplicatesAcknowledged": False}
+        door = "the set's review (POST /v1/sets/review)"
+        review = self.request(clerk, "POST", "/v1/sets/review", body, "S7b-1")
+        carried = self.refusals_in(review.json, T.BITCOIN_HELD_NOT_PAID) if review.ok else []
+        if carried:
+            # the review answered, and its gate refuses the row (the specification's "gate row in setgates.ts"): the judgment is the same sentence
+            payload = review.json if isinstance(review.json, dict) else {}
+            right = payload.get("acceptable") is not True and all(self.held_not_paid_said(str(r.get("message") or "")) for r in carried)
+            expected = ("the review refusing the row %s in \"%s\" followed by what the door did not do — on the answer itself (422) or on its gate's row with "
+                        "the review not acceptable (%s, section 2 and Finding 8); nothing created" % (T.BITCOIN_HELD_NOT_PAID, T.BITCOIN_HELD_NOT_PAID_SENTENCE, T.BITCOIN_SPEC))
+            heard = "the review answered HTTP %d, acceptable %s, its gate's row refused %s — \"%s\"" % (
+                review.status, json.dumps(payload.get("acceptable")), T.BITCOIN_HELD_NOT_PAID, carried[0].get("message"))
+            verdict = ("the estate's refusal as expected — %s" % heard) if right else "not refused as the specification says: %s — a finding" % heard
+            if not right:
+                self.finding("S7b-1", "%s did not refuse a Bitcoin row as the specification says" % door, body, review, expected, heard)
+            self.step("S7b-1", review, expected, verdict, body, clerk.name)
+        else:
+            right, verdict = self.judge_held_not_paid("S7b-1", door, body, review, clerk)
+        register, carrying = self.runs_carrying("S7b-1", clerk, A.BITCOIN_SET_INVOICE)
+        if carrying:
+            self.finding("S7b-1", "a run stands with the reviewed Bitcoin row", body, register, "no run carrying %s: a review creates nothing" % A.BITCOIN_SET_INVOICE,
+                         "the register holds %s" % ", ".join(carrying))
+        words = "a set of one payment of %s on %s to %s — %s — offered to its review: %s; %s" % (
+            T.btc_words(T.BITCOIN_PROBE_SATOSHIS), chain, address, offered, verdict, "nothing created" if not carrying else "a run stands: %s" % ", ".join(carrying))
+        return Outcome("S7b-1", PASS if right and len(self.findings) == before else FAIL, words)
+
+    def station_s7b_2(self) -> Outcome:
+        """The imported file's door, which the harness does not walk and says so by name; where the Bitcoin stations are skipped, that sentence stands first."""
+        bitcoin = self.facts["bitcoin"]
+        if bitcoin["skipped"]:
+            return Outcome("S7b-2", SKIPPED, T.BITCOIN_STATIONS_SKIPPED_SENTENCE % (bitcoin["skipped_at"], bitcoin["skipped"]))
+        return Outcome("S7b-2", SKIPPED, T.BITCOIN_IMPORT_NOT_WALKED_SENTENCE)
+
+    def station_s7b_3(self) -> Outcome:
+        clerk = self.clerk()
+        before = len(self.findings)
+        skipped = self.bitcoin_prologue("S7b-3")
+        if skipped is not None:
+            return skipped
+        chain, address, offered = self.bitcoin_offer()
+        body = {"pays": [self.bitcoin_row(chain, address, A.BITCOIN_RUN_INVOICE)], "duplicatesAcknowledged": False,
+                "idempotencyKey": "aer360-harness-%s-%s" % (self.run_stamp, A.BITCOIN_RUN_KEY), "reference": "Harness bitcoin probe %s" % A.BITCOIN_RUN_KEY}
+        created = self.request(clerk, "POST", "/v1/sets", body, "S7b-3")
+        right, verdict = self.judge_held_not_paid("S7b-3", "the run road (POST /v1/sets)", body, created, clerk)
+        register, carrying = self.runs_carrying("S7b-3", clerk, A.BITCOIN_RUN_INVOICE)
+        if carrying:
+            self.finding("S7b-3", "a run stands with a Bitcoin row", body, register,
+                         "no run carrying %s: the creation refuses a Bitcoin row (%s, section 2)" % (A.BITCOIN_RUN_INVOICE, T.BITCOIN_SPEC),
+                         "the register holds %s — left as the estate made it, never submitted, approved or executed by the harness" % ", ".join(carrying))
+        words = "a run of one payment of %s on %s to %s — %s — offered at its creation: %s; %s" % (
+            T.btc_words(T.BITCOIN_PROBE_SATOSHIS), chain, address, offered, verdict,
+            "no run was created" if not carrying else "a run stands, left as the estate made it and never submitted: %s" % ", ".join(carrying))
+        return Outcome("S7b-3", PASS if right and len(self.findings) == before else FAIL, words)
+
+    def station_s7b_4(self) -> Outcome:
+        """The deposit door, which the harness does not walk and says so by name; where the Bitcoin stations are skipped, that sentence stands first."""
+        bitcoin = self.facts["bitcoin"]
+        if bitcoin["skipped"]:
+            return Outcome("S7b-4", SKIPPED, T.BITCOIN_STATIONS_SKIPPED_SENTENCE % (bitcoin["skipped_at"], bitcoin["skipped"]))
+        return Outcome("S7b-4", SKIPPED, T.BITCOIN_DEPOSIT_NOT_WALKED_SENTENCE)
+
+    def bitcoin_summary_lines(self) -> List[str]:
+        """
+        Spec T32: the report's summary for the Bitcoin holding — the address the estate shows, printed for a person, as Series G is printed for one;
+        or the estate's sentence where it shows none; or why the Bitcoin stations were skipped. The stations skipped are counted as skipped here,
+        by name, and never as passed.
+        """
+        bitcoin = self.facts.get("bitcoin") or {}
+        skipped = [o.station for o in self.outcomes if o.station in self.BITCOIN_STATION_IDS and o.outcome == SKIPPED]
+        counted = (" Bitcoin stations skipped, counted as skipped and never as passed: %d (%s)." % (len(skipped), ", ".join(skipped))) if skipped else ""
+        if bitcoin.get("skipped"):
+            return ["Bitcoin (Spec T32): at %s %s.%s" % (bitcoin.get("skipped_at"), bitcoin["skipped"], counted)]
+        if not bitcoin.get("read"):
+            return ["Bitcoin (Spec T32): the estate's Bitcoin standing was not read in this run.%s" % counted] if counted else []
+        shown = [w for w in bitcoin.get("wallets") or [] if w.get("address") and not w.get("fault")]
+        if shown:
+            said = "; ".join("wallet %s — %s" % (w.get("label"), w.get("address")) for w in shown)
+            return ["Bitcoin (Spec T32): the address the estate shows for the holding on %s, for a person: %s. The harness invents no address, asks no faucet and "
+                    "sends nothing to it; bitcoin is held and read on this estate, never paid.%s" % (bitcoin.get("network"), said, counted)]
+        return ["Bitcoin (Spec T32): no address to print for a person — %s.%s" % (bitcoin.get("said") or "the estate showed none", counted)]
+
     # -- S8 Journey and readiness --------------------------------------------------------
     def station_s8(self) -> Outcome:
         founder = self.founder()
@@ -7024,6 +7665,19 @@ def audit_charter(interview_type: str, charter: Dict[str, Any], answers: Dict[st
         if "C2" in answers or "C3" in answers:
             expect("the company ceiling (C2) and the daily total (C3), in cents", {"denyCeiling": cents("C2"), "dailyTotal": cents("C3")},
                    {"denyCeiling": amounts.get("denyCeiling"), "dailyTotal": amounts.get("dailyTotal")}, {"C2": cents("C2"), "C3": cents("C3")})
+        # Spec T32 — the Bitcoin holding (C9B; catalog version 20), as the estate's Spec AER360-BTC-1 §1 says the compiler writes it: Yes writes
+        # heldNetworks ['bitcoin'], and ['bitcoin-testnet'] where the charter is compiled for a sandbox estate; No writes no such field. Held to
+        # nothing where the Policy Interview never asked C9B. A charter that states no realm is admitted either row.
+        c9b = choice(A.HOLD_BITCOIN_QUESTION_ID)
+        if c9b is not None:
+            held_got = charter.get(T.HELD_NETWORKS_FIELD)
+            if c9b != A.HOLD_BITCOIN_YES:
+                held_want: Any = None
+            elif isinstance(charter.get("realm"), str) and charter.get("realm"):
+                held_want = [T.bitcoin_network_for_realm(charter.get("realm"))]
+            else:
+                held_want = held_got if held_got in ([T.BITCOIN_CHAIN], [T.BITCOIN_TESTNET_CHAIN]) else [T.BITCOIN_CHAIN]
+            expect("the networks held (C9B)", held_want, held_got, c9b)
     else:
         expect("the name (WN)", text("WN"), charter.get("name"), text("WN"))
         expect("the purpose (W1)", choice("W1"), charter.get("purpose"), choice("W1"))
@@ -7078,6 +7732,101 @@ def audit_charter(interview_type: str, charter: Dict[str, Any], answers: Dict[st
             findings.append({"probe": "charter (%s): a sandbox charter naming a live network" % interview_type, "sent": sorted(live), "expected": "allowedChains without %s" % crossed,
                              "said": "allowedChains %s" % allowed})
     return findings
+
+
+def audit_bitcoin_named(lines: Sequence[Dict[str, Any]], charter: Optional[Dict[str, Any]], sandbox: bool,
+                        question: Optional[Dict[str, Any]] = None) -> Tuple[List[Dict[str, Any]], List[str], Optional[bool]]:
+    """
+    Spec T32 item 2 (S3b): bitcoin named in the charter as the estate's Spec AER360-BTC-1 words it, held on what S3 read.
+
+    The question (§1; Finding 8 for the note; §7 says the manual's chapter 4 and Reference A carry the same words): where the page that served
+    C9B was recorded, its prompt, its options where it lists them and its note where it carries one are the specification's, byte for byte. The
+    read-back: a line for C9B headed by the specification's prompt and answered as the book answers it; and, beside a Yes, a line saying what the
+    answer does — the specification gives that sentence's sense (holdBitcoinReadbackSentence: a sandbox estate is told of its test network address,
+    a live one that its answer is kept and its address opens later) and not its words, so it is quoted for a person and held only to what the
+    specification says no sentence says (BITCOIN_NEVER_SAID). The compiled charter, where this run holds one: heldNetworks ['bitcoin-testnet'] for a
+    sandbox estate and ['bitcoin'] for a live one, recordedHeldNetworks ['bitcoin'] beside it (judged on a live charter only where it is
+    present), and neither row among allowedChains or recordedChains. Returns the findings ({probe, sent, expected, said}), the words for the
+    station's line, and whether the charter names bitcoin (None where no charter was compared).
+    """
+    findings: List[Dict[str, Any]] = []
+    said: List[str] = []
+    qid = A.HOLD_BITCOIN_QUESTION_ID
+    yes = A.POLICY_ANSWERS[qid]["choice"]
+
+    def differ(probe: str, expected: str, got: str, sent: Any = None) -> None:
+        findings.append({"probe": "the charter names bitcoin: %s" % probe, "sent": sent, "expected": expected, "said": got})
+
+    if isinstance(question, dict):
+        before = len(findings)
+        if str(question.get("prompt")) != A.HOLD_BITCOIN_PROMPT:
+            differ("the question's words", "the specification's (section 1): %r" % A.HOLD_BITCOIN_PROMPT, "the estate asks %r" % (question.get("prompt"),))
+        options = question.get("options")
+        if isinstance(options, list) and [str(o) for o in options] != list(A.HOLD_BITCOIN_OPTIONS):
+            differ("the question's options", "the specification's (section 1): %s" % " and ".join(A.HOLD_BITCOIN_OPTIONS), "the estate offers %s" % json.dumps(options, ensure_ascii=False))
+        note = question.get("note")
+        noted = isinstance(note, str) and bool(note.strip())
+        if noted and note.strip() != A.HOLD_BITCOIN_NOTE:
+            differ("the question's note", "the specification's (Finding 8): %r" % A.HOLD_BITCOIN_NOTE, "the estate's note says %r" % (note,))
+        if len(findings) == before:
+            said.append("the estate asked %s in the specification's words%s" % (qid, ", its note among them" if noted else "; the page carries no note the harness can read"))
+        else:
+            said.append("the estate's page for %s differs from the specification's words" % qid)
+    at = next((i for i, l in enumerate(lines) if str(l.get("questionId")) == qid and not l.get("synthetic")), None)
+    if at is None:
+        differ("the read-back's line for %s" % qid, "a line for %s, which the book answers %r" % (qid, yes), "the read-back carries no line for %s" % qid)
+        said.append("the read-back carries no line for %s" % qid)
+    else:
+        line = lines[at]
+        if str(line.get("prompt")) != A.HOLD_BITCOIN_PROMPT:
+            differ("the question's words on the read-back", "the specification's (section 1): %r" % A.HOLD_BITCOIN_PROMPT, "the read-back heads the line %r" % (line.get("prompt"),))
+        spoken = str(line.get("spoken"))
+        if spoken != yes:
+            differ("the answer read back", "%r, as the book answers %s" % (yes, qid), "the read-back says %r" % spoken, A.POLICY_ANSWERS[qid])
+        beside: List[Dict[str, Any]] = []
+        for l in lines[at + 1:]:
+            if not l.get("synthetic"):
+                break
+            beside.append(l)
+        if spoken == yes and not beside:
+            differ("what the read-back says beside a Yes",
+                   "the specification (section 1; Finding 8, holdBitcoinReadbackSentence): beside a Yes the read-back says what the answer does",
+                   "the read-back carries no line beside %s's" % qid)
+        for l in beside:
+            words = str(l.get("spoken"))
+            for never in T.BITCOIN_NEVER_SAID:
+                if never in words.lower():
+                    differ("what the read-back says beside a Yes", "the specification (Finding 8): no sentence says %r" % never,
+                           "the read-back's %s line says %r" % (l.get("questionId"), words))
+        said.append("the read-back says %s: %r%s" % (qid, spoken, ("; beside it, quoted for a person because the specification gives this sentence's sense and not its "
+                                                                   "words: %s" % " | ".join("\"%s\"" % str(l.get("spoken")) for l in beside)) if beside else "; and nothing beside it"))
+    named: Optional[bool] = None
+    if charter is None:
+        said.append("this run holds no compiled charter (the compile answered none), so %s was not compared here" % T.HELD_NETWORKS_FIELD)
+    else:
+        row = T.BITCOIN_TESTNET_CHAIN if sandbox else T.BITCOIN_CHAIN
+        held = charter.get(T.HELD_NETWORKS_FIELD)
+        recorded = charter.get(T.RECORDED_HELD_NETWORKS_FIELD)
+        named = held == [row]
+        if not named:
+            differ("%s in the compiled charter" % T.HELD_NETWORKS_FIELD,
+                   "the specification (section 1): %s on the charter of a %s estate that answered Yes" % (json.dumps([row]), "sandbox" if sandbox else "live"),
+                   "the charter carries %s %s" % (T.HELD_NETWORKS_FIELD, json.dumps(held, ensure_ascii=False)))
+        if (sandbox or recorded is not None) and recorded != [T.BITCOIN_CHAIN]:
+            differ("%s in the compiled charter" % T.RECORDED_HELD_NETWORKS_FIELD,
+                   "the specification (section 1): %s beside it, the live-day intent" % json.dumps([T.BITCOIN_CHAIN]),
+                   "the charter carries %s %s" % (T.RECORDED_HELD_NETWORKS_FIELD, json.dumps(recorded, ensure_ascii=False)))
+        among: List[str] = []
+        for field in ("allowedChains", "recordedChains"):
+            crossed = [str(c) for c in (charter.get(field) or []) if T.is_bitcoin_chain(c)]
+            if crossed:
+                among.append("%s among %s" % (", ".join(crossed), field))
+                differ("a Bitcoin row among %s" % field, "the specification (section 1): nothing is added to allowedChains or recordedChains — bitcoin is held, not paid",
+                       "the charter's %s carries %s" % (field, ", ".join(crossed)))
+        said.append("the compiled charter of this %s estate carries %s %s and %s %s, and %s" % (
+            "sandbox" if sandbox else "live", T.HELD_NETWORKS_FIELD, json.dumps(held, ensure_ascii=False), T.RECORDED_HELD_NETWORKS_FIELD,
+            json.dumps(recorded, ensure_ascii=False), ("a Bitcoin row where none belongs: %s" % "; ".join(among)) if among else "no Bitcoin row among allowedChains or recordedChains"))
+    return findings, said, named
 
 
 def audit_journey(journey: Dict[str, Any], registers: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -7702,6 +8451,10 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
                "(Spec T31 §1.1)" % (expected_recorded_networks(), A.POLICY_ANSWERS["C2"]["cents"], A.POLICY_ANSWERS["C3"]["cents"], INTERVIEW_AWAITING_CHANGE_APPROVALS))
     line("S3", "GET /v1/onboarding/charter → expect standsWritten true")
     line("S3", "GET /v1/journey → expect currentStage 2 of %d" % JOURNEY_STAGE_COUNT)
+    # S3b — Spec T32 item 2: the charter read back, and bitcoin found named as the estate's specification words it; the station makes no call of its own
+    line("S3b", "[compare] the read-back and the compiled charter S3 read, for bitcoin named as the specification words it (Spec AER360-BTC-1 §1, §7) → expect the read-back's line for %s headed \"%s\" and answered %s, with a line beside it saying what the answer does (the specification gives that sentence's sense and not its words: it is quoted for a person, and held to never saying %s); the compiled charter's %s %s in the sandbox and %s live, %s %s beside it, and nothing added to allowedChains or recordedChains; a Policy Interview that does not ask %s stands before catalog version 20, and the station is skipped by name" % (
+        A.HOLD_BITCOIN_QUESTION_ID, A.HOLD_BITCOIN_PROMPT, A.POLICY_ANSWERS[A.HOLD_BITCOIN_QUESTION_ID]["choice"], " or ".join("\"%s\"" % words for words in T.BITCOIN_NEVER_SAID),
+        T.HELD_NETWORKS_FIELD, _j([T.BITCOIN_TESTNET_CHAIN]), _j([T.BITCOIN_CHAIN]), T.RECORDED_HELD_NETWORKS_FIELD, _j([T.BITCOIN_CHAIN]), A.HOLD_BITCOIN_QUESTION_ID))
     # S4 — Spec T10: every person is brought in on their own credential
     approver = A.PEOPLE[A.PAYMENT_APPROVER]
     line("S4", "GET /v1/approver-seats (as %s) → expect the charter's seats as this run finds them: which credential %s's seat names before anybody is brought in again" % (founder.name, approver.name))
@@ -7785,6 +8538,15 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
             T.WALLETS_REGISTER_ROUTE, founder.name))
     line("S5s", "[file] ~/.aer360-harness/%s/%s → the two wallets written down (walletId, walletNumber, address, bornAt; no key), mode 0600, so a later run takes them on; the first wallet's address printed on one line for the owner to fund with the book's SOL amount plus the %s reserve (Spec T29 §0a.3)" % (
         A.ESTATE["client_id"], T.SOLANA_WALLETS_FILE, T.sol_words(T.FEE_RESERVE_LAMPORTS)))
+    # S5b-1, S5b-2 — Spec T32 items 3 and 4: the address the estate shows for the holding, and the reading, as the founder's Wallets screen asks them
+    line("S5b-1", "GET %s (as %s) → expect whether the estate holds bitcoin and, where it does, each wallet in the founder's sight with its address or the sentence for its absence (Spec AER360-BTC-1 §6; it reads no chain): each address of the form of the network the deployment serves — %s… on %s for a sandbox estate, %s… on %s for a live one — or, where the main network's row is closed, held true, open false, no wallets and the one sentence \"%s\" (Finding 8); held false, or no such road, and the Bitcoin stations after this one are skipped by name; %s (503) and they are skipped as well" % (
+        T.BITCOIN_LIST_ROUTE, founder.name, T.BITCOIN_ADDRESS_PREFIXES[T.BITCOIN_TESTNET_CHAIN], T.BITCOIN_TESTNET_CHAIN, T.BITCOIN_ADDRESS_PREFIXES[T.BITCOIN_CHAIN], T.BITCOIN_CHAIN,
+        T.BITCOIN_ADDRESS_OPENS_LATER_SENTENCE, T.BITCOIN_ROAD_CLOSED))
+    line("S5b-1", "[print] the address the estate shows for the holding, for a person → one note for each wallet that shows one, as Series G is printed for a person: the harness invents no address, asks no faucet and sends nothing to it; where no wallet shows one, the estate's sentence for its absence (Spec T32 item 3)")
+    line("S5b-2", "GET %s (as %s) — only where S5b-1 did not read it (a run resumed here) → expect the same answer, read for the wallets a reading is asked of" % (T.BITCOIN_LIST_ROUTE, founder.name))
+    line("S5b-2", "GET %s (as %s) — for each wallet that shows an address, %d at most; where none shows one, the first wallet listed, once → expect the wallet's reading, as the founder's \"Read this wallet's bitcoin\" asks it (Spec AER360-BTC-1 §4 to §6): %s true or false and the reading of the address the list showed, with two sources or more where the answer names them; or %s (503, naming %s — the Bitcoin stations after this one are skipped by name), %s (503, the latched sentence with its four-key detail, or the met stop's own) or %s (429), each the estate's refusal as expected; or a silence (%s, with \"%s\" where the cause is %s), reported as a silence, FAILED — prerequisite, and never as a pass; skipped where the row is closed and no reading is offered" % (
+        T.BITCOIN_WALLET_ROUTE % "<walletId>", founder.name, T.BITCOIN_READINGS_AT_MOST, T.BITCOIN_HISTORY_WHOLE_FIELD, T.BITCOIN_ROAD_CLOSED, T.BITCOIN_SOURCES_SETTING,
+        T.BITCOIN_SOURCES_DISAGREE, T.BITCOIN_READS_LIMITED, T.BITCOIN_STATE_SILENT, T.BITCOIN_TIPS_APART_SENTENCE, T.BITCOIN_CAUSE_TIPS_APART))
     # S6 — Spec T12: since AER 360 Spec 95 the whitelist door admits any active roster signer; the harness presses the roster
     # people it holds a passkey for, in order (the founder last), until the estate answers whitelisted or nobody is left. A press
     # refused SIGNATURE_NOT_COUNTED (its seat bound to a retired credential, Spec 95/99) is recorded and the next person presses.
@@ -7827,6 +8589,15 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
             _j({"displayName": "Solana slip: %s" % words, "defaultAsset": T.PAYMENT_ASSET, "defaultChain": T.SOLANA_CHAIN, "addresses": [{"chain": T.SOLANA_CHAIN, "address": slip}]}),
             founder.name, T.ADDRESS_MALFORMED, T.solana_address_malformed_sentence(fault), fault))
     line("S6s", "GET /v1/payees → expect none of the three slips on any row; the payee written down beside the wallets at ~/.aer360-harness/%s/%s" % (A.ESTATE["client_id"], T.SOLANA_WALLETS_FILE))
+    # S6b — Spec T32 item 5: held, not paid — a payee offered on the estate's Bitcoin row, at the address the estate itself shows, refused in the estate's sentence
+    bitcoin_row_words = "<the estate's Bitcoin row: %s in the sandbox, %s live>" % (T.BITCOIN_TESTNET_CHAIN, T.BITCOIN_CHAIN)
+    bitcoin_address_words = "<the address the estate shows at S5b-1, else the specification's own example address on %s>" % T.BITCOIN_CHAIN
+    held_not_paid = "%d %s: \"%s\" followed by what the door did not do, matched with the harness's sentence matcher (Spec AER360-BTC-1 §2 and Finding 8)" % (
+        T.BITCOIN_REFUSAL_STATUSES[T.BITCOIN_HELD_NOT_PAID], T.BITCOIN_HELD_NOT_PAID, T.BITCOIN_HELD_NOT_PAID_SENTENCE)
+    line("S6b", "POST /v1/payees %s (as %s) → expect %s; an acceptance, another code or another sentence is a finding that names both" % (
+        _j({"displayName": A.BITCOIN_PAYEE_PROBE_NAME, "defaultAsset": T.BTC, "defaultChain": bitcoin_row_words, "addresses": [{"chain": bitcoin_row_words, "address": bitcoin_address_words}]}),
+        founder.name, held_not_paid))
+    line("S6b", "GET /v1/payees (as %s) → expect no payee on a Bitcoin row and none at the address offered: nothing was written" % founder.name)
     # S7 — Spec T14: the Treasury, the money before, the shortfall paid, S7a, the gas credits, the three payments judged on money that moved, the money after
     clerk = A.PEOPLE[A.PAYMENT_CLERK]
     treasurer = "%s at %s" % (founder.name, T.TREASURY["short"])
@@ -7966,6 +8737,19 @@ def dry_lines(base: str = DEFAULT_BASE, start_at: Optional[str] = None, with_inv
     line("S7s-3", "%s (as %s) → the Solana wallets' holdings after S7s-1 through the estate's own road: each wallet's SOL and its USDC (zero where no token account stands), from the two-source reader (services/holdings.ts); on a closed road the refresh skips the wallet with %s and the overview shows its row with no figure" % (
         holdings_road, clerk.name, T.SOLANA_ROAD_CLOSED))
     line("S7s-3", "GET /v1/payees (as %s) → expect the Solana payee's solanaUsdcAccount unchanged since S6s" % clerk.name)
+    # S7b-1 to S7b-4 — Spec T32 item 5: held, not paid — a set's review and a run each offered one satoshi on the estate's Bitcoin row and refused in the
+    # estate's sentence; the imported file's door and the deposit door are not walked, and say so by name
+    bitcoin_probe_row = lambda invoice: {"oneOff": {"chain": bitcoin_row_words, "address": bitcoin_address_words, "declared": True, "payeeName": A.BITCOIN_ONE_OFF_NAME},  # noqa: E731
+                                         "asset": T.BTC, "chain": bitcoin_row_words, "amountMinor": str(T.BITCOIN_PROBE_SATOSHIS), "invoiceRef": invoice}
+    line("S7b-1", "POST /v1/sets/review %s (as %s) → expect %s — on the answer itself, or on the review's gate row with the review not acceptable (the gate row in setgates.ts); nothing created" % (
+        _j({"pays": [bitcoin_probe_row(A.BITCOIN_SET_INVOICE)], "duplicatesAcknowledged": False}), clerk.name, held_not_paid))
+    line("S7b-1", "GET /v1/sets (as %s) → expect no run carrying %s: a review creates nothing" % (clerk.name, A.BITCOIN_SET_INVOICE))
+    line("S7b-2", "[not walked] POST /v1/imports/:importId/review → %s" % T.BITCOIN_IMPORT_NOT_WALKED_SENTENCE)
+    line("S7b-3", "POST /v1/sets %s (as %s) → expect %s; a run created is a finding, left as the estate made it and never submitted, approved or executed" % (
+        _j({"pays": [bitcoin_probe_row(A.BITCOIN_RUN_INVOICE)], "duplicatesAcknowledged": False, "idempotencyKey": "aer360-harness-<run>-%s" % A.BITCOIN_RUN_KEY,
+            "reference": "Harness bitcoin probe %s" % A.BITCOIN_RUN_KEY}), clerk.name, held_not_paid))
+    line("S7b-3", "GET /v1/sets (as %s) → expect no run carrying %s: nothing was created" % (clerk.name, A.BITCOIN_RUN_INVOICE))
+    line("S7b-4", "[not walked] POST /v1/deposits → %s" % T.BITCOIN_DEPOSIT_NOT_WALKED_SENTENCE)
     # S8
     line("S8", "GET /v1/journey → printed: the stage, the stages done")
     line("S8", "GET /v1/workspace/readiness → printed: transactable True once the wallet exists (False, reason \"%s\", before it), and the funding wallet's address" % NO_FUNDING_WALLET_REASON)
