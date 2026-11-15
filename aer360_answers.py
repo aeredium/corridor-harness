@@ -147,6 +147,19 @@ WHAT THE SPEC DECIDED, AND WHAT THE BOOK DECIDED WHERE THE SPEC LEFT IT TO THE H
   weekly or monthly figure, change the daily figure."), so C3_WRITTEN stands three lines after C3. The lines
   said beside an answer are carried here, at the end of this file (`lines_beside`), with their source; the
   auditor compares against them as strictly as it compared against Spec T27's, and no answer changes.
+
+  SPEC T32 (14 November 2026, on the owner's words of that day: "Instead of guessing, why don't you go and check the repository for the
+  harness, and if it does not know Bitcoin, then add that in the code?"): THE BOOK LEARNS CATALOG VERSION 20. The estate's Spec AER360-BTC-1
+  added one question to the Policy Interview, C9B, in Part C straight after C9 and not inside it: "Will this company hold bitcoin as a store
+  of value?", Yes or No, compulsory. The book answers Yes, so that Harness Holdings holds bitcoin: its charter then carries heldNetworks —
+  ['bitcoin-testnet'] for a sandbox estate, ['bitcoin'] for a live one — the estate shows the holding's address, and the Bitcoin stations of
+  the harness have a holding to read. The question's words are read from the specification as the builder brief of Spec T32 carries it whole
+  (CATALOG_VERSION_20_SOURCE), not from questioncatalog.ts, which stands outside the harness's working folder: CATALOG_SOURCE and
+  CATALOG_VERSION_READ stay the record of what was read from the code, version 15, and CATALOG_VERSION_ANSWERED says what the book now
+  answers, 20 — the specification says version 19 changed options alone and that version 20 is version 19 and this one question. An estate
+  whose Policy Interview does not ask C9B stands before version 20 and is answered as before. Nothing else in the book changes: no figure, no
+  person, no payee, no payment; bitcoin is held, not paid, so the book writes no payment in it. The words the Bitcoin stations offer the
+  estate's payment doors, each expected refused, are at the end of the Solana section below.
 """
 from __future__ import annotations
 
@@ -159,14 +172,21 @@ import aer360_tables as T  # noqa: E402
 
 CATALOG_SOURCE = "aeredium/AERAccounts apps/server/src/services/questioncatalog.ts at b523cbf (Spec AER360-115, PR #137), CATALOG_VERSION = 15"
 CATALOG_VERSION_READ = 15
-# THE VERSION THIS BOOK ANSWERS (Spec T11; 15 since Spec T27). S3 reports it beside what the estate serves; a question the estate serves
-# that the book does not know is reported with this figure in the sentence, so a moved catalog names the two versions it stands between.
-CATALOG_VERSION_ANSWERED = 15
+# THE VERSION THIS BOOK ANSWERS (Spec T11; 15 since Spec T27; 20 since Spec T32). S3 reports it beside what the estate serves; a question the
+# estate serves that the book does not know is reported with this figure in the sentence, so a moved catalog names the two versions it stands
+# between. CATALOG_SOURCE and CATALOG_VERSION_READ above stay what was read from the estate's code; version 20's one question was read from the
+# estate's specification (CATALOG_VERSION_20_SOURCE), which says version 19 changed options alone and version 20 added C9B and nothing else.
+CATALOG_VERSION_ANSWERED = 20
+CATALOG_VERSION_20_SOURCE = ("Spec AER360-BTC-1 (aeredium/AERAccounts), section 1 \"The question (catalog version 20)\", and Finding 8 of its security "
+                             "reading of 12 November 2026 for the note's words, as the builder brief of Spec T32 carries the specification whole "
+                             "(14 November 2026); not read from questioncatalog.ts")
 RETIRED_IN_V12 = ("C16", "C16C")
 # The seven questions catalog version 14 added (Spec 92), by interview; a double standing in for an older estate leaves them out.
 ADDED_IN_V14 = {"policy": ("C11A", "C11C", "C19"), "wallet_account": ("WO1", "WO2", "WO3", "WO4")}
 # The two questions catalog version 15 added (Spec AER360-115; Spec T27): the company's ceilings, in the Policy Interview only.
 ADDED_IN_V15 = {"policy": ("C2", "C3"), "wallet_account": ()}
+# The one question catalog version 20 added (Spec AER360-BTC-1 §1; Spec T32): the Bitcoin holding, in the Policy Interview only.
+ADDED_IN_V20 = {"policy": ("C9B",), "wallet_account": ()}
 
 # ---------------------------------------------------------------------------
 # The estate and its people.
@@ -331,7 +351,8 @@ def payments_total_minor(book: Optional[Sequence[Payment]] = None) -> int:
 PAYMENTS: List[Payment] = payments()
 
 # ---------------------------------------------------------------------------
-# The catalog, as version 15 asks it: id, kind, the gate it hangs on, and its closed options.
+# The catalog, as version 15 asks it: id, kind, the gate it hangs on, and its closed options — and, since Spec T32, the one
+# question version 20 added to it (C9B), read from the estate's specification and not from its code (ADDED_IN_V20).
 # Order is the catalog's own; the interview serves questions in this order, skipping the gated.
 # ---------------------------------------------------------------------------
 class Question(NamedTuple):
@@ -373,6 +394,16 @@ WRITTEN_ONE_DOLLAR = {"cents": "100"}  # the figure WO3 and WO4 arrive written w
 WA2_YES = "Yes — one person can both submit and release, where the quorum allows it"
 WA2_NO = ("No — every release needs at least one approver who did not submit it; with a quorum of 1 "
           "this means someone other than the submitter must approve")
+# Version 20's one question (Spec AER360-BTC-1 §1; Spec T32), in the specification's own words: its id, its prompt, its two options, and its note
+# as the security reading of 12 November 2026 reworded it inside version 20 (Finding 8), before the version shipped.
+HOLD_BITCOIN_QUESTION_ID = "C9B"
+HOLD_BITCOIN_PROMPT = "Will this company hold bitcoin as a store of value?"
+HOLD_BITCOIN_YES = "Yes"
+HOLD_BITCOIN_NO = "No"
+HOLD_BITCOIN_OPTIONS = [HOLD_BITCOIN_YES, HOLD_BITCOIN_NO]
+HOLD_BITCOIN_NOTE = ("Some companies keep part of their value in bitcoin, as a store of value, and your charter records whether yours will. Bitcoin is "
+                     "not a method of payment here, because a Bitcoin payment takes about an hour to be final. This is bitcoin on the Bitcoin "
+                     "network; wrapped bitcoin is not offered.")
 
 
 def _gate(question_id: str, one_of: Sequence[str]) -> Dict[str, Any]:
@@ -393,6 +424,9 @@ POLICY_CATALOG: List[Question] = [
              ["Level 2 may see level 3", "Level 3 may see level 4 — the agents and their wallets"]),
     Question("C9S", "statement", None, None),
     Question("C9", "multi_choice", None, list(OTHER_NETWORKS)),
+    # version 20 (Spec AER360-BTC-1 §1; Spec T32): the Bitcoin holding, in Part C straight after C9 and not inside it, compulsory —
+    #   C9B "Will this company hold bitcoin as a store of value?"
+    Question("C9B", "single_choice", None, list(HOLD_BITCOIN_OPTIONS), True),
     # version 15 (Spec AER360-115; Spec T27): the company's two ceilings, asked again after the networks and before the approvers —
     #   C2 "Is there an amount so large that no one in this company should ever make a payment of it — no approval, no exception?"
     #   C3 "How much is the maximum total of payments that can be made daily?"
@@ -517,6 +551,8 @@ POLICY_ANSWERS: Dict[str, Dict[str, Any]] = {
     "B4": {"choices": []},  # sight granted to no level beneath; not served while A9 is No
     "C9S": ACK,
     "C9": {"choices": [T.C9_NETWORK_CHOICE]},
+    # Spec T32: Harness Holdings holds bitcoin as a store of value — held and read, never paid; the charter names it and the estate shows its address
+    "C9B": {"choice": HOLD_BITCOIN_YES},
     # Spec T27: the company ceiling and the daily total — the figures every signing entry of the harness estates already carries
     "C2": {"cents": MONEY["company_ceiling_cents"]},
     "C3": {"cents": MONEY["daily_total_cents"]},
@@ -682,6 +718,22 @@ def solana_payment(amount: Optional[str] = None) -> Optional[SolanaPayment]:
 
 
 # ---------------------------------------------------------------------------
+# Bitcoin, held and not paid (Spec T32, 14 November 2026): what the Bitcoin stations offer the estate's payment doors.
+# ---------------------------------------------------------------------------
+# THE BOOK WRITES NO PAYMENT IN BITCOIN. Bitcoin is a holding on this estate, not a method of payment (the estate's Spec AER360-BTC-1), so every
+# door a payment enters by refuses a Bitcoin row, and the harness's stations offer each door one such row to hear the refusal: a payee whose
+# address is the holding's own (S6b), a set of one declared one-off for its review (S7b-1), and the same row offered as a run (S7b-3). The amount
+# is one satoshi (aer360_tables.BITCOIN_PROBE_SATOSHIS) — the smallest thing a door could take, and no door may take it. The address offered is
+# the one the estate itself shows for the holding, read at S5b-1, or the one address the specification writes out where the estate shows none;
+# the harness invents none. The names and the references below are the harness's own, so a row the estate wrongly kept is found by them.
+BITCOIN_PAYEE_PROBE_NAME = "Bitcoin payee probe"        # S6b: the payee offered on the estate's Bitcoin row, expected refused, never written
+BITCOIN_ONE_OFF_NAME = "Bitcoin probe destination"      # S7b-1, S7b-3: the declared one-off's payee name
+BITCOIN_SET_INVOICE = "HH-B001"                         # S7b-1: the set offered to the review, never created
+BITCOIN_RUN_INVOICE = "HH-B002"                         # S7b-3: the run offered at its creation, expected refused, never submitted
+BITCOIN_RUN_KEY = "PB1"                                 # S7b-3: the run's key in its idempotency key and its reference, as S7's are P1 to P3
+
+
+# ---------------------------------------------------------------------------
 # The shape an answer takes once the estate has stored it (Spec T8).
 # ---------------------------------------------------------------------------
 def _stored_key(key: str) -> tuple:
@@ -799,7 +851,10 @@ def _visible(q: Question, answers: Dict[str, Dict[str, Any]]) -> bool:
 
 
 def expected_walk(interview_type: str) -> List[Question]:
-    """The questions a version-15 estate serves for this book, in order (a version-14 estate serves the same less ADDED_IN_V15)."""
+    """
+    The questions a version-20 estate serves for this book, in order (an estate before version 20 serves the same less ADDED_IN_V20, and a
+    version-14 estate less ADDED_IN_V15 as well).
+    """
     answers = ANSWERS[interview_type]
     return [q for q in CATALOGS[interview_type] if _visible(q, answers)]
 

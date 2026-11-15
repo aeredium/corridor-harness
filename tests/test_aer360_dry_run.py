@@ -103,11 +103,13 @@ class DryRunTest(unittest.TestCase):
         self.assertEqual(ids[ids.index("C11") + 1], "C11A")
         self.assertEqual(ids[ids.index("C15") + 1], "C19")
         # Spec T27: the two version 15 added, in the catalog's order between C9 and C10, at the figures the harness estates' entries already carry
-        self.assertEqual(ids[ids.index("C9") + 1:ids.index("C10")], ["C2", "C3"])
+        # Spec T32: the one version 20 added, C9B, straight after C9 and before the two ceilings, answered Yes
+        self.assertEqual(ids[ids.index("C9") + 1:ids.index("C10")], ["C9B", "C2", "C3"])
+        self.assertTrue(any('"questionId": "C9B", "value": {"choice": "Yes"}' in l for l in s3))
         self.assertTrue(any('"questionId": "C2", "value": {"cents": "10000"}' in l for l in s3))
         self.assertTrue(any('"questionId": "C3", "value": {"cents": "100000"}' in l for l in s3))
-        self.assertEqual(len(s3), 25)
-        self.assertIn("the answer book answers catalog version 15", [l for l in lines if l.startswith("S3 — POST /v1/onboarding/interviews {")][0])
+        self.assertEqual(len(s3), 26)
+        self.assertIn("the answer book answers catalog version 20", [l for l in lines if l.startswith("S3 — POST /v1/onboarding/interviews {")][0])
         readback = [l for l in lines if l.startswith("S3 — GET /v1/onboarding/interviews/<policy interview>/readback")][0]
         self.assertIn("directly after C2 and C3 (catalog version 15) the lines C2_WRITTEN and C3_WRITTEN saying what each becomes — US$100 per payment and US$1,000 a day", readback)
         self.assertIn("the standing limits kept where an earlier Policy Interview stands written (Spec T27; compared in S10)", readback)
@@ -220,7 +222,9 @@ class DryRunTest(unittest.TestCase):
         """Spec T8: --dry unchanged in its calls. The fixture is the dry run at main after PR #5, its expectations cut off at the arrow."""
         with open(FROZEN_CALLS, "r", encoding="utf-8") as handle:
             frozen = handle.read().splitlines()
-        self.assertEqual(len(frozen), 285, "Spec T31 adds S3's head — the charter changes read, the approvals, the read after each and the conditional Finish the write (281 → 285); "
+        self.assertEqual(len(frozen), 299, "Spec T32 adds S3's answer to C9B after C9 (1) and the Bitcoin stations — S3b after S3 (1), S5b-1 and S5b-2 after S5s (2 and 2), S6b after S6s (2), "
+                                            "S7b-1 to S7b-4 after S7s-3 (2, 1, 2 and 1) — and nothing else moved (285 → 299); "
+                                            "Spec T31 adds S3's head — the charter changes read, the approvals, the read after each and the conditional Finish the write (281 → 285); "
                                             "Spec T14 rewrote S7 (159 → 193); Spec T18 adds S7's conditional register read for a run resumed at S7 (193 → 194); Spec T19 adds S5's head — the ceremonies read and the conditional finish — and S14 (194 → 231); "
                                             "Spec T24 adds S6's payee.env read, S7's conditional one, and the runs register read before the one-off (231 → 234); "
                                             "Spec T26 drops the three standing credit lines and prints one conditional cure per workspace, the admin.env line moved to where it is read (234 → 233); "
@@ -230,10 +234,21 @@ class DryRunTest(unittest.TestCase):
         # Spec T29: the Solana stations' lines stand after S5's, S6's and S7's, each block together, and the EVM stations' lines are unchanged
         stations = [l.split(" — ", 1)[0] for l in frozen]
         self.assertEqual([s for s in stations if s in ("S5s", "S6s", "S7s-1", "S7s-2", "S7s-3")], ["S5s"] * 8 + ["S6s"] * 12 + ["S7s-1"] * 16 + ["S7s-2"] * 3 + ["S7s-3"] * 2)
-        self.assertEqual(stations.index("S5s"), stations.index("S6") - 8)
-        self.assertEqual(stations.index("S6s"), stations.index("S7") - 12)
-        self.assertEqual(stations.index("S7s-1"), stations.index("S8") - 21)
-        self.assertEqual(len([s for s in stations if s not in ("S5s", "S6s", "S7s-1", "S7s-2", "S7s-3")]), 244, "the EVM stations' 240 lines of Spec T28 stand as they were, and Spec T31's four of S3's head beside them")
+        # Spec T32: the Bitcoin stations' lines stand after the Solana stations' in each place — S5b-1 and S5b-2 (4) before S6, S6b (2) before S7, S7b-1 to S7b-4 (6) before S8
+        self.assertEqual(stations.index("S5s"), stations.index("S6") - 8 - 4)
+        self.assertEqual(stations.index("S6s"), stations.index("S7") - 12 - 2)
+        self.assertEqual(stations.index("S7s-1"), stations.index("S8") - 21 - 6)
+        bitcoin_stations = ("S3b", "S5b-1", "S5b-2", "S6b", "S7b-1", "S7b-2", "S7b-3", "S7b-4")
+        self.assertEqual([s for s in stations if s in bitcoin_stations], ["S3b"] + ["S5b-1"] * 2 + ["S5b-2"] * 2 + ["S6b"] * 2 + ["S7b-1"] * 2 + ["S7b-2"] + ["S7b-3"] * 2 + ["S7b-4"])
+        self.assertEqual(stations.index("S3b"), stations.index("S4") - 1)
+        self.assertEqual(stations.index("S5b-1"), stations.index("S5s") + 8)
+        self.assertEqual(stations.index("S6b"), stations.index("S6s") + 12)
+        self.assertEqual(stations.index("S7b-1"), stations.index("S7s-3") + 2)
+        self.assertEqual(len([s for s in stations if s not in ("S5s", "S6s", "S7s-1", "S7s-2", "S7s-3") + bitcoin_stations]), 245,
+                         "the EVM stations' 240 lines of Spec T28 stand as they were, Spec T31's four of S3's head beside them, and Spec T32's one answer to C9B under S3")
+        self.assertEqual([l for l in frozen if l.startswith(("S7b-2 — ", "S7b-4 — "))], ["S7b-2 — [not walked] POST /v1/imports/:importId/review", "S7b-4 — [not walked] POST /v1/deposits"],
+                         "Spec T32: the two doors the harness does not walk print no call and say so")
+        self.assertEqual(len([l for l in frozen if '"BTC"' in l]), 3, "Spec T32: the payee, the set's review and the run's creation, each offered and expected refused")
         # Spec T31 §1.2: S3's head, before its interview begins — the four lines stand directly after S2's and before the interview's start
         head = stations.index("S3")
         self.assertEqual(frozen[head], "S3 — GET /v1/charter-changes (as Harriet Founder)")
@@ -244,7 +259,9 @@ class DryRunTest(unittest.TestCase):
         ceilings = [i for i, l in enumerate(frozen) if '"questionId": "C2"' in l or '"questionId": "C3"' in l]
         self.assertEqual([frozen[i] for i in ceilings], ['S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C2", "value": {"cents": "10000"}}',
                                                          'S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C3", "value": {"cents": "100000"}}'])
-        self.assertIn('"questionId": "C9"', frozen[ceilings[0] - 1])
+        self.assertEqual(frozen[ceilings[0] - 1], 'S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C9B", "value": {"choice": "Yes"}}',
+                         "Spec T32: C9B stands straight after C9 and before the ceilings")
+        self.assertIn('"questionId": "C9"', frozen[ceilings[0] - 2])
         self.assertIn('"questionId": "C10"', frozen[ceilings[1] + 1])
         self.assertEqual(calls_of(H.dry_lines()), frozen)
         # Spec T24: no address of the owner's, and no derived address of a payee or the one-off, is in the fixture — the placeholder stands in for the file the printer never reads
@@ -401,10 +418,15 @@ class DryRunTest(unittest.TestCase):
     def test_from_resumes_at_a_station_with_a_sign_in_for_the_stored_passkeys(self):
         lines = H.dry_lines(start_at="S5")
         self.assertTrue(lines[0].startswith("resume — POST /v1/auth/login/options"))
-        self.assertEqual(self.stations_in(lines[1:]), ["S5", "S5s", "S6", "S6s", "S7", "S7s-1", "S7s-2", "S7s-3", "S8", "S9", "S10", "S11", "S12", "S14"])
+        # Spec T32: the Bitcoin stations stand in their places — S5b-1 and S5b-2 after S5s, S6b after S6s, S7b-1 to S7b-4 after S7s-3
+        bitcoin_doors = ["S7b-1", "S7b-2", "S7b-3", "S7b-4"]
+        self.assertEqual(self.stations_in(lines[1:]), ["S5", "S5s", "S5b-1", "S5b-2", "S6", "S6s", "S6b", "S7", "S7s-1", "S7s-2", "S7s-3"] + bitcoin_doors + ["S8", "S9", "S10", "S11", "S12", "S14"])
         # Spec T29: the Solana stations resume by name, S5s, S6s and S7s-1 among them, and nothing before them is printed
-        self.assertEqual(self.stations_in(H.dry_lines(start_at="S5s")[1:]), ["S5s", "S6", "S6s", "S7", "S7s-1", "S7s-2", "S7s-3", "S8", "S9", "S10", "S11", "S12", "S14"])
-        self.assertEqual(self.stations_in(H.dry_lines(start_at="S7s-1")[1:]), ["S7s-1", "S7s-2", "S7s-3", "S8", "S9", "S10", "S11", "S12", "S14"])
+        self.assertEqual(self.stations_in(H.dry_lines(start_at="S5s")[1:]), ["S5s", "S5b-1", "S5b-2", "S6", "S6s", "S6b", "S7", "S7s-1", "S7s-2", "S7s-3"] + bitcoin_doors + ["S8", "S9", "S10", "S11", "S12", "S14"])
+        self.assertEqual(self.stations_in(H.dry_lines(start_at="S7s-1")[1:]), ["S7s-1", "S7s-2", "S7s-3"] + bitcoin_doors + ["S8", "S9", "S10", "S11", "S12", "S14"])
+        # Spec T32: the Bitcoin stations resume by name as well
+        self.assertEqual(self.stations_in(H.dry_lines(start_at="S5b-2")[1:]), ["S5b-2", "S6", "S6s", "S6b", "S7", "S7s-1", "S7s-2", "S7s-3"] + bitcoin_doors + ["S8", "S9", "S10", "S11", "S12", "S14"])
+        self.assertEqual(self.stations_in(H.dry_lines(start_at="S7b-3")[1:]), ["S7b-3", "S7b-4", "S8", "S9", "S10", "S11", "S12", "S14"])
         with self.assertRaises(H.HarnessError):
             H.dry_lines(start_at="S13")
 

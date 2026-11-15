@@ -628,9 +628,22 @@ def load_v15_added() -> Dict[str, Dict[str, Any]]:
 
 
 V15_ADDED = load_v15_added()
+VERSION_20_FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "aer360-version-20-added.json")
+BITCOIN_FROM_CATALOG_VERSION = 20  # Spec T32: the version whose Policy Interview asks C9B (Spec AER360-BTC-1 §1); an interview begun before it is never asked
+
+
+def load_v20_added() -> Dict[str, Dict[str, Any]]:
+    """id → {questionId, part, kind, prompt, options, note, required} for the one question catalog version 20 added (Spec AER360-BTC-1 §1; Spec T32), as the specification words it."""
+    with open(VERSION_20_FIXTURE, "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    return {q["questionId"]: q for questions in data["added"].values() for q in questions}
+
+
+V20_ADDED = load_v20_added()
 PROMPTS: Dict[str, Dict[str, Any]] = dict(V11)
 PROMPTS.update(V14_ADDED)
 PROMPTS.update(V15_ADDED)
+PROMPTS.update(V20_ADDED)
 LEVELS_BENEATH = set(A.LEVELS_BENEATH)
 # packages/shared/src/venues.ts (Spec 92): the engine's closed venue table, row for row and in its order, and the venues' published names.
 VENUE_CONTRACTS = (
@@ -2084,6 +2097,9 @@ class EstateDouble:
         """
         version = self.catalog_version if version is None else version
         questions = list(A.CATALOGS[interview_type])
+        if version < BITCOIN_FROM_CATALOG_VERSION:
+            # Spec T32: before version 20 an interview is never asked the one Spec AER360-BTC-1 added (C9B) — the default estate of this double, version 15
+            questions = [q for q in questions if q.id not in set(A.ADDED_IN_V20[interview_type])]
         if version < CEILINGS_FROM_CATALOG_VERSION:
             questions = [q for q in questions if q.id not in set(A.ADDED_IN_V15[interview_type])]
         if version < 14:
@@ -5562,7 +5578,9 @@ class TheDoubleTellsTheTruth(unittest.TestCase):
         self.assertFalse(any(q.id in A.ADDED_IN_V14["policy"] for q in older.catalog("policy")))
         self.assertFalse(any(q.id in A.ADDED_IN_V15["policy"] for q in older.catalog("policy")))
         self.assertEqual(len(older.catalog("wallet_account")), len(A.ACCOUNT_CATALOG) - 4)
-        self.assertEqual(len(older.catalog("policy")), len(A.POLICY_CATALOG) - 3 - 2)
+        self.assertEqual(len(older.catalog("policy")), len(A.POLICY_CATALOG) - 3 - 2 - 1, "less the three of version 14, the two of version 15 and the one of version 20 (Spec T32)")
+        self.assertFalse(any(q.id in A.ADDED_IN_V20["policy"] for q in EstateDouble().catalog("policy")), "the default estate, version 15, is never asked C9B")
+        self.assertEqual([q.id for q in EstateDouble(catalog_version=20).catalog("policy")], [q.id for q in A.POLICY_CATALOG], "an estate at version 20 is asked every question the book carries")
         charter = older.compile_charter("wallet_account", {qid: row["value"] for qid, row in self.double.latest(iv).items() if qid not in ("WO1", "WO2", "WO3", "WO4")}, 12)
         self.assertNotIn("holder", charter)
         self.assertNotIn("signingTiers", charter)

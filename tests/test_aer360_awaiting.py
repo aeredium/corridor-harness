@@ -74,7 +74,7 @@ def seed_a_write_that_waits(double=None, tmp=None):
     double = double or EstateDouble()
     tmp = tmp or tempfile.mkdtemp()
     runner = runner_on(double, tmp, invite=double.mint_founder_link())
-    for station, title in H.STATIONS[:5]:
+    for station, title in [s for s in H.STATIONS if s[0] in ("S1", "S2", "S3", "S4", "S5")]:  # by name: Spec T32 put S3b among the first five, and it is not one of these
         outcome = runner.run_station(station, title)
         assert outcome.outcome == H.PASS, outcome.line
     record = {}

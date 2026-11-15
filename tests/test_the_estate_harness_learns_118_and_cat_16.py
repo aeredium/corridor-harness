@@ -45,8 +45,11 @@ def fixture_lines():
 
 
 def book_answers(interview_type="policy"):
-    """The answers as the harness records them, with no prompt, so the fixture's shorthand prompts are compared with nothing."""
-    return [(q.id, A.ANSWERS[interview_type][q.id], "", q.kind) for q in A.expected_walk(interview_type)]
+    """
+    The answers as the harness records them, with no prompt, so the fixture's shorthand prompts are compared with nothing — for the walk of an estate
+    before catalog version 20: the read-back of 1 November is such an estate's and never asked version 20's one question (C9B, Spec T32).
+    """
+    return [(q.id, A.ANSWERS[interview_type][q.id], "", q.kind) for q in A.expected_walk(interview_type) if q.id not in A.ADDED_IN_V20[interview_type]]
 
 
 def ids_of(lines):

@@ -18,6 +18,7 @@ S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": 
 S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "B3", "value": {"acknowledged": true}}
 S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C9S", "value": {"acknowledged": true}}
 S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C9", "value": {"choices": ["Arbitrum One"]}}
+S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C9B", "value": {"choice": "Yes"}}
 S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C2", "value": {"cents": "10000"}}
 S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C3", "value": {"cents": "100000"}}
 S3 — POST /v1/onboarding/interviews/<policy interview>/answers {"questionId": "C10", "value": {"choice": "1"}}
@@ -38,6 +39,7 @@ S3 — POST /v1/onboarding/interviews/<policy interview>/confirm {"issuedAtMs": 
 S3 — POST /v1/onboarding/interviews/<policy interview>/compile {}
 S3 — GET /v1/onboarding/charter
 S3 — GET /v1/journey
+S3b — [compare] the read-back and the compiled charter S3 read, for bitcoin named as the specification words it (Spec AER360-BTC-1 §1, §7)
 S4 — GET /v1/approver-seats (as Harriet Founder)
 S4 — POST /v1/invites {"displayName": "Ada Approver", "email": "harness+ada@aeredium.io", "role": "author"} (as Harriet Founder, x-csrf-token)
 S4 — POST /v1/auth/invite/options {"token": "<token from the url>", "issuedAtMs": "<now>", "response": {}}
@@ -113,6 +115,10 @@ S5s — POST /v1/workspace/wallets/options {"whose": "estate", "chain": "solana"
 S5s — POST /v1/workspace/wallets {"whose": "estate", "chain": "solana", "issuedAtMs": "<issuedAtMs>", "walletId": "<walletId>", "response": "<assertion by Harriet Founder's passkey over the challenge>"} (as Harriet Founder)
 S5s — GET /v1/aer360/wallets (as Harriet Founder)
 S5s — [file] ~/.aer360-harness/harness-holdings/solana-wallets.json
+S5b-1 — GET /v1/aer360/bitcoin (as Harriet Founder)
+S5b-1 — [print] the address the estate shows for the holding, for a person
+S5b-2 — GET /v1/aer360/bitcoin (as Harriet Founder) — only where S5b-1 did not read it (a run resumed here)
+S5b-2 — GET /v1/aer360/bitcoin/wallets/<walletId> (as Harriet Founder) — for each wallet that shows an address, 3 at most; where none shows one, the first wallet listed, once
 S6 — [file] ~/.aer360-harness/payee.env
 S6 — POST /v1/payees {"displayName": "Northwind Supplies", "defaultAsset": "USDC", "defaultChain": "arbitrum", "addresses": [{"chain": "arbitrum", "address": "<OWNER_PAYEE_ADDRESS from ~/.aer360-harness/payee.env>"}]} (as Harriet Founder)
 S6 — POST /v1/payees/addresses/<address of Northwind Supplies>/promote {} (as Harriet Founder)
@@ -137,6 +143,8 @@ S6s — POST /v1/payees {"displayName": "Solana slip: the wrong shape (a 0x addr
 S6s — POST /v1/payees {"displayName": "Solana slip: base58 of thirty-one bytes", "defaultAsset": "USDC", "defaultChain": "solana", "addresses": [{"chain": "solana", "address": "<the real address's first thirty-one bytes, re-encoded>"}]} (as Harriet Founder)
 S6s — POST /v1/payees {"displayName": "Solana slip: thirty-two bytes off the curve", "defaultAsset": "USDC", "defaultChain": "solana", "addresses": [{"chain": "solana", "address": "<the real address with a byte flipped until the harness's own on-curve check fails, re-encoded>"}]} (as Harriet Founder)
 S6s — GET /v1/payees
+S6b — POST /v1/payees {"displayName": "Bitcoin payee probe", "defaultAsset": "BTC", "defaultChain": "<the estate's Bitcoin row: bitcoin-testnet in the sandbox, bitcoin live>", "addresses": [{"chain": "<the estate's Bitcoin row: bitcoin-testnet in the sandbox, bitcoin live>", "address": "<the address the estate shows at S5b-1, else the specification's own example address on bitcoin>"}]} (as Harriet Founder)
+S6b — GET /v1/payees (as Harriet Founder)
 S7 — GET /v1/workspace (as Cora Clerk)
 S7 — [file] ~/.aer360-harness/payee.env — only where S6 did not read it (a run resumed at S7)
 S7 — POST /v1/auth/login/options {} and POST /v1/auth/login/verify {"nonce": "<nonce>", "issuedAtMs": "<issuedAtMs>", "response": "<assertion>"} (as Harriet Founder at Harness Treasury, with the passkey stored at ~/.aer360-harness/harness-treasury/harriet.json)
@@ -214,6 +222,12 @@ S7s-2 — POST /v1/sets/review {"pays": [{"payeeAddressId": "<address of Harness
 S7s-2 — GET /v1/sets (as Cora Clerk)
 S7s-3 — POST /v1/aer360/refresh {} then GET /v1/aer360/overview (as Cora Clerk)
 S7s-3 — GET /v1/payees (as Cora Clerk)
+S7b-1 — POST /v1/sets/review {"pays": [{"oneOff": {"chain": "<the estate's Bitcoin row: bitcoin-testnet in the sandbox, bitcoin live>", "address": "<the address the estate shows at S5b-1, else the specification's own example address on bitcoin>", "declared": true, "payeeName": "Bitcoin probe destination"}, "asset": "BTC", "chain": "<the estate's Bitcoin row: bitcoin-testnet in the sandbox, bitcoin live>", "amountMinor": "1", "invoiceRef": "HH-B001"}], "duplicatesAcknowledged": false} (as Cora Clerk)
+S7b-1 — GET /v1/sets (as Cora Clerk)
+S7b-2 — [not walked] POST /v1/imports/:importId/review
+S7b-3 — POST /v1/sets {"pays": [{"oneOff": {"chain": "<the estate's Bitcoin row: bitcoin-testnet in the sandbox, bitcoin live>", "address": "<the address the estate shows at S5b-1, else the specification's own example address on bitcoin>", "declared": true, "payeeName": "Bitcoin probe destination"}, "asset": "BTC", "chain": "<the estate's Bitcoin row: bitcoin-testnet in the sandbox, bitcoin live>", "amountMinor": "1", "invoiceRef": "HH-B002"}], "duplicatesAcknowledged": false, "idempotencyKey": "aer360-harness-<run>-PB1", "reference": "Harness bitcoin probe PB1"} (as Cora Clerk)
+S7b-3 — GET /v1/sets (as Cora Clerk)
+S7b-4 — [not walked] POST /v1/deposits
 S8 — GET /v1/journey
 S8 — GET /v1/workspace/readiness
 S9 — [out of scope] the tour's answers as Claude would see them: the harness is the founder, not Claude

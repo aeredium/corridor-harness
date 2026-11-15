@@ -125,7 +125,8 @@ class AFreshEstateAtVersion15(unittest.TestCase):
         o = self.outcomes["S3"]
         self.assertEqual(o.outcome, H.PASS, o.line)
         self.assertIn("policy interview: 25 questions answered", o.line)
-        self.assertIn("; the answer book answers catalog version 15, and the estate served 25 question(s), every one known to the book (%s)" % H.ESTATE_STATES_NO_CATALOG_VERSION, o.line)
+        # Spec T32: the book answers version 20 since; the estate of this test stands at 15 and is never asked version 20's one question
+        self.assertIn("; the answer book answers catalog version 20, and the estate served 25 question(s), every one known to the book (%s)" % H.ESTATE_STATES_NO_CATALOG_VERSION, o.line)
         self.assertNotIn("asks neither", o.line, "the book's version and the interview's agree, so the sentence names one")
         given = {q: (value, prompt, kind) for q, value, prompt, kind in self.runner.facts["answers"]["policy"]}
         self.assertEqual(given["C2"], ({"cents": "10000"}, "Is there an amount so large that no one in this company should ever make a payment of it — no approval, no exception?", "money"))
@@ -232,10 +233,10 @@ class AVersion14Estate(unittest.TestCase):
         o = self.outcomes["S3"]
         self.assertEqual(o.outcome, H.PASS, o.line)
         self.assertIn("policy interview: 23 questions answered", o.line)
-        self.assertIn("; the answer book answers catalog version 15, and the estate served 23 question(s), every one known to the book%s (%s)" % (
+        self.assertIn("; the answer book answers catalog version 20, and the estate served 23 question(s), every one known to the book%s (%s)" % (
             VERSION_14_CLAUSE, H.ESTATE_STATES_NO_CATALOG_VERSION), o.line)
         given = [q for q, _, _, _ in self.runner.facts["answers"]["policy"]]
-        self.assertEqual(given, [q.id for q in A.expected_walk("policy") if q.id not in A.ADDED_IN_V15["policy"]])
+        self.assertEqual(given, [q.id for q in A.expected_walk("policy") if q.id not in A.ADDED_IN_V15["policy"] + A.ADDED_IN_V20["policy"]])
 
     def test_the_read_back_carries_no_ceiling_line_and_s10_expects_none(self):
         self.assertFalse(any(l["questionId"] in ("C2", "C3", "C2_WRITTEN", "C3_WRITTEN") for l in lines_of(self.runner)))
@@ -351,8 +352,8 @@ class TheRefusalsTellTheTruth(unittest.TestCase):
             runner, outcomes = run(AnEstateAtALaterCatalog(), tempfile.mkdtemp())
         o = outcomes["S3"]
         self.assertEqual(o.outcome, H.FAIL, o.line)
-        self.assertIn("the answer book has no answer for policy question C4 (money): How much may this company pay in a week? — the answer book answers catalog version 15; "
-                      "%s, and it served a question the book does not know, so its catalog is later than 15 or is not the one the book read (%s)" % (
+        self.assertIn("the answer book has no answer for policy question C4 (money): How much may this company pay in a week? — the answer book answers catalog version 20; "
+                      "%s, and it served a question the book does not know, so its catalog is later than 20 or is not the one the book read (%s)" % (
                           H.ESTATE_STATES_NO_CATALOG_VERSION, A.CATALOG_SOURCE), o.line)
         self.assertIn("b523cbf", o.line)
         self.assertEqual([q for q, _, _, _ in runner.facts["answers"]["policy"]][-3:], ["C9", "C2", "C3"], "answered up to the question it does not know, and not past it")

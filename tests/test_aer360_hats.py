@@ -48,8 +48,12 @@ LIVE_CENSUS_LINE = ("Harriet Founder — Authorise payments — harness+harriet@
 
 
 def fixture_answers(interview_type):
-    """The answers as the harness records them: (id, value, prompt, kind) for the walk the book expects."""
-    return [(q.id, A.ANSWERS[interview_type][q.id], "prompt of %s" % q.id, q.kind) for q in A.expected_walk(interview_type)]
+    """
+    The answers as the harness records them: (id, value, prompt, kind) for the walk the book expects of an estate before catalog version 20 — the
+    fixtures of this file are the read-backs and the charters of such estates, which never asked version 20's one question (C9B, Spec T32); the
+    Bitcoin holding has its own tests (tests/test_the_estate_harness_learns_bitcoin.py).
+    """
+    return [(q.id, A.ANSWERS[interview_type][q.id], "prompt of %s" % q.id, q.kind) for q in A.expected_walk(interview_type) if q.id not in A.ADDED_IN_V20[interview_type]]
 
 
 # Spec T27: what the estate says each of the company's ceilings becomes, word for word for the book's US$100 and US$1,000 — since Spec T31, as Spec
