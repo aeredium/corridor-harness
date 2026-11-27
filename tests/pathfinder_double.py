@@ -84,6 +84,10 @@ HALT_FINALITY = ("Halting an agent is final. There is no un-halt: its credential
                  "on the very next knock. Granting authority again means creating a new agent, which is cheap and is meant to be.")
 DELETE_FINALITY = ("Deleting an agent is final. Its seat in your package is free again and it no longer appears on this page; the register "
                    "keeps every agent that ever existed. Granting authority again means creating a new agent, which is cheap and is meant to be.")
+# The signing gateway's own words for a delegation the cluster refused, as the Wallet's submit carried them on production (Pathfinder run
+# 20261127-063032, Spec T33), the ticket its request id is made from in place of `<ticket>`: the session refused is the one ending `:delegate`.
+DELEGATION_REFUSED_SAID = ("PolicyDenied: collect: session req=%s:delegate ingress=329 presig=0 failed: 3/3 signers errored; party 0: party error: this party's own "
+                           "evaluation decided reject (agent_destination_not_whitelisted); only an approve may be signed")
 DOLLARS = re.compile(r"^\d+(\.\d{1,2})?$")
 ADDRESS = re.compile(r"^0x[0-9a-fA-F]{40}$")
 # Spec 45 §5: what counts as funds, below which a balance is dust and the delete proceeds naming it.
@@ -200,7 +204,8 @@ class PathfinderDouble(ConnectorDouble):
                  wallet_usdc=0, estate_chain=None, wallet_address=None, lands_later=0, delegate_first=True, police_verdict="allow", price_usd=PRICE_USD,
                  funds_left=False, margin_bps=P.MARGIN_BPS, gas_price_wei=GAS_PRICE_WEI, interrupt_on=None, receipt_lag=0,
                  fee_bps=T.FEE_BPS, fee_to=None, fee_leg=True, lose_press_answer=False, rpc_error_on=None, rpc_error_times=None, actual_gas_factor=1,
-                 event_for_another_hash=False, account_funding=None, my_agent_wallet=None, rpc_host=RPC_HOST, lists_roads=False, **kwargs):
+                 event_for_another_hash=False, account_funding=None, my_agent_wallet=None, rpc_host=RPC_HOST, lists_roads=False,
+                 implementation=None, names_implementation=True, **kwargs):
         """
         `catalogue` the names tools/list answers (default the fifteen tables.py pins; `lists_roads` adds the two assignment tools after
         police.check_action, where the relay listed them before Spec C-CAT-1 — the connector as it stands before C-CAT-1 ships);
@@ -224,7 +229,9 @@ class PathfinderDouble(ConnectorDouble):
         makes the EntryPoint's actualGasCost that many times the receipt's cost (the platform debits the greater, settle.go);
         `event_for_another_hash` logs the UserOperationEvent of another operation; `account_funding` the funding wallet GET
         /v1/account states instead of the owner's; `my_agent_wallet` the wallet id aerconnect_my_agent states instead of the
-        agent's; `rpc_host` the RPC's host.
+        agent's; `rpc_host` the RPC's host. Spec T33: `implementation` the contract an agent's key delegates to on this double (default
+        the one tables.py pins) — the delegation's one destination, which the cluster refuses in the gateway's words where the agent's
+        list does not hold it, and the address both wallet readings name; `names_implementation` False makes the readings name none.
         """
         super().__init__(seated=seated, **kwargs)
         self.catalogue = list(catalogue) if catalogue is not None else list(P.CATALOGUE)
@@ -261,6 +268,9 @@ class PathfinderDouble(ConnectorDouble):
         self.account_reads = 0
         self.my_agent_wallet = my_agent_wallet
         self.rpc_host = rpc_host
+        self.implementation = implementation or T.address(T.DELEGATION_IMPLEMENTATION["arbitrum"])
+        self.names_implementation = names_implementation
+        self.delegations_refused = []  # the ticket of every submit whose delegation the cluster refused
         self.receipt_reads = {}
         self.token_forms = []  # every form /token was handed, so a test can name the verifier and the code
         self.holdings = {}  # wallet address (lower) → {asset: raw}
@@ -394,7 +404,7 @@ class PathfinderDouble(ConnectorDouble):
             self.account_reads += 1
             funding = self.account_funding if self.account_funding and self.account_reads > self.account_funding_after else customer.get("fundingAddress")
             view_customer = {"id": customer["id"], "displayName": customer["displayName"], "email": customer["email"], "country": customer["country"],
-                             "fundingWallet": {"address": funding} if funding else None}
+                             "fundingWallet": self.reading_of({"address": funding}, funding, "arbitrum") if funding else None}
             if self.account_group:
                 view_customer["signingGroup"] = self.account_group
             mine = [a for a in self.agents if a["customerId"] == customer["id"]]
@@ -687,6 +697,17 @@ class PathfinderDouble(ConnectorDouble):
         held["USDC"] = self.usdc_of(address)
         return held
 
+    def reading_of(self, reading, address, chain):
+        """
+        A wallet reading with its delegation rows, as production's answers of 27 November 2026 carry them (Pathfinder run 20261127-063032:
+        `"delegation":[{"chain":"arbitrum","delegated":false,"implementation":"0x0562…","read":true}]`, the implementation lower-cased) —
+        on GET /v1/account's funding wallet and on the agent's own wallet reading alike. Where in each answer production puts the list
+        is read from no source this repository holds; the double puts it on the reading itself. `names_implementation` False names none.
+        """
+        if self.names_implementation:
+            reading["delegation"] = [{"chain": chain, "delegated": address.lower() in self.delegated, "implementation": self.implementation.lower(), "read": True}]
+        return reading
+
     def balances_of(self, agent):
         held = self.held_by(agent["walletAddress"])
         rows = []
@@ -694,8 +715,8 @@ class PathfinderDouble(ConnectorDouble):
             raw = held.get(asset, 0)
             rows.append({"asset": asset, "chain": agent["walletChain"], "contract": contract, "decimals": DECIMALS[asset], "raw": str(raw),
                          "amount": H.format_units(raw, DECIMALS[asset]), "available": True, "source": "arbitrum via the double"})
-        return {"wallet_id": agent["walletId"], "chain": agent["walletChain"], "native": {"symbol": "ETH", "wei": str(held.get("ETH", 0))},
-                "tokens": {"balances": rows, "road": "the pact's document", "said": "…"}}
+        return self.reading_of({"wallet_id": agent["walletId"], "chain": agent["walletChain"], "native": {"symbol": "ETH", "wei": str(held.get("ETH", 0))},
+                                "tokens": {"balances": rows, "road": "the pact's document", "said": "…"}}, agent["walletAddress"], agent["walletChain"])
 
     def tool_wallet_get_balances(self, rpc_id, agent, connection, args):
         if args.get("wallet_id") != agent["walletId"]:
@@ -728,8 +749,17 @@ class PathfinderDouble(ConnectorDouble):
             return self.tool_text(rpc_id, "agent_mismatch: agent_id must match the calling agent", error=True)
         if args.get("pact_id") != agent["pactId"]:
             return self.tool_text(rpc_id, "pact_mismatch: the pact named is not the one the ticket was built under", error=True)
-        ticket["state"] = "consumed"
         address = agent["walletAddress"]
+        if self.delegate_first and address.lower() not in self.delegated:
+            # Spec T33, as production did on 27 November 2026 (run 20261127-063032): a key not yet delegated signs its delegation first, as a copy of the
+            # trade's own signing request (stablepro-agent-server useroperation.go), so it carries the agent's pact; the delegation's one destination is
+            # the implementation it names (aerkey-policy-engine envelopes.go, VerifyAndParseDelegation), and an agent's evaluation commits only where its
+            # destination is on its wallet's list (agent_whitelist.go). Off the list, the cluster refuses in the gateway's words: nothing is signed,
+            # nothing moves, and the trade itself is never asked for.
+            if self.implementation.lower() not in [a.lower() for a in agent["document"]["scope"]["counterparties_allowed"]]:
+                self.delegations_refused.append(ticket["id"])
+                return self.tool_text(rpc_id, DELEGATION_REFUSED_SAID % ticket["id"], error=True)
+        ticket["state"] = "consumed"
         held = self.holdings.setdefault(address.lower(), {})
         gross = ticket["raw"] * 10 ** 12 // self.price_usd  # USDC (6 decimals) → WETH (18) at the price
         fee = gross * self.fee_bps // 10000 if self.fee_leg else 0

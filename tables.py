@@ -18,6 +18,11 @@ tools/list is ruled to publish to a paying agent — the fifteen, since Spec T25
 by name, with the source it was read from and the spec that added it (below, after the figures),
 and THE ROADS: the three assignment-tool names the owner ruled out of a paying agent's catalogue
 on 4 October 2026. Pathfinder's S8 expects each pinned tool by name and fails on a ROADS name.
+
+Since Spec T33 (27 November 2026) it pins, apart from the Series' table, THE CONTRACT AN AGENT'S KEY
+DELEGATES TO on Arbitrum, read from production's own word (PINNED_FROM_PRODUCTION, below the Trader's list),
+and the Pathfinder's list of nine that carries it (PATHFINDER_LIST). The Series' table and the Trader's
+eight lines are as they were.
 """
 from __future__ import annotations
 
@@ -117,6 +122,41 @@ TRADER_LIST_B3: List[str] = [
     "USDT0_ARBITRUM",
 ]
 
+# ---------------------------------------------------------------------------
+# THE CONTRACT AN AGENT'S KEY DELEGATES TO (Spec T33, 27 November 2026). Pathfinder run 20261127-063032 on
+# production passed S1 to S10 and was refused at S11's wallet.submit_transaction: the signing session refused
+# was the DELEGATION (request id `<ticket>:delegate`), the one signature by which an agent's key becomes an
+# account before its first operation (EIP-7702), with `agent_destination_not_whitelisted`. The policy engine
+# reads a delegation authorization as what it is — its one destination is the implementation it names
+# (aerkey-policy-engine pkg/eval/envelopes.go, VerifyAndParseDelegation) — and commits an agent's evaluation only
+# where the destination is on its wallet's list, the list its owner wrote (pkg/eval/agent_whitelist.go; the access
+# platform, internal/access/agent_whitelist_authoring.go: "The agent whitelist is populated by the owner."). So the
+# Pathfinder's owner writes one more line on its agent's list: this contract.
+#
+# It is pinned APART from PINNED, and that is where Spec T33 and the code part company: the spec asks one new
+# `Pinned` under this key, and PINNED is the Series' and the Guide's table — every address in it is held to the
+# Series' own text (tests/test_series_ids.py) and is a destination the money Series may send
+# (corridor_harness.resolve_address). This address was read from production, not from the Series, and no Series
+# test sends it; so it is a `Pinned` of its own table, found by the same `address`, `source` and `describe`, and
+# PINNED, TRADER_LIST_B3 and the Series are untouched. Re-pinned only by a spec, with where it was read.
+# ---------------------------------------------------------------------------
+PINNED_FROM_PRODUCTION: Dict[str, Pinned] = {
+    "DELEGATION_IMPLEMENTATION_ARBITRUM": Pinned(
+        "0x0562346e1291fd9B922991A249FaaBD0bFEa325f",
+        "the corridor's account contract on Arbitrum, the implementation an agent's key delegates to before its first operation (EIP-7702)",
+        "the agents' Wallet's own reading on production, Pathfinder run 20261127-063032, delegation[arbitrum].implementation",
+    ),
+}
+
+# The key of the contract an agent's key delegates to, by the chain as the corridor spells it. A chain not named
+# here has none pinned, and the harness invents none.
+DELEGATION_IMPLEMENTATION: Dict[str, str] = {"arbitrum": "DELEGATION_IMPLEMENTATION_ARBITRUM"}
+
+# The Pathfinder's list, the nine lines its owner writes for its agent (Spec T33): the eight lines of the Trader's
+# list in B3's order, then the contract the agent's key delegates to on the chain it trades on. The Pathfinder's
+# alone: the money Series' Trader files TRADER_LIST_B3, which is not changed by one entry.
+PATHFINDER_LIST: List[str] = TRADER_LIST_B3 + ["DELEGATION_IMPLEMENTATION_ARBITRUM"]
+
 # The Series' figures (Series §2 and the tests that name another figure). The
 # harness refuses to send any amount that is not the figure the Series wrote for
 # that test; see `series.py` where each test carries its own.
@@ -197,20 +237,27 @@ CATALOGUE_NAMES: Tuple[str, ...] = tuple(t.name for t in CATALOGUE)
 ROADS_NAMES: Tuple[str, ...] = ("police.request_assignment", "police.assignment_status", "police.police_assignment_status")
 
 
+def pinned_row(key: str) -> Pinned:
+    """The pinned row for a table key: the Series' and the Guide's (PINNED), or the one read from production (PINNED_FROM_PRODUCTION, Spec T33). A key that is not pinned is a bug, and it throws."""
+    if key in PINNED:
+        return PINNED[key]
+    if key in PINNED_FROM_PRODUCTION:
+        return PINNED_FROM_PRODUCTION[key]
+    raise KeyError("no pinned address called %s" % key)
+
+
 def address(key: str) -> str:
     """The pinned bytes for a table key. A key that is not pinned is a bug, and it throws."""
-    if key not in PINNED:
-        raise KeyError("no pinned address called %s" % key)
-    return PINNED[key].address
+    return pinned_row(key).address
 
 
 def source(key: str) -> str:
-    return PINNED[key].source
+    return pinned_row(key).source
 
 
 def describe(key: str) -> str:
     """One line for a report: the address, what it is, and where it was read."""
-    row = PINNED[key]
+    row = pinned_row(key)
     return "%s — %s (read from %s)" % (row.address, row.what, row.source)
 
 
@@ -219,7 +266,7 @@ def is_pinned(addr: Optional[str]) -> bool:
     if not addr:
         return False
     low = addr.lower()
-    return any(row.address.lower() == low for row in PINNED.values())
+    return any(row.address.lower() == low for row in list(PINNED.values()) + list(PINNED_FROM_PRODUCTION.values()))
 
 
 def tool(name: str) -> PinnedTool:
