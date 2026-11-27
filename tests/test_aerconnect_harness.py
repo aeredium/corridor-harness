@@ -1073,7 +1073,6 @@ class TheContractTheAgentsKeyDelegatesToIsPinned(unittest.TestCase):
                                             "deployment's own answer"), row.source)
         self.assertEqual(T.source(IMPLEMENTATION_KEY), row.source)
         self.assertEqual(T.describe(IMPLEMENTATION_KEY), "%s — %s (read from %s)" % (row.address, row.what, row.source))
-        self.assertTrue(T.is_pinned(row.address.lower()), "compared case-insensitively")
         self.assertEqual(T.DELEGATION_IMPLEMENTATION, {"arbitrum": IMPLEMENTATION_KEY})
         self.assertEqual(P.IMPLEMENTATION_KEY, IMPLEMENTATION_KEY, "the trade's chain is arbitrum, and the harness reads the key from tables.py")
         with self.assertRaises(KeyError):
@@ -1102,6 +1101,23 @@ class TheContractTheAgentsKeyDelegatesToIsPinned(unittest.TestCase):
                 text = handle.read()
             for words in ("PATHFINDER_LIST", "DELEGATION_IMPLEMENTATION", "PINNED_FROM_PRODUCTION", PINNED_IMPLEMENTATION[2:].lower()):
                 self.assertNotIn(words, text.replace(PINNED_IMPLEMENTATION[2:], PINNED_IMPLEMENTATION[2:].lower()), "%s is not touched by Spec T33" % name)
+
+    def test_is_pinned_answers_for_the_series_table_alone(self):
+        """
+        The security reading of pull request 34, finding 3: the contract is pinned apart so that the money Series cannot send it, and
+        `is_pinned` is the Series' table's predicate — a guard that admits a raw address on it must not admit the address read from
+        production. It reads PINNED alone, as it did before Spec T33; and no module of the money Series asks it, by key or by address.
+        """
+        for spelling in (PINNED_IMPLEMENTATION, PINNED_IMPLEMENTATION.lower(), PINNED_IMPLEMENTATION.upper().replace("0X", "0x")):
+            self.assertFalse(T.is_pinned(spelling), "the address read from production is not one of the Series' pinned bytes")
+        for key, row in T.PINNED.items():
+            self.assertTrue(T.is_pinned(row.address), key)
+            self.assertTrue(T.is_pinned(row.address.lower()), "compared case-insensitively")
+        self.assertFalse(T.is_pinned(None))
+        self.assertFalse(T.is_pinned(""))
+        for name in ("corridor_harness.py", "corridor_consent.py", "series.py", "aerconnect_harness.py"):
+            with open(os.path.join(ROOT, name), encoding="utf-8") as handle:
+                self.assertNotIn("is_pinned", handle.read(), "%s gates nothing on is_pinned" % name)
 
     def test_the_harness_reads_the_address_from_tables_and_declares_it_nowhere(self):
         with open(os.path.join(ROOT, "aerconnect_harness.py"), encoding="utf-8") as handle:

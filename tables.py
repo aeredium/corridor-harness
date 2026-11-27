@@ -270,11 +270,15 @@ def describe(key: str) -> str:
 
 
 def is_pinned(addr: Optional[str]) -> bool:
-    """Whether an address is one of the pinned bytes, compared case-insensitively."""
+    """
+    Whether an address is one of the Series' and the Guide's pinned bytes (PINNED), compared case-insensitively. PINNED alone: the
+    address read from production (PINNED_FROM_PRODUCTION, Spec T33) is the Pathfinder's ninth line and no destination of the money
+    Series, so a guard that admits an address on this predicate does not admit it (the security reading of pull request 34, finding 3).
+    """
     if not addr:
         return False
     low = addr.lower()
-    return any(row.address.lower() == low for row in list(PINNED.values()) + list(PINNED_FROM_PRODUCTION.values()))
+    return any(row.address.lower() == low for row in PINNED.values())
 
 
 def tool(name: str) -> PinnedTool:
