@@ -191,10 +191,13 @@ Trader's list did not hold the implementation, so the cluster refused, correctly
     already carries one: S2's GET /v1/account (the funding wallet's reading), and on every run S11's first wallet.get_balances (the agent's
     own wallet reading, the wallet whose key delegates: what S2 read does not stand for it — the security reading of pull request 34,
     finding 1), before anything is funded, built or submitted. No call is added for it. The same address is said in one clause and
-    the run goes on; another address and the trade is NOT submitted — S11 stops (`stopped`, never a fail: the harness's own table gone
-    stale is no fault of the product, as an unpinned tool at S8 is a finding and never a fail) naming the address pinned, the address
-    named, the chain, and that the table is behind and must be re-pinned by a spec, with the same sentence a finding at the station that
-    read it; no implementation named in any answer read and the run goes on with a finding that the address could not be held.
+    the run goes on; another address and the trade is NOT submitted — S11 stops (`stopped`: not a fail, which says a fault of the
+    product's, and not said to be the harness's own table gone stale either, since an upgrade and a substituted implementation read
+    alike in the deployment's own answer and the harness cannot know which it is — the security reading of pull request 34, finding 2)
+    naming the address pinned, the address named and the chain, saying that the two differ and that the cause is not known, and asking
+    that the address named be verified against a source other than the deployment's own answer before any re-pin; the same sentence is a
+    finding at the station that read it; no implementation named in any answer read and the run goes on with a finding that the address
+    could not be held.
   the refusal, told truthfully. Where the submit is still refused with agent_destination_not_whitelisted on a session whose request id
     ends `:delegate`, S11's line says, beside the gateway's words kept verbatim, that the delegation was refused, not the trade.
 Where Spec T33 and the code part company: the spec asks one new `Pinned` in the table, and tables.py's PINNED is the Series' and the
@@ -435,11 +438,16 @@ ACCOUNT_READING = "GET /v1/account (S2)"  # the funding wallet's reading, on the
 WALLET_READING = "wallet.get_balances (S11)"  # the agent's own wallet reading, the first call of S11
 # The same address: one clause in the line of the station that read it, and the run goes on.
 IMPLEMENTATION_SAME_CLAUSE = "the contract the agent's key delegates to on %s is the one tables.py pins, %s, in %s's own word (%s)"
-# Another address: the trade is not submitted. The harness's own table gone stale, never a fault of the product — the station stops,
-# and the sentence is a finding at the station that read it: the address pinned, the chain, who names which address and where.
-IMPLEMENTATION_BEHIND_SENTENCE = ("tables.py pins %s as the contract an agent's key delegates to on %s, and %s names %s (%s): the harness's table is behind "
-                                  "the deployment and must be re-pinned by a spec, so the trade is not submitted — the harness's own table gone stale, not "
-                                  "a fault of the product")
+# Another address: the trade is not submitted, and the station stops. The sentence says what was read and no more (the security reading
+# of pull request 34, finding 2): the address pinned, the chain, who names which address and where, that the two differ, and that the
+# harness does not know why. The pinned address is the contract every agent's key hands its account to, and a deployment that names
+# another may have been upgraded or may have had its implementation substituted: its own answer reads the same either way, so the
+# sentence names no cause, calls the event neither the harness's stale table nor a fault of the product, and asks that the address
+# named be verified against a source other than the deployment's own answer before any re-pin. It is a finding at the station that read it.
+IMPLEMENTATION_DIFFERS_SENTENCE = ("tables.py pins %s as the contract an agent's key delegates to on %s, and %s names %s (%s): the two addresses differ, so the "
+                                   "trade is not submitted — why they differ is not known to the harness, which cannot tell an upgrade from a substituted "
+                                   "contract by the deployment's own answer; before any re-pin, by a spec, the address named must be verified against a source "
+                                   "other than that answer, and the source recorded with the pin")
 IMPLEMENTATION_NOT_TRADED_TAIL = "nothing was funded, built, signed or sent"
 # No implementation named for the chain in any answer read: the run goes on, and a finding says the address could not be held.
 IMPLEMENTATION_UNNAMED_FINDING = ("no answer read for it — %s — names an implementation for %s, so the contract tables.py pins for the agent's key to delegate "
@@ -1809,9 +1817,9 @@ class Pathfinder:
         Spec T33: the contract tables.py pins for the agent's key to delegate to on the trade's chain, held case-insensitively
         against the implementation an answer the harness already reads names for that chain. No call is made here. Answers the
         sentence for the station's line, and remembers what was found: the same address, one clause; another address, the
-        sentence that says the harness's table is behind — named with both addresses and the chain, and recorded as a finding
-        at this station, since a table gone stale is the harness's own and never a fault of the product; None where the answer
-        names no implementation for the chain, which a later reading may still name.
+        sentence that says the two differ — named with both addresses and the chain, with no cause, since the harness cannot
+        know one, and recorded as a finding at this station; None where the answer names no implementation for the chain,
+        which a later reading may still name.
         """
         chain = TRADE["chain"]
         pinned = T.address(IMPLEMENTATION_KEY)
@@ -1823,16 +1831,18 @@ class Pathfinder:
         if other is None:
             self.facts["implementation"] = {"outcome": IMPLEMENTATION_SAME, "named": named[0], "where": where}
             return IMPLEMENTATION_SAME_CLAUSE % (chain, pinned, normal_base(self.base), where)
-        sentence = IMPLEMENTATION_BEHIND_SENTENCE % (pinned, chain, normal_base(self.base), other, where)
+        sentence = IMPLEMENTATION_DIFFERS_SENTENCE % (pinned, chain, normal_base(self.base), other, where)
         self.facts["implementation"] = {"outcome": IMPLEMENTATION_ANOTHER, "named": other, "where": where, "sentence": sentence}
         self.finding(sentence)
         return sentence
 
-    def stop_on_a_stale_table(self) -> None:
+    def stop_where_the_implementation_differs(self) -> None:
         """
         Spec T33: where the deployment names another implementation than the one pinned, the trade is not submitted. The station
-        stops — `stopped`, the harness's word for what it cannot get past by itself, and never a fail, which is a fault of the
-        product's alone (Spec T25) — in the sentence that names both addresses, the chain, and that the table must be re-pinned.
+        stops — `stopped`, the harness's word for what it cannot get past by itself. It is not a fail, which says a fault of the
+        product's (Spec T25), and it is not said to be the harness's own table gone stale either: which of the two it is the
+        harness cannot know (the security reading of pull request 34, finding 2). The sentence names both addresses and the
+        chain, says that the cause is not known, and asks for a source other than the deployment's own answer before any re-pin.
         """
         held = self.facts.get("implementation") or {}
         if held.get("outcome") == IMPLEMENTATION_ANOTHER:
@@ -1850,7 +1860,7 @@ class Pathfinder:
         """
         named_earlier = bool(self.facts.get("implementation"))
         clause = self.hold_the_implementation(balances.data, WALLET_READING)
-        self.stop_on_a_stale_table()
+        self.stop_where_the_implementation_differs()
         if clause is None:
             if named_earlier:
                 return ""
@@ -2350,7 +2360,7 @@ class Pathfinder:
         facts = {"wallet_id": wallet["id"]}
         # Spec T33: where an earlier station read another implementation than the one tables.py pins, the trade is not submitted and
         # nothing is asked of the Wallet or the estate here
-        self.stop_on_a_stale_table()
+        self.stop_where_the_implementation_differs()
         # the wallet's own balances first: the harness trades only what the wallet holds — and where the wallet is short, the harness funds it
         # itself, from Harness Holdings through the estate's own road (Spec T23); no station asks a person for anything
         self.expect("the wallet's balances on its own chain: USDC at least %d minor units (US$0.10); short of it, Harness Holdings funds the "
@@ -3319,7 +3329,7 @@ def dry_lines(base: str = DEFAULT_BASE, owner: str = DEFAULT_OWNER, store_dir: s
          "key to delegate to there, %s (%s) → the same: one clause, and the run goes on; another: \"%s\", a finding, and S11 does not trade; none named: nothing is said "
          "here; S11 holds the agent's own wallet reading all the same, as it does where this answer named the same" % (
              TRADE["chain"], pinned_implementation, IMPLEMENTATION_KEY,
-             IMPLEMENTATION_BEHIND_SENTENCE % (pinned_implementation, TRADE["chain"], normal_base(base), "<the address named>", ACCOUNT_READING)))
+             IMPLEMENTATION_DIFFERS_SENTENCE % (pinned_implementation, TRADE["chain"], normal_base(base), "<the address named>", ACCOUNT_READING)))
     station("S3", "this run's own agent, %s (%s), with a fresh passkey" % (label, ROLE_ID))
     call("S3", "GET %s → expect 200: customer.fundingWallet.address, the funding root the connector registered at the owner's first agent and keeps since "
          "(connector Spec 8: registered once) — sent as fundingAddress for an owner that already has one; for an owner the connector lists none for, [file] "
@@ -3366,7 +3376,7 @@ def dry_lines(base: str = DEFAULT_BASE, owner: str = DEFAULT_OWNER, store_dir: s
          "funded, built or submitted → the same: one clause; another: stopped, \"%s; %s\"; none named by it where S2's answer named one: nothing more is said; none named in any "
          "answer read: the finding \"%s\"" % (
              TRADE["chain"], pinned_implementation,
-             IMPLEMENTATION_BEHIND_SENTENCE % (pinned_implementation, TRADE["chain"], normal_base(base), "<the address named>", WALLET_READING), IMPLEMENTATION_NOT_TRADED_TAIL,
+             IMPLEMENTATION_DIFFERS_SENTENCE % (pinned_implementation, TRADE["chain"], normal_base(base), "<the address named>", WALLET_READING), IMPLEMENTATION_NOT_TRADED_TAIL,
              IMPLEMENTATION_UNNAMED_FINDING % (names_said([ACCOUNT_READING, WALLET_READING]), TRADE["chain"], pinned_implementation, normal_base(base))))
     estate_people = os.path.join(estate_store, A.ESTATE["client_id"])
     call("S11", "[estate %s] POST /v1/auth/login/options {}, POST /v1/auth/login/verify {nonce, issuedAtMs, response} as each of %s with the passkey stored under %s "

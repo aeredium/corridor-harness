@@ -138,13 +138,21 @@ TRADER_LIST_B3: List[str] = [
 # Series' own text (tests/test_series_ids.py) and is a destination the money Series may send
 # (corridor_harness.resolve_address). This address was read from production, not from the Series, and no Series
 # test sends it; so it is a `Pinned` of its own table, found by the same `address`, `source` and `describe`, and
-# PINNED, TRADER_LIST_B3 and the Series are untouched. Re-pinned only by a spec, with where it was read.
+# PINNED, TRADER_LIST_B3 and the Series are untouched.
+#
+# What the source below is, and is not (the security reading of pull request 34, finding 2). This address is the contract every agent's
+# key hands its account to, and the one source recorded for it is the deployment's own answer: a pin read from the deployment and held
+# against the same deployment's later answers is trust on first use. So the row says so in its own words, and the rule for a re-pin is:
+# only by a spec, only after the new address has been verified against a source other than the deployment's own answer, and the row's
+# source records that check beside the reading. Where a deployment names another address, the Pathfinder does not trade and names no
+# cause (aerconnect_harness.IMPLEMENTATION_DIFFERS_SENTENCE): the deployment's word alone is no ground for a re-pin.
 # ---------------------------------------------------------------------------
 PINNED_FROM_PRODUCTION: Dict[str, Pinned] = {
     "DELEGATION_IMPLEMENTATION_ARBITRUM": Pinned(
         "0x0562346e1291fd9B922991A249FaaBD0bFEa325f",
         "the corridor's account contract on Arbitrum, the implementation an agent's key delegates to before its first operation (EIP-7702)",
-        "the agents' Wallet's own reading on production, Pathfinder run 20261127-063032, delegation[arbitrum].implementation",
+        "the agents' Wallet's own reading on production, Pathfinder run 20261127-063032, delegation[arbitrum].implementation — the "
+        "deployment's own answer, and the only source recorded: verified against no source other than the deployment's own answer",
     ),
 }
 
