@@ -26,6 +26,7 @@ import re
 import shutil
 import sys
 import tempfile
+import time
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -1157,6 +1158,31 @@ class TheReadersOfTheDelegation(unittest.TestCase):
         self.assertFalse(P.delegation_refused((GATEWAY_REFUSED_THE_DELEGATION % "5d1c0b3e").replace("agent_destination_not_whitelisted", "legacy_limit_zero")))
         self.assertFalse(P.delegation_refused((GATEWAY_REFUSED_THE_DELEGATION % "5d1c0b3e").replace(":delegate", ":delegated_elsewhere")))
         self.assertFalse(P.delegation_refused(""))
+
+    def test_the_delegations_session_is_read_to_a_bound_whatever_the_refusal_carries(self):
+        """
+        The security reading of pull request 34, finding 5: the words matched are the deployment's own, of no known length. An unbounded
+        `\\S*` after `req=` ran to the end of each unbroken run and backed off a character at a time, for every `req=` in it — time by the
+        square of the text's length. The request id is read to a bound, and a long refusal with many `req=` and no `:delegate` costs
+        time in proportion to its length.
+        """
+        said = "session req=%s:delegate failed (agent_destination_not_whitelisted)"
+        self.assertTrue(P.delegation_refused(said % ("7" * 200)), "an id as long as the bound is read")
+        self.assertFalse(P.delegation_refused(said % ("7" * 201)), "a longer one is not read as the delegation's: the bound is a bound")
+        self.assertEqual(P.DELEGATE_ID_BOUND, 200)
+        self.assertTrue(P.delegation_refused(said % "run:7:ticket"), "an id that carries a colon of its own is read as it was")
+        self.assertTrue(P.delegation_refused(said % ""), "and an empty one, as it was")
+
+    def test_a_long_refusal_with_many_req_and_no_delegate_does_not_stall_the_reader(self):
+        """
+        Finding 5 again, by the clock: one unbroken run of 240,000 characters, 60,000 times `req=` and never `:delegate`. By the square of
+        its length that is some fourteen thousand million steps of the matcher; to the bound, some twenty-four million.
+        """
+        hostile = "agent_destination_not_whitelisted " + "req=" * 60000
+        started = time.perf_counter()
+        self.assertFalse(P.delegation_refused(hostile))
+        elapsed = time.perf_counter() - started
+        self.assertLess(elapsed, 2.0, "the refusal's own words stalled the reader for %.1f s" % elapsed)
 
     def test_a_sentence_that_counts_or_names_the_list_tells_the_truth_about_it(self):
         self.assertEqual(P.list_said(THE_NINE), THE_LIST_SAID)

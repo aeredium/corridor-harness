@@ -455,7 +455,12 @@ IMPLEMENTATION_UNNAMED_FINDING = ("no answer read for it — %s — names an imp
 IMPLEMENTATION_UNNAMED_CLAUSE = "the contract the agent's key delegates to could not be held against %s's own word (a finding)"
 # S11's refusal, told truthfully: said beside the gateway's own words, kept verbatim, where the signing session refused is the delegation's.
 DELEGATION_REFUSED_REASON = "agent_destination_not_whitelisted"
-DELEGATE_SESSION = re.compile(r"\breq=\S*:delegate(?![A-Za-z0-9_])")  # "session req=<ticket>:delegate": the request id ends :delegate
+# "session req=<ticket>:delegate": the request id ends :delegate. The id is read to a bound (the security reading of pull request 34,
+# finding 5): the words matched are the deployment's own and of no known length, and an unbounded `\S*` ran to the end of each unbroken
+# run and backed off a character at a time for every `req=` in it — time by the square of a long refusal's length, a stalled S11. A
+# ticket is a UUID, 36 characters; an id longer than the bound is not read as the delegation's, and the gateway's words are kept all the same.
+DELEGATE_ID_BOUND = 200
+DELEGATE_SESSION = re.compile(r"\breq=\S{0,%d}:delegate(?![A-Za-z0-9_])" % DELEGATE_ID_BOUND)
 DELEGATION_REFUSED_SAID = ("the delegation was refused, not the trade: the session refused is the one whose request id ends :delegate, the one signature by "
                            "which the agent's key becomes an account before its first operation, and the trade itself was never asked for")
 
