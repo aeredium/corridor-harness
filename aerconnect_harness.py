@@ -22,8 +22,10 @@ Two laws, as the other harnesses keep them:
 THE STATIONS, A TO Z
   S1  Sign up            POST /v1/auth/signup/options, /verify — born once; a stored passkey is signed in with
   S2  The account        GET /v1/account — the owner born once, the seat's standing; the signing group compared where the page
-                         states one, a finding where it states none (Spec T25)
-  S3  Create agent       GET /v1/account/agents/new, the step-up, POST /v1/account/agents — trader.v1, this run's own agent
+                         states one, a finding where it states none (Spec T25); the contract the agent's key delegates to, as
+                         tables.py pins it, held against the implementation the page names where it names one (Spec T33)
+  S3  Create agent       GET /v1/account/agents/new, the step-up, POST /v1/account/agents — trader.v1, this run's own agent, its
+                         list the Pathfinder's nine: the Trader's eight venue contracts and the contract its key delegates to (Spec T33)
   S4  Recall the policy  POST /v1/account/agents/:id/policy — the policy S3 was born with, recalled and re-filed as an edit;
                          the pact keeps its id, the agent and its token are not touched (the law of 2 October 2026)
   S5  The child wallet   GET /v1/account/agents/:id/wallet-record — provisioned, not a mock, the owner's
@@ -34,7 +36,8 @@ THE STATIONS, A TO Z
   S9  The agent          aerconnect_my_agent — the wallet UUID, the pact, the gas balance
   S10 The judgment       police.check_action — the trade within the mandate, a receipt
   S11 The trade          the agent's wallet funded by Harness Holdings through the estate's own road where it is short (Spec T23),
-                         then wallet.build_transaction, wallet.submit_transaction — a real swap, landed, sponsored by the paymaster
+                         then wallet.build_transaction, wallet.submit_transaction — a real swap, landed, sponsored by the paymaster;
+                         not traded where the deployment names another implementation than the one pinned (Spec T33)
   S12 The reader         the chain and the gas trail — the swap on chain, the debit with its 10% charge, the balances reconciled
   S12a The commission check  the trading fee on chain: five basis points of the trade's output, in the ERC-20 Transfer logs, to
                          the agents' fee address — FEE_BPS and FEE_ADDRESS read from tables.py, judged by fee_check
@@ -167,6 +170,40 @@ settled, the instruction confirmed, the wallet's USDC read through wallet.get_ba
 (`~/.aer360-harness/`); the one sentence on this road that names a thing a person must do is T14's treasury top-up. And S3 sends, S5
 and S9 expect, the funding wallet the connector's own register holds for an owner that already exists (`GET /v1/account`): a funding
 root is registered once (connector Spec 8), and the file is read only when the owner's root is about to be registered.
+
+THE OWNER LISTS THE CONTRACT ITS AGENT'S KEY DELEGATES TO (Spec T33, 27 November 2026; Bear: "We need to fix that. Before doing any
+building, can we go ahead and fix this problem?", and his standing rule, "The more complexity, the more issues. You need to do the best you
+can to actually use what we already have."). Run 20261127-063032 on production passed S1 to S10 and was refused at S11's
+wallet.submit_transaction, in the signing gateway's words: "PolicyDenied: collect: session req=<ticket>:delegate ingress=329 presig=0 failed:
+3/3 signers errored; party 0: party error: this party's own evaluation decided reject (agent_destination_not_whitelisted); only an approve may
+be signed". The session refused was the DELEGATION, the one signature by which the agent's key becomes an account before its first operation
+(EIP-7702: stablepro-agent-server internal/execution/onchain/useroperation.go asks the gateway for it as a copy of the trade's own signing
+request, so it carries the agent's pact); the trade itself was never asked for. The policy engine reads a delegation authorization as what
+it is, its one destination the implementation it names (aerkey-policy-engine pkg/eval/envelopes.go, VerifyAndParseDelegation), and commits
+an agent's evaluation only where its destination is on its wallet's list, the list its owner wrote (pkg/eval/agent_whitelist.go; the access
+platform, internal/access/agent_whitelist_authoring.go: "The agent whitelist is populated by the owner."). The eight venue contracts of the
+Trader's list did not hold the implementation, so the cluster refused, correctly, by its own rule. Now:
+  the list. The Pathfinder's owner files nine lines (tables.py PATHFINDER_LIST): the eight venue contracts of the Trader's list in B3's
+    order, then the contract the agent's key delegates to on the trade's chain, pinned in tables.py with where it was read. The access
+    platform validates an authored destination for its form only (requireAgentWhitelistPayableDestinations), so an owner may list it.
+  the check before the trade. The pinned address is held, case-insensitively, against the implementation the deployment itself names for
+    the trade's chain — the `delegation` rows its wallet readings carry ({chain, delegated, implementation, read}) — on each answer that
+    already carries one: S2's GET /v1/account (the funding wallet's reading), and on every run S11's first wallet.get_balances (the agent's
+    own wallet reading, the wallet whose key delegates: what S2 read does not stand for it — the security reading of pull request 34,
+    finding 1), before anything is funded, built or submitted. No call is added for it. The same address is said in one clause and
+    the run goes on; another address and the trade is NOT submitted — S11 stops (`stopped`: not a fail, which says a fault of the
+    product's, and not said to be the harness's own table gone stale either, since an upgrade and a substituted implementation read
+    alike in the deployment's own answer and the harness cannot know which it is — the security reading of pull request 34, finding 2)
+    naming the address pinned, the address named and the chain, saying that the two differ and that the cause is not known, and asking
+    that the address named be verified against a source other than the deployment's own answer before any re-pin; the same sentence is a
+    finding at the station that read it; no implementation named in any answer read and the run goes on with a finding that the address
+    could not be held.
+  the refusal, told truthfully. Where the submit is still refused with agent_destination_not_whitelisted on a session whose request id
+    ends `:delegate`, S11's line says, beside the gateway's words kept verbatim, that the delegation was refused, not the trade.
+Where Spec T33 and the code part company: the spec asks one new `Pinned` in the table, and tables.py's PINNED is the Series' and the
+Guide's own — every address in it is held to the Series' text and may be sent by the money Series — so the contract is pinned in a table
+of its own there (PINNED_FROM_PRODUCTION), found by the same T.address; and where the two readings sit in each answer is read from no
+source this repository holds, so the reader finds a `delegation` list wherever an answer carries one.
 
 THE LIVE TIGHTENING (AAOI IM3) is a marked second pass: every body below is derived from the source, and only the bodies
 the source leaves genuinely ambiguous carry a LIVE-TODO comment. `--dry` is the walk, green now; the live run is proven
@@ -388,6 +425,44 @@ DRY_SCHEMAS: Dict[str, Dict[str, Any]] = {
 TRADE_POLL_SECONDS = T.REHEARSAL_INTERVAL_SECONDS
 TRADE_DEADLINE_SECONDS = T.REHEARSAL_DEADLINE_SECONDS
 WEI_PER_ETHER = 10 ** 18
+
+# ---------------------------------------------------------------------------
+# The contract the agent's key delegates to (Spec T33, 27 November 2026): the ninth line of the list the owner files, and the
+# check before the trade. The address is tables.py's alone (T.address(IMPLEMENTATION_KEY)), read and never declared here.
+# ---------------------------------------------------------------------------
+IMPLEMENTATION_KEY = T.DELEGATION_IMPLEMENTATION[TRADE["chain"]]  # DELEGATION_IMPLEMENTATION_ARBITRUM, pinned with where it was read
+DELEGATION_ROWS = "delegation"  # the rows a wallet reading carries, as production's answers of 27 November 2026 do: {chain, delegated, implementation, read}
+IMPLEMENTATION_SAME = "the same"
+IMPLEMENTATION_ANOTHER = "another"
+ACCOUNT_READING = "GET /v1/account (S2)"  # the funding wallet's reading, on the owner's account page
+WALLET_READING = "wallet.get_balances (S11)"  # the agent's own wallet reading, the first call of S11
+# The same address: one clause in the line of the station that read it, and the run goes on.
+IMPLEMENTATION_SAME_CLAUSE = "the contract the agent's key delegates to on %s is the one tables.py pins, %s, in %s's own word (%s)"
+# Another address: the trade is not submitted, and the station stops. The sentence says what was read and no more (the security reading
+# of pull request 34, finding 2): the address pinned, the chain, who names which address and where, that the two differ, and that the
+# harness does not know why. The pinned address is the contract every agent's key hands its account to, and a deployment that names
+# another may have been upgraded or may have had its implementation substituted: its own answer reads the same either way, so the
+# sentence names no cause, calls the event neither the harness's stale table nor a fault of the product, and asks that the address
+# named be verified against a source other than the deployment's own answer before any re-pin. It is a finding at the station that read it.
+IMPLEMENTATION_DIFFERS_SENTENCE = ("tables.py pins %s as the contract an agent's key delegates to on %s, and %s names %s (%s): the two addresses differ, so the "
+                                   "trade is not submitted — why they differ is not known to the harness, which cannot tell an upgrade from a substituted "
+                                   "contract by the deployment's own answer; before any re-pin, by a spec, the address named must be verified against a source "
+                                   "other than that answer, and the source recorded with the pin")
+IMPLEMENTATION_NOT_TRADED_TAIL = "nothing was funded, built, signed or sent"
+# No implementation named for the chain in any answer read: the run goes on, and a finding says the address could not be held.
+IMPLEMENTATION_UNNAMED_FINDING = ("no answer read for it — %s — names an implementation for %s, so the contract tables.py pins for the agent's key to delegate "
+                                  "to there, %s, could not be held against %s's own word; the run goes on")
+IMPLEMENTATION_UNNAMED_CLAUSE = "the contract the agent's key delegates to could not be held against %s's own word (a finding)"
+# S11's refusal, told truthfully: said beside the gateway's own words, kept verbatim, where the signing session refused is the delegation's.
+DELEGATION_REFUSED_REASON = "agent_destination_not_whitelisted"
+# "session req=<ticket>:delegate": the request id ends :delegate. The id is read to a bound (the security reading of pull request 34,
+# finding 5): the words matched are the deployment's own and of no known length, and an unbounded `\S*` ran to the end of each unbroken
+# run and backed off a character at a time for every `req=` in it — time by the square of a long refusal's length, a stalled S11. A
+# ticket is a UUID, 36 characters; an id longer than the bound is not read as the delegation's, and the gateway's words are kept all the same.
+DELEGATE_ID_BOUND = 200
+DELEGATE_SESSION = re.compile(r"\breq=\S{0,%d}:delegate(?![A-Za-z0-9_])" % DELEGATE_ID_BOUND)
+DELEGATION_REFUSED_SAID = ("the delegation was refused, not the trade: the session refused is the one whose request id ends :delegate, the one signature by "
+                           "which the agent's key becomes an account before its first operation, and the trade itself was never asked for")
 
 # ---------------------------------------------------------------------------
 # THE LEXICON: the connector's error dictionary, mirrored (AAOI OP2, AT3).
@@ -801,6 +876,52 @@ def groups_in(view: Any) -> List[str]:
     return list(dict.fromkeys(found))
 
 
+def implementations_named(answer: Any, chain: str) -> List[str]:
+    """
+    Every implementation an answer names for the chain (Spec T33), in the order read and each once: the `delegation` rows a wallet
+    reading carries ({chain, delegated, implementation, read}), found wherever the answer carries such a list — where each reading
+    sits in an answer is read from no source this repository holds. A row for another chain, or one whose implementation is not an
+    address (absent, empty, or all zeros: a reading that names none), names nothing; empty where the answer names none.
+    """
+    wanted = str(chain).strip().lower()
+    found: List[str] = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            rows = node.get(DELEGATION_ROWS)
+            for row in ([rows] if isinstance(rows, dict) else rows if isinstance(rows, list) else []):
+                if not isinstance(row, dict) or str(row.get("chain") or "").strip().lower() != wanted:
+                    continue
+                named = str(row.get("implementation") or "").strip()
+                if H.HEX40.fullmatch(named) and int(named, 16) and named.lower() not in [seen.lower() for seen in found]:
+                    found.append(named)
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(answer)
+    return found
+
+
+def delegation_refused(words: str) -> bool:
+    """Whether a refusal's own words say the session refused was the delegation's (Spec T33): agent_destination_not_whitelisted, on a request id ending :delegate."""
+    return DELEGATION_REFUSED_REASON in (words or "") and bool(DELEGATE_SESSION.search(words or ""))
+
+
+def list_said(sent: Sequence[str]) -> str:
+    """
+    The list an owner filed, as a sentence names it, truthfully (Spec T33): the Pathfinder's nine by what they are — the eight venue
+    contracts of the Trader's list and the contract the agent's key delegates to — where the addresses are the pinned nine in their
+    order, and any other list by its count alone.
+    """
+    if [str(a).strip().lower() for a in sent] == [T.address(key).lower() for key in T.PATHFINDER_LIST]:
+        return "the %d lines of the Pathfinder's list (the %d venue contracts of the Trader's list and the contract the agent's key delegates to on %s)" % (
+            len(T.PATHFINDER_LIST), len(T.TRADER_LIST_B3), TRADE["chain"])
+    return "a list of %d line(s), not the Pathfinder's pinned %d" % (len(sent), len(T.PATHFINDER_LIST))
+
+
 def cents_of(value: Any) -> Optional[int]:
     """Cents from the Wallet's dollars ("0.03", "US$0.03"), or None."""
     return H.usd_cents(value)
@@ -1187,8 +1308,10 @@ def answers_from(questionnaire: Dict[str, Any], offered: Sequence[str], role_id:
     transactions a day, the assets — and the owner's own figures where the form opens empty and the owner must write one:
     the two budgets (Spec 41: "we do not have an opinion on the figure"; the harness writes the corridor's book, per trade
     20 and per day 100). The chains are the questionnaire's, with the trade's chain first, because the first chain ticked
-    is where the wallet is minted. The list is the Trader's (T.TRADER_LIST_B3, the eight venue contracts B3 names, under
-    the scope `agent`), so the agent may trade from its first pact.
+    is where the wallet is minted. The list is the Pathfinder's nine (T.PATHFINDER_LIST, Spec T33, under the scope `agent`):
+    the eight venue contracts of the Trader's list B3 names, so the agent may trade from its first pact, and the contract
+    the agent's key delegates to on the trade's chain, so the one signature that makes the key an account before its first
+    operation is to a destination on its wallet's list, as the policy engine asks of every destination of an agent's.
     """
     # LIVE-TODO: the shape is answersBody's; whether the platform accepts this filing is a live fact — the questionnaire's
     # starting answers are Police's describe_role template read live, the platform validates every address of the list
@@ -1212,7 +1335,7 @@ def answers_from(questionnaire: Dict[str, Any], offered: Sequence[str], role_id:
         "maxTxPerDay": str(count),
         "chains": chains,
         "counterpartiesScope": C.TRADER_LIST_SCOPE,
-        "counterparties": [T.address(key) for key in T.TRADER_LIST_B3],
+        "counterparties": [T.address(key) for key in T.PATHFINDER_LIST],
     }
     assets = questionnaire.get("assets")
     if isinstance(assets, list):  # absent means the question was not asked (routes/consent.ts), and then nothing is sent
@@ -1252,7 +1375,7 @@ def document_disagreements(document: Any, answers: Dict[str, Any]) -> List[str]:
     filed = scope.get("counterparties_allowed")
     sent = [str(a).strip() for a in answers["counterparties"]]
     if not isinstance(filed, list) or [str(a).lower() for a in filed] != [a.lower() for a in sent]:
-        out.append("the document's scope.counterparties_allowed is %s, and the %d contracts of the Trader's list were sent" % (json.dumps(filed), len(sent)))
+        out.append("the document's scope.counterparties_allowed is %s, and what was sent is %s: %s" % (json.dumps(filed), list_said(sent), json.dumps(sent)))
     return out
 
 
@@ -1659,7 +1782,10 @@ class Pathfinder:
         """
         The account page, judged on what the connector states (Spec T25): the owner born once, the seat, the agents; and the
         signing group only where the page states one (GROUP_KEYS) — stated and other than the run expects, a fault; stated
-        nowhere, a finding, since the connector has never carried it there and never promised to.
+        nowhere, a finding, since the connector has never carried it there and never promised to. And, since Spec T33, the
+        first station whose answer may carry it: where the page names an implementation for the trade's chain (the funding
+        wallet's reading), the contract tables.py pins for the agent's key to delegate to is held against it here, and the
+        line says which it found — the same, in one clause; another, the sentence S11 will stop on, a finding and never a fail.
         """
         self.need(self.signed_in, NO_SESSION)
         self.expect("200 with the customer (the id customer.json names), the subscription's standing, the agents, the connections; the "
@@ -1679,6 +1805,9 @@ class Pathfinder:
             customer.get("id"), standing or "not stated", subscription.get("plan") or "no plan", subscription.get("state") or "no row", len(agents))
         if standing != "paid":
             self.note(C.seat_sentence(stored_id, standing))
+        held = self.hold_the_implementation(view, ACCOUNT_READING)  # Spec T33: the answer already in hand; no call is added for it
+        if held:
+            words = "%s; %s" % (words, held)
         groups = groups_in({k: v for k, v in view.items() if k != "agents"})
         if not groups:
             self.finding(NO_GROUP_FINDING % (self.expected_group, ACCOUNT_ROUTE))
@@ -1686,6 +1815,65 @@ class Pathfinder:
         if self.expected_group not in groups or len(groups) != 1:
             raise StationStop("%s; the account is assigned %s, and %s was expected" % (words, ", ".join(groups), self.expected_group), outcome=FAIL)
         return Outcome("S2", PASS, "the account: %s; assigned group %s" % (words, self.expected_group))
+
+    # -- the contract the agent's key delegates to, held against the deployment's own word (Spec T33) -----------
+    def hold_the_implementation(self, answer: Any, where: str) -> Optional[str]:
+        """
+        Spec T33: the contract tables.py pins for the agent's key to delegate to on the trade's chain, held case-insensitively
+        against the implementation an answer the harness already reads names for that chain. No call is made here. Answers the
+        sentence for the station's line, and remembers what was found: the same address, one clause; another address, the
+        sentence that says the two differ — named with both addresses and the chain, with no cause, since the harness cannot
+        know one, and recorded as a finding at this station; None where the answer names no implementation for the chain,
+        which a later reading may still name.
+        """
+        chain = TRADE["chain"]
+        pinned = T.address(IMPLEMENTATION_KEY)
+        self.facts.setdefault("implementation_read", []).append(where)
+        named = implementations_named(answer, chain)
+        if not named:
+            return None
+        other = next((address for address in named if address.lower() != pinned.lower()), None)
+        if other is None:
+            self.facts["implementation"] = {"outcome": IMPLEMENTATION_SAME, "named": named[0], "where": where}
+            return IMPLEMENTATION_SAME_CLAUSE % (chain, pinned, normal_base(self.base), where)
+        sentence = IMPLEMENTATION_DIFFERS_SENTENCE % (pinned, chain, normal_base(self.base), other, where)
+        self.facts["implementation"] = {"outcome": IMPLEMENTATION_ANOTHER, "named": other, "where": where, "sentence": sentence}
+        self.finding(sentence)
+        return sentence
+
+    def stop_where_the_implementation_differs(self) -> None:
+        """
+        Spec T33: where the deployment names another implementation than the one pinned, the trade is not submitted. The station
+        stops — `stopped`, the harness's word for what it cannot get past by itself. It is not a fail, which says a fault of the
+        product's (Spec T25), and it is not said to be the harness's own table gone stale either: which of the two it is the
+        harness cannot know (the security reading of pull request 34, finding 2). The sentence names both addresses and the
+        chain, says that the cause is not known, and asks for a source other than the deployment's own answer before any re-pin.
+        """
+        held = self.facts.get("implementation") or {}
+        if held.get("outcome") == IMPLEMENTATION_ANOTHER:
+            raise StationStop("%s; %s" % (held["sentence"], IMPLEMENTATION_NOT_TRADED_TAIL), outcome=STOPPED)
+
+    def implementation_before_the_trade(self, balances: H.McpAnswer) -> str:
+        """
+        Spec T33, no later than S11 and before anything is funded, built or submitted: the agent's own wallet reading, S11's
+        first wallet.get_balances, is held against the pinned contract on every run, whatever an earlier station read. The key
+        that delegates is the agent's wallet's, and S2's is the funding wallet's reading: the one does not stand for the other
+        (the security reading of pull request 34, finding 1), so an address other than the pinned one stops the station here
+        even where S2 read the pinned one. Answers the clause S11's line carries: the same address, noted too so a later stop
+        of S11 does not lose it; none named by this reading where an earlier station's answer named one, nothing, and no
+        finding (that station's line says what it held); none named in any answer read, a finding, and the run goes on.
+        """
+        named_earlier = bool(self.facts.get("implementation"))
+        clause = self.hold_the_implementation(balances.data, WALLET_READING)
+        self.stop_where_the_implementation_differs()
+        if clause is None:
+            if named_earlier:
+                return ""
+            self.finding(IMPLEMENTATION_UNNAMED_FINDING % (names_said(self.facts.get("implementation_read") or []), TRADE["chain"],
+                                                           T.address(IMPLEMENTATION_KEY), normal_base(self.base)))
+            return "; %s" % (IMPLEMENTATION_UNNAMED_CLAUSE % normal_base(self.base))
+        self.note(clause)
+        return "; %s" % clause
 
     # -- S3 Create agent ------------------------------------------------------------------------------------
     def station_s3(self) -> Outcome:
@@ -1787,10 +1975,10 @@ class Pathfinder:
         if problems:
             raise StationStop("the connector filed pact %s, and %s" % (pact.get("id"), "; ".join(problems)), outcome=FAIL)
         return Outcome("S4", PASS, "recall the policy: pact %s %s unchanged by the edit; the document carries the questionnaire's answers as sent — per trade US$%s, per "
-                       "day US$%s, ask me first above US$%s, %s transactions a day, the chains %s (the wallet's first), the %d contracts of the "
-                       "Trader's list under the scope %r" % (pact.get("id"), pact.get("state"), answers["perTxUsd"], answers["dailyUsd"],
-                                                             answers["holdAboveUsd"], answers["maxTxPerDay"], ", ".join(answers["chains"]),
-                                                             len(answers["counterparties"]), answers["counterpartiesScope"])
+                       "day US$%s, ask me first above US$%s, %s transactions a day, the chains %s (the wallet's first), %s under the scope %r" % (
+                           pact.get("id"), pact.get("state"), answers["perTxUsd"], answers["dailyUsd"],
+                           answers["holdAboveUsd"], answers["maxTxPerDay"], ", ".join(answers["chains"]),
+                           list_said(answers["counterparties"]), answers["counterpartiesScope"])
                        + ("; %s" % filed.get("entrySaid") if filed.get("entrySaid") else ""))
 
     # -- S5 The child wallet --------------------------------------------------------------------------------
@@ -2175,11 +2363,17 @@ class Pathfinder:
                               "at S10" % self.start_at, outcome=NOT_RUN)
         self.need(self.facts.get("receipt"), NO_RECEIPT)
         facts = {"wallet_id": wallet["id"]}
+        # Spec T33: where an earlier station read another implementation than the one tables.py pins, the trade is not submitted and
+        # nothing is asked of the Wallet or the estate here
+        self.stop_where_the_implementation_differs()
         # the wallet's own balances first: the harness trades only what the wallet holds — and where the wallet is short, the harness funds it
         # itself, from Harness Holdings through the estate's own road (Spec T23); no station asks a person for anything
         self.expect("the wallet's balances on its own chain: USDC at least %d minor units (US$0.10); short of it, Harness Holdings funds the "
                     "wallet through the estate's own road" % TRADE_RAW)
         balances, usdc, weth, held = self.read_agent_balances(facts)
+        # Spec T33: this reading — the agent's own wallet's, already in hand — is held against the pinned implementation on every run,
+        # whatever S2 read on the account page, before any money is asked for; another address stops the station here
+        delegates_to = self.implementation_before_the_trade(balances)
         funded: Optional[str] = None
         if held is None or held < TRADE_RAW:
             usdc, weth, held, funded = self.fund_the_wallet(wallet, facts, held, balances)
@@ -2219,8 +2413,12 @@ class Pathfinder:
         sent = bool(operation.get("user_op_hash") or operation.get("handle_ops_tx_hash"))
         if not sent and (submitted.is_error or submit["kind"] in ("refused", "held", "no_judgment")):
             who = submit.get("who") or {}
-            raise StationStop("the Wallet refused the submit — %s (%s): %s" % (who.get("party", "the MCP Wallet"), submit["kind"],
-                                                                                named(str(submit.get("sentence") or submitted.text[:400]), who.get("reason") or None)), outcome=FAIL)
+            # Spec T33: the refusal told truthfully — where the gateway's own words name the delegation's session (a request id ending
+            # :delegate) refused agent_destination_not_whitelisted, the line says so beside them; the words themselves are kept verbatim
+            told = "; %s" % DELEGATION_REFUSED_SAID if delegation_refused("%s %s" % (submit.get("sentence") or "", submitted.text)) else ""
+            raise StationStop("the Wallet refused the submit — %s (%s): %s%s" % (who.get("party", "the MCP Wallet"), submit["kind"],
+                                                                                  named(str(submit.get("sentence") or submitted.text[:400]), who.get("reason") or None), told),
+                              outcome=FAIL)
         if sent and submitted.is_error:
             # The operation left: a confirmation that timed out is the Wallet's word that it "was sent and may still land"
             # (useroperation.go, confirmation_timeout), never a refusal. Its words travel, and its ticket is followed.
@@ -2277,12 +2475,12 @@ class Pathfinder:
             raise StationStop("; ".join(problems), outcome=FAIL)
         self.facts["event"] = event
         return Outcome("S11", PASS, "the trade: %sticket %s submitted; the operation %s landed in the handleOps transaction %s (block %s), from the wallet "
-                       "%s, sponsored by the paymaster %s; the Wallet's calls %s; reserved US$%s, debited US$%s" % (
+                       "%s, sponsored by the paymaster %s; the Wallet's calls %s; reserved US$%s, debited US$%s%s" % (
                            ("funded by Harness Holdings through the estate's own road — %s; " % funded) if funded
                            else "the wallet held %d minor units of USDC already, so nothing was funded; " % held,
                            build["ticket_id"], user_op_hash, handle_ops, H.hex_quantity(receipt.get("blockNumber")), event["sender"], event["paymaster"],
                            ", ".join(operation.get("calls") or []) or "not stated", operation.get("reserved_usd") or "not stated",
-                           operation.get("debited_usd") or "not stated"))
+                           operation.get("debited_usd") or "not stated", delegates_to))
 
     def remember_trade(self, operation: Dict[str, Any], ticket_id: str) -> None:
         """What a resumed S12 and S12a need, in run.json — the hashes, the ticket, the readings taken before — and never a secret."""
@@ -3111,7 +3309,8 @@ def dry_lines(base: str = DEFAULT_BASE, owner: str = DEFAULT_OWNER, store_dir: s
     answers = {"perTxUsd": C.BOOK_PER_TX_USD, "dailyUsd": C.BOOK_DAILY_USD, "holdAboveUsd": "<the questionnaire's, else %s>" % C.BOOK_PER_TX_USD,
                "maxTxPerDay": "<the questionnaire's>", "chains": [TRADE["chain"], "<the questionnaire's other chains>"],
                "assets": "<the questionnaire's>", "counterpartiesScope": C.TRADER_LIST_SCOPE,
-               "counterparties": ["%s (%s)" % (T.address(k), k) for k in T.TRADER_LIST_B3]}
+               "counterparties": ["%s (%s)" % (T.address(k), k) for k in T.PATHFINDER_LIST]}  # Spec T33: the nine the owner files
+    pinned_implementation = T.address(IMPLEMENTATION_KEY)
     if start_at and started:
         lines.append("resume — POST %s {} then POST %s {nonce, issuedAtMs, response} → the owner signed in with the stored passkey; the standing "
                      "agent taken up from %s, or each station that needs it says none stands" % (C.SIGNIN_OPTIONS, C.SIGNIN_VERIFY, os.path.join(folder, RUN_FILE)))
@@ -3131,6 +3330,11 @@ def dry_lines(base: str = DEFAULT_BASE, owner: str = DEFAULT_OWNER, store_dir: s
     station("S2", "the account: the owner born once, the seat's standing; the signing group compared with %s where the page states one, a finding where it states none" % group)
     call("S2", "GET %s → expect 200: customer.id = customer.json's, subscription.standing paid; a signing group stated on %s compared with %s (another group fails — a fault); "
          "none stated → the finding \"%s\", and S2 passes" % (ACCOUNT_ROUTE, ", ".join(GROUP_KEYS), group, NO_GROUP_FINDING % (group, ACCOUNT_ROUTE)))
+    call("S2", "[table] where that answer names an implementation for %s (a wallet reading's delegation rows): held against the contract tables.py pins for the agent's "
+         "key to delegate to there, %s (%s) → the same: one clause, and the run goes on; another: \"%s\", a finding, and S11 does not trade; none named: nothing is said "
+         "here; S11 holds the agent's own wallet reading all the same, as it does where this answer named the same" % (
+             TRADE["chain"], pinned_implementation, IMPLEMENTATION_KEY,
+             IMPLEMENTATION_DIFFERS_SENTENCE % (pinned_implementation, TRADE["chain"], normal_base(base), "<the address named>", ACCOUNT_READING)))
     station("S3", "this run's own agent, %s (%s), with a fresh passkey" % (label, ROLE_ID))
     call("S3", "GET %s → expect 200: customer.fundingWallet.address, the funding root the connector registered at the owner's first agent and keeps since "
          "(connector Spec 8: registered once) — sent as fundingAddress for an owner that already has one; for an owner the connector lists none for, [file] "
@@ -3173,6 +3377,12 @@ def dry_lines(base: str = DEFAULT_BASE, owner: str = DEFAULT_OWNER, store_dir: s
     station("S11", "the agent's wallet funded by Harness Holdings through the estate's own road where it is short, then a real swap, landed, sponsored by the paymaster")
     call("S11", "MCP tools/call wallet.get_balances %s → expect USDC on %s of at least %d minor units; short of it: \"%s\"" % (
         _j({"wallet_id": "<wallet UUID>"}), TRADE["chain"], TRADE_RAW, SHORT_SENTENCE % ("<wallet address>", TRADE["chain"], "<what it holds>", TRADE_RAW)))
+    call("S11", "[table] on every run, whatever S2 read: the implementation that reading, the agent's own wallet's, names for %s held against tables.py's %s, before anything is "
+         "funded, built or submitted → the same: one clause; another: stopped, \"%s; %s\"; none named by it where S2's answer named one: nothing more is said; none named in any "
+         "answer read: the finding \"%s\"" % (
+             TRADE["chain"], pinned_implementation,
+             IMPLEMENTATION_DIFFERS_SENTENCE % (pinned_implementation, TRADE["chain"], normal_base(base), "<the address named>", WALLET_READING), IMPLEMENTATION_NOT_TRADED_TAIL,
+             IMPLEMENTATION_UNNAMED_FINDING % (names_said([ACCOUNT_READING, WALLET_READING]), TRADE["chain"], pinned_implementation, normal_base(base))))
     estate_people = os.path.join(estate_store, A.ESTATE["client_id"])
     call("S11", "[estate %s] POST /v1/auth/login/options {}, POST /v1/auth/login/verify {nonce, issuedAtMs, response} as each of %s with the passkey stored under %s "
          "→ expect a session in the workspace %s; the founder's absence: \"%s\"" % (
@@ -3203,6 +3413,8 @@ def dry_lines(base: str = DEFAULT_BASE, owner: str = DEFAULT_OWNER, store_dir: s
     call("S11", "GET %s → expect 200: the gas account before the trade" % GAS_ACCOUNT_ROUTE)
     call("S11", "MCP tools/call wallet.build_transaction %s → expect a ticket and the pact it was built under" % _j(trade_build))
     call("S11", "MCP tools/call wallet.submit_transaction %s → expect the execution: user_op_hash, handle_ops_tx_hash, status, reserved_usd, debited_usd" % _j(trade_submit))
+    call("S11", "[told] a submit refused with %s on a session whose request id ends :delegate → the gateway's words verbatim, and beside them: \"%s\"" % (
+        DELEGATION_REFUSED_REASON, DELEGATION_REFUSED_SAID))
     call("S11", "MCP tools/call wallet.ticket_status %s every %s s until the handleOps transaction is named, deadline %s s" % (
         _j({"ticket_id": "<ticket>"}), TRADE_POLL_SECONDS, TRADE_DEADLINE_SECONDS))
     call("S11", "[read] eth_getTransactionReceipt <handleOps> at %s → expect status 0x1 and the UserOperationEvent: success, sender the wallet, paymaster %s"

@@ -12,7 +12,9 @@ What the spec asks the tests to prove, each below:
     and never touch the owner;
   the redaction: no passkey material, bearer or credential appears whole in the report;
   resume with --from S8;
-  the pinned catalogue (tables.py's fifteen, Specs T25 and T25b) against a tools/list double returning them by name.
+  the pinned catalogue (tables.py's fifteen, Specs T25 and T25b) against a tools/list double returning them by name;
+  the owner lists the contract its agent's key delegates to (Spec T33, 27 November 2026): the nine filed and read back, the table,
+    the check before the trade in its three outcomes, the delegation's refusal told as the delegation's, and the dry run's nine.
 (The lexicon mirror is tests/test_aerconnect_lexicon.py.)
 """
 import contextlib
@@ -24,6 +26,7 @@ import re
 import shutil
 import sys
 import tempfile
+import time
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -145,6 +148,30 @@ class TheDryWalk(unittest.TestCase):
         self.assertIn('"amount_usd": 0.1', build, "the MCP Wallet takes dollars")
         self.assertIn('"police_receipt": "<receipt>"', build)
 
+    def test_the_plan_prints_the_nine_the_owner_files_and_the_check_before_the_trade(self):
+        """Spec T33: the dry run's plan prints the same nine answers_from files, and says where the pinned contract is held and what S11 tells of a refusal."""
+        lines = P.dry_lines(store_dir=self.tmp)
+        press = next(line for line in lines if line.startswith("S3 — POST /v1/account/agents "))
+        printed = ["%s (%s)" % (T.address(key), key) for key in T.PATHFINDER_LIST]
+        self.assertEqual(len(printed), 9)
+        self.assertEqual(printed[:8], ["%s (%s)" % (T.address(key), key) for key in T.TRADER_LIST_B3], "the Trader's eight, in their order")
+        self.assertEqual(printed[8], "0x0562346e1291fd9B922991A249FaaBD0bFEa325f (DELEGATION_IMPLEMENTATION_ARBITRUM)")
+        self.assertIn('"counterparties": %s' % json.dumps(printed), press)
+        held_at_s2 = [line for line in lines if line.startswith("S2 — [table] ")]
+        held_at_s11 = [line for line in lines if line.startswith("S11 — [table] ")]
+        told = [line for line in lines if line.startswith("S11 — [told] ")]
+        self.assertEqual((len(held_at_s2), len(held_at_s11), len(told)), (1, 1, 1))
+        pinned_address = T.address("DELEGATION_IMPLEMENTATION_ARBITRUM")
+        self.assertIn(P.IMPLEMENTATION_DIFFERS_SENTENCE % (pinned_address, "arbitrum", P.DEFAULT_BASE, "<the address named>", P.ACCOUNT_READING), held_at_s2[0])
+        self.assertIn("%s; %s" % (P.IMPLEMENTATION_DIFFERS_SENTENCE % (pinned_address, "arbitrum", P.DEFAULT_BASE, "<the address named>", P.WALLET_READING),
+                                  P.IMPLEMENTATION_NOT_TRADED_TAIL), held_at_s11[0])
+        self.assertIn(P.IMPLEMENTATION_UNNAMED_FINDING % ("GET /v1/account (S2) and wallet.get_balances (S11)", "arbitrum", pinned_address, P.DEFAULT_BASE), held_at_s11[0])
+        self.assertIn(P.DELEGATION_REFUSED_SAID, told[0])
+        # the check is made on answers the walk already reads: the plan gains no call to the connector, its doors or the chain
+        self.assertLess(lines.index(held_at_s11[0]), next(i for i, line in enumerate(lines) if line.startswith("S11 — [estate")), "before anything is funded")
+        self.assertEqual(lines.index(held_at_s11[0]) - 1, next(i for i, line in enumerate(lines) if line.startswith("S11 — MCP tools/call wallet.get_balances")),
+                         "held on S11's first reading, the agent's own wallet's")
+
     def test_on_a_base_that_is_not_a_test_ring_it_says_what_the_guard_refuses(self):
         heads = [line for line in P.dry_lines(base="https://connect.example", store_dir=self.tmp) if re.match(r"^S\d+a? [A-Z]", line)]
         for station in P.GUARDED:
@@ -236,7 +263,9 @@ class AWholeWalk(PathfinderBase):
         # the questionnaire the server returned became the pact: its starting answers, the owner's two budgets, the trade's chain first
         scope = agent["document"]["scope"]
         self.assertEqual(scope["chains"], ["arbitrum", "base", "ethereum"])
-        self.assertEqual(scope["counterparties_allowed"], [T.address(k) for k in T.TRADER_LIST_B3])
+        # Spec T33: the list is the Pathfinder's nine — the Trader's eight venue contracts in B3's order, then the contract the agent's key delegates to
+        self.assertEqual(scope["counterparties_allowed"], [T.address(k) for k in T.PATHFINDER_LIST])
+        self.assertEqual(scope["counterparties_allowed"][:8], [T.address(k) for k in T.TRADER_LIST_B3])
         self.assertEqual(scope["counterparties_whitelist_scope"], "agent")
         self.assertEqual(scope["assets_allowed"], ["USDC", "USDT", "WETH"])
         self.assertEqual(agent["document"]["budgets"], {"per_tx_cap_usd": 20.0, "daily_cap_usd": 100.0})
@@ -1009,6 +1038,432 @@ class TheCommissionCheck(PathfinderBase):
                 self.assertNotIn("bps", sent, (station, step["route"]))
                 self.assertNotIn("basis point", sent, (station, step["route"]))
         self.assertNotIn(fee, "\n".join(self.said).lower(), "the terminal prints the fee wallet shortened, never whole")
+
+
+# Spec T33 (27 November 2026): the Pathfinder's owner lists the contract its agent's key delegates to.
+IMPLEMENTATION_KEY = "DELEGATION_IMPLEMENTATION_ARBITRUM"
+PINNED_IMPLEMENTATION = "0x0562346e1291fd9B922991A249FaaBD0bFEa325f"  # as Spec T33 writes it, EIP-55; tables.py is held to it below
+ANOTHER_IMPLEMENTATION = H.checksum_address("0x" + "c0de" * 10)  # an account contract a later deployment might name; nobody's address
+THE_EIGHT = ["0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45", "0x2626664c2603336E57B271c5C0b26F421741e481", "0x13f4EA83D0bd40E75C8222255bc855a974568Dd4",
+             "0x32226588378236Fd0c7c4053999F88aC0e5cAc77", "0x678Aa4bF4E210cf2166753e054d5b7c31cc7fa86", "0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d",
+             "0x6C96dE32CEa08842dcc4058c14d3aaAD7Fa41dee", "0x14E4A1B13bf7F943c8ff7C51fb60FA964A298D92"]  # B3's lines as they stood at 334133a
+THE_NINE = THE_EIGHT + [PINNED_IMPLEMENTATION]
+# The signing gateway's words of run 20261127-063032, as Spec T33 quotes them, the ticket in place of <ticket>.
+GATEWAY_REFUSED_THE_DELEGATION = ("PolicyDenied: collect: session req=%s:delegate ingress=329 presig=0 failed: 3/3 signers errored; party 0: party error: this party's own "
+                                  "evaluation decided reject (agent_destination_not_whitelisted); only an approve may be signed")
+THE_LIST_SAID = "the 9 lines of the Pathfinder's list (the 8 venue contracts of the Trader's list and the contract the agent's key delegates to on arbitrum)"
+
+
+class TheContractTheAgentsKeyDelegatesToIsPinned(unittest.TestCase):
+    """Spec T33 §1, the table: the new key is pinned, an EIP-55 address, with where it was read; the Trader's eight are as they were."""
+
+    def test_the_new_key_is_pinned_is_an_eip_55_address_and_names_its_source(self):
+        row = T.pinned_row(IMPLEMENTATION_KEY)
+        self.assertEqual(row.address, PINNED_IMPLEMENTATION)
+        self.assertRegex(row.address, r"^0x[0-9a-fA-F]{40}$")
+        self.assertEqual(H.checksum_address(row.address), row.address, "EIP-55, as the explorer prints it")
+        self.assertNotEqual(row.address, row.address.lower())
+        self.assertEqual(T.address(IMPLEMENTATION_KEY), row.address)
+        for words in ("the corridor's account contract on Arbitrum", "the implementation an agent's key delegates to before its first operation", "EIP-7702"):
+            self.assertIn(words, row.what)
+        for words in ("the agents' Wallet's own reading on production", "Pathfinder run 20261127-063032", "delegation[arbitrum].implementation"):
+            self.assertIn(words, row.source)
+        # the security reading of pull request 34, finding 2: the one source recorded is the deployment's own answer, and the row says so rather
+        # than let a reading stand for a check that was never made
+        self.assertTrue(row.source.endswith(" — the deployment's own answer, and the only source recorded: verified against no source other than the "
+                                            "deployment's own answer"), row.source)
+        self.assertEqual(T.source(IMPLEMENTATION_KEY), row.source)
+        self.assertEqual(T.describe(IMPLEMENTATION_KEY), "%s — %s (read from %s)" % (row.address, row.what, row.source))
+        self.assertEqual(T.DELEGATION_IMPLEMENTATION, {"arbitrum": IMPLEMENTATION_KEY})
+        self.assertEqual(P.IMPLEMENTATION_KEY, IMPLEMENTATION_KEY, "the trade's chain is arbitrum, and the harness reads the key from tables.py")
+        with self.assertRaises(KeyError):
+            T.address("DELEGATION_IMPLEMENTATION_BASE")  # none is pinned for another chain, and none is invented
+
+    def test_the_traders_list_is_still_exactly_the_eight_it_was(self):
+        """The guard: TRADER_LIST_B3 is not changed by one entry, and the Pathfinder's list is those eight in their order and then the one."""
+        self.assertEqual(T.TRADER_LIST_B3, ["UNISWAP_V3_ARBITRUM", "UNISWAP_V3_BASE", "PANCAKESWAP_V3_ETHEREUM", "PANCAKESWAP_V3_ARBITRUM", "PANCAKESWAP_V3_BASE",
+                                            "CCTP_TOKEN_MESSENGER_V2", "USDT0_ETHEREUM", "USDT0_ARBITRUM"])
+        self.assertEqual([T.address(key) for key in T.TRADER_LIST_B3], THE_EIGHT)
+        self.assertEqual(T.PATHFINDER_LIST, T.TRADER_LIST_B3 + [IMPLEMENTATION_KEY])
+        self.assertEqual([T.address(key) for key in T.PATHFINDER_LIST], THE_NINE)
+        self.assertEqual(len(T.PATHFINDER_LIST), 9)
+        self.assertIsNot(T.PATHFINDER_LIST, T.TRADER_LIST_B3)
+
+    def test_the_series_table_and_the_money_series_are_as_they_were(self):
+        """Where Spec T33 and the code part company: PINNED is the Series' own table, so the contract is pinned beside it and the Series cannot send it."""
+        self.assertNotIn(IMPLEMENTATION_KEY, T.PINNED)
+        self.assertEqual(len(T.PINNED), 13, "the thirteen rows read from the Series and the Guide")
+        self.assertNotIn(PINNED_IMPLEMENTATION.lower(), [row.address.lower() for row in T.PINNED.values()])
+        self.assertEqual(list(T.PINNED_FROM_PRODUCTION), [IMPLEMENTATION_KEY])
+        with self.assertRaises(H.HarnessError):
+            H.resolve_address(IMPLEMENTATION_KEY, None)  # the money Series sends an address of the Series' table or the owner's, and no other
+        for name in ("corridor_harness.py", "corridor_consent.py", "series.py"):
+            with open(os.path.join(ROOT, name), encoding="utf-8") as handle:
+                text = handle.read()
+            for words in ("PATHFINDER_LIST", "DELEGATION_IMPLEMENTATION", "PINNED_FROM_PRODUCTION", PINNED_IMPLEMENTATION[2:].lower()):
+                self.assertNotIn(words, text.replace(PINNED_IMPLEMENTATION[2:], PINNED_IMPLEMENTATION[2:].lower()), "%s is not touched by Spec T33" % name)
+
+    def test_is_pinned_answers_for_the_series_table_alone(self):
+        """
+        The security reading of pull request 34, finding 3: the contract is pinned apart so that the money Series cannot send it, and
+        `is_pinned` is the Series' table's predicate — a guard that admits a raw address on it must not admit the address read from
+        production. It reads PINNED alone, as it did before Spec T33; and no module of the money Series asks it, by key or by address.
+        """
+        for spelling in (PINNED_IMPLEMENTATION, PINNED_IMPLEMENTATION.lower(), PINNED_IMPLEMENTATION.upper().replace("0X", "0x")):
+            self.assertFalse(T.is_pinned(spelling), "the address read from production is not one of the Series' pinned bytes")
+        for key, row in T.PINNED.items():
+            self.assertTrue(T.is_pinned(row.address), key)
+            self.assertTrue(T.is_pinned(row.address.lower()), "compared case-insensitively")
+        self.assertFalse(T.is_pinned(None))
+        self.assertFalse(T.is_pinned(""))
+        for name in ("corridor_harness.py", "corridor_consent.py", "series.py", "aerconnect_harness.py"):
+            with open(os.path.join(ROOT, name), encoding="utf-8") as handle:
+                self.assertNotIn("is_pinned", handle.read(), "%s gates nothing on is_pinned" % name)
+
+    def test_the_harness_reads_the_address_from_tables_and_declares_it_nowhere(self):
+        with open(os.path.join(ROOT, "aerconnect_harness.py"), encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertNotIn(PINNED_IMPLEMENTATION[2:].lower(), text.lower(), "the address is tables.py's alone")
+        self.assertIn("T.address(IMPLEMENTATION_KEY)", text)
+        self.assertIn("for key in T.PATHFINDER_LIST]", text)
+        self.assertNotIn("T.TRADER_LIST_B3]", text, "the Pathfinder files its own list; the Trader's eight are counted, never filed")
+
+
+class TheReadersOfTheDelegation(unittest.TestCase):
+    """Spec T33 §2 to §4, the small readers: the list as a sentence names it, the implementation an answer names, the delegation's session."""
+
+    ROW = {"chain": "arbitrum", "delegated": False, "implementation": PINNED_IMPLEMENTATION.lower(), "read": True}  # as production's answers carry it
+
+    def test_the_implementation_is_found_wherever_an_answer_carries_a_delegation_list(self):
+        named = [PINNED_IMPLEMENTATION.lower()]
+        self.assertEqual(P.implementations_named({"customer": {"id": "c1", "fundingWallet": {"address": FUNDING, "delegation": [dict(self.ROW)]}}, "agents": []}, "arbitrum"), named)
+        self.assertEqual(P.implementations_named({"wallet_id": "w1", "tokens": {"balances": []}, "delegation": [dict(self.ROW)]}, "arbitrum"), named)
+        self.assertEqual(P.implementations_named({"delegation": dict(self.ROW)}, "arbitrum"), named, "one row that is not in a list is read as one row")
+        both = {"readings": [{"delegation": [dict(self.ROW)]}, {"delegation": [dict(self.ROW, implementation=PINNED_IMPLEMENTATION)]}]}
+        self.assertEqual(P.implementations_named(both, "arbitrum"), named, "the same address in another case is named once")
+        two = {"readings": [{"delegation": [dict(self.ROW)]}, {"delegation": [dict(self.ROW, implementation=ANOTHER_IMPLEMENTATION)]}]}
+        self.assertEqual(P.implementations_named(two, "arbitrum"), named + [ANOTHER_IMPLEMENTATION])
+
+    def test_an_answer_that_names_none_for_the_chain_names_nothing(self):
+        for answer in (None, "", [], {}, {"customer": {"fundingWallet": None}}, {"delegation": []}, {"delegation": None},
+                       {"delegation": [dict(self.ROW, chain="base")]}, {"delegation": [dict(self.ROW, implementation=None, read=False)]},
+                       {"delegation": [dict(self.ROW, implementation="")]}, {"delegation": [dict(self.ROW, implementation="0x" + "0" * 40)]},
+                       {"delegation": [dict(self.ROW, implementation="not an address")]}, {"delegation": ["arbitrum"]}):
+            self.assertEqual(P.implementations_named(answer, "arbitrum"), [], answer)
+
+    def test_the_delegations_session_is_known_by_its_reason_and_the_end_of_its_request_id(self):
+        self.assertTrue(P.delegation_refused(GATEWAY_REFUSED_THE_DELEGATION % "5d1c0b3e-0000-4000-8000-000000000000"))
+        self.assertFalse(P.delegation_refused((GATEWAY_REFUSED_THE_DELEGATION % "5d1c0b3e").replace(":delegate", "")),
+                         "the trade's own session, refused for the same reason, is not the delegation's: no other reading of S11 changes")
+        self.assertFalse(P.delegation_refused((GATEWAY_REFUSED_THE_DELEGATION % "5d1c0b3e").replace("agent_destination_not_whitelisted", "legacy_limit_zero")))
+        self.assertFalse(P.delegation_refused((GATEWAY_REFUSED_THE_DELEGATION % "5d1c0b3e").replace(":delegate", ":delegated_elsewhere")))
+        self.assertFalse(P.delegation_refused(""))
+
+    def test_the_delegations_session_is_read_to_a_bound_whatever_the_refusal_carries(self):
+        """
+        The security reading of pull request 34, finding 5: the words matched are the deployment's own, of no known length. An unbounded
+        `\\S*` after `req=` ran to the end of each unbroken run and backed off a character at a time, for every `req=` in it — time by the
+        square of the text's length. The request id is read to a bound, and a long refusal with many `req=` and no `:delegate` costs
+        time in proportion to its length.
+        """
+        said = "session req=%s:delegate failed (agent_destination_not_whitelisted)"
+        self.assertTrue(P.delegation_refused(said % ("7" * 200)), "an id as long as the bound is read")
+        self.assertFalse(P.delegation_refused(said % ("7" * 201)), "a longer one is not read as the delegation's: the bound is a bound")
+        self.assertEqual(P.DELEGATE_ID_BOUND, 200)
+        self.assertTrue(P.delegation_refused(said % "run:7:ticket"), "an id that carries a colon of its own is read as it was")
+        self.assertTrue(P.delegation_refused(said % ""), "and an empty one, as it was")
+
+    def test_a_long_refusal_with_many_req_and_no_delegate_does_not_stall_the_reader(self):
+        """
+        Finding 5 again, by the clock: one unbroken run of 240,000 characters, 60,000 times `req=` and never `:delegate`. By the square of
+        its length that is some fourteen thousand million steps of the matcher; to the bound, some twenty-four million.
+        """
+        hostile = "agent_destination_not_whitelisted " + "req=" * 60000
+        started = time.perf_counter()
+        self.assertFalse(P.delegation_refused(hostile))
+        elapsed = time.perf_counter() - started
+        self.assertLess(elapsed, 2.0, "the refusal's own words stalled the reader for %.1f s" % elapsed)
+
+    def test_a_sentence_that_counts_or_names_the_list_tells_the_truth_about_it(self):
+        self.assertEqual(P.list_said(THE_NINE), THE_LIST_SAID)
+        self.assertEqual(P.list_said([address.lower() for address in THE_NINE]), THE_LIST_SAID, "the pinned nine in another case are the pinned nine")
+        self.assertEqual(P.list_said(THE_EIGHT), "a list of 8 line(s), not the Pathfinder's pinned 9")
+        self.assertEqual(P.list_said(THE_NINE[1:] + THE_NINE[:1]), "a list of 9 line(s), not the Pathfinder's pinned 9", "in their order, or not said to be them")
+
+    def test_the_document_is_still_compared_with_what_was_sent(self):
+        answers = {"perTxUsd": "20", "dailyUsd": "100", "holdAboveUsd": "10", "maxTxPerDay": "50", "chains": ["arbitrum"], "counterpartiesScope": "agent",
+                   "counterparties": list(THE_NINE)}
+        document = {"scope": {"chains": ["arbitrum"], "counterparties_whitelist_scope": "agent", "counterparties_allowed": list(THE_NINE)},
+                    "budgets": {"per_tx_cap_usd": 20.0, "daily_cap_usd": 100.0}, "velocity": {"max_tx_per_day": 50},
+                    "approvals": {"human_approval_threshold_usd": 10.0}}
+        self.assertEqual(P.document_disagreements(document, answers), [])
+        document["scope"]["counterparties_allowed"] = [address.lower() for address in THE_NINE]
+        self.assertEqual(P.document_disagreements(document, answers), [], "compared case-insensitively, in order")
+        document["scope"]["counterparties_allowed"] = list(THE_EIGHT)  # a connector that filed the Trader's eight and dropped the ninth line
+        self.assertEqual(P.document_disagreements(document, answers),
+                         ["the document's scope.counterparties_allowed is %s, and what was sent is %s: %s" % (json.dumps(THE_EIGHT), THE_LIST_SAID, json.dumps(THE_NINE))])
+
+    def test_answers_from_files_the_nine_in_place_of_the_eight(self):
+        answers = P.answers_from({"holdAboveUsd": "10", "maxTxPerDay": "50", "chains": ["arbitrum", "base"], "assets": ["USDC", "WETH"]}, ["arbitrum", "base", "ethereum"])
+        self.assertEqual(answers["counterparties"], THE_NINE)
+        self.assertEqual(answers["counterpartiesScope"], "agent")
+        self.assertEqual(answers["chains"], ["arbitrum", "base"])
+
+
+class TheOwnerListsTheContractItsAgentsKeyDelegatesTo(PathfinderBase):
+    """
+    Spec T33, through the double: the list filed and read back; the check before the trade, its three outcomes; S11's refusal told truthfully.
+    A fresh owner's account page carries no funding wallet yet, so its first run holds the pinned contract at S11, on the agent's own wallet
+    reading; from the second run the page carries the funding wallet's reading, and S2 holds it — the first station whose answer carries it.
+    """
+
+    def tools_called(self):
+        return [name for name, _ in self.double.tool_calls]
+
+    def test_the_list_filed_is_the_nine_in_order_and_the_pact_document_read_back_equals_it(self):
+        runner = self.walk()
+        self.assertEqual(self.words(runner), {s: P.PASS for s in P.STATION_IDS}, [runner.line(o) for o in runner.outcomes])
+        self.assertEqual(runner.facts["answers"]["counterparties"], THE_NINE, "what S3 filed and S4 filed again")
+        document = self.agent_of(runner)["document"]
+        self.assertEqual(document["scope"]["counterparties_allowed"], THE_NINE, "the pact document the connector holds")
+        self.assertEqual(P.document_disagreements(document, runner.facts["answers"]), [])
+        self.assertIn("%s under the scope 'agent'" % THE_LIST_SAID, self.line_of(runner, "S4"))
+        self.assertEqual(self.double.delegations_refused, [], "the delegation's one destination is on the list, so the cluster signs it")
+        self.assertIn("which is the debit and the delegation's", self.line_of(runner, "S12"), "the key was delegated by this run's first operation")
+
+    def test_the_eight_alone_are_refused_at_the_delegation_as_production_refused_them(self):
+        """The double is at least as strict as the cluster: a list without the implementation — the Trader's eight, as main filed them — is refused at the delegation."""
+        filed = P.answers_from
+        P.answers_from = lambda questionnaire, offered, role_id=P.ROLE_ID: dict(filed(questionnaire, offered, role_id), counterparties=list(THE_EIGHT))
+        self.addCleanup(setattr, P, "answers_from", filed)
+        runner = self.walk()
+        s11 = runner.outcome_of("S11")
+        self.assertEqual((s11.outcome, s11.cause), (P.FAIL, P.FAULT), s11.line)
+        self.assertEqual(len(self.double.delegations_refused), 1)
+        self.assertIn(GATEWAY_REFUSED_THE_DELEGATION % self.double.delegations_refused[0], s11.line)
+        self.assertTrue(s11.line.endswith("; " + P.DELEGATION_REFUSED_SAID), s11.line)
+
+    def test_the_double_names_the_pinned_implementation_and_the_run_goes_on(self):
+        runner = self.walk()
+        self.assertEqual(self.words(runner), {s: P.PASS for s in P.STATION_IDS}, [runner.line(o) for o in runner.outcomes])
+        clause = P.IMPLEMENTATION_SAME_CLAUSE % ("arbitrum", PINNED_IMPLEMENTATION, ISSUER, P.WALLET_READING)
+        self.assertEqual(clause, "the contract the agent's key delegates to on arbitrum is the one tables.py pins, %s, in %s's own word (wallet.get_balances (S11))"
+                         % (PINNED_IMPLEMENTATION, ISSUER), "one clause")
+        self.assertTrue(self.line_of(runner, "S11").endswith("; " + clause), self.line_of(runner, "S11"))
+        self.assertIn(clause, runner.notes["S11"])
+        self.assertNotIn("delegates to", self.line_of(runner, "S2"), "a fresh owner's page carries no funding wallet's reading, and S2 says nothing of it")
+        self.assertEqual(runner.facts["implementation"], {"outcome": P.IMPLEMENTATION_SAME, "named": PINNED_IMPLEMENTATION.lower(), "where": P.WALLET_READING})
+        self.assertEqual(runner.findings, {}, "the same address is no finding")
+        called = self.tools_called()
+        self.assertLess(called.index("wallet.get_balances"), called.index("wallet.build_transaction"), "held on the first reading, before the trade is built")
+        # the second run: the owner's page now carries the funding wallet's reading, so S2 is the first station whose answer carries it
+        second = self.walk()
+        at_s2 = P.IMPLEMENTATION_SAME_CLAUSE % ("arbitrum", PINNED_IMPLEMENTATION, ISSUER, P.ACCOUNT_READING)
+        self.assertTrue(self.line_of(second, "S2").endswith("; %s; assigned group group-100" % at_s2), self.line_of(second, "S2"))
+        self.assertEqual(second.outcome_of("S11").outcome, P.PASS, self.line_of(second, "S11"))
+        # …and S11 holds the agent's own wallet reading all the same: S2's is the funding wallet's (the security reading of pull request 34, finding 1)
+        self.assertTrue(self.line_of(second, "S11").endswith("; " + clause), self.line_of(second, "S11"))
+        self.assertEqual(second.facts["implementation"]["where"], P.WALLET_READING, "the last reading held is the agent's own")
+        self.assertEqual(second.facts["implementation_read"], [P.ACCOUNT_READING, P.WALLET_READING])
+        self.assertEqual(second.findings, {})
+
+    def test_the_check_adds_no_call(self):
+        """Read where the harness already reads it: the routes and the tools of a whole walk are the ones main asked, in the same number."""
+        runner = self.walk()
+        self.assertEqual(self.tools_called().count("wallet.wallet_status"), 0, "no reading is asked for the check's sake")
+        self.assertEqual([step["route"] for step in runner.steps["S2"]], ["GET " + P.ACCOUNT_ROUTE])
+        before_the_estate = []
+        for step in runner.steps["S11"]:
+            if "(%s)" % E.A.ESTATE["company"] in step["who"]:
+                break
+            before_the_estate.append(step["route"])
+        self.assertEqual(before_the_estate, ["MCP tools/call wallet.get_balances"], "S11's first reading, and then the estate's road")
+
+    def test_the_double_names_another_address_and_no_submit_reaches_it(self):
+        self.double.implementation = ANOTHER_IMPLEMENTATION
+        runner = self.walk()
+        sentence = P.IMPLEMENTATION_DIFFERS_SENTENCE % (PINNED_IMPLEMENTATION, "arbitrum", ISSUER, ANOTHER_IMPLEMENTATION.lower(), P.WALLET_READING)
+        s11 = runner.outcome_of("S11")
+        self.assertEqual((s11.outcome, s11.cause), (P.STOPPED, None), "stopped, not a fail, and no cause word: the harness names no cause it cannot know")
+        self.assertEqual(s11.line, "the trade: %s; %s" % (sentence, P.IMPLEMENTATION_NOT_TRADED_TAIL))
+        for words in (PINNED_IMPLEMENTATION, ANOTHER_IMPLEMENTATION.lower(), "on arbitrum", "the two addresses differ", "the trade is not submitted",
+                      "why they differ is not known to the harness"):
+            self.assertIn(words, s11.line)
+        self.assertEqual(runner.findings, {"S11": [sentence]}, "a finding at the station that read it, as an unpinned tool is at S8")
+        called = self.tools_called()
+        self.assertNotIn("wallet.submit_transaction", called)
+        self.assertNotIn("wallet.build_transaction", called)
+        self.assertEqual(called.count("wallet.get_balances"), 1, "the one reading the check was held on")
+        self.assertEqual(self.double.tickets, {})
+        self.assertNotIn("estate", runner.state, "nothing was asked of Harness Holdings: no payee, no payment")
+        self.assertEqual(self.double.delegations_refused, [])
+        self.assertNotIn(P.FAIL, self.words(runner).values(), "no station fails: a fail is a fault of the product (Spec T25)")
+        self.assertEqual(self.words(runner)["S12"], P.NOT_RUN)
+        self.assertEqual(self.words(runner)["S13"], P.PASS, self.line_of(runner, "S13"))
+        self.assertEqual(P.exit_code_of(runner.outcomes), 2, "stopped: neither a pass nor a fail")
+        report = runner.report()
+        row = next(line for line in report.splitlines() if line.startswith("| S11 The trade | "))
+        self.assertTrue(row.startswith("| S11 The trade | stopped |  | the trade: tables.py pins %s as the contract" % PINNED_IMPLEMENTATION), row)
+        self.assertTrue(row.endswith(" | %s |" % sentence), row)
+        self.assertNotIn("| fail |", row)
+        self.assertIn("- S11 The trade — %s" % sentence, report.split("## Findings", 1)[1].split("## What the teardown removed", 1)[0])
+
+    def test_another_address_named_on_the_account_page_is_said_at_s2_and_s11_does_not_trade(self):
+        first = self.walk()  # the owner is born and its funding wallet registered: from now the page carries the funding wallet's reading
+        self.assertEqual(first.outcome_of("S11").outcome, P.PASS, self.line_of(first, "S11"))
+        self.double.implementation = ANOTHER_IMPLEMENTATION
+        self.double.tool_calls.clear()
+        tickets = len(self.double.tickets)
+        runner = self.walk()
+        sentence = P.IMPLEMENTATION_DIFFERS_SENTENCE % (PINNED_IMPLEMENTATION, "arbitrum", ISSUER, ANOTHER_IMPLEMENTATION.lower(), P.ACCOUNT_READING)
+        s2 = runner.outcome_of("S2")
+        self.assertEqual((s2.outcome, s2.cause), (P.PASS, None), "the account is as it should be; the table is the harness's own")
+        self.assertTrue(s2.line.endswith("; %s; assigned group group-100" % sentence), s2.line)
+        self.assertEqual(runner.findings, {"S2": [sentence]})
+        s11 = runner.outcome_of("S11")
+        self.assertEqual((s11.outcome, s11.cause), (P.STOPPED, None))
+        self.assertEqual(s11.line, "the trade: %s; %s" % (sentence, P.IMPLEMENTATION_NOT_TRADED_TAIL))
+        self.assertEqual([name for name in self.tools_called() if name.startswith("wallet.")], [], "S11 asked nothing of the Wallet: not a reading, not a ticket, not a submit")
+        self.assertEqual(len(self.double.tickets), tickets)
+        self.assertNotIn("estate", runner.state)
+        self.assertNotIn(P.FAIL, self.words(runner).values())
+        self.assertEqual(P.exit_code_of(runner.outcomes), 2)
+
+    def test_the_double_names_none_and_the_run_goes_on_with_the_finding(self):
+        self.double.names_implementation = False
+        runner = self.walk()
+        self.assertEqual(self.words(runner), {s: P.PASS for s in P.STATION_IDS}, [runner.line(o) for o in runner.outcomes])
+        finding = P.IMPLEMENTATION_UNNAMED_FINDING % ("GET /v1/account (S2) and wallet.get_balances (S11)", "arbitrum", PINNED_IMPLEMENTATION, ISSUER)
+        self.assertEqual(runner.findings, {"S11": [finding]})
+        self.assertIn("could not be held against %s's own word; the run goes on" % ISSUER, finding)
+        self.assertTrue(self.line_of(runner, "S11").endswith("; " + P.IMPLEMENTATION_UNNAMED_CLAUSE % ISSUER), self.line_of(runner, "S11"))
+        self.assertNotIn("implementation", runner.facts, "nothing was held, and nothing is said to have been")
+        self.assertIn("wallet.submit_transaction", self.tools_called())
+        self.assertEqual(P.exit_code_of(runner.outcomes), 0, "a finding is not a fail")
+
+    def test_a_run_resumed_past_s2_holds_it_on_s11s_own_reading(self):
+        first = self.runner()
+        for station, title in P.STATIONS[:7]:
+            outcome = first.run_station(station, title)
+            self.assertEqual(outcome.outcome, P.PASS, first.line(outcome))
+        self.double.implementation = ANOTHER_IMPLEMENTATION
+        runner = self.walk(start_at="S8")
+        s11 = runner.outcome_of("S11")
+        self.assertEqual((s11.outcome, s11.cause), (P.STOPPED, None), s11.line)
+        self.assertIn("%s names %s (%s)" % (ISSUER, ANOTHER_IMPLEMENTATION.lower(), P.WALLET_READING), s11.line)
+        self.assertNotIn("wallet.submit_transaction", self.tools_called())
+        self.assertEqual(self.double.deleted, [first.facts["agent_id"]], "the agent that run left standing is torn down all the same")
+
+    def the_agents_own_reading_says(self, rows_of):
+        """The agent's own wallet reading alone answered with other delegation rows; the account page's, the funding wallet's, is as the double has it."""
+        balances_of = self.double.balances_of
+
+        def reading(agent):
+            answer = balances_of(agent)
+            rows = rows_of(answer.pop("delegation"))
+            if rows is not None:
+                answer["delegation"] = rows
+            return answer
+
+        self.double.balances_of = reading
+
+    def test_the_account_page_names_the_pinned_one_and_the_agents_own_reading_another_and_s11_does_not_trade(self):
+        """
+        The security reading of pull request 34, finding 1: the key that delegates is the agent's wallet's, and S2's is the funding wallet's
+        reading — so the pinned address read at S2 settles nothing for S11, which holds the agent's own reading on every run.
+        """
+        first = self.walk()  # the owner is born and its funding wallet registered: from now the account page carries the funding wallet's reading
+        self.assertEqual(first.outcome_of("S11").outcome, P.PASS, self.line_of(first, "S11"))
+        self.the_agents_own_reading_says(lambda rows: [dict(row, implementation=ANOTHER_IMPLEMENTATION.lower()) for row in rows])
+        self.double.tool_calls.clear()
+        tickets = len(self.double.tickets)
+        runner = self.walk()
+        s2 = runner.outcome_of("S2")
+        self.assertEqual(s2.outcome, P.PASS, s2.line)
+        self.assertIn(P.IMPLEMENTATION_SAME_CLAUSE % ("arbitrum", PINNED_IMPLEMENTATION, ISSUER, P.ACCOUNT_READING), s2.line, "the account page named the pinned one")
+        s11 = runner.outcome_of("S11")
+        self.assertEqual((s11.outcome, s11.cause), (P.STOPPED, None), s11.line)
+        for words in ("tables.py pins %s as the contract an agent's key delegates to on arbitrum" % PINNED_IMPLEMENTATION,
+                      "%s names %s (%s)" % (ISSUER, ANOTHER_IMPLEMENTATION.lower(), P.WALLET_READING)):
+            self.assertIn(words, s11.line)
+        self.assertTrue(s11.line.endswith("; " + P.IMPLEMENTATION_NOT_TRADED_TAIL), s11.line)
+        self.assertEqual(list(runner.findings), ["S11"], "a finding at the station that read it, and none at S2")
+        self.assertEqual(len(runner.findings["S11"]), 1)
+        self.assertEqual(runner.facts["implementation"]["outcome"], P.IMPLEMENTATION_ANOTHER)
+        self.assertEqual(runner.facts["implementation"]["where"], P.WALLET_READING)
+        called = self.tools_called()
+        self.assertEqual(called.count("wallet.get_balances"), 1, "the one reading the check was held on")
+        self.assertNotIn("wallet.build_transaction", called)
+        self.assertNotIn("wallet.submit_transaction", called)
+        self.assertEqual(len(self.double.tickets), tickets, "no ticket was built")
+        self.assertNotIn("estate", runner.state, "nothing was asked of Harness Holdings: no payee, no payment")
+        self.assertNotIn(P.FAIL, self.words(runner).values())
+        self.assertEqual(P.exit_code_of(runner.outcomes), 2)
+
+    def test_the_agents_own_reading_names_none_where_s2_named_the_pinned_one_and_the_run_goes_on_without_the_finding(self):
+        """Only the finding that no answer named one is passed over where an earlier station's answer named one: S2's line already says what it held."""
+        first = self.walk()
+        self.assertEqual(first.outcome_of("S11").outcome, P.PASS, self.line_of(first, "S11"))
+        self.the_agents_own_reading_says(lambda rows: None)
+        runner = self.walk()
+        self.assertEqual(self.words(runner), {s: P.PASS for s in P.STATION_IDS}, [runner.line(o) for o in runner.outcomes])
+        self.assertEqual(runner.findings, {})
+        self.assertNotIn("delegates to", self.line_of(runner, "S11"), "the reading named none, and S11 does not say it held one")
+        self.assertEqual(runner.facts["implementation"], {"outcome": P.IMPLEMENTATION_SAME, "named": PINNED_IMPLEMENTATION.lower(), "where": P.ACCOUNT_READING})
+        self.assertEqual(runner.facts["implementation_read"], [P.ACCOUNT_READING, P.WALLET_READING], "both answers were read for it")
+
+    def test_the_sentence_for_another_address_says_what_was_read_and_names_no_cause(self):
+        """
+        The security reading of pull request 34, finding 2: the pinned address is the contract every agent's key hands its account to, and a
+        deployment that names another may have been upgraded or may have had its implementation substituted. The harness cannot tell which,
+        so its sentence says what was read — the two addresses, that they differ, that the trade was not submitted — says the cause is not
+        known, and asks for a source other than the deployment's own answer before any re-pin. It does not say the table is behind, nor
+        that this is no fault of the product, nor that the table must be re-pinned to what the deployment names.
+        """
+        self.double.implementation = ANOTHER_IMPLEMENTATION
+        runner = self.walk()
+        s11 = runner.outcome_of("S11")
+        self.assertEqual((s11.outcome, s11.cause), (P.STOPPED, None), s11.line)
+        self.assertEqual(s11.line, "the trade: tables.py pins %s as the contract an agent's key delegates to on arbitrum, and %s names %s (wallet.get_balances (S11)): "
+                         "the two addresses differ, so the trade is not submitted — why they differ is not known to the harness, which cannot tell an upgrade from "
+                         "a substituted contract by the deployment's own answer; before any re-pin, by a spec, the address named must be verified against a source "
+                         "other than that answer, and the source recorded with the pin; nothing was funded, built, signed or sent"
+                         % (PINNED_IMPLEMENTATION, ISSUER, ANOTHER_IMPLEMENTATION.lower()))
+        self.assertEqual(len(runner.findings["S11"]), 1)
+        self.assertTrue(s11.line.startswith("the trade: %s; " % runner.findings["S11"][0]), "the finding is the same sentence")
+        for claim in ("is behind", "gone stale", "must be re-pinned", "fault of the product"):
+            self.assertNotIn(claim, s11.line, "a cause the harness cannot know")
+        self.assertNotIn("wallet.submit_transaction", self.tools_called(), "and the stop is as closed as it was")
+
+    def test_the_double_refuses_the_delegation_in_the_gateways_words_and_s11_says_it_was_the_delegation(self):
+        self.double.implementation = ANOTHER_IMPLEMENTATION  # this deployment's keys delegate to a contract the owner's list does not hold…
+        self.double.names_implementation = False             # …and no reading names it, so the table could not be held and the run went on
+        runner = self.walk()
+        s11 = runner.outcome_of("S11")
+        self.assertEqual((s11.outcome, s11.cause), (P.FAIL, P.FAULT), s11.line)
+        self.assertEqual(len(self.double.delegations_refused), 1)
+        gateway = GATEWAY_REFUSED_THE_DELEGATION % self.double.delegations_refused[0]
+        self.assertTrue(s11.line.startswith("the trade: the Wallet refused the submit — the MCP Wallet (refused): %s [PolicyDenied: %s]" % (
+            gateway, P.LEXICON["PolicyDenied"]["description"])), s11.line)
+        self.assertTrue(s11.line.endswith("; the delegation was refused, not the trade: the session refused is the one whose request id ends :delegate, the one "
+                                          "signature by which the agent's key becomes an account before its first operation, and the trade itself was never asked for"), s11.line)
+        self.assertEqual(s11.line.count(gateway), 1, "the gateway's words, verbatim and once")
+        self.assertEqual(self.tools_called().count("wallet.submit_transaction"), 1, "the submit was asked once, and refused")
+        self.assertEqual(self.words(runner)["S12"], P.NOT_RUN, "nothing was signed and nothing moved")
+
+    def test_a_submit_refused_for_another_cause_is_told_as_it_always_was(self):
+        """No other reading of S11 changes: a refusal that is not the delegation's carries no word about the delegation."""
+        double = self.double
+
+        def refusing(rpc_id, agent, connection, args):
+            return double.tool_text(rpc_id, "ticket_invalid: no unspent ticket by that id", error=True)
+
+        double.tool_wallet_submit_transaction = refusing
+        runner = self.walk()
+        s11 = runner.outcome_of("S11")
+        self.assertEqual((s11.outcome, s11.cause), (P.FAIL, P.FAULT), s11.line)
+        self.assertIn("the Wallet refused the submit — the MCP Wallet (refused): no unspent ticket by that id", s11.line)
+        self.assertNotIn("delegation", s11.line)
 
 
 class NothingIsCreatedWithoutTheWord(PathfinderBase):

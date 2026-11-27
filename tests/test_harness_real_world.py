@@ -1347,7 +1347,9 @@ class TheDocuments(unittest.TestCase):
         self.assertIn("%s\n\n%s\n" % (title, SECTION_6_T29), text)
         t31 = "## Spec T31 — The estate harness learns AER360-118 and CAT-16, and never strands its estate (1 November 2026)"
         t32 = "## Spec T32 — The estate harness learns that an estate holds bitcoin (14 November 2026)"
-        self.assertEqual(text.index("## "), text.index(t32), "the newest entry first: Spec T32's since 14 November 2026, then T31's, then T29's")
+        t33 = "## Spec T33 — The Pathfinder's owner lists the contract its agent's key delegates to (27 November 2026)"
+        self.assertEqual(text.index("## "), text.index(t33), "the newest entry first: Spec T33's since 27 November 2026, then T32's, then T31's, then T29's")
+        self.assertLess(text.index(t33), text.index(t32))
         self.assertLess(text.index(t32), text.index(t31))
         self.assertLess(text.index(t31), text.index(title))
         entry = text.split(title, 1)[1].split("## Spec HRW-1", 1)[0]
