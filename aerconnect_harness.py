@@ -187,9 +187,10 @@ Trader's list did not hold the implementation, so the cluster refused, correctly
     order, then the contract the agent's key delegates to on the trade's chain, pinned in tables.py with where it was read. The access
     platform validates an authored destination for its form only (requireAgentWhitelistPayableDestinations), so an owner may list it.
   the check before the trade. The pinned address is held, case-insensitively, against the implementation the deployment itself names for
-    the trade's chain — the `delegation` rows its wallet readings carry ({chain, delegated, implementation, read}) — at the first station
-    whose answer already carries one: S2's GET /v1/account (the funding wallet's reading), else S11's first wallet.get_balances (the agent's
-    own wallet reading), before anything is funded, built or submitted. No call is added for it. The same address is said in one clause and
+    the trade's chain — the `delegation` rows its wallet readings carry ({chain, delegated, implementation, read}) — on each answer that
+    already carries one: S2's GET /v1/account (the funding wallet's reading), and on every run S11's first wallet.get_balances (the agent's
+    own wallet reading, the wallet whose key delegates: what S2 read does not stand for it — the security reading of pull request 34,
+    finding 1), before anything is funded, built or submitted. No call is added for it. The same address is said in one clause and
     the run goes on; another address and the trade is NOT submitted — S11 stops (`stopped`, never a fail: the harness's own table gone
     stale is no fault of the product, as an unpinned tool at S8 is a finding and never a fail) naming the address pinned, the address
     named, the chain, and that the table is behind and must be re-pinned by a spec, with the same sentence a finding at the station that
@@ -1839,17 +1840,20 @@ class Pathfinder:
 
     def implementation_before_the_trade(self, balances: H.McpAnswer) -> str:
         """
-        Spec T33, no later than S11 and before anything is funded, built or submitted: where no earlier station's answer named
-        an implementation for the trade's chain — a run resumed past S2, or an owner whose account page carries no funding
-        wallet's reading yet — the agent's own wallet reading, S11's first wallet.get_balances, is held the same way. Answers
-        the clause S11's line carries: empty where an earlier station held it (its own line says so); the same address, noted
-        too so a later stop of S11 does not lose it; none named in any answer read, a finding, and the run goes on.
+        Spec T33, no later than S11 and before anything is funded, built or submitted: the agent's own wallet reading, S11's
+        first wallet.get_balances, is held against the pinned contract on every run, whatever an earlier station read. The key
+        that delegates is the agent's wallet's, and S2's is the funding wallet's reading: the one does not stand for the other
+        (the security reading of pull request 34, finding 1), so an address other than the pinned one stops the station here
+        even where S2 read the pinned one. Answers the clause S11's line carries: the same address, noted too so a later stop
+        of S11 does not lose it; none named by this reading where an earlier station's answer named one, nothing, and no
+        finding (that station's line says what it held); none named in any answer read, a finding, and the run goes on.
         """
-        if self.facts.get("implementation"):
-            return ""
+        named_earlier = bool(self.facts.get("implementation"))
         clause = self.hold_the_implementation(balances.data, WALLET_READING)
         self.stop_on_a_stale_table()
         if clause is None:
+            if named_earlier:
+                return ""
             self.finding(IMPLEMENTATION_UNNAMED_FINDING % (names_said(self.facts.get("implementation_read") or []), TRADE["chain"],
                                                            T.address(IMPLEMENTATION_KEY), normal_base(self.base)))
             return "; %s" % (IMPLEMENTATION_UNNAMED_CLAUSE % normal_base(self.base))
@@ -2352,8 +2356,8 @@ class Pathfinder:
         self.expect("the wallet's balances on its own chain: USDC at least %d minor units (US$0.10); short of it, Harness Holdings funds the "
                     "wallet through the estate's own road" % TRADE_RAW)
         balances, usdc, weth, held = self.read_agent_balances(facts)
-        # Spec T33: where no earlier station's answer named it, this reading — the agent's own wallet's, already in hand — is held against
-        # the pinned implementation before any money is asked for; another address stops the station here
+        # Spec T33: this reading — the agent's own wallet's, already in hand — is held against the pinned implementation on every run,
+        # whatever S2 read on the account page, before any money is asked for; another address stops the station here
         delegates_to = self.implementation_before_the_trade(balances)
         funded: Optional[str] = None
         if held is None or held < TRADE_RAW:
@@ -3312,7 +3316,8 @@ def dry_lines(base: str = DEFAULT_BASE, owner: str = DEFAULT_OWNER, store_dir: s
     call("S2", "GET %s → expect 200: customer.id = customer.json's, subscription.standing paid; a signing group stated on %s compared with %s (another group fails — a fault); "
          "none stated → the finding \"%s\", and S2 passes" % (ACCOUNT_ROUTE, ", ".join(GROUP_KEYS), group, NO_GROUP_FINDING % (group, ACCOUNT_ROUTE)))
     call("S2", "[table] where that answer names an implementation for %s (a wallet reading's delegation rows): held against the contract tables.py pins for the agent's "
-         "key to delegate to there, %s (%s) → the same: one clause, and the run goes on; another: \"%s\", a finding, and S11 does not trade; none named: S11 holds it" % (
+         "key to delegate to there, %s (%s) → the same: one clause, and the run goes on; another: \"%s\", a finding, and S11 does not trade; none named: nothing is said "
+         "here; S11 holds the agent's own wallet reading all the same, as it does where this answer named the same" % (
              TRADE["chain"], pinned_implementation, IMPLEMENTATION_KEY,
              IMPLEMENTATION_BEHIND_SENTENCE % (pinned_implementation, TRADE["chain"], normal_base(base), "<the address named>", ACCOUNT_READING)))
     station("S3", "this run's own agent, %s (%s), with a fresh passkey" % (label, ROLE_ID))
@@ -3357,8 +3362,9 @@ def dry_lines(base: str = DEFAULT_BASE, owner: str = DEFAULT_OWNER, store_dir: s
     station("S11", "the agent's wallet funded by Harness Holdings through the estate's own road where it is short, then a real swap, landed, sponsored by the paymaster")
     call("S11", "MCP tools/call wallet.get_balances %s → expect USDC on %s of at least %d minor units; short of it: \"%s\"" % (
         _j({"wallet_id": "<wallet UUID>"}), TRADE["chain"], TRADE_RAW, SHORT_SENTENCE % ("<wallet address>", TRADE["chain"], "<what it holds>", TRADE_RAW)))
-    call("S11", "[table] where no earlier station's answer named it: the implementation that reading names for %s held against tables.py's %s, before anything is funded, built "
-         "or submitted → the same: one clause; another: stopped, \"%s; %s\"; none named in any answer read: the finding \"%s\"" % (
+    call("S11", "[table] on every run, whatever S2 read: the implementation that reading, the agent's own wallet's, names for %s held against tables.py's %s, before anything is "
+         "funded, built or submitted → the same: one clause; another: stopped, \"%s; %s\"; none named by it where S2's answer named one: nothing more is said; none named in any "
+         "answer read: the finding \"%s\"" % (
              TRADE["chain"], pinned_implementation,
              IMPLEMENTATION_BEHIND_SENTENCE % (pinned_implementation, TRADE["chain"], normal_base(base), "<the address named>", WALLET_READING), IMPLEMENTATION_NOT_TRADED_TAIL,
              IMPLEMENTATION_UNNAMED_FINDING % (names_said([ACCOUNT_READING, WALLET_READING]), TRADE["chain"], pinned_implementation, normal_base(base))))
