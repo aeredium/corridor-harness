@@ -4,6 +4,9 @@ finding answered by a change.
 
   Finding 2: where S11 could not read the chain, or on a run resumed past S11, S12 reads the receipt of the approval's operation again —
     and held neither the sender nor the paymaster its UserOperationEvent names, which S11 holds on its own reading. S12 holds both now.
+  Finding 3: the approval's operation was judged landed and paid for, and what it approved was never read. S12 reads the ERC-20 Approval
+    log in its receipt and holds the owner to the wallet, the spender to the venue contract the trade names and the amount to what the
+    swap took — what the Series' D2 says of every trade: "approve(SwapRouter02, exactly the USDC amount of the trade)".
 
 The file is named so that the repository's one command for the suite, `python3 -m unittest discover tests`, reaches it among the first
 modules it runs.
@@ -17,14 +20,19 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import aerconnect_harness as P  # noqa: E402
 import corridor_harness as H  # noqa: E402
+import tables as T  # noqa: E402
 
 try:
+    from .pathfinder_double import APPROVAL_TOPIC, USDC_ARBITRUM, WETH_ARBITRUM, topic_of, word
     from .test_aerconnect_harness import PathfinderBase
 except ImportError:  # run as a top-level module by `unittest discover tests`
+    from pathfinder_double import APPROVAL_TOPIC, USDC_ARBITRUM, WETH_ARBITRUM, topic_of, word
     from test_aerconnect_harness import PathfinderBase
 
-ANOTHER = H.checksum_address("0x" + "5e" * 20)  # nobody's address: neither the agent's wallet nor the group-100 paymaster
+ANOTHER = H.checksum_address("0x" + "5e" * 20)  # nobody's address: neither the agent's wallet nor the group-100 paymaster, nor the venue contract
 PAYMASTER = H.checksum_address(P.PAYMASTER["arbitrum"])
+VENUE = H.checksum_address(P.TRADE["contract_address"])  # the venue contract the trade names: Uniswap v3's SwapRouter02 on Arbitrum, tables.py's
+UNLIMITED = 2 ** 256 - 1
 
 
 class S12HoldsTheSenderAndThePaymasterOfTheApprovalItReadsAgain(PathfinderBase):
@@ -84,6 +92,114 @@ class S12HoldsTheSenderAndThePaymasterOfTheApprovalItReadsAgain(PathfinderBase):
         self.assertEqual(s12.outcome, P.PASS, s12.line)
         self.assertNotIn("the paymaster is", s12.line)
         self.assertNotIn("the operation's sender is", s12.line)
+
+
+class TheReaderOfWhatAnOperationApproved(unittest.TestCase):
+    """Finding 3, the small reader: the ERC-20 Approval logs of a receipt — the token, the owner, the spender and the amount."""
+
+    def test_the_topic_is_erc_20s_approval_as_every_explorer_prints_it(self):
+        self.assertEqual(APPROVAL_TOPIC, "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925")
+        self.assertEqual(P.APPROVAL_TOPIC, APPROVAL_TOPIC, "the harness derives it from the event's signature, and the double states it")
+
+    def test_an_approval_is_read_and_nothing_else_is_read_as_one(self):
+        owner, spender = H.checksum_address("0x" + "a7" * 20), VENUE
+        receipt = {"logs": [
+            {"address": USDC_ARBITRUM, "topics": [H.TRANSFER_TOPIC, topic_of(owner), topic_of(spender)], "data": "0x" + word(7)},  # a Transfer
+            {"address": USDC_ARBITRUM, "topics": [APPROVAL_TOPIC.upper().replace("0X", "0x"), topic_of(owner), topic_of(spender)], "data": "0x" + word(100000)},
+            {"address": WETH_ARBITRUM, "topics": [APPROVAL_TOPIC, topic_of(owner), topic_of(ANOTHER)], "data": "0x" + word(UNLIMITED)},
+            {"address": WETH_ARBITRUM, "topics": [APPROVAL_TOPIC, topic_of(owner), topic_of(spender), "0x" + word(9)], "data": "0x"},  # ERC-721's, four topics
+            {"address": USDC_ARBITRUM, "topics": [APPROVAL_TOPIC, topic_of(owner), topic_of(spender)], "data": "0x"},  # an amount of nothing
+        ]}
+        self.assertEqual(P.approvals_in(receipt), [
+            {"token": H.checksum_address(USDC_ARBITRUM), "owner": owner, "spender": spender, "amount": 100000},
+            {"token": H.checksum_address(WETH_ARBITRUM), "owner": owner, "spender": ANOTHER, "amount": UNLIMITED},
+            {"token": H.checksum_address(USDC_ARBITRUM), "owner": owner, "spender": spender, "amount": 0},
+        ])
+        for empty in ({}, {"logs": None}, {"logs": []}):
+            self.assertEqual(P.approvals_in(empty), [])
+
+
+class S12ReadsWhatTheApprovalApproved(PathfinderBase):
+    """
+    Finding 3. The approval is its own operation with its own receipt, and S11, S12 and S12a judged that receipt for its status, its
+    UserOperationEvent and its debit alone: a Wallet that approved another spender than the venue contract, or more than the trade sells,
+    passed all three so long as the swap's transfers reconciled. S12 reads the Approval log now, and each of those is a fault it names.
+    """
+
+    def failed_at_s12_alone(self, runner):
+        """S11 passed — it judges the landing, not what was approved — and S12 failed, a fault; the commission on the swap is read all the same."""
+        self.assertEqual(runner.outcome_of("S11").outcome, P.PASS, self.line_of(runner, "S11"))
+        s12 = runner.outcome_of("S12")
+        self.assertEqual((s12.outcome, s12.cause), (P.FAIL, P.FAULT), s12.line)
+        self.assertNotIn("the balances reconcile", s12.line.split("; ")[0], "the problem is said first")
+        self.assertEqual(runner.outcome_of("S12a").outcome, P.PASS, self.line_of(runner, "S12a"))
+        return s12.line
+
+    def test_the_venue_contract_and_exactly_what_the_swap_took_pass_and_s12_says_what_was_approved(self):
+        runner = self.walk()
+        self.assertEqual(self.words(runner), {s: P.PASS for s in P.STATION_IDS}, [runner.line(o) for o in runner.outcomes])
+        self.assertEqual(runner.findings, {})
+        self.assertIn("; the approval's operation approved the venue contract %s to take 0.1 USDC from the wallet, exactly what the swap took; " % VENUE,
+                      self.line_of(runner, "S12"))
+        self.assertEqual(T.address("UNISWAP_V3_ARBITRUM"), VENUE, "the venue contract is the one tables.py pins for the trade's venue on its chain")
+
+    def test_another_spender_than_the_venue_contract_fails_s12(self):
+        self.double.approval_spender = ANOTHER
+        line = self.failed_at_s12_alone(self.walk())
+        self.assertIn("the approval's operation: the approval's spender %s is not the venue contract %s" % (ANOTHER, VENUE), line)
+        self.assertNotIn("approved the venue contract", line)
+        self.assertNotIn("the allowance of", line, "the amount is the trade's, and nothing is said of it")
+
+    def test_an_unlimited_allowance_fails_s12(self):
+        self.double.approval_amount = UNLIMITED
+        line = self.failed_at_s12_alone(self.walk())
+        self.assertIn("the approval's operation: the allowance of %d minor units of USDC (an unlimited allowance) is not the 100000 the swap took" % UNLIMITED, line)
+        self.assertNotIn("the approval's spender", line, "the spender is the venue contract, and nothing is said of it")
+
+    def test_an_allowance_of_one_unit_more_than_the_swap_took_fails_s12(self):
+        """Series D3: "if the Wallet ever reports one leg on a fresh trade, an allowance was left standing, and that is a failure" — read here on chain."""
+        self.double.approval_amount = P.TRADE_RAW + 1
+        line = self.failed_at_s12_alone(self.walk())
+        self.assertIn("the approval's operation: the allowance of 100001 minor units of USDC is not the 100000 the swap took", line)
+        self.assertNotIn("unlimited", line)
+
+    def test_an_approval_of_another_token_fails_s12(self):
+        self.double.approval_token = WETH_ARBITRUM
+        line = self.failed_at_s12_alone(self.walk())
+        self.assertIn("the approval's operation: the Approval is logged by the token %s, and the USDC the trade sells is %s" % (
+            H.checksum_address(WETH_ARBITRUM), H.checksum_address(USDC_ARBITRUM)), line)
+
+    def test_a_receipt_that_carries_no_approval_by_the_wallet_fails_s12(self):
+        self.double.approval_log = False
+        runner = self.walk()
+        line = self.failed_at_s12_alone(runner)
+        self.assertIn("the approval's operation: its receipt carries no ERC-20 Approval by the wallet %s (0 Approval logs read in it), so what it approved "
+                      "could not be read" % self.agent_of(runner)["walletAddress"], line)
+
+    def test_a_run_resumed_at_s12_reads_what_was_approved_by_the_hash_run_json_keeps(self):
+        self.double.approval_spender = ANOTHER
+        first = self.runner()
+        for station, title in P.STATIONS[:11]:
+            outcome = first.run_station(station, title)
+            self.assertEqual(outcome.outcome, P.PASS, first.line(outcome))
+        runner = self.walk(start_at="S12")
+        s12 = runner.outcome_of("S12")
+        self.assertEqual((s12.outcome, s12.cause), (P.FAIL, P.FAULT), s12.line)
+        self.assertIn("the approval's operation: the approval's spender %s is not the venue contract %s" % (ANOTHER, VENUE), s12.line)
+
+    def test_a_quote_that_carries_no_approval_is_read_as_before(self):
+        """The guard: no approval's operation was sent, so there is no receipt of one to read, and S12 says nothing of one."""
+        self.double.needs_approval = False
+        runner = self.walk()
+        self.assertEqual(self.words(runner), {s: P.PASS for s in P.STATION_IDS}, [runner.line(o) for o in runner.outcomes])
+        self.assertNotIn("approv", self.line_of(runner, "S12"))
+
+    def test_a_wallet_before_w_ops_is_read_as_before(self):
+        """The guard: the one operation of a Wallet that lists none is read exactly as it always was, in the sentences it always had."""
+        self.double.operations = False
+        runner = self.walk()
+        self.assertEqual(self.words(runner), {s: P.PASS for s in P.STATION_IDS}, [runner.line(o) for o in runner.outcomes])
+        self.assertNotIn("approv", self.line_of(runner, "S12"))
 
 
 if __name__ == "__main__":

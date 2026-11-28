@@ -48,6 +48,7 @@ GAS_USED = 400000
 GAS_PRICE_WEI = 10_000_000  # 0.01 gwei, an Arbitrum figure
 DELEGATION_GAS_USED = 60000
 APPROVAL_GAS_USED = 100000  # the approval's own operation (Spec T34): at the double's price of gas and of ETH, a debit of one cent
+APPROVAL_TOPIC = "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925"  # ERC-20's Approval(address,address,uint256), as every explorer prints it
 HTTP_DEFAULT_WAIT = 60.0  # corridor_harness.http_request's own default, what a caller that states no wait is given
 # Spec T34 §8, the relay's two sentences for a door that did not answer. The first is aer-connector Spec C-WAIT-1's, as Spec T34 quotes it from
 # "asked" on ("asked and did not answer within N seconds; it is not known whether anything was done"); the words before "asked" are the double's own,
@@ -220,7 +221,8 @@ class PathfinderDouble(ConnectorDouble):
                  event_for_another_hash=False, account_funding=None, my_agent_wallet=None, rpc_host=RPC_HOST, lists_roads=False,
                  implementation=None, names_implementation=True, operations=True, needs_approval=True, approval_fate=None, swap_refused=False,
                  refused_swap_row=True, approval_charged=True, submit_seconds=0, relay_wait=P.RELAY_DOOR_WAIT_SECONDS, relay_said=RELAY_ASKED_UNANSWERED_SAID,
-                 swap_sent_after=0, swap_never_sent=False, approval_sender=None, approval_paymaster=None, **kwargs):
+                 swap_sent_after=0, swap_never_sent=False, approval_sender=None, approval_paymaster=None, approval_log=True, approval_spender=None,
+                 approval_amount=None, approval_token=None, **kwargs):
         """
         `catalogue` the names tools/list answers (default the fifteen tables.py pins; `lists_roads` adds the two assignment tools after
         police.check_action, where the relay listed them before Spec C-CAT-1 — the connector as it stands before C-CAT-1 ships);
@@ -260,7 +262,11 @@ class PathfinderDouble(ConnectorDouble):
         ticket_status reads pass before the swap's operation is sent (the Wallet standing between the two operations when the answer was
         lost); `swap_never_sent` the approval's operation landed and no swap ever followed. The security reading of pull request 35, finding 2:
         `approval_sender` and `approval_paymaster` are the sender and the paymaster the EntryPoint's UserOperationEvent names for the approval's
-        operation, in place of the agent's wallet and the group-100 paymaster (None: those two, as the chain would say).
+        operation, in place of the agent's wallet and the group-100 paymaster (None: those two, as the chain would say). Finding 3 of the same
+        reading, what the approval's operation approves: its receipt carries the token's ERC-20 Approval log — the wallet the owner, the spender
+        the venue contract the ticket was built for, the amount exactly what the trade sells (Series D2: "approve(SwapRouter02, exactly the USDC
+        amount of the trade)"); `approval_spender`, `approval_amount` and `approval_token` put another spender, another amount (2**256 - 1 is an
+        unlimited one) or another token's contract in that log, and `approval_log` False leaves the log out of the receipt altogether.
         """
         super().__init__(seated=seated, **kwargs)
         self.catalogue = list(catalogue) if catalogue is not None else list(P.CATALOGUE)
@@ -312,6 +318,10 @@ class PathfinderDouble(ConnectorDouble):
         self.swap_never_sent = swap_never_sent
         self.approval_sender = approval_sender
         self.approval_paymaster = approval_paymaster
+        self.approval_log = approval_log
+        self.approval_spender = approval_spender
+        self.approval_amount = approval_amount
+        self.approval_token = approval_token
         self.wait_stated = None  # the wait the caller of the request in hand stated; None where it stated none
         self.waits = []  # (the MCP method, or the tool's name for tools/call; the wait its caller stated), for every MCP request
         self.delegations_refused = []  # the ticket of every submit whose delegation the cluster refused
@@ -826,7 +836,14 @@ class PathfinderDouble(ConnectorDouble):
         rows = []
         if self.operations and self.needs_approval:
             reverted = self.approval_fate == "reverted"
-            approval = self.send_operation(agent, "approve", [], self.block - 1, APPROVAL_GAS_USED, landed=True, reverted=reverted, charged=self.approval_charged,
+            # what the approval approves, as the token logs it (ERC-20 Approval: owner, spender, value): the wallet lets the venue contract the ticket
+            # was built for take exactly what the trade sells; an approval that reverted logs nothing
+            approved = []
+            if self.approval_log and not reverted:
+                spender = self.approval_spender or ticket["args"].get("contract_address") or T.address("UNISWAP_V3_ARBITRUM")
+                approved.append({"address": self.approval_token or USDC_ARBITRUM, "topics": [APPROVAL_TOPIC, topic_of(address), topic_of(spender)],
+                                 "data": "0x" + word(ticket["raw"] if self.approval_amount is None else self.approval_amount)})
+            approval = self.send_operation(agent, "approve", approved, self.block - 1, APPROVAL_GAS_USED, landed=True, reverted=reverted, charged=self.approval_charged,
                                            sender=self.approval_sender, paymaster=self.approval_paymaster)
             rows.append(approval)
             if reverted:

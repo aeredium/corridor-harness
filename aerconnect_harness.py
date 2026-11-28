@@ -429,6 +429,14 @@ LATEST_ROUND_DATA = H.selector("latestRoundData()")
 FEED_DECIMALS = H.selector("decimals()")
 # The EntryPoint's own event (ERC-4337 v0.6 and v0.7 alike): userOpHash, sender and paymaster indexed.
 USER_OPERATION_EVENT = H.event_topic("UserOperationEvent(bytes32,address,address,uint256,bool,uint256,uint256)")
+# WHAT THE APPROVAL'S OPERATION APPROVED (the security reading of pull request 35, finding 3). Since the Wallet's Spec W-OPS the approval is
+# an operation of its own with a receipt of its own, and the token logs there what was approved: ERC-20's Approval(owner, spender, value).
+# S12 reads it and holds what the Series says of every trade (series.py D2 and D3; Rule 8 amended): "approve(SwapRouter02, exactly the USDC
+# amount of the trade)", and "an approval is never unlimited" — the owner the wallet, the spender the venue contract the trade names
+# (TRADE's contract_address), the amount what the swap took. The money Series holds the same two of the approval's calldata
+# (corridor_harness.judge_allowed: the spender, the allowance); the Pathfinder holds no calldata, and reads the chain's own log.
+APPROVAL_TOPIC = H.event_topic("Approval(address,address,uint256)")
+UNLIMITED_ALLOWANCE = 2 ** 256 - 1
 MARGIN_BPS = 1000  # AAP_GAS_MARGIN_BPS, ten percent by the ruling of 24 September 2026 (internal/gas/dollars.go)
 # The platform values the gas at its own price of the moment it quoted (internal/gas/price.go: a spot price cached up to
 # five minutes); the reader values it at Chainlink's at the landing block, so the debit is judged within a band of two
@@ -1116,6 +1124,25 @@ def user_operation_events(receipt: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "success": bool(word_at(raw, 1)) if len(raw) >= 64 else None,
                 "actual_gas_cost": word_at(raw, 2) if len(raw) >= 96 else None,
                 "actual_gas_used": word_at(raw, 3) if len(raw) >= 128 else None,
+            })
+    return out
+
+
+def approvals_in(receipt: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Every ERC-20 Approval a receipt logged: the token that logged it, the owner, the spender and the amount (the security reading of pull
+    request 35, finding 3). ERC-721's Approval, which indexes its third argument and so carries four topics, is not one.
+    """
+    out: List[Dict[str, Any]] = []
+    for log in receipt.get("logs") or []:
+        topics = [str(t) for t in (log.get("topics") or [])]
+        if len(topics) == 3 and topics[0].lower() == APPROVAL_TOPIC:
+            data = str(log.get("data") or "0x")
+            out.append({
+                "token": H.checksum_address(str(log.get("address") or "0x" + "0" * 40)),
+                "owner": H.checksum_address("0x" + topics[1][-40:]),
+                "spender": H.checksum_address("0x" + topics[2][-40:]),
+                "amount": int(data, 16) if data not in ("0x", "") else 0,
             })
     return out
 
@@ -3148,7 +3175,9 @@ class Pathfinder:
         each one's sponsor's transaction, its status, the UserOperationEvent for its own hash and its success, and the delegation's
         where there is one; of each operation before the value one (the approval's) it holds the event's sender to the wallet and its
         paymaster to the group-100 paymaster too, as S11 does, since this may be the only reading of it the run has (the security
-        reading of pull request 35, finding 2) — and holds the fall of the owner's gas account against the SUM of every operation's debit, and the
+        reading of pull request 35, finding 2), and of the approval's operation it reads what was approved, in the ERC-20 Approval log of
+        its own receipt: the wallet's, to the venue contract the trade names, of exactly what the swap took (finding 3 of the same
+        reading; approval_held) — and holds the fall of the owner's gas account against the SUM of every operation's debit, and the
         delegation's where the walk made it, each debit judged within its own band as the one always was. Where the Wallet listed
         no operations (a Wallet before W-OPS) the one operation is read exactly as before, in the sentences it always had.
         """
@@ -3194,6 +3223,12 @@ class Pathfinder:
             H.format_units(sold, T.DECIMALS[TRADE["asset"]]), TRADE["asset"], H.format_units(bought, T.DECIMALS[TRADE["to_asset"]]), TRADE["to_asset"], len(transfers)))
         if sold and sold != TRADE_RAW:
             self.note("the chain says %d minor units of %s left the wallet; the trade was for %d" % (sold, TRADE["asset"], TRADE_RAW))
+        # the security reading of pull request 35, finding 3: what the approval's operation approved, read from its own receipt
+        for op, row, _ in earlier:
+            if str(op.get("kind") or "").strip().lower() == APPROVAL_KIND:
+                wrong, approved = self.approval_held(op, row, wallet, usdc_token, sold)
+                problems.extend(wrong)
+                lines.extend(approved)
         # 2. the gas trail: the debit, judged in dollars against the chain at the platform's ten percent
         self.expect("the ticket's debit, read once more: debited_usd")
         ticket = self.read_ticket()
@@ -3283,6 +3318,43 @@ class Pathfinder:
         if problems:
             raise StationStop("; ".join(problems + lines), outcome=FAIL)
         return Outcome("S12", PASS, "the reader: %s" % "; ".join(lines))
+
+    @staticmethod
+    def approval_held(operation: Dict[str, Any], receipt: Dict[str, Any], wallet: Dict[str, Any], token: str, sold: int) -> Tuple[List[str], List[str]]:
+        """
+        What the approval's operation approved, read from the ERC-20 Approval logs of its own receipt and held to what the Series says of
+        every trade (the security reading of pull request 35, finding 3; series.py D2 and D3): the owner is the wallet; the token is the
+        coin the trade sells, where the Wallet stated its contract (`token`); the spender is the venue contract the trade names; and the
+        amount is exactly what the swap took out of the wallet (`sold`; the trade's own figure where the swap's receipt moved none, which
+        S12 says for itself). Answers the problems, each a fault in S12's line, and the clauses that say what was approved where nothing
+        is wrong with it. A receipt that carries no Approval by the wallet is a problem too: what was approved could not be read.
+        """
+        name = operation_said(operation)
+        address = str(wallet.get("address") or "")
+        venue = H.checksum_address(TRADE["contract_address"])
+        needed, of_what = (sold, "the swap took") if sold > 0 else (TRADE_RAW, "the trade sells")
+        read = approvals_in(receipt)
+        mine = [approval for approval in read if address and approval["owner"].lower() == address.lower()]
+        if not mine:
+            return ["%s: its receipt carries no ERC-20 Approval by the wallet %s (%d Approval log%s read in it), so what it approved could not be read" % (
+                name, address or "(not known)", len(read), "" if len(read) == 1 else "s")], []
+        problems: List[str] = []
+        lines: List[str] = []
+        for approval in mine:
+            wrong: List[str] = []
+            if token and approval["token"].lower() != token.lower():
+                wrong.append("%s: the Approval is logged by the token %s, and the %s the trade sells is %s" % (
+                    name, approval["token"], TRADE["asset"], H.checksum_address(token)))
+            if approval["spender"].lower() != venue.lower():
+                wrong.append("%s: the approval's spender %s is not the venue contract %s" % (name, approval["spender"], venue))
+            if approval["amount"] != needed:
+                wrong.append("%s: the allowance of %d minor units of %s%s is not the %d %s" % (
+                    name, approval["amount"], TRADE["asset"], " (an unlimited allowance)" if approval["amount"] == UNLIMITED_ALLOWANCE else "", needed, of_what))
+            if not wrong:
+                lines.append("%s approved the venue contract %s to take %s %s from the wallet, exactly what %s" % (
+                    name, venue, H.format_units(approval["amount"], T.DECIMALS[TRADE["asset"]]), TRADE["asset"], of_what))
+            problems.extend(wrong)
+        return problems, lines
 
     def receipt_of(self, tx_hash: str, wait: bool = False) -> Optional[Dict[str, Any]]:
         """
