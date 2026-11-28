@@ -47,6 +47,20 @@ PRICE_USD = 2500  # the double's price of ETH, for the feed and for the platform
 GAS_USED = 400000
 GAS_PRICE_WEI = 10_000_000  # 0.01 gwei, an Arbitrum figure
 DELEGATION_GAS_USED = 60000
+APPROVAL_GAS_USED = 100000  # the approval's own operation (Spec T34): at the double's price of gas and of ETH, a debit of one cent
+APPROVAL_TOPIC = "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925"  # ERC-20's Approval(address,address,uint256), as every explorer prints it
+HTTP_DEFAULT_WAIT = 60.0  # corridor_harness.http_request's own default, what a caller that states no wait is given
+# Spec T34 §8, the relay's two sentences for a door that did not answer. The first is aer-connector Spec C-WAIT-1's, as Spec T34 quotes it from
+# "asked" on ("asked and did not answer within N seconds; it is not known whether anything was done"); the words before "asked" are the double's own,
+# since this repository holds no source for them. The second is the relay's older sentence, whose tail is corridor_harness.RELAY_UNREACHABLE.
+RELAY_ASKED_UNANSWERED_SAID = "The MCP Wallet door was asked and did not answer within %d seconds; it is not known whether anything was done."
+RELAY_NOT_REACHED_SAID = "The MCP Wallet door " + H.RELAY_UNREACHABLE
+# What the double's Wallet says of an operation that did not go as asked (Spec T34 §1). The Wallet's own words for these are read from no source this
+# repository holds (its Spec W-OPS and api/openapi.yaml are the Wallet's), so the first is the double's own; the second is the cluster's refusal in
+# the words the double's Police already speaks for the same cause.
+APPROVAL_REVERTED_SAID = "user_operation_reverted: the approval's operation %s reverted on chain, so the swap was not sent"
+SWAP_REFUSED_SAID = ("PolicyDenied: denied (cause: legacy_limit_zero; the per-payment limit has not been set to more than zero. Set it to a figure above zero for the "
+                     "payment to be approved.)")
 
 # packages/shared/src/refusals.ts and apps/server/src/http.ts, verbatim, for the account roads' codes.
 MESSAGES = {
@@ -205,7 +219,10 @@ class PathfinderDouble(ConnectorDouble):
                  funds_left=False, margin_bps=P.MARGIN_BPS, gas_price_wei=GAS_PRICE_WEI, interrupt_on=None, receipt_lag=0,
                  fee_bps=T.FEE_BPS, fee_to=None, fee_leg=True, lose_press_answer=False, rpc_error_on=None, rpc_error_times=None, actual_gas_factor=1,
                  event_for_another_hash=False, account_funding=None, my_agent_wallet=None, rpc_host=RPC_HOST, lists_roads=False,
-                 implementation=None, names_implementation=True, **kwargs):
+                 implementation=None, names_implementation=True, operations=True, needs_approval=True, approval_fate=None, swap_refused=False,
+                 refused_swap_row=True, approval_charged=True, submit_seconds=0, relay_wait=P.RELAY_DOOR_WAIT_SECONDS, relay_said=RELAY_ASKED_UNANSWERED_SAID,
+                 swap_sent_after=0, swap_never_sent=False, approval_sender=None, approval_paymaster=None, approval_log=True, approval_spender=None,
+                 approval_amount=None, approval_token=None, **kwargs):
         """
         `catalogue` the names tools/list answers (default the fifteen tables.py pins; `lists_roads` adds the two assignment tools after
         police.check_action, where the relay listed them before Spec C-CAT-1 — the connector as it stands before C-CAT-1 ships);
@@ -232,6 +249,24 @@ class PathfinderDouble(ConnectorDouble):
         agent's; `rpc_host` the RPC's host. Spec T33: `implementation` the contract an agent's key delegates to on this double (default
         the one tables.py pins) — the delegation's one destination, which the cluster refuses in the gateway's words where the agent's
         list does not hold it, and the address both wallet readings name; `names_implementation` False makes the readings name none.
+        Spec T34, a trade made of two operations (the Wallet's Spec W-OPS): `operations` True (the default) answers a trade as the Wallet now
+        does — every call its own operation, the approval's and then the swap's, each with its own sponsor's transaction and its own debit, the
+        answer's own fields describing the swap and `operations` listing both in the order sent — and False is a Wallet before W-OPS, the one
+        operation and no list; `needs_approval` False is a trade whose quote carries no approval (the swap's operation alone, listed);
+        `approval_fate` "reverted" lands the approval's operation reverted, and the swap is not sent; `swap_refused` has the cluster refuse the
+        swap after the approval's operation landed (`refused_swap_row` False leaves the refused swap out of `operations`); `approval_charged`
+        False is a platform that does not debit the approval's operation, though the Wallet states its debit. The waits (Spec T34 §7 and §8):
+        `submit_seconds` how long the Wallet's door takes to answer a submit; `relay_wait` how long the relay waits for the door before it
+        answers `relay_said` in the door's place; a caller whose own stated wait (http_request's 60 where it states none) is shorter than
+        either hears nothing — the transport's timeout — and the trade goes on at the Wallet all the same. `swap_sent_after` how many
+        ticket_status reads pass before the swap's operation is sent (the Wallet standing between the two operations when the answer was
+        lost); `swap_never_sent` the approval's operation landed and no swap ever followed. The security reading of pull request 35, finding 2:
+        `approval_sender` and `approval_paymaster` are the sender and the paymaster the EntryPoint's UserOperationEvent names for the approval's
+        operation, in place of the agent's wallet and the group-100 paymaster (None: those two, as the chain would say). Finding 3 of the same
+        reading, what the approval's operation approves: its receipt carries the token's ERC-20 Approval log — the wallet the owner, the spender
+        the venue contract the ticket was built for, the amount exactly what the trade sells (Series D2: "approve(SwapRouter02, exactly the USDC
+        amount of the trade)"); `approval_spender`, `approval_amount` and `approval_token` put another spender, another amount (2**256 - 1 is an
+        unlimited one) or another token's contract in that log, and `approval_log` False leaves the log out of the receipt altogether.
         """
         super().__init__(seated=seated, **kwargs)
         self.catalogue = list(catalogue) if catalogue is not None else list(P.CATALOGUE)
@@ -270,6 +305,25 @@ class PathfinderDouble(ConnectorDouble):
         self.rpc_host = rpc_host
         self.implementation = implementation or T.address(T.DELEGATION_IMPLEMENTATION["arbitrum"])
         self.names_implementation = names_implementation
+        self.operations = operations
+        self.needs_approval = needs_approval
+        self.approval_fate = approval_fate
+        self.swap_refused = swap_refused
+        self.refused_swap_row = refused_swap_row
+        self.approval_charged = approval_charged
+        self.submit_seconds = submit_seconds
+        self.relay_wait = relay_wait
+        self.relay_said = relay_said
+        self.swap_sent_after = swap_sent_after
+        self.swap_never_sent = swap_never_sent
+        self.approval_sender = approval_sender
+        self.approval_paymaster = approval_paymaster
+        self.approval_log = approval_log
+        self.approval_spender = approval_spender
+        self.approval_amount = approval_amount
+        self.approval_token = approval_token
+        self.wait_stated = None  # the wait the caller of the request in hand stated; None where it stated none
+        self.waits = []  # (the MCP method, or the tool's name for tools/call; the wait its caller stated), for every MCP request
         self.delegations_refused = []  # the ticket of every submit whose delegation the cluster refused
         self.receipt_reads = {}
         self.token_forms = []  # every form /token was handed, so a test can name the verifier and the code
@@ -292,6 +346,7 @@ class PathfinderDouble(ConnectorDouble):
             payload = json.loads(body.decode("utf-8")) if body else {}
             self.calls.append((method, "rpc:" + str(payload.get("method")), 200))
             return H.HttpAnswer(200, {"Content-Type": "application/json"}, json.dumps(self.rpc(payload)), 1)
+        self.wait_stated = timeout
         return super().__call__(method, url, headers, body, timeout, follow_redirects)
 
     def route(self, method, path, query, headers, payload, follow_redirects):
@@ -591,6 +646,7 @@ class PathfinderDouble(ConnectorDouble):
         agent = next((a for a in self.agents if a["id"] == connection["agentId"]), None)
         method = payload.get("method")
         rpc_id = payload.get("id")
+        self.waits.append(((payload.get("params") or {}).get("name") if method == "tools/call" else method, self.wait_stated))
         if self.interrupt_on and method == self.interrupt_on:
             raise KeyboardInterrupt
         if method == "notifications/initialized":
@@ -760,6 +816,57 @@ class PathfinderDouble(ConnectorDouble):
                 self.delegations_refused.append(ticket["id"])
                 return self.tool_text(rpc_id, DELEGATION_REFUSED_SAID % ticket["id"], error=True)
         ticket["state"] = "consumed"
+        customer = agent["customerId"]
+        self.block += 7
+        # the delegation first, where the key is not yet delegated: a transaction of its own, which the platform debits
+        delegation = None
+        if self.delegate_first and address.lower() not in self.delegated:
+            delegation = "0x" + secrets.token_hex(32)
+            self.delegated.add(address.lower())
+            self.receipts[delegation] = {"transactionHash": delegation, "status": "0x1", "blockNumber": hex(self.block - 2),
+                                         "gasUsed": hex(DELEGATION_GAS_USED), "effectiveGasPrice": hex(self.gas_price_wei), "logs": []}
+            self.gas[customer] = self.gas.get(customer, 0) - platform_debit(DELEGATION_GAS_USED * self.gas_price_wei, self.price_usd, self.margin_bps)
+        ticket["delegation_tx_hash"] = delegation
+        outcome = {"sender": address, "chain": agent["walletChain"], "entry_point": ENTRY_POINT, "calls": ["approve", "swap"] if self.needs_approval else ["swap"],
+                   "delegated": delegation is not None}
+        if delegation:
+            outcome["delegation_tx_hash"] = delegation
+        # Spec T34, the Wallet's Spec W-OPS: every call is its own operation — for a trade the approval, where the quote carries one, and then the
+        # swap — each with its own sponsor's transaction and its own debit. A Wallet before W-OPS (`operations` False) sends the one operation.
+        rows = []
+        if self.operations and self.needs_approval:
+            reverted = self.approval_fate == "reverted"
+            # what the approval approves, as the token logs it (ERC-20 Approval: owner, spender, value): the wallet lets the venue contract the ticket
+            # was built for take exactly what the trade sells; an approval that reverted logs nothing
+            approved = []
+            if self.approval_log and not reverted:
+                spender = self.approval_spender or ticket["args"].get("contract_address") or T.address("UNISWAP_V3_ARBITRUM")
+                approved.append({"address": self.approval_token or USDC_ARBITRUM, "topics": [APPROVAL_TOPIC, topic_of(address), topic_of(spender)],
+                                 "data": "0x" + word(ticket["raw"] if self.approval_amount is None else self.approval_amount)})
+            approval = self.send_operation(agent, "approve", approved, self.block - 1, APPROVAL_GAS_USED, landed=True, reverted=reverted, charged=self.approval_charged,
+                                           sender=self.approval_sender, paymaster=self.approval_paymaster)
+            rows.append(approval)
+            if reverted:
+                # the approval's operation reverted, so the swap is not sent: the answer is an error, and its own fields name no value operation
+                approval["reason"] = APPROVAL_REVERTED_SAID % approval["user_op_hash"]
+                ticket["rows"] = rows
+                return self.answer_in_time(rpc_id, self.tool_json(rpc_id, {
+                    "ticket_id": ticket["id"], "execution": dict(outcome, success=False, operations=[self.row_view(row) for row in rows]),
+                    "reason": "user_operation_reverted", "message": approval["reason"]}, error=True))
+            if self.swap_refused:
+                # the approval's operation landed and the cluster refused the swap: nothing more is signed, and the answer is the refusal
+                refused = {"kind": "swap", "status": "failed", "success": False, "reason": SWAP_REFUSED_SAID}
+                ticket["rows"] = rows + ([refused] if self.refused_swap_row else [])
+                return self.answer_in_time(rpc_id, self.tool_json(rpc_id, {
+                    "ticket_id": ticket["id"], "message": SWAP_REFUSED_SAID,
+                    "execution": dict(outcome, success=False, operations=[self.row_view(row) for row in ticket["rows"]])}, error=True))
+            if self.swap_never_sent:
+                # the approval's operation landed and no swap followed: the answer never arrives, and the ticket lists the approval alone
+                ticket["rows"] = rows
+                return self.answer_in_time(rpc_id, self.tool_json(rpc_id, {
+                    "ticket_id": ticket["id"], "execution": dict(outcome, success=False, operations=[self.row_view(row) for row in rows]),
+                    "reason": "confirmation_timeout", "message": "confirmation_timeout: the swap was not sent"}, error=True))
+        # the swap: the coin sold leaves the wallet, the pool pays the router the gross, the router pays the fee and the rest
         held = self.holdings.setdefault(address.lower(), {})
         gross = ticket["raw"] * 10 ** 12 // self.price_usd  # USDC (6 decimals) → WETH (18) at the price
         fee = gross * self.fee_bps // 10000 if self.fee_leg else 0
@@ -769,10 +876,6 @@ class PathfinderDouble(ConnectorDouble):
         held["WETH"] = held.get("WETH", 0) + bought
         if self.funds_left:
             self.move_usdc(address, 50000)
-        user_op_hash = "0x" + secrets.token_hex(32)
-        handle_ops = "0x" + secrets.token_hex(32)
-        self.block += 7
-        wei = GAS_USED * self.gas_price_wei
         logs = [
             {"address": USDC_ARBITRUM, "topics": [H.TRANSFER_TOPIC, topic_of(address), topic_of(POOL)], "data": "0x" + word(ticket["raw"])},
             {"address": WETH_ARBITRUM, "topics": [H.TRANSFER_TOPIC, topic_of(POOL), topic_of(router)], "data": "0x" + word(gross)},
@@ -780,55 +883,99 @@ class PathfinderDouble(ConnectorDouble):
         if self.fee_leg:
             logs.append({"address": WETH_ARBITRUM, "topics": [H.TRANSFER_TOPIC, topic_of(router), topic_of(self.fee_to)], "data": "0x" + word(fee)})
         logs.append({"address": WETH_ARBITRUM, "topics": [H.TRANSFER_TOPIC, topic_of(router), topic_of(address)], "data": "0x" + word(bought)})
+        landed = self.lands_later == 0
+        swap = self.send_operation(agent, "swap", logs, self.block, GAS_USED, landed=landed, another_hash=self.event_for_another_hash)
+        rows.append(swap)
+        ticket.update(user_op_hash=swap["user_op_hash"], handle_ops_tx_hash=swap["handle_ops_tx_hash"], debited_usd=swap["debit"], reserved_usd=swap["reserved_usd"],
+                      rows=rows)
+        # the answer's own fields describe the VALUE operation, the swap, as they always did; the handleOps transaction is named the moment it is
+        # sent, with the status submitted (useroperation.go); `success` is a Go bool on UserOperationOutcome: the UserOperationEvent's flag once
+        # landed, false before it
+        execution = dict(outcome, user_op_hash=swap["user_op_hash"], handle_ops_tx_hash=swap["handle_ops_tx_hash"], status=swap["status"], success=swap["success"],
+                         reserved_usd=swap["reserved_usd"])
+        if landed:
+            execution["debited_usd"] = swap["debit"]
+        if self.operations:
+            execution["operations"] = [self.row_view(row) for row in rows]
+        if landed:
+            return self.answer_in_time(rpc_id, self.tool_json(rpc_id, {"ticket_id": ticket["id"], "execution": execution,
+                                                                       "message": "submitted through the platform's gas road"}))
+        # awaitOperation timed out: the Wallet answers with an error, and the operation it names was sent and may still land
+        return self.answer_in_time(rpc_id, self.tool_json(rpc_id, {
+            "ticket_id": ticket["id"], "execution": execution, "reason": "confirmation_timeout",
+            "message": "confirmation_timeout: the operation %s was sent and may still land; ask ticket_status" % swap["user_op_hash"]}, error=True))
+
+    def send_operation(self, agent, kind, logs, block, gas_used, landed=True, reverted=False, charged=True, another_hash=False, sender=None, paymaster=None):
+        """
+        One UserOperation, sent and landed on the double's chain: its own handleOps transaction, carrying `logs` and the EntryPoint's
+        UserOperationEvent for it (success false where it reverted; `another_hash` logs the event of another operation; `sender` and
+        `paymaster` the two addresses the event names in place of the agent's wallet and the group-100 paymaster), and the platform's
+        debit for its gas (settle.go: the greater of the receipt's cost and the event's), taken from the owner's gas account unless `charged`
+        is False. Answers the operation's row as the Wallet keeps it: `debit` what it states once the operation landed.
+        """
+        address = agent["walletAddress"]
+        user_op_hash = "0x" + secrets.token_hex(32)
+        handle_ops = "0x" + secrets.token_hex(32)
+        wei = gas_used * self.gas_price_wei
         actual = wei * self.actual_gas_factor
-        named_hash = ("0x" + secrets.token_hex(32)) if self.event_for_another_hash else user_op_hash
-        logs.append({"address": ENTRY_POINT, "topics": [P.USER_OPERATION_EVENT, named_hash, topic_of(address), topic_of(P.PAYMASTER["arbitrum"])],
-                     "data": "0x" + word(0) + word(1) + word(actual) + word(GAS_USED)})
+        named_hash = ("0x" + secrets.token_hex(32)) if another_hash else user_op_hash
+        logs = list(logs) + [{"address": ENTRY_POINT, "topics": [P.USER_OPERATION_EVENT, named_hash, topic_of(sender or address), topic_of(paymaster or P.PAYMASTER["arbitrum"])],
+                              "data": "0x" + word(0) + word(0 if reverted else 1) + word(actual) + word(gas_used)}]
         for index, log in enumerate(logs):
-            log.update(logIndex=hex(index), transactionHash=handle_ops, blockNumber=hex(self.block))
-        self.receipts[handle_ops] = {"transactionHash": handle_ops, "status": "0x1", "blockNumber": hex(self.block), "gasUsed": hex(GAS_USED),
+            log.update(logIndex=hex(index), transactionHash=handle_ops, blockNumber=hex(block))
+        self.receipts[handle_ops] = {"transactionHash": handle_ops, "status": "0x1", "blockNumber": hex(block), "gasUsed": hex(gas_used),
                                      "effectiveGasPrice": hex(self.gas_price_wei), "logs": logs}
         debit = platform_debit(max(wei, actual), self.price_usd, self.margin_bps)  # settle.go: the greater is the gas
-        delegation = None
-        if self.delegate_first and address.lower() not in self.delegated:
-            delegation = "0x" + secrets.token_hex(32)
-            self.delegated.add(address.lower())
-            self.receipts[delegation] = {"transactionHash": delegation, "status": "0x1", "blockNumber": hex(self.block - 1),
-                                         "gasUsed": hex(DELEGATION_GAS_USED), "effectiveGasPrice": hex(self.gas_price_wei), "logs": []}
-            self.gas[agent["customerId"]] = self.gas.get(agent["customerId"], 0) - platform_debit(DELEGATION_GAS_USED * self.gas_price_wei, self.price_usd,
-                                                                                                    self.margin_bps)
-        self.gas[agent["customerId"]] = self.gas.get(agent["customerId"], 0) - debit
-        landed = self.lands_later == 0
-        ticket.update(user_op_hash=user_op_hash, handle_ops_tx_hash=handle_ops, debited_usd=dollars(debit), reserved_usd=dollars(debit + 5),
-                      delegation_tx_hash=delegation)
-        execution = {"sender": address, "chain": agent["walletChain"], "user_op_hash": user_op_hash, "entry_point": ENTRY_POINT,
-                     # the handleOps transaction is named the moment it is sent, with the status submitted (useroperation.go)
-                     "handle_ops_tx_hash": handle_ops,
-                     # `success` is a Go bool on UserOperationOutcome: the UserOperationEvent's flag once landed, false before it
-                     "calls": ["approve", "swap"], "status": "landed" if landed else "submitted", "success": landed, "delegated": delegation is not None,
-                     "reserved_usd": dollars(debit + 5)}
-        if delegation:
-            execution["delegation_tx_hash"] = delegation
-        if landed:
-            execution["debited_usd"] = dollars(debit)
-            return self.tool_json(rpc_id, {"ticket_id": ticket["id"], "execution": execution, "message": "submitted through the platform's gas road"})
-        # awaitOperation timed out: the Wallet answers with an error, and the operation it names was sent and may still land
-        return self.tool_json(rpc_id, {"ticket_id": ticket["id"], "execution": execution, "reason": "confirmation_timeout",
-                                       "message": "confirmation_timeout: the operation %s was sent and may still land; ask ticket_status" % user_op_hash},
-                              error=True)
+        if charged:
+            self.gas[agent["customerId"]] = self.gas.get(agent["customerId"], 0) - debit
+        return {"kind": kind, "user_op_hash": user_op_hash, "handle_ops_tx_hash": handle_ops, "reserved_usd": dollars(debit + 5), "debit": dollars(debit),
+                "status": "reverted" if reverted else "landed" if landed else "submitted", "success": landed and not reverted}
+
+    def row_view(self, row, landed=None):
+        """An operation's row as an answer lists it (the Wallet's UserOperationEntry): its debit stated once it landed, its reason where it has one."""
+        view = {key: row[key] for key in ("kind", "user_op_hash", "handle_ops_tx_hash", "reserved_usd", "status", "success", "reason") if key in row}
+        if landed is not None and row.get("status") == "submitted":
+            view.update(status="landed" if landed else "submitted", success=bool(landed))
+        if view.get("status") in ("landed", "reverted") and "debit" in row:
+            view["debited_usd"] = row["debit"]
+        return view
+
+    def answer_in_time(self, rpc_id, answer):
+        """
+        Spec T34 §7 and §8: the Wallet's door takes `submit_seconds` to answer a submit; the relay waits `relay_wait` for the door and then
+        answers in its place, in its own sentence (`relay_said`); and the caller hears whichever comes first only if its own stated wait —
+        http_request's default where it stated none — is at least as long. A caller that gave up hears nothing but the transport's timeout,
+        and the trade goes on at the Wallet all the same: nothing here is undone.
+        """
+        took = self.submit_seconds
+        if took > self.relay_wait:
+            took = self.relay_wait
+            answer = self.tool_text(rpc_id, self.relay_said % self.relay_wait if "%d" in self.relay_said else self.relay_said, error=True)
+        if took > (self.wait_stated if self.wait_stated is not None else HTTP_DEFAULT_WAIT):
+            raise H.Unreachable("POST %s/mcp: The read operation timed out" % self.issuer)
+        return answer
 
     def tool_wallet_ticket_status(self, rpc_id, agent, connection, args):
         ticket = self.tickets.get(str(args.get("ticket_id")))
         if ticket is None:
             return self.tool_text(rpc_id, "ticket_not_found", error=True)
         ticket["reads"] += 1
-        # internal/ticket/manager.go: the operation's hashes from the moment it is sent; debited_usd once it landed; no status field
-        view = {"id": ticket["id"], "state": ticket["state"], "user_op_hash": ticket.get("user_op_hash"), "reserved_usd": ticket.get("reserved_usd"),
-                "handle_ops_tx_hash": ticket.get("handle_ops_tx_hash"), "fate": "consumed; what followed is in the audit journal"}
+        # internal/ticket/manager.go: the operation's hashes from the moment it is sent; debited_usd once it landed; no status field.
+        # Since the Wallet's Spec W-OPS the ticket's own fields describe the value operation, and `operations` lists every operation in the order sent.
+        view = {"id": ticket["id"], "state": ticket["state"], "fate": "consumed; what followed is in the audit journal"}
         if ticket.get("delegation_tx_hash"):
             view["delegation_tx_hash"] = ticket["delegation_tx_hash"]
-        if ticket["reads"] >= self.lands_later and ticket.get("handle_ops_tx_hash"):
+        rows = list(ticket.get("rows") or [])
+        sent = bool(ticket.get("handle_ops_tx_hash")) and ticket["reads"] >= self.swap_sent_after  # the swap's operation: sent at the submit, or only after some reads
+        landed = sent and ticket["reads"] >= self.lands_later
+        if sent:
+            view.update(user_op_hash=ticket.get("user_op_hash"), reserved_usd=ticket.get("reserved_usd"), handle_ops_tx_hash=ticket.get("handle_ops_tx_hash"))
+        else:
+            rows = [row for row in rows if row.get("kind") != "swap" or not row.get("user_op_hash")]
+        if landed:
             view["debited_usd"] = ticket["debited_usd"]
+        if self.operations and rows:
+            view["operations"] = [self.row_view(row, landed=landed) for row in rows]
         return self.tool_json(rpc_id, {"ticket": view})
 
     def token(self, form):

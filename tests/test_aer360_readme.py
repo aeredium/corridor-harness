@@ -445,11 +445,15 @@ class ChangelogTest(unittest.TestCase):
 
     T33_TITLE = "## Spec T33 — The Pathfinder's owner lists the contract its agent's key delegates to (27 November 2026)"
 
+    T34_TITLE = "## Spec T34 — The Pathfinder reads a trade made of two operations (28 November 2026)"
+
     def test_the_changelog_records_spec_t31_first_and_names_every_change(self):
         text = read("CHANGELOG.md")
-        # Spec T33's entry (Pathfinder's, 27 November 2026) is the newest; Spec T32's, the estate harness's newest since 14 November 2026, stands
-        # directly after it, and Spec T31's directly after that
-        self.assertEqual(text.index("## "), text.index(self.T33_TITLE), "the newest entry first")
+        # Spec T34's entry (Pathfinder's, 28 November 2026) is the newest, and Spec T33's (Pathfinder's, 27 November 2026) stands directly after it;
+        # Spec T32's, the estate harness's newest since 14 November 2026, stands directly after that, and Spec T31's directly after that
+        self.assertEqual(text.index("## "), text.index(self.T34_TITLE), "the newest entry first")
+        self.assertLess(text.index(self.T34_TITLE), text.index(self.T33_TITLE))
+        self.assertNotIn("\n## ", text.split(self.T34_TITLE, 1)[1].split(self.T33_TITLE, 1)[0], "no entry stands between Spec T34's and Spec T33's")
         self.assertLess(text.index(self.T33_TITLE), text.index(self.T32_TITLE))
         self.assertNotIn("\n## ", text.split(self.T33_TITLE, 1)[1].split(self.T32_TITLE, 1)[0], "no entry stands between Spec T33's and Spec T32's")
         self.assertLess(text.index(self.T32_TITLE), text.index(self.T31_TITLE))

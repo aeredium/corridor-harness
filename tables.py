@@ -22,7 +22,8 @@ on 4 October 2026. Pathfinder's S8 expects each pinned tool by name and fails on
 Since Spec T33 (27 November 2026) it pins, apart from the Series' table, THE CONTRACT AN AGENT'S KEY
 DELEGATES TO on Arbitrum, read from production's own word (PINNED_FROM_PRODUCTION, below the Trader's list),
 and the Pathfinder's list of nine that carries it (PATHFINDER_LIST). The Series' table and the Trader's
-eight lines are as they were.
+eight lines are as they were. Since Spec T34 (28 November 2026) that row records, beside the deployment's
+own answer, a source other than it: the access platform's own proof of the contract's bytes.
 """
 from __future__ import annotations
 
@@ -140,9 +141,20 @@ TRADER_LIST_B3: List[str] = [
 # test sends it; so it is a `Pinned` of its own table, found by the same `address`, `source` and `describe`, and
 # PINNED, TRADER_LIST_B3 and the Series are untouched.
 #
-# What the source below is, and is not (the security reading of pull request 34, finding 2). This address is the contract every agent's
-# key hands its account to, and the one source recorded for it is the deployment's own answer: a pin read from the deployment and held
-# against the same deployment's later answers is trust on first use. So the row says so in its own words, and the rule for a re-pin is:
+# What the source below is (the security reading of pull request 34, findings 2 and 3; Spec T34 §6, 28 November 2026). This address is the
+# contract every agent's key hands its account to. A pin read from the deployment and held against the same deployment's later answers
+# is trust on first use, so the row records two sources and says which is which: the deployment's own answer, where the address was
+# first read, and beside it a source other than that answer — the access platform's own repository, whose deploy/paymaster/PIN.md
+# records a proof run that built the contract from source and matched the bytes at this address, and a read of the code at the address
+# through Arbitrum's public endpoint. Both are recorded as Spec T34 states them, read by that spec's authors on 27 November 2026: the
+# builder who carried Spec T34 out holds no clone of the access platform and made no call to the chain. The row's own string says so too,
+# since the security reading of pull request 35 (finding 4): `describe` prints the row and not this comment, and a second source nobody on
+# the harness's side has read must not be printed as a check somebody made. That reading read neither PIN.md nor the chain; the repair that
+# answered it holds no clone of the access platform either, and its one read of the chain (eth_getCode at this address, 28 November 2026)
+# was refused by its session's doorway and did not run. So the row ends by saying who has confirmed the second source — no one, yet — what is
+# weak in it as written (a byte count with no hash of the code, a match of "prepared" bytecode), and what is still owed: someone who can
+# read PIN.md and the chain holds the keccak256 of the code at the address against the one recorded, and that clause of the row is then
+# replaced, by a spec, with who checked and when. The rule for a re-pin stands as written:
 # only by a spec, only after the new address has been verified against a source other than the deployment's own answer, and the row's
 # source records that check beside the reading. Where a deployment names another address, the Pathfinder does not trade and names no
 # cause (aerconnect_harness.IMPLEMENTATION_DIFFERS_SENTENCE): the deployment's word alone is no ground for a re-pin.
@@ -152,7 +164,17 @@ PINNED_FROM_PRODUCTION: Dict[str, Pinned] = {
         "0x0562346e1291fd9B922991A249FaaBD0bFEa325f",
         "the corridor's account contract on Arbitrum, the implementation an agent's key delegates to before its first operation (EIP-7702)",
         "the agents' Wallet's own reading on production, Pathfinder run 20261127-063032, delegation[arbitrum].implementation — the "
-        "deployment's own answer, and the only source recorded: verified against no source other than the deployment's own answer",
+        "deployment's own answer; and, a source other than that answer (Spec T34, read on 27 November 2026): aeredium/aegiskey-access-platform "
+        "deploy/paymaster/PIN.md, which records a proof run of 24 September 2026 in which this address on Arbitrum One holds 3,721 bytes, "
+        "keccak256 0x1c2695858cfcc5bfd49f48b8892f30c3a9e2e7f53357b47ed0cf7b6caee96e02, and is Simple7702Account of @account-abstraction/contracts "
+        "v0.9.0 built from source and matched byte for byte (prepared bytecode keccak256 "
+        "0x955be2fd7096eaf14501fb3493662595232925a50bf19adfeed49c3738a83de6 on both sides); and eth_getCode at this address through "
+        "arb1.arbitrum.io on 27 November 2026 answered 3,721 bytes — the whole of that second source recorded as Spec T34 states it and, "
+        "as of 28 November 2026, confirmed by no one who has worked on this repository: the builder who carried Spec T34 out, the security "
+        "reading of pull request 35 and the repair that answered that reading each read neither PIN.md nor the chain; the reading of "
+        "27 November records a byte count and no hash of the code it was answered, and the match byte for byte is of prepared bytecode; "
+        "still owed, by someone who can read PIN.md and the chain: the keccak256 of the code at this address held against the "
+        "0x1c26…6e02 above, and who checked and when recorded here",
     ),
 }
 
