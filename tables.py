@@ -147,7 +147,14 @@ TRADER_LIST_B3: List[str] = [
 # first read, and beside it a source other than that answer — the access platform's own repository, whose deploy/paymaster/PIN.md
 # records a proof run that built the contract from source and matched the bytes at this address, and a read of the code at the address
 # through Arbitrum's public endpoint. Both are recorded as Spec T34 states them, read by that spec's authors on 27 November 2026: the
-# builder who carried Spec T34 out holds no clone of the access platform and made no call to the chain. The rule for a re-pin stands as written:
+# builder who carried Spec T34 out holds no clone of the access platform and made no call to the chain. The row's own string says so too,
+# since the security reading of pull request 35 (finding 4): `describe` prints the row and not this comment, and a second source nobody on
+# the harness's side has read must not be printed as a check somebody made. That reading read neither PIN.md nor the chain; the repair that
+# answered it holds no clone of the access platform either, and its one read of the chain (eth_getCode at this address, 28 November 2026)
+# was refused by its session's doorway and did not run. So the row ends by saying who has confirmed the second source — no one, yet — what is
+# weak in it as written (a byte count with no hash of the code, a match of "prepared" bytecode), and what is still owed: someone who can
+# read PIN.md and the chain holds the keccak256 of the code at the address against the one recorded, and that clause of the row is then
+# replaced, by a spec, with who checked and when. The rule for a re-pin stands as written:
 # only by a spec, only after the new address has been verified against a source other than the deployment's own answer, and the row's
 # source records that check beside the reading. Where a deployment names another address, the Pathfinder does not trade and names no
 # cause (aerconnect_harness.IMPLEMENTATION_DIFFERS_SENTENCE): the deployment's word alone is no ground for a re-pin.
@@ -162,7 +169,12 @@ PINNED_FROM_PRODUCTION: Dict[str, Pinned] = {
         "keccak256 0x1c2695858cfcc5bfd49f48b8892f30c3a9e2e7f53357b47ed0cf7b6caee96e02, and is Simple7702Account of @account-abstraction/contracts "
         "v0.9.0 built from source and matched byte for byte (prepared bytecode keccak256 "
         "0x955be2fd7096eaf14501fb3493662595232925a50bf19adfeed49c3738a83de6 on both sides); and eth_getCode at this address through "
-        "arb1.arbitrum.io on 27 November 2026 answered 3,721 bytes",
+        "arb1.arbitrum.io on 27 November 2026 answered 3,721 bytes — the whole of that second source recorded as Spec T34 states it and, "
+        "as of 28 November 2026, confirmed by no one who has worked on this repository: the builder who carried Spec T34 out, the security "
+        "reading of pull request 35 and the repair that answered that reading each read neither PIN.md nor the chain; the reading of "
+        "27 November records a byte count and no hash of the code it was answered, and the match byte for byte is of prepared bytecode; "
+        "still owed, by someone who can read PIN.md and the chain: the keccak256 of the code at this address held against the "
+        "0x1c26…6e02 above, and who checked and when recorded here",
     ),
 }
 

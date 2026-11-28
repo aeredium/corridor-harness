@@ -7,6 +7,8 @@ finding answered by a change.
   Finding 3: the approval's operation was judged landed and paid for, and what it approved was never read. S12 reads the ERC-20 Approval
     log in its receipt and holds the owner to the wallet, the spender to the venue contract the trade names and the amount to what the
     swap took — what the Series' D2 says of every trade: "approve(SwapRouter02, exactly the USDC amount of the trade)".
+  Finding 4: the pin's row cited a second source nobody on the harness's side had verified, and only a comment said so. The row's own
+    string, which `tables.describe` prints, says it now. The source itself is confirmed by nothing here: that check is still owed.
 
 The file is named so that the repository's one command for the suite, `python3 -m unittest discover tests`, reaches it among the first
 modules it runs.
@@ -200,6 +202,48 @@ class S12ReadsWhatTheApprovalApproved(PathfinderBase):
         runner = self.walk()
         self.assertEqual(self.words(runner), {s: P.PASS for s in P.STATION_IDS}, [runner.line(o) for o in runner.outcomes])
         self.assertNotIn("approv", self.line_of(runner, "S12"))
+
+
+class ThePinsRowSaysWhoConfirmedItsSecondSource(unittest.TestCase):
+    """
+    Finding 4. The row of DELEGATION_IMPLEMENTATION_ARBITRUM cites a second source — the access platform's PIN.md and a read of the chain —
+    that neither the builder of Spec T34 nor the security reading verified, and said so in a comment alone: `tables.describe` prints the
+    row, and the row stopped at the citation. The row's own string now says what it is: recorded as the spec states it, confirmed by no
+    one on the harness's side as of its date, with what is weak in it and what is still owed. Nothing here confirms the source itself.
+    """
+    KEY = "DELEGATION_IMPLEMENTATION_ARBITRUM"
+    CITED = "eth_getCode at this address through arb1.arbitrum.io on 27 November 2026 answered 3,721 bytes"
+    SAID = (" — the whole of that second source recorded as Spec T34 states it and, as of 28 November 2026, confirmed by no one who has worked on this "
+            "repository: the builder who carried Spec T34 out, the security reading of pull request 35 and the repair that answered that reading each read "
+            "neither PIN.md nor the chain; the reading of 27 November records a byte count and no hash of the code it was answered, and the match byte "
+            "for byte is of prepared bytecode; still owed, by someone who can read PIN.md and the chain: the keccak256 of the code at this address held "
+            "against the 0x1c26…6e02 above, and who checked and when recorded here")
+
+    def test_the_rows_own_string_says_that_no_one_on_the_harnesss_side_confirmed_it(self):
+        source = T.source(self.KEY)
+        self.assertTrue(source.endswith(self.CITED + self.SAID), source)
+        self.assertEqual(source.count("confirmed by no one who has worked on this repository"), 1)
+
+    def test_what_describe_prints_carries_it_and_not_the_comment_alone(self):
+        printed = T.describe(self.KEY)
+        self.assertTrue(printed.endswith(self.SAID + ")"), printed)
+        for words in ("recorded as Spec T34 states it", "as of 28 November 2026", "a byte count and no hash of the code", "is of prepared bytecode", "still owed"):
+            self.assertIn(words, printed)
+
+    def test_the_row_claims_no_check_that_nobody_made(self):
+        source = T.source(self.KEY)
+        cited, said = source.split(" — the whole of that second source ")
+        for words in ("confirmed by", "checked by", "verified by"):
+            self.assertNotIn(words, cited, "the citation names no one who checked it")
+        self.assertNotIn("checked by", said)
+        self.assertNotIn("verified by", said)
+        self.assertEqual(said.count("confirmed by"), 1, "the one thing said of confirming it is that no one has")
+        self.assertIn("keccak256 0x1c2695858cfcc5bfd49f48b8892f30c3a9e2e7f53357b47ed0cf7b6caee96e02", cited, "the hash the owed check is to be held against is the row's own")
+
+    def test_the_pin_itself_is_as_it_was(self):
+        self.assertEqual(T.address(self.KEY), "0x0562346e1291fd9B922991A249FaaBD0bFEa325f")
+        self.assertEqual(list(T.PINNED_FROM_PRODUCTION), [self.KEY])
+        self.assertEqual(T.PATHFINDER_LIST[-1], self.KEY)
 
 
 if __name__ == "__main__":
