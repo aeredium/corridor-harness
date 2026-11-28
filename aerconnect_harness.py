@@ -3146,7 +3146,9 @@ class Pathfinder:
         """
         The reader: the swap on chain, the gas trail, the balances. Since Spec T34 it reads EVERY operation of the trade — the receipt of
         each one's sponsor's transaction, its status, the UserOperationEvent for its own hash and its success, and the delegation's
-        where there is one — and holds the fall of the owner's gas account against the SUM of every operation's debit, and the
+        where there is one; of each operation before the value one (the approval's) it holds the event's sender to the wallet and its
+        paymaster to the group-100 paymaster too, as S11 does, since this may be the only reading of it the run has (the security
+        reading of pull request 35, finding 2) — and holds the fall of the owner's gas account against the SUM of every operation's debit, and the
         delegation's where the walk made it, each debit judged within its own band as the one always was. Where the Wallet listed
         no operations (a Wallet before W-OPS) the one operation is read exactly as before, in the sentences it always had.
         """
@@ -3170,6 +3172,14 @@ class Pathfinder:
                 problems.append("%s: the handleOps receipt's status is %s" % (operation_said(op), row.get("status")))
             if found.get("success") is not True:
                 problems.append("%s: the UserOperationEvent says the operation did not succeed" % operation_said(op))
+            # The security reading of pull request 35, finding 2: where S11 could not read the chain, or on a run resumed past S11, this
+            # reading of the operation's event is the only one the run has, so it holds what S11's holds — the sender is the wallet and
+            # the paymaster the group-100 paymaster — in S11's own words for each
+            if address and str(found.get("sender") or "").lower() != address:
+                problems.append("%s: the operation's sender is %s, and the wallet is %s" % (operation_said(op), found.get("sender"), wallet["address"]))
+            if str(found.get("paymaster") or "").lower() != PAYMASTER[TRADE["chain"]].lower():
+                problems.append("%s: the paymaster is %s, and the group-100 paymaster is %s" % (
+                    operation_said(op), found.get("paymaster"), H.checksum_address(PAYMASTER[TRADE["chain"]])))
         # 1. the swap on chain: the coin sold left the wallet, the coin bought arrived
         transfers = H.transfers_in(receipt)
         usdc_token = str(before.get("usdc_contract") or "").lower()

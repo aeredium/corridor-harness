@@ -220,7 +220,7 @@ class PathfinderDouble(ConnectorDouble):
                  event_for_another_hash=False, account_funding=None, my_agent_wallet=None, rpc_host=RPC_HOST, lists_roads=False,
                  implementation=None, names_implementation=True, operations=True, needs_approval=True, approval_fate=None, swap_refused=False,
                  refused_swap_row=True, approval_charged=True, submit_seconds=0, relay_wait=P.RELAY_DOOR_WAIT_SECONDS, relay_said=RELAY_ASKED_UNANSWERED_SAID,
-                 swap_sent_after=0, swap_never_sent=False, **kwargs):
+                 swap_sent_after=0, swap_never_sent=False, approval_sender=None, approval_paymaster=None, **kwargs):
         """
         `catalogue` the names tools/list answers (default the fifteen tables.py pins; `lists_roads` adds the two assignment tools after
         police.check_action, where the relay listed them before Spec C-CAT-1 — the connector as it stands before C-CAT-1 ships);
@@ -258,7 +258,9 @@ class PathfinderDouble(ConnectorDouble):
         answers `relay_said` in the door's place; a caller whose own stated wait (http_request's 60 where it states none) is shorter than
         either hears nothing — the transport's timeout — and the trade goes on at the Wallet all the same. `swap_sent_after` how many
         ticket_status reads pass before the swap's operation is sent (the Wallet standing between the two operations when the answer was
-        lost); `swap_never_sent` the approval's operation landed and no swap ever followed.
+        lost); `swap_never_sent` the approval's operation landed and no swap ever followed. The security reading of pull request 35, finding 2:
+        `approval_sender` and `approval_paymaster` are the sender and the paymaster the EntryPoint's UserOperationEvent names for the approval's
+        operation, in place of the agent's wallet and the group-100 paymaster (None: those two, as the chain would say).
         """
         super().__init__(seated=seated, **kwargs)
         self.catalogue = list(catalogue) if catalogue is not None else list(P.CATALOGUE)
@@ -308,6 +310,8 @@ class PathfinderDouble(ConnectorDouble):
         self.relay_said = relay_said
         self.swap_sent_after = swap_sent_after
         self.swap_never_sent = swap_never_sent
+        self.approval_sender = approval_sender
+        self.approval_paymaster = approval_paymaster
         self.wait_stated = None  # the wait the caller of the request in hand stated; None where it stated none
         self.waits = []  # (the MCP method, or the tool's name for tools/call; the wait its caller stated), for every MCP request
         self.delegations_refused = []  # the ticket of every submit whose delegation the cluster refused
@@ -822,7 +826,8 @@ class PathfinderDouble(ConnectorDouble):
         rows = []
         if self.operations and self.needs_approval:
             reverted = self.approval_fate == "reverted"
-            approval = self.send_operation(agent, "approve", [], self.block - 1, APPROVAL_GAS_USED, landed=True, reverted=reverted, charged=self.approval_charged)
+            approval = self.send_operation(agent, "approve", [], self.block - 1, APPROVAL_GAS_USED, landed=True, reverted=reverted, charged=self.approval_charged,
+                                           sender=self.approval_sender, paymaster=self.approval_paymaster)
             rows.append(approval)
             if reverted:
                 # the approval's operation reverted, so the swap is not sent: the answer is an error, and its own fields name no value operation
@@ -883,10 +888,11 @@ class PathfinderDouble(ConnectorDouble):
             "ticket_id": ticket["id"], "execution": execution, "reason": "confirmation_timeout",
             "message": "confirmation_timeout: the operation %s was sent and may still land; ask ticket_status" % swap["user_op_hash"]}, error=True))
 
-    def send_operation(self, agent, kind, logs, block, gas_used, landed=True, reverted=False, charged=True, another_hash=False):
+    def send_operation(self, agent, kind, logs, block, gas_used, landed=True, reverted=False, charged=True, another_hash=False, sender=None, paymaster=None):
         """
         One UserOperation, sent and landed on the double's chain: its own handleOps transaction, carrying `logs` and the EntryPoint's
-        UserOperationEvent for it (success false where it reverted; `another_hash` logs the event of another operation), and the platform's
+        UserOperationEvent for it (success false where it reverted; `another_hash` logs the event of another operation; `sender` and
+        `paymaster` the two addresses the event names in place of the agent's wallet and the group-100 paymaster), and the platform's
         debit for its gas (settle.go: the greater of the receipt's cost and the event's), taken from the owner's gas account unless `charged`
         is False. Answers the operation's row as the Wallet keeps it: `debit` what it states once the operation landed.
         """
@@ -896,7 +902,7 @@ class PathfinderDouble(ConnectorDouble):
         wei = gas_used * self.gas_price_wei
         actual = wei * self.actual_gas_factor
         named_hash = ("0x" + secrets.token_hex(32)) if another_hash else user_op_hash
-        logs = list(logs) + [{"address": ENTRY_POINT, "topics": [P.USER_OPERATION_EVENT, named_hash, topic_of(address), topic_of(P.PAYMASTER["arbitrum"])],
+        logs = list(logs) + [{"address": ENTRY_POINT, "topics": [P.USER_OPERATION_EVENT, named_hash, topic_of(sender or address), topic_of(paymaster or P.PAYMASTER["arbitrum"])],
                               "data": "0x" + word(0) + word(0 if reverted else 1) + word(actual) + word(gas_used)}]
         for index, log in enumerate(logs):
             log.update(logIndex=hex(index), transactionHash=handle_ops, blockNumber=hex(block))
