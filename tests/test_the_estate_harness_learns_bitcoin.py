@@ -1021,9 +1021,12 @@ class TheWords(unittest.TestCase):
     def test_the_changelog_records_spec_t32_first_and_names_every_change(self):
         text = read("CHANGELOG.md")
         title = "## Spec T32 — The estate harness learns that an estate holds bitcoin (14 November 2026)"
-        # Spec T33's entry (Pathfinder's, 27 November 2026) is the newest; this one, the estate harness's newest, stands directly after it
+        # Spec T34's entry (Pathfinder's, 28 November 2026) is the newest and Spec T33's (Pathfinder's, 27 November 2026) the next; this one, the
+        # estate harness's newest, stands directly after Spec T33's
         t33 = "## Spec T33 — The Pathfinder's owner lists the contract its agent's key delegates to (27 November 2026)"
-        self.assertEqual(text.index("## "), text.index(t33), "the newest entry first")
+        t34 = "## Spec T34 — The Pathfinder reads a trade made of two operations (28 November 2026)"
+        self.assertEqual(text.index("## "), text.index(t34), "the newest entry first")
+        self.assertLess(text.index(t34), text.index(t33))
         self.assertNotIn("\n## ", text.split(t33, 1)[1].split(title, 1)[0], "no entry stands between Spec T33's and Spec T32's")
         entry = text.split(title, 1)[1].split("## Spec T31", 1)[0]
         for words in ("`aer360_tables.py`", "`aer360_answers.py`", "`aer360_harness.py`", "`tests/bitcoin_double.py` (new)", "`tests/test_the_estate_harness_learns_bitcoin.py` (new)",

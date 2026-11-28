@@ -39,11 +39,11 @@ import corridor_harness as H  # noqa: E402
 import tables as T  # noqa: E402
 
 try:
-    from .pathfinder_double import ISSUER, tool_listing
+    from .pathfinder_double import APPROVAL_REVERTED_SAID, ISSUER, RELAY_ASKED_UNANSWERED_SAID, SWAP_REFUSED_SAID, tool_listing
     from .test_aerconnect_harness import FUNDING, PathfinderBase, pinned
     from .test_the_harness_names_no_real_tester import tracked_files
 except ImportError:  # run as a top-level module by `unittest discover tests`
-    from pathfinder_double import ISSUER, tool_listing
+    from pathfinder_double import APPROVAL_REVERTED_SAID, ISSUER, RELAY_ASKED_UNANSWERED_SAID, SWAP_REFUSED_SAID, tool_listing
     from test_aerconnect_harness import FUNDING, PathfinderBase, pinned
     from test_the_harness_names_no_real_tester import tracked_files
 
@@ -380,11 +380,70 @@ class TheGuardWalksEveryStationsFailurePaths(PathfinderBase):
         runner = self.walk()
         self.assert_fault(runner, "S11", "refused: the arbitrum RPC at https://arb1.arbitrum.io refused eth_getTransactionReceipt", "limit exceeded")
 
+    # Spec T34 (28 November 2026): the trade is two operations, the approval's and then the swap's, and every new failure path is a fault of the
+    # product's, in the product's own words, naming the operation.
+    def test_s11_the_approvals_operation_reverted_is_a_fault_naming_the_operation(self):
+        self.double.approval_fate = "reverted"
+        runner = self.walk()
+        reverted = self.double.tickets[runner.facts["ticket_id"]]["rows"][0]["user_op_hash"]
+        outcome = self.assert_fault(runner, "S11", "the approval's operation %s reverted — %s [unclassified]" % (reverted, APPROVAL_REVERTED_SAID % reverted),
+                                    "; the swap's operation was not sent")
+        self.assertEqual(outcome.line, "the trade: the approval's operation %s reverted — %s [unclassified]; the swap's operation was not sent" % (
+            reverted, APPROVAL_REVERTED_SAID % reverted))
+        self.assertEqual(runner.outcome_of("S12").outcome, P.NOT_RUN, "no swap landed, so there is nothing for the reader to read")
+        self.assertEqual(self.line_of(runner, "S12"), "the reader: %s" % P.NO_LANDING)
+        self.assertEqual([name for name, _ in self.double.tool_calls].count("wallet.ticket_status"), 0, "the Wallet's answer was its last word: nothing was waited for")
+
+    def test_s11_a_swap_refused_after_the_approval_landed_is_a_fault_naming_both_operations(self):
+        self.double.swap_refused = True
+        runner = self.walk()
+        landed = self.double.tickets[runner.facts["ticket_id"]]["rows"][0]
+        refusal = "%s [PolicyDenied: %s; legacy_limit_zero: %s]" % (SWAP_REFUSED_SAID, P.LEXICON["PolicyDenied"]["description"], P.LEXICON["legacy_limit_zero"]["description"])
+        outcome = self.assert_fault(runner, "S11", "PolicyDenied: denied (cause: legacy_limit_zero")
+        self.assertEqual(outcome.line, "the trade: the approval's operation %s landed in the handleOps transaction %s; the swap's operation was not sent (status failed) — %s"
+                         % (landed["user_op_hash"], landed["handle_ops_tx_hash"], refusal))
+        self.assertTrue(any("the Wallet answered the submit with an error after the approval's operation was sent" in note for note in runner.notes["S11"]), runner.notes["S11"])
+        self.assertEqual(runner.outcome_of("S12").outcome, P.NOT_RUN)
+        self.assertEqual([name for name, _ in self.double.tool_calls].count("wallet.ticket_status"), 0)
+
+    def test_s11_a_swap_refused_is_named_all_the_same_where_the_wallet_lists_no_row_for_it(self):
+        """What the Wallet lists for a swap it never sent is read from no source this repository holds: with a row for it or without, the line names both operations."""
+        self.double.swap_refused = True
+        self.double.refused_swap_row = False
+        runner = self.walk()
+        landed = self.double.tickets[runner.facts["ticket_id"]]["rows"][0]
+        self.assert_fault(runner, "S11", "the approval's operation %s landed in the handleOps transaction %s; the swap's operation was not sent — %s [PolicyDenied: "
+                          % (landed["user_op_hash"], landed["handle_ops_tx_hash"], SWAP_REFUSED_SAID))
+
+    def test_s11_a_submit_never_answered_with_the_approval_landed_and_no_swap_is_a_fault_naming_both_operations(self):
+        """Spec T34 §8: the relay says the door was asked and did not answer; S11 reads the ticket for 180 seconds, and fails on what it finds, saying how far the trade got."""
+        self.double.submit_seconds = 300  # longer than the relay's 240
+        self.double.swap_never_sent = True
+        runner = self.walk()
+        ticket = self.double.tickets[runner.facts["ticket_id"]]
+        landed = ticket["rows"][0]
+        relayed = RELAY_ASKED_UNANSWERED_SAID % 240
+        outcome = self.assert_fault(runner, "S11", relayed, "the approval's operation %s landed" % landed["user_op_hash"], "the swap's operation was not sent")
+        self.assertEqual(outcome.line, "the trade: the answer to the submit never arrived — AER Connect's relay said: %s [unclassified] — and wallet.ticket_status, read "
+                         "every 5.0 s for up to 180 s, does not say the trade landed: the approval's operation %s landed in the handleOps transaction %s; the swap's "
+                         "operation was not sent; the ticket is %s, and run.json keeps the hashes for --from S12" % (
+                             relayed, landed["user_op_hash"], landed["handle_ops_tx_hash"], ticket["id"]))
+        self.assertNotIn("refused the submit", outcome.line, "a door that was asked and did not answer is not a refusal, and not \"no swap\"")
+        self.assertEqual(runner.outcome_of("S12").outcome, P.NOT_RUN)
+
     def test_s12_a_debit_outside_the_platforms_own_arithmetic_is_a_fault(self):
         self.double.gas_price_wei = 10 ** 9
         self.double.margin_bps = 3000
         runner = self.walk()
         self.assert_fault(runner, "S12", "the debit of US$1.30 is outside US$1.08 to US$1.12")
+
+    def test_s12_a_gas_account_fallen_by_one_operations_debit_where_two_were_sent_is_a_fault_naming_the_figures(self):
+        """Spec T34 §2: the fall is held against the SUM of every operation's debit, and the delegation's; a platform that debited the swap's alone is told so."""
+        self.double.approval_charged = False
+        runner = self.walk()
+        self.assertEqual(runner.outcome_of("S11").outcome, P.PASS, self.line_of(runner, "S11"))
+        self.assert_fault(runner, "S12", "the gas account fell by US$0.03 (US$10.00 to US$9.97), and the debits of the 2 operations come to US$0.03 (the approval's "
+                          "operation US$0.01 and the swap's operation US$0.02) and US$0.01 to US$0.01 for the delegation")
 
     def test_s12a_a_swap_with_no_commission_is_a_fault(self):
         self.double.fee_leg = False

@@ -14,7 +14,10 @@ What the spec asks the tests to prove, each below:
   resume with --from S8;
   the pinned catalogue (tables.py's fifteen, Specs T25 and T25b) against a tools/list double returning them by name;
   the owner lists the contract its agent's key delegates to (Spec T33, 27 November 2026): the nine filed and read back, the table,
-    the check before the trade in its three outcomes, the delegation's refusal told as the delegation's, and the dry run's nine.
+    the check before the trade in its three outcomes, the delegation's refusal told as the delegation's, and the dry run's nine;
+  Spec T34 (28 November 2026), sections 5 and 6: S11's finding where the agent's own wallet reading names no implementation, on a first
+    run and on a later one, and the row that records the pin's other source. (The two operations themselves, the wait and the door that
+    did not answer are tests/test_a_ticket_of_two_operations.py; their failure paths, tests/test_a_fail_means_a_fault.py.)
 (The lexicon mirror is tests/test_aerconnect_lexicon.py.)
 """
 import contextlib
@@ -277,7 +280,9 @@ class AWholeWalk(PathfinderBase):
         self.assertLess(names.index("wallet.build_transaction"), names.index("wallet.submit_transaction"))
         self.assertIn("sponsored by the paymaster %s" % H.checksum_address(P.PAYMASTER["arbitrum"]), self.line_of(runner, "S11"))
         self.assertIn("within US$0.02 to US$0.02 for gas plus the 10% charge", self.line_of(runner, "S12"))
-        self.assertIn("the gas account fell by US$0.03, US$10.00 to US$9.97, which is the debit and the delegation's", self.line_of(runner, "S12"))
+        # Spec T34: the Wallet sends the approval and the swap as two operations, each debited, and the gas account falls by their sum and the delegation's
+        self.assertIn("the gas account fell by US$0.04, US$10.00 to US$9.96, which is the sum of the debits of the 2 operations (the approval's operation US$0.01 and "
+                      "the swap's operation US$0.02) and the delegation's", self.line_of(runner, "S12"))
         self.assertIn("the balances reconcile: USDC 100000 → 0", self.line_of(runner, "S12"))
 
     def test_the_step_up_of_s3_is_the_only_one_and_s7_sends_no_agent_press(self):
@@ -800,7 +805,7 @@ class TheStationsSayWhatHappened(PathfinderBase):
         runner = self.walk()
         self.assertEqual(runner.outcome_of("S11").outcome, P.PASS, self.line_of(runner, "S11"))
         asked = [route for route in (step["route"] for step in runner.steps["S11"]) if route.startswith("eth_getTransactionReceipt")]
-        self.assertEqual(len(asked), 3)
+        self.assertEqual(len(asked), 6, "three times for each of the trade's two operations, the approval's and the swap's (Spec T34)")
 
     def test_s11_and_s12_say_where_the_operation_did_not_land(self):
         self.double.lands_later = 10 ** 6
@@ -1068,10 +1073,22 @@ class TheContractTheAgentsKeyDelegatesToIsPinned(unittest.TestCase):
             self.assertIn(words, row.what)
         for words in ("the agents' Wallet's own reading on production", "Pathfinder run 20261127-063032", "delegation[arbitrum].implementation"):
             self.assertIn(words, row.source)
-        # the security reading of pull request 34, finding 2: the one source recorded is the deployment's own answer, and the row says so rather
-        # than let a reading stand for a check that was never made
-        self.assertTrue(row.source.endswith(" — the deployment's own answer, and the only source recorded: verified against no source other than the "
-                                            "deployment's own answer"), row.source)
+        # the security reading of pull request 34, findings 2 and 3; Spec T34 §6: the row records the deployment's own answer for what it is, and
+        # beside it the source other than that answer the address was held against — the access platform's own proof of the contract's bytes
+        self.assertIn(" — the deployment's own answer; and, a source other than that answer (Spec T34, read on 27 November 2026): ", row.source)
+        self.assertNotIn("verified against no source", row.source)
+        self.assertNotIn("the only source recorded", row.source)
+        for words in ("aeredium/aegiskey-access-platform deploy/paymaster/PIN.md", "a proof run of 24 September 2026", "this address on Arbitrum One holds 3,721 bytes",
+                      "keccak256 0x1c2695858cfcc5bfd49f48b8892f30c3a9e2e7f53357b47ed0cf7b6caee96e02", "Simple7702Account of @account-abstraction/contracts v0.9.0",
+                      "built from source and matched byte for byte",
+                      "prepared bytecode keccak256 0x955be2fd7096eaf14501fb3493662595232925a50bf19adfeed49c3738a83de6 on both sides",
+                      "eth_getCode at this address through arb1.arbitrum.io on 27 November 2026 answered 3,721 bytes"):
+            self.assertIn(words, row.source)
+        with open(os.path.join(ROOT, "tables.py"), encoding="utf-8") as handle:
+            table = handle.read()
+        self.assertNotIn("verified against no source", table, "the comment above the table no longer says so (Spec T34 §6)")
+        self.assertIn("only by a spec, only after the new address has been verified against a source other than the deployment's own answer", table,
+                      "the rule for a re-pin stands as written")
         self.assertEqual(T.source(IMPLEMENTATION_KEY), row.source)
         self.assertEqual(T.describe(IMPLEMENTATION_KEY), "%s — %s (read from %s)" % (row.address, row.what, row.source))
         self.assertEqual(T.DELEGATION_IMPLEMENTATION, {"arbitrum": IMPLEMENTATION_KEY})
@@ -1229,7 +1246,7 @@ class TheOwnerListsTheContractItsAgentsKeyDelegatesTo(PathfinderBase):
         self.assertEqual(P.document_disagreements(document, runner.facts["answers"]), [])
         self.assertIn("%s under the scope 'agent'" % THE_LIST_SAID, self.line_of(runner, "S4"))
         self.assertEqual(self.double.delegations_refused, [], "the delegation's one destination is on the list, so the cluster signs it")
-        self.assertIn("which is the debit and the delegation's", self.line_of(runner, "S12"), "the key was delegated by this run's first operation")
+        self.assertIn(") and the delegation's", self.line_of(runner, "S12"), "the key was delegated by this run's first operation")
 
     def test_the_eight_alone_are_refused_at_the_delegation_as_production_refused_them(self):
         """The double is at least as strict as the cluster: a list without the implementation — the Trader's eight, as main filed them — is refused at the delegation."""
@@ -1400,17 +1417,44 @@ class TheOwnerListsTheContractItsAgentsKeyDelegatesTo(PathfinderBase):
         self.assertNotIn(P.FAIL, self.words(runner).values())
         self.assertEqual(P.exit_code_of(runner.outcomes), 2)
 
-    def test_the_agents_own_reading_names_none_where_s2_named_the_pinned_one_and_the_run_goes_on_without_the_finding(self):
-        """Only the finding that no answer named one is passed over where an earlier station's answer named one: S2's line already says what it held."""
+    def test_the_agents_own_reading_names_none_where_s2_named_the_pinned_one_and_s11_says_what_the_pin_was_held_on(self):
+        """
+        Spec T34 §5, the low finding of the security reading of pull request 34: where the agent's own wallet reading names no implementation
+        and S2's answer named the pinned one, the run used to go on with no finding and no word at S11 — so the report said the contract
+        was held when, for the wallet whose key delegates, it was not. S11 records a finding on every run: here, on a later run, that the
+        agent's own reading named none and the pin was held on the funding wallet's reading alone, and its line carries a clause to the same
+        effect. The run goes on, as Spec T33 rules.
+        """
         first = self.walk()
         self.assertEqual(first.outcome_of("S11").outcome, P.PASS, self.line_of(first, "S11"))
         self.the_agents_own_reading_says(lambda rows: None)
         runner = self.walk()
         self.assertEqual(self.words(runner), {s: P.PASS for s in P.STATION_IDS}, [runner.line(o) for o in runner.outcomes])
-        self.assertEqual(runner.findings, {})
-        self.assertNotIn("delegates to", self.line_of(runner, "S11"), "the reading named none, and S11 does not say it held one")
+        finding = ("the agent's own wallet reading (wallet.get_balances (S11)) names no implementation for arbitrum, so the contract tables.py pins for the agent's key "
+                   "to delegate to there, %s, was held on the funding wallet's reading alone (GET /v1/account (S2)), which is not the reading of the wallet whose key "
+                   "delegates; the run goes on" % PINNED_IMPLEMENTATION)
+        self.assertEqual(finding, P.IMPLEMENTATION_UNNAMED_BY_THE_WALLET_FINDING % (P.WALLET_READING, "arbitrum", PINNED_IMPLEMENTATION, P.ACCOUNT_READING))
+        self.assertEqual(runner.findings, {"S11": [finding]}, "a finding at S11, and none at S2, whose reading named the pinned one")
+        clause = "the agent's own wallet reading named no implementation for arbitrum, and the pin was held on the funding wallet's reading alone (a finding)"
+        self.assertTrue(self.line_of(runner, "S11").endswith("; " + clause), self.line_of(runner, "S11"))
+        self.assertNotIn("is the one tables.py pins", self.line_of(runner, "S11"), "the reading named none, and S11 does not say it held one")
+        self.assertIn(P.IMPLEMENTATION_SAME_CLAUSE % ("arbitrum", PINNED_IMPLEMENTATION, ISSUER, P.ACCOUNT_READING), self.line_of(runner, "S2"))
         self.assertEqual(runner.facts["implementation"], {"outcome": P.IMPLEMENTATION_SAME, "named": PINNED_IMPLEMENTATION.lower(), "where": P.ACCOUNT_READING})
         self.assertEqual(runner.facts["implementation_read"], [P.ACCOUNT_READING, P.WALLET_READING], "both answers were read for it")
+        self.assertEqual(P.exit_code_of(runner.outcomes), 0, "a finding is not a fail: the run goes on, as Spec T33 rules")
+        self.assertIn("wallet.submit_transaction", self.tools_called())
+        report = runner.report()
+        self.assertIn("- S11 The trade — %s" % finding, report.split("## Findings", 1)[1].split("## What the teardown removed", 1)[0])
+
+    def test_on_a_first_run_no_answer_names_one_and_s11_records_the_finding_that_it_could_not_be_held(self):
+        """Spec T34 §5, on an owner's first run: the account page carries no funding wallet yet, the agent's own reading names none, and S11 says so."""
+        self.double.names_implementation = False
+        runner = self.walk()
+        self.assertEqual(runner.outcome_of("S11").outcome, P.PASS, self.line_of(runner, "S11"))
+        self.assertEqual(runner.findings, {"S11": [P.IMPLEMENTATION_UNNAMED_FINDING % ("GET /v1/account (S2) and wallet.get_balances (S11)", "arbitrum",
+                                                                                        PINNED_IMPLEMENTATION, ISSUER)]})
+        self.assertTrue(self.line_of(runner, "S11").endswith("; " + P.IMPLEMENTATION_UNNAMED_CLAUSE % ISSUER), self.line_of(runner, "S11"))
+        self.assertNotIn("implementation", runner.facts, "nothing was held on any reading, and nothing is said to have been")
 
     def test_the_sentence_for_another_address_says_what_was_read_and_names_no_cause(self):
         """
@@ -1668,7 +1712,8 @@ class TheTradeRoadSaysWhatHappened(PathfinderBase):
         self.double.lands_later = 2
         runner = self.walk()
         self.assertEqual(runner.outcome_of("S11").outcome, P.PASS, self.line_of(runner, "S11"))
-        self.assertTrue(any("the Wallet answered the submit with an error after the operation was sent" in n for n in runner.notes["S11"]))
+        self.assertTrue(any("the Wallet answered the submit with an error after the approval's operation and the swap's operation were sent" in n
+                            for n in runner.notes["S11"]), runner.notes["S11"])
         self.assertIn("confirmation_timeout", " ".join(runner.notes["S11"]))
 
     def test_an_rpc_refusal_is_the_rpcs_and_the_hashes_are_kept(self):
@@ -1681,7 +1726,11 @@ class TheTradeRoadSaysWhatHappened(PathfinderBase):
         self.assertNotIn("a fault, not a judgment", line)
         traded = H.read_json(os.path.join(self.store, "alpha", P.RUN_FILE))["traded"]
         self.assertTrue(traded["handle_ops_tx_hash"] and traded["user_op_hash"], "the Wallet's hashes are written before the chain is read")
-        self.assertIn("the Wallet says the operation %s landed in the handleOps transaction %s" % (traded["user_op_hash"], traded["handle_ops_tx_hash"]), line)
+        # Spec T34: the trade is two operations, and the Wallet's word for each travels with the chain's refusal; run.json keeps the hashes of both
+        before = traded["operations_before"]
+        self.assertEqual([op["kind"] for op in before], ["approve"])
+        self.assertIn("the Wallet says the approval's operation %s landed in the handleOps transaction %s and the swap's operation %s landed in the handleOps "
+                      "transaction %s" % (before[0]["user_op_hash"], before[0]["handle_ops_tx_hash"], traded["user_op_hash"], traded["handle_ops_tx_hash"]), line)
         for station in ("S12", "S12a"):
             later = self.line_of(runner, station)
             self.assertEqual(runner.outcome_of(station).outcome, P.FAIL, later)
@@ -1692,7 +1741,7 @@ class TheTradeRoadSaysWhatHappened(PathfinderBase):
         self.double.rpc_error_on, self.double.rpc_error_times = "eth_getTransactionReceipt", 1
         runner = self.walk()
         self.assertEqual(runner.outcome_of("S11").outcome, P.FAIL)
-        self.assertIn("run.json keeps both hashes, and S12 reads the receipt again", self.line_of(runner, "S11"))
+        self.assertIn("run.json keeps the hashes, and S12 reads the receipts again", self.line_of(runner, "S11"))
         for station in ("S12", "S12a", "S13"):
             self.assertEqual(runner.outcome_of(station).outcome, P.PASS, runner.line(runner.outcome_of(station)))
         self.assertIn("S11 could not read the handleOps receipt; it is read here, by the hash the Wallet named", runner.notes["S12"])

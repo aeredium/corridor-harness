@@ -37,10 +37,14 @@ THE STATIONS, A TO Z
   S10 The judgment       police.check_action — the trade within the mandate, a receipt
   S11 The trade          the agent's wallet funded by Harness Holdings through the estate's own road where it is short (Spec T23),
                          then wallet.build_transaction, wallet.submit_transaction — a real swap, landed, sponsored by the paymaster;
-                         not traded where the deployment names another implementation than the one pinned (Spec T33)
-  S12 The reader         the chain and the gas trail — the swap on chain, the debit with its 10% charge, the balances reconciled
+                         not traded where the deployment names another implementation than the one pinned (Spec T33); every
+                         operation of the trade read, the approval's and the swap's, and a submit whose answer never arrived
+                         followed on its ticket and the chain rather than called no swap (Spec T34)
+  S12 The reader         the chain and the gas trail — the swap on chain, each operation's debit with its 10% charge, the gas
+                         account fallen by their sum (Spec T34), the balances reconciled
   S12a The commission check  the trading fee on chain: five basis points of the trade's output, in the ERC-20 Transfer logs, to
-                         the agents' fee address — FEE_BPS and FEE_ADDRESS read from tables.py, judged by fee_check
+                         the agents' fee address — FEE_BPS and FEE_ADDRESS read from tables.py, judged by fee_check; read on the
+                         swap's operation, the trade's value operation (Spec T34)
   S13 Teardown           revoke, halt, delete — the agent this run created; the owner is never touched
 
 REUSED, NOT REIMPLEMENTED (AAOI OP1). `corridor_consent.py` is the owner: `HarnessCustomer` signs up once, signs in with
@@ -204,6 +208,29 @@ Where Spec T33 and the code part company: the spec asks one new `Pinned` in the 
 Guide's own — every address in it is held to the Series' text and may be sent by the money Series — so the contract is pinned in a table
 of its own there (PINNED_FROM_PRODUCTION), found by the same T.address; and where the two readings sit in each answer is read from no
 source this repository holds, so the reader finds a `delegation` list wherever an answer carries one.
+
+THE PATHFINDER READS A TRADE MADE OF TWO OPERATIONS (Spec T34, 28 November 2026, on the same two sentences of Bear's). The agents' Wallet
+now sends every call as its own UserOperation (stablepro-agent-server Spec W-OPS: the signing cluster's engine judges a UserOperation of
+one call): for a trade the approval, where the quote carries one, and then the swap. The answers of wallet.submit_transaction and
+wallet.ticket_status keep every field they had, describing the VALUE operation, and gain `operations`, every operation in the order sent.
+  S11 reads every operation — its kind, hash, sponsor's transaction, status and success, in order — and waits for the landing of each as it
+    waited for the one. The trade is landed when the value operation is landed and succeeded AND every operation before it is; where one
+    did not land or reverted, S11 fails in the Wallet's words and says which. An answer with no `operations` is read as it always was.
+  S12 reads the receipt of every operation's sponsor's transaction, and the delegation's, and holds the fall of the owner's gas account
+    against the SUM of every operation's debit and the delegation's, one band for each. S12a reads the commission on the swap's.
+  S11 says, on every run, where the agent's own wallet reading named no implementation: a finding, and where S2's answer named one, that
+    the pin was held on the funding wallet's reading alone (the low finding of the security reading of pull request 34).
+  A tool's answer is waited for 300 seconds, longer than the relay's 240 for a door (aer-connector Spec C-WAIT-1): run 20261128-022511
+    gave the submit up at http_request's 60 while a first trade takes about 85, and the teardown then halted the agent with the trade
+    between its two operations. The wait is stated by OwnerMcp.rpc on tools/call alone; no other caller's wait is changed.
+  A submit whose answer never arrived — the relay's "asked and did not answer", its older "could not be reached", or the Pathfinder's own
+    wait run out — is not "no swap": S11 reads wallet.ticket_status every interval for up to 180 seconds, and the chain, and passes on a
+    swap that landed (with a finding that the answer never arrived; S12 and S12a run) or fails saying how far the trade got. The teardown
+    comes after S11's reading, never during it.
+Where Spec T34 and the code part company: the spec expects a change in corridor_harness.py for the wait, and http_request already takes
+its caller's `timeout` while every tool call of the Pathfinder passes through OwnerMcp.rpc here, so corridor_harness.py is not changed;
+and where `operations` sits in each answer, and what the Wallet answers where the swap is refused after the approval landed, are read from
+no source this repository holds, so the reader finds the list wherever an answer carries it and reads a refused swap with or without a row.
 
 THE LIVE TIGHTENING (AAOI IM3) is a marked second pass: every body below is derived from the source, and only the bodies
 the source leaves genuinely ambiguous carry a LIVE-TODO comment. `--dry` is the walk, green now; the live run is proven
@@ -463,6 +490,50 @@ DELEGATE_ID_BOUND = 200
 DELEGATE_SESSION = re.compile(r"\breq=\S{0,%d}:delegate(?![A-Za-z0-9_])" % DELEGATE_ID_BOUND)
 DELEGATION_REFUSED_SAID = ("the delegation was refused, not the trade: the session refused is the one whose request id ends :delegate, the one signature by "
                            "which the agent's key becomes an account before its first operation, and the trade itself was never asked for")
+# Spec T34 §5 (the low finding of the security reading of pull request 34): the agent's own wallet reading names no implementation for the
+# chain where an earlier station's answer named one. The run goes on, as Spec T33 rules, and S11 says on every run what the pin was held on.
+IMPLEMENTATION_UNNAMED_BY_THE_WALLET_FINDING = ("the agent's own wallet reading (%s) names no implementation for %s, so the contract tables.py pins for the agent's key to "
+                                                "delegate to there, %s, was held on the funding wallet's reading alone (%s), which is not the reading of the wallet whose "
+                                                "key delegates; the run goes on")
+IMPLEMENTATION_UNNAMED_BY_THE_WALLET_CLAUSE = ("the agent's own wallet reading named no implementation for %s, and the pin was held on the funding wallet's reading alone "
+                                               "(a finding)")
+
+# ---------------------------------------------------------------------------
+# A trade made of two operations (Spec T34, 28 November 2026). The agents' Wallet sends every call as its own UserOperation
+# (stablepro-agent-server Spec W-OPS: the signing cluster's engine judges a UserOperation of one call, engine_userop_batch_unjudged for
+# more): for a trade the approval, where the quote carries one, and then the swap. The answers of wallet.submit_transaction and
+# wallet.ticket_status keep every field they had, describing the VALUE operation (the swap, or the transfer), and gain `operations`:
+# every operation in the order sent, the value operation last, each {kind, user_op_hash, handle_ops_tx_hash, reserved_usd, debited_usd,
+# status, success, reason?}. Where an answer carries no `operations` (a Wallet before W-OPS) the one operation is read exactly as before.
+# Where the list sits in each answer is read from no source this repository holds (W-OPS's api/openapi.yaml is the Wallet's), so the
+# reader finds it wherever the answer carries it.
+# ---------------------------------------------------------------------------
+OPERATIONS_KEY = "operations"
+APPROVAL_KIND = "approve"
+VALUE_KIND = "swap"  # the value operation of the Pathfinder's trade, named so where the Wallet listed operations and no value one among them
+OPERATION_SAID = {"approve": "the approval's operation", "swap": "the swap's operation", "transfer": "the transfer's operation"}
+ENDED_BADLY = ("reverted", "expired", "failed")  # the statuses by which the Wallet says an operation will not land
+TICKET_FIELDS = ("user_op_hash", "handle_ops_tx_hash", "reserved_usd", "debited_usd", "delegation_tx_hash", "status", "fate", "success")
+ENTRY_FIELDS = ("kind", "user_op_hash", "handle_ops_tx_hash", "reserved_usd", "debited_usd", "status", "success", "reason")
+# A TOOL CALL IS WAITED FOR AS LONG AS THE RELAY MAY WAIT (Spec T34 §7). Run 20261128-022511 on production gave the submit up at 60 seconds,
+# http_request's own default, while a first trade takes about 85 (the delegation, the approval's operation, the swap's). The connector's
+# relay waits 240 seconds for a door's answer (aer-connector Spec C-WAIT-1), so the Pathfinder waits longer than that for a tool's answer
+# and the relay's answer, whatever it is, is always heard. A maximum, never a delay. Stated by the Pathfinder's own session (OwnerMcp.rpc)
+# on tools/call alone: http_request's default and every other caller's wait are as they were.
+RELAY_DOOR_WAIT_SECONDS = 240
+TOOL_WAIT_SECONDS = 300.0
+# A DOOR THAT WAS ASKED AND DID NOT ANSWER IS NOT "NO SWAP" (Spec T34 §8). Where the submit's answer is the relay's sentence that the
+# Wallet's door was asked and did not answer (aer-connector Spec C-WAIT-1: "asked and did not answer within N seconds; it is not known
+# whether anything was done"), or its older sentence that the door could not be reached (corridor_harness.RELAY_UNREACHABLE), or the
+# Pathfinder's own wait ran out, S11 concludes nothing from that alone: it reads the trade's fate where the product keeps it —
+# wallet.ticket_status every interval for up to FATE_WAIT_SECONDS, and the chain as S12 reads it — and judges on what it finds.
+RELAY_ASKED_UNANSWERED = "asked and did not answer"
+FATE_WAIT_SECONDS = 180.0
+SUBMIT_UNANSWERED_FINDING = ("the answer to wallet.submit_transaction never arrived — %s; the trade's fate was read where the product keeps it, wallet.ticket_status "
+                             "for the ticket %s and the chain, and the trade landed: %s")
+SUBMIT_UNANSWERED_CLAUSE = " — its answer never arrived, and the trade's fate was read from wallet.ticket_status and the chain (a finding)"
+SUBMIT_UNANSWERED_FAILED = ("the answer to the submit never arrived — %s — and wallet.ticket_status, read every %s s for up to %d s, does not say the trade "
+                            "landed: ")
 
 # ---------------------------------------------------------------------------
 # THE LEXICON: the connector's error dictionary, mirrored (AAOI OP2, AT3).
@@ -910,6 +981,77 @@ def delegation_refused(words: str) -> bool:
     return DELEGATION_REFUSED_REASON in (words or "") and bool(DELEGATE_SESSION.search(words or ""))
 
 
+def operations_in(answer: Any) -> List[Dict[str, Any]]:
+    """
+    Every operation an answer of the Wallet lists, in the order sent (Spec T34; the Wallet's Spec W-OPS): the rows of its `operations`
+    list, found wherever the answer carries one. Empty where it carries none — a Wallet before W-OPS — and then the one operation is
+    read from the answer's own fields, exactly as before.
+    """
+    rows = H.find_key(answer, [OPERATIONS_KEY], list) if isinstance(answer, (dict, list)) else None
+    return [dict(row) for row in (rows or []) if isinstance(row, dict)]
+
+
+def operation_said(operation: Dict[str, Any]) -> str:
+    """An operation as a sentence names it: by its kind where the Wallet listed it (the approval's, the swap's, the transfer's), else the operation."""
+    kind = str(operation.get("kind") or "").strip().lower()
+    return OPERATION_SAID.get(kind) or ("the %s operation" % kind if kind else "the operation")
+
+
+def operation_sent(operation: Dict[str, Any]) -> bool:
+    """Whether the Wallet names a hash for the operation: its userOpHash, or its sponsor's handleOps transaction."""
+    return bool(operation.get("user_op_hash") or operation.get("handle_ops_tx_hash"))
+
+
+def ended_badly(operation: Dict[str, Any]) -> bool:
+    """
+    Whether the Wallet's own word says the operation will not land as asked: a status that says so (reverted, expired, failed), a landing
+    whose `success` is false, or a reason named for an operation that was never sent (no hash, and not landed).
+    """
+    status = str(operation.get("status") or "")
+    if status in ENDED_BADLY or (status == "landed" and operation.get("success") is False):
+        return True
+    return bool(operation.get("reason")) and not landed_word(operation) and not operation_sent(operation)
+
+
+def newer_reading(known: Dict[str, Any], newer: Dict[str, Any], fields: Sequence[str]) -> Dict[str, Any]:
+    """An operation as last read, with what a newer reading states of it laid over; the earlier `success` predates the landing, so only the newer may say it."""
+    merged = dict(known)
+    merged.pop("success", None)
+    for key in fields:
+        if newer.get(key) not in (None, ""):
+            merged[key] = newer[key]
+    return merged
+
+
+def with_listed(operations: List[Dict[str, Any]], listed: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    The trade's operations in the order sent, the value operation last (Spec T34 §1). `operations` is what is known — the value operation
+    as the answer's own fields describe it, after the operations before it — and `listed` the answer's `operations`. No list: what is
+    known, unchanged, the one operation of a Wallet before W-OPS. A list: every row before the value one laid over what is known of it,
+    by its place; the value row — the last, where it is not an approval — laid over the value operation, which is named by its kind
+    from then on (the swap's where the Wallet listed none: listed operations with no value one among them are a swap not sent).
+    """
+    if not listed:
+        return operations
+    value_listed = listed[-1] if str(listed[-1].get("kind") or "").strip().lower() != APPROVAL_KIND else None
+    before_listed = list(listed[:-1]) if value_listed is not None else list(listed)
+    before_known = operations[:-1]
+    before = [newer_reading(before_known[index] if index < len(before_known) else {}, row, ENTRY_FIELDS) for index, row in enumerate(before_listed)]
+    before += [dict(known) for known in before_known[len(before):]]  # an operation once read is never dropped by a shorter list
+    value = newer_reading(operations[-1], value_listed, ENTRY_FIELDS) if value_listed is not None else dict(operations[-1])
+    value.setdefault("kind", VALUE_KIND)
+    return before + [value]
+
+
+def door_did_not_answer(answer: H.McpAnswer, who: Dict[str, Any]) -> bool:
+    """
+    Whether an answer is AER Connect's relay saying the door was asked and did not answer (aer-connector Spec C-WAIT-1), or its older
+    sentence that the door could not be reached (Spec T34 §8): no word of the door's, and no ground for saying nothing was done.
+    """
+    words = "%s %s" % (answer.text, (answer.rpc_error or {}).get("message") or "")
+    return RELAY_ASKED_UNANSWERED in words or who.get("reason") == "door_unreachable"
+
+
 def list_said(sent: Sequence[str]) -> str:
     """
     The list an owner filed, as a sentence names it, truthfully (Spec T33): the Pathfinder's nine by what they are — the eight venue
@@ -1166,12 +1308,16 @@ class OwnerMcp(H.Mcp):
     corridor_harness.Mcp as it is — initialize, tools/list, the schema readers, the guard against a road that is not an
     AER Connect agent's — with `rpc` restated for the one thing the law asks of this harness and the corridor's session
     does not do: its record redacts every secret to its last four characters, and a door that cannot be reached is
-    recorded in the transport's own words before the fault travels on.
+    recorded in the transport's own words before the fault travels on. And, since Spec T34 §7, it states how long a tool's
+    answer is waited for: `tool_wait` seconds on tools/call, longer than the relay may wait for a door, so the relay's answer
+    is always heard; every other method waits as it did, on http_request's own default.
     """
 
-    def __init__(self, oauth: H.Oauth, label: str, record: Callable[..., None], mcp_url: str, secrets_: List[str]):
+    def __init__(self, oauth: H.Oauth, label: str, record: Callable[..., None], mcp_url: str, secrets_: List[str],
+                 tool_wait: float = TOOL_WAIT_SECONDS):
         super().__init__(oauth, label, record, mcp_url)
         self.secrets = secrets_
+        self.tool_wait = float(tool_wait)
 
     def bearer(self) -> str:
         """
@@ -1211,8 +1357,10 @@ class OwnerMcp(H.Mcp):
         self.note([bearer] + H.secret_values(params or {}))
         tool = (params or {}).get("name", method) if method == "tools/call" else method
         sent = H.redact(params or {}, self.secrets, mask=C.last4)
+        # Spec T34 §7: a tool's answer is waited for as long as the relay may wait for the door, and a little longer; a maximum, never a delay
+        wait = {"timeout": self.tool_wait} if method == "tools/call" else {}
         try:
-            http_answer = H.http_request("POST", self.mcp_url, headers, json.dumps(payload).encode("utf-8"))
+            http_answer = H.http_request("POST", self.mcp_url, headers, json.dumps(payload).encode("utf-8"), **wait)
         except H.Unreachable as err:
             self.record(test_id=test_id, kind=method, tool=tool, arguments=sent, answer=str(err), http_status=0,
                         round_trip_ms=0, agent=self.label, outcome="unreachable")
@@ -1397,9 +1545,10 @@ class Pathfinder:
                  started_at: Optional[_dt.datetime] = None, interval: float = TRADE_POLL_SECONDS,
                  deadline: float = TRADE_DEADLINE_SECONDS, dry: bool = False, estate_base: str = ESTATE_BASE,
                  estate_store: str = ESTATE_STORE_DIR, estate_transport: Optional[E.Transport] = None, estate_admin_env: Optional[str] = None,
-                 expected_group: str = EXPECTED_GROUP):
+                 expected_group: str = EXPECTED_GROUP, tool_wait: float = TOOL_WAIT_SECONDS):
         self.base = base.rstrip("/")
         self.owner = owner
+        self.tool_wait = float(tool_wait)  # Spec T34 §7: how long a tool's answer is waited for, longer than the relay's wait for a door
         self.expected_group = expected_group  # S2 (Spec T25): the signing group compared where the page states one (--group; default group-100)
         self.store_dir = os.path.expanduser(store_dir)
         self.folder_dir = os.path.join(self.store_dir, owner)
@@ -1584,7 +1733,7 @@ class Pathfinder:
             self.need(self.facts.get("connected"), NO_CONNECTION)
             self.expect("", **{"MCP initialize": "200 with the server's name, version and instructions",
                                "MCP notifications/initialized": "202, a notification", "MCP tools/list": "200 with the tools"})
-            session = OwnerMcp(self.oauth, self.label, self.record, self.base + H.MCP_PATH, self.secrets)
+            session = OwnerMcp(self.oauth, self.label, self.record, self.base + H.MCP_PATH, self.secrets, tool_wait=self.tool_wait)
             answer = session.initialize(self.current)
             if answer.is_error or not answer.result:
                 who = H.who_answered(answer, "connector")
@@ -1860,15 +2009,18 @@ class Pathfinder:
         that delegates is the agent's wallet's, and S2's is the funding wallet's reading: the one does not stand for the other
         (the security reading of pull request 34, finding 1), so an address other than the pinned one stops the station here
         even where S2 read the pinned one. Answers the clause S11's line carries: the same address, noted too so a later stop
-        of S11 does not lose it; none named by this reading where an earlier station's answer named one, nothing, and no
-        finding (that station's line says what it held); none named in any answer read, a finding, and the run goes on.
+        of S11 does not lose it; none named by this reading, a finding on EVERY run, and the run goes on (Spec T34 §5, the low
+        finding of the same reading) — where an earlier station's answer named one, that the agent's own wallet reading named
+        none and the pin was held on the funding wallet's reading alone; where no answer read named one, that it could not be held.
         """
-        named_earlier = bool(self.facts.get("implementation"))
+        earlier = self.facts.get("implementation") or {}
         clause = self.hold_the_implementation(balances.data, WALLET_READING)
         self.stop_where_the_implementation_differs()
         if clause is None:
-            if named_earlier:
-                return ""
+            if earlier:
+                self.finding(IMPLEMENTATION_UNNAMED_BY_THE_WALLET_FINDING % (WALLET_READING, TRADE["chain"], T.address(IMPLEMENTATION_KEY),
+                                                                             earlier.get("where") or ACCOUNT_READING))
+                return "; %s" % (IMPLEMENTATION_UNNAMED_BY_THE_WALLET_CLAUSE % TRADE["chain"])
             self.finding(IMPLEMENTATION_UNNAMED_FINDING % (names_said(self.facts.get("implementation_read") or []), TRADE["chain"],
                                                            T.address(IMPLEMENTATION_KEY), normal_base(self.base)))
             return "; %s" % (IMPLEMENTATION_UNNAMED_CLAUSE % normal_base(self.base))
@@ -2260,7 +2412,7 @@ class Pathfinder:
         self.expect("", **{"MCP initialize": "200 with the server's name, version and instructions",
                            "MCP notifications/initialized": "202, a notification",
                            "MCP tools/list": "200 with each of the %d pinned tools present by name (tables.py CATALOGUE): %s" % (len(CATALOGUE), ", ".join(CATALOGUE))})
-        session = OwnerMcp(self.oauth, self.label, self.record, self.base + H.MCP_PATH, self.secrets)
+        session = OwnerMcp(self.oauth, self.label, self.record, self.base + H.MCP_PATH, self.secrets, tool_wait=self.tool_wait)
         answer = session.initialize("S8")
         if answer.is_error or not answer.result:
             who = H.who_answered(answer, "connector")
@@ -2406,12 +2558,25 @@ class Pathfinder:
         properties, _, _ = H.schema_parts(self.mcp.schema_of("wallet.submit_transaction"))
         if properties and "agent_id" in properties:
             submit_args["agent_id"] = self.facts.get("agent_id")
-        submitted = self.mcp.call("wallet.submit_transaction", submit_args, "S11")
-        submit = H.classify_wallet(submitted)
-        data = submitted.data if isinstance(submitted.data, dict) else {}
+        # Spec T34 §8: an answer that never arrived — the Pathfinder's own wait ran out, or the relay says the Wallet's door was asked and
+        # did not answer, or could not be reached — is not "no swap". Nothing is concluded from it alone: the trade's fate is read below
+        # where the product keeps it, and S11 judges on what it finds. `unanswered` carries the words of whoever said so.
+        unanswered = ""
+        submitted: Optional[H.McpAnswer] = None
+        try:
+            submitted = self.mcp.call("wallet.submit_transaction", submit_args, "S11")
+        except H.Unreachable as err:
+            unanswered = "the harness waited up to %s s for it, and the transport says: %s" % (self.tool_wait, err)
+        submit = H.classify_wallet(submitted) if submitted is not None else {}
+        data = submitted.data if submitted is not None and isinstance(submitted.data, dict) else {}
         operation = H.find_key(data, ["execution", "user_operation"], dict) or {}
-        sent = bool(operation.get("user_op_hash") or operation.get("handle_ops_tx_hash"))
-        if not sent and (submitted.is_error or submit["kind"] in ("refused", "held", "no_judgment")):
+        # Spec T34 §1: every operation of the trade in the order sent, the value operation — the answer's own fields — last; the one, as
+        # before, where the answer lists none
+        operations = with_listed([dict(operation)], operations_in(data))
+        sent = any(operation_sent(op) for op in operations)
+        if submitted is not None and not sent and door_did_not_answer(submitted, submit.get("who") or {}):
+            unanswered = "AER Connect's relay said: %s" % named((submitted.text or str((submitted.rpc_error or {}).get("message") or "")).strip()[:400])
+        elif submitted is not None and not sent and (submitted.is_error or submit["kind"] in ("refused", "held", "no_judgment")):
             who = submit.get("who") or {}
             # Spec T33: the refusal told truthfully — where the gateway's own words name the delegation's session (a request id ending
             # :delegate) refused agent_destination_not_whitelisted, the line says so beside them; the words themselves are kept verbatim
@@ -2419,77 +2584,152 @@ class Pathfinder:
             raise StationStop("the Wallet refused the submit — %s (%s): %s%s" % (who.get("party", "the MCP Wallet"), submit["kind"],
                                                                                   named(str(submit.get("sentence") or submitted.text[:400]), who.get("reason") or None), told),
                               outcome=FAIL)
-        if sent and submitted.is_error:
+        if sent and submitted is not None and submitted.is_error:
             # The operation left: a confirmation that timed out is the Wallet's word that it "was sent and may still land"
             # (useroperation.go, confirmation_timeout), never a refusal. Its words travel, and its ticket is followed.
             reason = H.find_key(data, ["reason", "reason_code", "code"], str)
             words = H.find_key(data, ["message"], str) or submitted.text[:400]
-            self.note("the Wallet answered the submit with an error after the operation was sent — %s; the harness follows its ticket"
-                      % named("%s: %s" % (reason, words) if reason and not str(words).startswith(reason) else str(words), reason))
-        self.facts["ticket_id"] = build["ticket_id"]
-        self.remember_trade(operation, build["ticket_id"])
-        operation = self.until_landed(operation, build["ticket_id"])
-        self.remember_trade(operation, build["ticket_id"])  # written before the chain is read: an RPC that fails loses no hash
-        user_op_hash = str(operation.get("user_op_hash") or "").lower()
-        handle_ops = str(operation.get("handle_ops_tx_hash") or "").lower()
+            were = [operation_said(op) for op in operations if operation_sent(op)]
+            self.note("the Wallet answered the submit with an error after %s %s sent — %s; the harness follows its ticket"
+                      % (names_said(were), "was" if len(were) == 1 else "were",
+                         named("%s: %s" % (reason, words) if reason and not str(words).startswith(reason) else str(words), reason)))
+            # Spec T34 §1: where every operation before the value one has landed and the value operation was never sent, nothing of the
+            # trade is on its way and the Wallet's answer is its last word on it: the value operation carries that word as its reason
+            # where the Wallet's own row for it names none, and nothing is waited for
+            if not operation_sent(operations[-1]) and all(landed_word(op) for op in operations[:-1]) and not any(ended_badly(op) for op in operations):
+                operations[-1]["reason"] = str(submit.get("sentence") or submitted.text[:400])
+        ticket_id = build["ticket_id"]
+        self.facts["ticket_id"] = ticket_id
+        self.remember_trade(operations, ticket_id)
+        # the Wallet's ticket, followed until every operation has landed or one has ended badly: to the run's deadline, or — where the
+        # answer to the submit never arrived (Spec T34 §8) — every interval for up to FATE_WAIT_SECONDS
+        waited = FATE_WAIT_SECONDS if unanswered else self.deadline
+        operations = self.until_landed(operations, ticket_id, waited, to_the_end=bool(unanswered))
+        self.remember_trade(operations, ticket_id)  # written before the chain is read: an RPC that fails loses no hash
+        operation = operations[-1]  # the value operation: the swap's
         self.facts["operation"] = operation
-        status = str(operation.get("status") or "")
+        self.facts["operations"] = operations
+        one = len(operations) == 1
         # The Wallet's `success` is the UserOperationEvent's flag once landed and false before (UserOperationOutcome), so it is
         # read only on an answer that says landed; the chain's own event, read below, is the judge of a landing either way.
-        if status in ("reverted", "expired", "failed") or (status == "landed" and operation.get("success") is False):
-            raise StationStop("the operation %s %s — %s" % (user_op_hash or "(no hash)", operation.get("status") or "did not succeed",
-                                                             named(str(operation.get("reason") or "the Wallet named no reason"))), outcome=FAIL)
-        if not landed_word(operation) or not H.HEX64.fullmatch(handle_ops or ""):
-            raise StationStop("the operation %s had not landed at the deadline of %s s (status %s, handleOps %s); the ticket is %s, and run.json "
-                              "keeps both hashes for --from S12" % (user_op_hash or "(no hash)", int(self.deadline), operation.get("status") or "not stated",
-                                                                   handle_ops or "not named", build["ticket_id"]), outcome=FAIL)
+        # Spec T34 §1: the trade is landed when the value operation is landed and succeeded AND every operation before it is; where one
+        # did not land or ended badly, the line says which, in the Wallet's words for it, and what became of each of the others.
+        badly = any(ended_badly(op) for op in operations)
+        if badly or not all(self.landed_and_named(op) for op in operations):
+            sentence = "; ".join(self.fate_said(op, None if badly else waited) for op in operations)
+            if not badly:
+                kept_said = (", and run.json keeps %s for --from S12" % ("both hashes" if one else "the hashes")) if any(operation_sent(op) for op in operations) else ""
+                sentence = "%s; the ticket is %s%s" % (sentence, ticket_id, kept_said)
+            if unanswered:
+                sentence = SUBMIT_UNANSWERED_FAILED % (unanswered, self.interval, int(waited)) + sentence
+            raise StationStop(sentence, outcome=FAIL)
         self.expect("the handleOps receipt: status 0x1, and the UserOperationEvent for this userOpHash: success, from the wallet, paid by the group-100 paymaster")
         # The Wallet's word that it landed travels with any answer the chain could not give: the hashes are in run.json, and S12 reads again.
-        kept = ("the Wallet says the operation %s landed in the handleOps transaction %s; run.json keeps both hashes, and S12 reads the "
-                "receipt again" % (user_op_hash or "(no hash)", handle_ops))
-        try:
-            receipt = self.receipt_of(handle_ops, wait=True)
-        except ChainRefused as err:
-            raise StationStop("refused: %s; the chain's own word, and no judgment of the trade — %s" % (err, kept), outcome=FAIL)
-        except H.Unreachable as err:
-            raise StationStop("unreachable: %s; nothing was judged, and a retry may reach it — %s" % (err, kept), outcome=FAIL)
-        if not isinstance(receipt, dict):
-            raise StationStop("%s names no receipt for the handleOps transaction %s within %d s — %s" % (self.chain.host, handle_ops, int(self.deadline), kept),
-                              outcome=FAIL)
+        kept = "the Wallet says %s; run.json keeps %s, and S12 reads the %s again" % (
+            " and ".join(self.fate_said(op) for op in operations), "both hashes" if one else "the hashes", "receipt" if one else "receipts")
+        # Spec T34 §1: the landing of each operation is waited for and read as the one's always was, in the order sent
+        landings: List[Tuple[Dict[str, Any], Dict[str, Any], Optional[Dict[str, Any]]]] = []
+        for op in operations:
+            handle_ops = str(op.get("handle_ops_tx_hash") or "").lower()
+            try:
+                receipt = self.receipt_of(handle_ops, wait=True)
+            except ChainRefused as err:
+                raise StationStop("refused: %s; the chain's own word, and no judgment of the trade — %s" % (err, kept), outcome=FAIL)
+            except H.Unreachable as err:
+                raise StationStop("unreachable: %s; nothing was judged, and a retry may reach it — %s" % (err, kept), outcome=FAIL)
+            if not isinstance(receipt, dict):
+                raise StationStop("%s names no receipt for the handleOps transaction %s within %d s — %s" % (self.chain.host, handle_ops, int(self.deadline), kept),
+                                  outcome=FAIL)
+            hash_of = str(op.get("user_op_hash") or "").lower()
+            landings.append((op, receipt, next((e for e in user_operation_events(receipt) if e["user_op_hash"] == hash_of), None)))
+        _, receipt, event = landings[-1]
         self.facts["receipt_tx"] = receipt
-        event = next((e for e in user_operation_events(receipt) if e["user_op_hash"] == user_op_hash), None)
+        self.facts["operations_read"] = landings[:-1]
+        user_op_hash = str(operation.get("user_op_hash") or "").lower()
+        handle_ops = str(operation.get("handle_ops_tx_hash") or "").lower()
         problems: List[str] = []
-        if H.hex_quantity(receipt.get("status")) != 1:
-            problems.append("the handleOps receipt's status is %s" % receipt.get("status"))
-        if event is None:
-            # The platform's own sentence for the same absence (internal/gas/settle.go): no other operation's event stands in.
-            problems.append("the EntryPoint emitted no UserOperationEvent for this hash in the transaction (%s in %s)" % (user_op_hash, handle_ops))
-        else:
-            if event["success"] is not True:
-                problems.append("the UserOperationEvent says the operation did not succeed")
-            if wallet.get("address") and event["sender"].lower() != str(wallet["address"]).lower():
-                problems.append("the operation's sender is %s, and the wallet is %s" % (event["sender"], wallet["address"]))
-            if event["paymaster"].lower() != PAYMASTER[TRADE["chain"]].lower():
-                problems.append("the paymaster is %s, and the group-100 paymaster is %s" % (event["paymaster"], H.checksum_address(PAYMASTER[TRADE["chain"]])))
+        for op, row, found in landings:
+            whose = "%s: " % operation_said(op) if op.get("kind") else ""  # named where the Wallet listed the trade's operations
+            if H.hex_quantity(row.get("status")) != 1:
+                problems.append("%sthe handleOps receipt's status is %s" % (whose, row.get("status")))
+            if found is None:
+                # The platform's own sentence for the same absence (internal/gas/settle.go): no other operation's event stands in.
+                problems.append("%sthe EntryPoint emitted no UserOperationEvent for this hash in the transaction (%s in %s)" % (
+                    whose, str(op.get("user_op_hash") or "").lower(), str(op.get("handle_ops_tx_hash") or "").lower()))
+                continue
+            if found["success"] is not True:
+                problems.append("%sthe UserOperationEvent says the operation did not succeed" % whose)
+            if wallet.get("address") and found["sender"].lower() != str(wallet["address"]).lower():
+                problems.append("%sthe operation's sender is %s, and the wallet is %s" % (whose, found["sender"], wallet["address"]))
+            if found["paymaster"].lower() != PAYMASTER[TRADE["chain"]].lower():
+                problems.append("%sthe paymaster is %s, and the group-100 paymaster is %s" % (whose, found["paymaster"], H.checksum_address(PAYMASTER[TRADE["chain"]])))
         if problems:
             raise StationStop("; ".join(problems), outcome=FAIL)
         self.facts["event"] = event
-        return Outcome("S11", PASS, "the trade: %sticket %s submitted; the operation %s landed in the handleOps transaction %s (block %s), from the wallet "
-                       "%s, sponsored by the paymaster %s; the Wallet's calls %s; reserved US$%s, debited US$%s%s" % (
-                           ("funded by Harness Holdings through the estate's own road — %s; " % funded) if funded
-                           else "the wallet held %d minor units of USDC already, so nothing was funded; " % held,
-                           build["ticket_id"], user_op_hash, handle_ops, H.hex_quantity(receipt.get("blockNumber")), event["sender"], event["paymaster"],
-                           ", ".join(operation.get("calls") or []) or "not stated", operation.get("reserved_usd") or "not stated",
-                           operation.get("debited_usd") or "not stated", delegates_to))
+        if unanswered:
+            # Spec T34 §8: the swap landed and succeeded, so S11 passes on the landing — with a finding that the answer to the submit never arrived
+            self.finding(SUBMIT_UNANSWERED_FINDING % (unanswered, ticket_id, " and ".join(self.fate_said(op) for op in operations)))
+        funded_said = (("funded by Harness Holdings through the estate's own road — %s; " % funded) if funded
+                       else "the wallet held %d minor units of USDC already, so nothing was funded; " % held)
+        answered_said = SUBMIT_UNANSWERED_CLAUSE if unanswered else ""
+        if not operation.get("kind"):
+            # a Wallet before W-OPS listed no operations: the one operation, in the line it always had
+            return Outcome("S11", PASS, "the trade: %sticket %s submitted%s; the operation %s landed in the handleOps transaction %s (block %s), from the wallet "
+                           "%s, sponsored by the paymaster %s; the Wallet's calls %s; reserved US$%s, debited US$%s%s" % (
+                               funded_said, ticket_id, answered_said, user_op_hash, handle_ops, H.hex_quantity(receipt.get("blockNumber")), event["sender"],
+                               event["paymaster"], ", ".join(operation.get("calls") or []) or "not stated", operation.get("reserved_usd") or "not stated",
+                               operation.get("debited_usd") or "not stated", delegates_to))
+        # Spec T34 §1: the line names every operation — the approval's and the swap's, or the one
+        landed_said = "; ".join("%s %s landed in the handleOps transaction %s (block %s), reserved US$%s, debited US$%s" % (
+            operation_said(op), str(op.get("user_op_hash") or "").lower(), str(op.get("handle_ops_tx_hash") or "").lower(), H.hex_quantity(row.get("blockNumber")),
+            op.get("reserved_usd") or "not stated", op.get("debited_usd") or "not stated") for op, row, _ in landings)
+        return Outcome("S11", PASS, "the trade: %sticket %s submitted as %d operation%s%s; %s; %sfrom the wallet %s, sponsored by the paymaster %s; the Wallet's calls %s%s" % (
+            funded_said, ticket_id, len(landings), "" if one else "s", answered_said, landed_said, "" if one else "each ", event["sender"], event["paymaster"],
+            ", ".join(operation.get("calls") or []) or "not stated", delegates_to))
 
-    def remember_trade(self, operation: Dict[str, Any], ticket_id: str) -> None:
-        """What a resumed S12 and S12a need, in run.json — the hashes, the ticket, the readings taken before — and never a secret."""
+    @staticmethod
+    def landed_and_named(operation: Dict[str, Any]) -> bool:
+        """Whether the Wallet's own word says the operation landed and names the handleOps transaction it landed in."""
+        return landed_word(operation) and bool(H.HEX64.fullmatch(str(operation.get("handle_ops_tx_hash") or "").lower()))
+
+    @staticmethod
+    def fate_said(operation: Dict[str, Any], waited: Optional[float] = None) -> str:
+        """
+        How far one operation got, in one clause, by the Wallet's own word (Spec T34): ended badly, with its reason; never sent, with the
+        reason the Wallet named where it named one; landed, in which handleOps transaction; or not landed — at the deadline, where one is given.
+        """
+        name = operation_said(operation)
+        user_op_hash = str(operation.get("user_op_hash") or "").lower()
+        handle_ops = str(operation.get("handle_ops_tx_hash") or "").lower()
+        status = str(operation.get("status") or "")
+        if not operation_sent(operation) and (operation.get("kind") or status not in ENDED_BADLY):
+            # no hash was ever named for it: a listed operation, or one with no status that says it ended, was not sent
+            return "%s was not sent%s%s" % (name, (" (status %s)" % status) if status else "",
+                                           (" — %s" % named(str(operation["reason"]))) if operation.get("reason") else "")
+        if status in ENDED_BADLY or (status == "landed" and operation.get("success") is False):
+            return "%s %s %s — %s" % (name, user_op_hash or "(no hash)", status, named(str(operation.get("reason") or "the Wallet named no reason")))
+        if landed_word(operation) and H.HEX64.fullmatch(handle_ops):
+            return "%s %s landed in the handleOps transaction %s" % (name, user_op_hash or "(no hash)", handle_ops)
+        return "%s %s had not landed%s (status %s, handleOps %s)" % (
+            name, user_op_hash or "(no hash)", (" at the deadline of %s s" % int(waited)) if waited is not None else "", status or "not stated", handle_ops or "not named")
+
+    def remember_trade(self, operations: Sequence[Dict[str, Any]], ticket_id: str) -> None:
+        """
+        What a resumed S12 and S12a need, in run.json — the hashes, the ticket, the readings taken before — and never a secret. The value
+        operation's fields where they always were; since Spec T34 its kind, and the operations sent before it (the approval's), each by
+        its hashes and its debit.
+        """
+        operation = operations[-1]
         self.state["traded"] = {
             "user_op_hash": str(operation.get("user_op_hash") or "").lower() or None,
             "handle_ops_tx_hash": str(operation.get("handle_ops_tx_hash") or "").lower() or None,
             "delegation_tx_hash": str(operation.get("delegation_tx_hash") or "").lower() or None,
             "ticket_id": ticket_id, "status": operation.get("status"), "debited_usd": operation.get("debited_usd"),
             "reserved_usd": operation.get("reserved_usd"), "before": self.facts.get("before"), "gas_before": self.facts.get("gas_before"),
+            "kind": operation.get("kind"),
+            "operations_before": [{"kind": op.get("kind"), "user_op_hash": str(op.get("user_op_hash") or "").lower() or None,
+                                   "handle_ops_tx_hash": str(op.get("handle_ops_tx_hash") or "").lower() or None, "status": op.get("status"),
+                                   "debited_usd": op.get("debited_usd"), "reserved_usd": op.get("reserved_usd")} for op in operations[:-1]],
             "saved_at": H.now_iso(),
         }
         self.save_state()
@@ -2771,29 +3011,65 @@ class Pathfinder:
                 self.read_the_set_again(estate, clerk, paid)
         raise StationStop(NOT_LANDED_SENTENCE % (address, TRADE["chain"], self.holds_words(held, balances), TRADE_RAW, set_id, int(self.deadline), self.landing_words(paid)), outcome=FAIL)
 
-    def until_landed(self, operation: Dict[str, Any], ticket_id: str) -> Dict[str, Any]:
+    def until_landed(self, operations: List[Dict[str, Any]], ticket_id: str, wait: Optional[float] = None, to_the_end: bool = False) -> List[Dict[str, Any]]:
         """
-        The Wallet's own ticket_status, every interval until the operation has landed or ended badly, to the deadline. The Wallet
-        names the handleOps transaction the moment it is sent, with the status submitted (useroperation.go), so a hash is not a
-        landing: landed is the status landed, or the debit the ticket states once the operation landed.
+        The Wallet's own ticket_status, every interval until every operation of the trade has landed or one has ended badly, to the
+        deadline (`wait` seconds; the run's own where none is given). The Wallet names the handleOps transaction the moment it is
+        sent, with the status submitted (useroperation.go), so a hash is not a landing: landed is the status landed, or the debit
+        the ticket states once the operation landed. The ticket's own fields are the value operation's, laid over what is known of
+        it (the submit's flag predates the landing; only a newer reading may say `success`); its `operations`, where it lists them
+        (Spec T34), are laid over each operation in its place. One operation and no list: the loop it always was. `to_the_end` is
+        the reading of a submit whose answer never arrived (Spec T34 §8), the trade's fate read where the product keeps it: the
+        ticket, and the chain as S12 reads it — an operation the ticket names a handleOps transaction for and does not yet say
+        landed is asked of the chain at each interval (read_on_chain); and a read of the ticket that does not arrive either is
+        noted and the reading goes on to its deadline, so the teardown never follows a reading cut short while the trade may be
+        on its way. Every other reading fails on such a read, as it always did, and asks the chain nothing here.
         """
-        deadline_at = self.clock() + self.deadline
-        while not landed_word(operation) and str(operation.get("status") or "") not in ("reverted", "expired", "failed"):
+        deadline_at = self.clock() + (self.deadline if wait is None else wait)
+        while not any(ended_badly(op) for op in operations) and not all(landed_word(op) for op in operations):
             if self.clock() >= deadline_at:
                 break
             self.sleep(self.interval)
-            self.expect("the ticket's state: the operation's userOpHash, its handleOps transaction once it landed, the debit")
+            self.expect("the ticket's state: each operation's userOpHash, its handleOps transaction once it landed, the debit")
             args, _ = H.arguments_for(self.mcp.schema_of("wallet.ticket_status"), {}, {"ticket_id": ticket_id})
-            answer = self.mcp.call("wallet.ticket_status", args, self.current)
-            data = answer.data if isinstance(answer.data, dict) else {}
-            ticket = H.find_key(data, ["ticket"], dict) or data
-            merged = dict(operation)
-            merged.pop("success", None)  # the submit's flag predates the landing; only a newer reading may say it
-            for key in ("user_op_hash", "handle_ops_tx_hash", "reserved_usd", "debited_usd", "delegation_tx_hash", "status", "fate", "success"):
-                if ticket.get(key) not in (None, ""):
-                    merged[key] = ticket[key]
-            operation = merged
-        return operation
+            answer: Optional[H.McpAnswer] = None
+            try:
+                answer = self.mcp.call("wallet.ticket_status", args, self.current)
+            except H.Unreachable as err:
+                if not to_the_end:
+                    raise
+                self.note("wallet.ticket_status did not answer (%s); the reading of the trade's fate goes on to its end" % err)
+            if answer is not None:
+                data = answer.data if isinstance(answer.data, dict) else {}
+                ticket = H.find_key(data, ["ticket"], dict) or data
+                operations = with_listed(operations[:-1] + [newer_reading(operations[-1], ticket, TICKET_FIELDS)], operations_in(data))
+            if to_the_end:
+                operations = [self.read_on_chain(op) for op in operations]
+        return operations
+
+    def read_on_chain(self, operation: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Spec T34 §8, the chain as S12 reads it: an operation the ticket names a handleOps transaction for and does not yet say
+        landed, asked of the chain — the receipt, and the UserOperationEvent for the operation's own hash. Where the chain carries
+        it, the operation is read as landed, or as reverted where the event says it did not succeed; where the chain carries
+        none yet, or could not be asked this time, the operation is as the ticket left it, and the next interval asks again.
+        """
+        handle_ops = str(operation.get("handle_ops_tx_hash") or "").lower()
+        user_op_hash = str(operation.get("user_op_hash") or "").lower()
+        if landed_word(operation) or ended_badly(operation) or not H.HEX64.fullmatch(handle_ops) or not user_op_hash:
+            return operation
+        self.expect("the handleOps receipt of an operation the ticket names and does not yet say landed: the UserOperationEvent for its hash, where the chain carries it")
+        try:
+            receipt = self.chain.receipt(handle_ops)
+        except H.HarnessError:
+            return operation  # the chain refused, or could not be reached, this time: its own words are in the record, and it is asked again
+        event = next((e for e in user_operation_events(receipt) if e["user_op_hash"] == user_op_hash), None) if isinstance(receipt, dict) else None
+        if event is None:
+            return operation
+        if event["success"] is True:
+            return dict(operation, status="landed", success=True)
+        return dict(operation, status="reverted", success=False,
+                    reason=operation.get("reason") or "the chain's UserOperationEvent for it says the operation did not succeed")
 
     # -- S12 The reader -------------------------------------------------------------------------------------
     def landing(self) -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -2810,7 +3086,8 @@ class Pathfinder:
             operation = self.facts.get("operation") or {}
             handle_ops = str(operation.get("handle_ops_tx_hash") or "").lower()
             user_op_hash = str(operation.get("user_op_hash") or "").lower()
-            if self.facts.get("receipt_tx") or not landed_word(operation) or not H.HEX64.fullmatch(handle_ops) or not user_op_hash:
+            every = self.facts.get("operations") or [operation]  # Spec T34: the trade is landed when every operation before the value one is, too
+            if self.facts.get("receipt_tx") or not all(landed_word(op) for op in every) or not H.HEX64.fullmatch(handle_ops) or not user_op_hash:
                 raise StationStop(NO_LANDING, outcome=NOT_RUN)  # S11 read the receipt and judged it, or no landing was ever said
             self.expect("the handleOps receipt S11 could not read, read again by the hash the Wallet named")
             receipt = self.receipt_of(handle_ops)
@@ -2834,20 +3111,65 @@ class Pathfinder:
         if event is None:
             raise StationStop("S11 was passed over by --from %s, and the trade run.json records (handleOps %s) has no receipt carrying its "
                               "UserOperationEvent on %s" % (self.start_at, handle_ops, self.chain.host), outcome=NOT_RUN)
+        value = {k: traded.get(k) for k in ("user_op_hash", "handle_ops_tx_hash", "delegation_tx_hash", "status", "debited_usd", "reserved_usd", "kind")}
+        earlier = [dict(op) for op in (traded.get("operations_before") or []) if isinstance(op, dict)]  # Spec T34: the approval's, where the trade had one
         self.facts.update(receipt_tx=receipt, event=event, ticket_id=traded.get("ticket_id"), before=traded.get("before") or {},
-                          gas_before=traded.get("gas_before"),
-                          operation={k: traded.get(k) for k in ("user_op_hash", "handle_ops_tx_hash", "delegation_tx_hash", "status", "debited_usd", "reserved_usd")})
+                          gas_before=traded.get("gas_before"), operation=value, operations=earlier + [value])
         return receipt, event
 
+    def landings_before(self) -> List[Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]]:
+        """
+        Spec T34 §2: every operation the trade sent before the value one — the approval's — with the receipt of its sponsor's
+        transaction and its own UserOperationEvent: S11's readings; or, where S11 could not read the chain, or on a run resumed
+        past S11, read again by the hashes the Wallet named (run.json keeps them), as `landing` reads the value operation's.
+        Empty where the trade was one operation.
+        """
+        read = self.facts.get("operations_read")
+        if read is not None:
+            return read
+        read = []
+        for op in (self.facts.get("operations") or [])[:-1]:
+            handle_ops = str(op.get("handle_ops_tx_hash") or "").lower()
+            user_op_hash = str(op.get("user_op_hash") or "").lower()
+            self.expect("the receipt of the handleOps transaction %s landed in, read again by the hash the Wallet named" % operation_said(op))
+            receipt = self.receipt_of(handle_ops) if H.HEX64.fullmatch(handle_ops) else None
+            event = next((e for e in user_operation_events(receipt) if e["user_op_hash"] == user_op_hash), None) if isinstance(receipt, dict) else None
+            if event is None:
+                raise StationStop("the Wallet says %s %s landed in the handleOps transaction %s, and %s %s" % (
+                    operation_said(op), user_op_hash or "(no hash)", handle_ops or "(not named)", self.chain.host,
+                    "names no receipt for it" if not isinstance(receipt, dict) else "names a receipt carrying no UserOperationEvent for it"), outcome=FAIL)
+            read.append((op, receipt, event))
+        self.facts["operations_read"] = read
+        return read
+
     def station_s12(self) -> Outcome:
+        """
+        The reader: the swap on chain, the gas trail, the balances. Since Spec T34 it reads EVERY operation of the trade — the receipt of
+        each one's sponsor's transaction, its status, the UserOperationEvent for its own hash and its success, and the delegation's
+        where there is one — and holds the fall of the owner's gas account against the SUM of every operation's debit, and the
+        delegation's where the walk made it, each debit judged within its own band as the one always was. Where the Wallet listed
+        no operations (a Wallet before W-OPS) the one operation is read exactly as before, in the sentences it always had.
+        """
         receipt, event = self.landing()
+        earlier = self.landings_before()  # Spec T34 §2: the operations before the value one (the approval's), each with its receipt and its event
         self.session()  # the Wallet's reads below; a run resumed past S8 opens the session here
         wallet = self.facts.get("wallet") or {}
         before = self.facts.get("before") or {}
         operation = self.facts.get("operation") or {}
+        listed = bool(operation.get("kind"))  # the Wallet listed the trade's operations, so each is named; else the one, in its old words
         address = str(wallet.get("address") or "").lower()
         problems: List[str] = []
         lines: List[str] = []
+        if listed:
+            every = earlier + [(operation, receipt, event)]
+            lines.append("%d operation%s of the trade read, each by the receipt of its sponsor's transaction: %s" % (len(every), "" if len(every) == 1 else "s", names_said([
+                "%s %s in %s (block %s)" % (operation_said(op), str(op.get("user_op_hash") or "").lower(), str(op.get("handle_ops_tx_hash") or "").lower(),
+                                            H.hex_quantity(row.get("blockNumber"))) for op, row, _ in every])))
+        for op, row, found in earlier:
+            if H.hex_quantity(row.get("status")) != 1:
+                problems.append("%s: the handleOps receipt's status is %s" % (operation_said(op), row.get("status")))
+            if found.get("success") is not True:
+                problems.append("%s: the UserOperationEvent says the operation did not succeed" % operation_said(op))
         # 1. the swap on chain: the coin sold left the wallet, the coin bought arrived
         transfers = H.transfers_in(receipt)
         usdc_token = str(before.get("usdc_contract") or "").lower()
@@ -2866,57 +3188,77 @@ class Pathfinder:
         self.expect("the ticket's debit, read once more: debited_usd")
         ticket = self.read_ticket()
         debited = cents_of(ticket.get("debited_usd") or operation.get("debited_usd"))
+        # Spec T34 §2: every operation the platform debited for, in the order sent, the value operation last — its name, its receipt, its
+        # event and its debit in cents, the debit read from the ticket's own row for it where the ticket lists one, else as S11 read it
+        rows = operations_in(ticket)
+        charged: List[Tuple[str, Dict[str, Any], Dict[str, Any], Optional[int]]] = []
+        for index, (op, row, found) in enumerate(earlier):
+            stated = rows[index] if index < len(rows) and str(rows[index].get("kind") or "") == str(op.get("kind") or "") else {}
+            charged.append((operation_said(op), row, found, cents_of(stated.get("debited_usd") or op.get("debited_usd"))))
+        charged.append((operation_said(operation), receipt, event, debited))
         self.expect("200: the gas account read live, after the trade")
         gas_answer, gas = self.call("GET", GAS_ACCOUNT_ROUTE)
         after_gas = ((gas or {}).get("available") or {}).get("cents") if isinstance(gas, dict) and isinstance(gas.get("available"), dict) else None
         before_gas = self.facts.get("gas_before")
-        operations = [("the swap", receipt)]
+        delegations: List[Dict[str, Any]] = []
         delegation = str(ticket.get("delegation_tx_hash") or operation.get("delegation_tx_hash") or "").lower()
         if H.HEX64.fullmatch(delegation or ""):
             self.expect("the delegation's receipt: status 0x1 (the key delegated by the first operation, an operation of this walk too)")
             delegated = self.receipt_of(delegation)
             if isinstance(delegated, dict):
-                operations.append(("the delegation", delegated))
+                delegations.append(delegated)
             else:
                 problems.append("the delegation %s has no receipt on %s" % (delegation, self.rpc_url))
         self.expect("Chainlink's ETH/USD on %s at the landing block: latestRoundData and decimals" % TRADE["chain"])
         block = H.hex_quantity(receipt.get("blockNumber"))
         price = self.eth_price(block)
-        bands: List[Tuple[str, int, int, int]] = []
-        for label, row in operations:
+
+        def band_of(row: Dict[str, Any], found: Optional[Dict[str, Any]]) -> Tuple[int, int, int]:
             wei = (H.hex_quantity(row.get("gasUsed")) or 0) * (H.hex_quantity(row.get("effectiveGasPrice")) or 0)
-            if label == "the swap" and isinstance(event.get("actual_gas_cost"), int):
+            if found is not None and isinstance(found.get("actual_gas_cost"), int):
                 # The platform's own rule (internal/gas/settle.go): where the EntryPoint's event states what the operation cost
                 # the deposit, the greater of that and the receipt's gasUsed × effectiveGasPrice is the gas.
-                wei = max(wei, event["actual_gas_cost"])
+                wei = max(wei, found["actual_gas_cost"])
             low, high = debit_band(wei, price) if price else (0, 0)
-            bands.append((label, wei, low, high))
+            return wei, low, high
+
+        bands = [band_of(row, found) for _, row, found, _ in charged]  # one band for each operation, as the one always had
+        others = [band_of(row, None) for row in delegations]  # the delegation's, where the walk made it: the Wallet states no debit for it
         if price is None:
             problems.append("the price of ETH could not be read from %s, so the debit's ten percent could not be judged — %s"
                             % (ETH_USD_FEED[TRADE["chain"]], self.facts.get("price_unread") or "the feed answered no price"))
-        elif debited is None:
-            problems.append("the Wallet states no debited_usd for the operation (%s)" % short_json(ticket, 300))
         else:
-            label, wei, low, high = bands[0]
-            if not low <= debited <= high:
-                problems.append("the debit of %s is outside %s to %s: gas of %d wei plus the platform's ten percent (at least a cent), at US$%s per ether ± %d bps"
-                                % (T.format_usd_cents(debited), T.format_usd_cents(low), T.format_usd_cents(high), wei, H.price_words(price // 10 ** 6), PRICE_BAND_BPS))
-            lines.append("the debit: %s for %d wei of gas at US$%s per ether (Chainlink at block %s), within %s to %s for gas plus the 10%% charge"
-                         % (T.format_usd_cents(debited), wei, H.price_words(price // 10 ** 6), block, T.format_usd_cents(low), T.format_usd_cents(high)))
+            for (label, _, _, debit), (wei, low, high) in zip(charged, bands):
+                if debit is None:
+                    problems.append("the Wallet states no debited_usd for %s (%s)" % (label, short_json(ticket, 300)))
+                    continue
+                if not low <= debit <= high:
+                    problems.append("%sthe debit of %s is outside %s to %s: gas of %d wei plus the platform's ten percent (at least a cent), at US$%s per ether ± %d bps"
+                                    % ("%s: " % label if listed else "", T.format_usd_cents(debit), T.format_usd_cents(low), T.format_usd_cents(high), wei,
+                                       H.price_words(price // 10 ** 6), PRICE_BAND_BPS))
+                lines.append("%sthe debit: %s for %d wei of gas at US$%s per ether (Chainlink at block %s), within %s to %s for gas plus the 10%% charge"
+                             % ("%s, " % label if listed else "", T.format_usd_cents(debit), wei, H.price_words(price // 10 ** 6), block, T.format_usd_cents(low),
+                                T.format_usd_cents(high)))
         # 3. the balances reconcile: the gas account fell by the debits; the coins moved by what the chain says moved
+        debits = [debit for _, _, _, debit in charged]
         if before_gas is None or after_gas is None:
             problems.append("the gas account was not read both before and after (before %s, after %s)" % (before_gas, after_gas))
-        elif debited is not None:
+        elif all(debit is not None for debit in debits):
             fall = before_gas - after_gas
-            others_low = sum(b[2] for b in bands[1:])
-            others_high = sum(b[3] for b in bands[1:])
-            if not debited + others_low <= fall <= debited + others_high:
-                problems.append("the gas account fell by %s (%s to %s), and the debits come to %s%s" % (
-                    T.format_usd_cents(fall), T.format_usd_cents(before_gas), T.format_usd_cents(after_gas), T.format_usd_cents(debited),
-                    (" and %s to %s for the delegation" % (T.format_usd_cents(others_low), T.format_usd_cents(others_high))) if bands[1:] else ""))
+            total = sum(debits)  # Spec T34 §2: the fall is held against the SUM of every operation's debit, and the delegation's where the walk made it
+            others_low = sum(band[1] for band in others)
+            others_high = sum(band[2] for band in others)
+            each = names_said(["%s %s" % (label, T.format_usd_cents(debit)) for label, _, _, debit in charged])
+            count = "%d operation%s" % (len(charged), "" if len(charged) == 1 else "s")
+            if not total + others_low <= fall <= total + others_high:
+                problems.append("the gas account fell by %s (%s to %s), and the debits %s%s" % (
+                    T.format_usd_cents(fall), T.format_usd_cents(before_gas), T.format_usd_cents(after_gas),
+                    ("of the %s come to %s (%s)" % (count, T.format_usd_cents(total), each)) if listed else "come to %s" % T.format_usd_cents(total),
+                    (" and %s to %s for the delegation" % (T.format_usd_cents(others_low), T.format_usd_cents(others_high))) if others else ""))
             else:
-                lines.append("the gas account fell by %s, %s to %s, which is the debit%s" % (
-                    T.format_usd_cents(fall), T.format_usd_cents(before_gas), T.format_usd_cents(after_gas), " and the delegation's" if bands[1:] else ""))
+                lines.append("the gas account fell by %s, %s to %s, which is %s%s" % (
+                    T.format_usd_cents(fall), T.format_usd_cents(before_gas), T.format_usd_cents(after_gas),
+                    ("the sum of the debits of the %s (%s)" % (count, each)) if listed else "the debit", " and the delegation's" if others else ""))
         self.expect("the wallet's balances after the trade: USDC fallen and WETH risen by exactly what the chain moved")
         args, _ = H.arguments_for(self.mcp.schema_of("wallet.get_balances"), {}, {"wallet_id": wallet.get("id")})
         balances = self.mcp.call("wallet.get_balances", args, "S12")
@@ -2955,10 +3297,26 @@ class Pathfinder:
         fee address, and the fee address's own incoming Transfer logs at the landing block carry the same leg, in the same
         transaction — the chain's word, never the calldata alone. The rate and the address are tables.py's, read here and not
         declared, and only this harness's terminal and report show them, the address shortened as the corridor prints it.
+        Since Spec T34 a trade may be two operations: the commission is checked on the VALUE operation, the swap's, as it always
+        was, and where the trade had an approval's operation before it the line says so, whatever it found.
         """
         if chain_family(TRADE["chain"]) == "solana":
             return self.commission_on_solana()
         receipt, _ = self.landing()
+        earlier = (self.facts.get("operations") or [])[:-1]
+        if not earlier:
+            return self.commission_of(receipt)
+        said = "; read on %s, the trade's value operation: %s before it is not the swap, and no commission is looked for on it" % (
+            operation_said((self.facts.get("operations") or [{}])[-1]), names_said([operation_said(op) for op in earlier]))
+        try:
+            outcome = self.commission_of(receipt)
+        except StationStop as stop:
+            stop.sentence += said
+            raise
+        return Outcome("S12a", outcome.outcome, outcome.line + said, cause=outcome.cause)
+
+    def commission_of(self, receipt: Dict[str, Any]) -> Outcome:
+        """The commission judged on the swap's own receipt: S12a's judgment, as it was before a trade could be two operations."""
         wallet = str((self.facts.get("wallet") or {}).get("address") or "")
         fee_address = T.address("FEE_ADDRESS")
         transfers = H.transfers_in(receipt)
@@ -3045,7 +3403,9 @@ class Pathfinder:
         args, _ = H.arguments_for(self.mcp.schema_of("wallet.ticket_status"), {}, {"ticket_id": ticket_id})
         answer = self.mcp.call("wallet.ticket_status", args, self.current)
         data = answer.data if isinstance(answer.data, dict) else {}
-        return H.find_key(data, ["ticket"], dict) or data
+        ticket = H.find_key(data, ["ticket"], dict) or data
+        listed = operations_in(data)  # Spec T34: the ticket's operations, wherever the answer carries them, travel with the ticket
+        return dict(ticket, **{OPERATIONS_KEY: listed}) if listed and not operations_in(ticket) else ticket
 
     def eth_price(self, block: Optional[int]) -> Optional[int]:
         """Chainlink's ETH/USD at the block, in millionths of a cent per ether, or None where the feed could not be read."""
@@ -3378,10 +3738,11 @@ def dry_lines(base: str = DEFAULT_BASE, owner: str = DEFAULT_OWNER, store_dir: s
     call("S11", "MCP tools/call wallet.get_balances %s → expect USDC on %s of at least %d minor units; short of it: \"%s\"" % (
         _j({"wallet_id": "<wallet UUID>"}), TRADE["chain"], TRADE_RAW, SHORT_SENTENCE % ("<wallet address>", TRADE["chain"], "<what it holds>", TRADE_RAW)))
     call("S11", "[table] on every run, whatever S2 read: the implementation that reading, the agent's own wallet's, names for %s held against tables.py's %s, before anything is "
-         "funded, built or submitted → the same: one clause; another: stopped, \"%s; %s\"; none named by it where S2's answer named one: nothing more is said; none named in any "
-         "answer read: the finding \"%s\"" % (
+         "funded, built or submitted → the same: one clause; another: stopped, \"%s; %s\"; none named by it where S2's answer named one: the finding \"%s\", on every run "
+         "(Spec T34); none named in any answer read: the finding \"%s\"" % (
              TRADE["chain"], pinned_implementation,
              IMPLEMENTATION_DIFFERS_SENTENCE % (pinned_implementation, TRADE["chain"], normal_base(base), "<the address named>", WALLET_READING), IMPLEMENTATION_NOT_TRADED_TAIL,
+             IMPLEMENTATION_UNNAMED_BY_THE_WALLET_FINDING % (WALLET_READING, TRADE["chain"], pinned_implementation, ACCOUNT_READING),
              IMPLEMENTATION_UNNAMED_FINDING % (names_said([ACCOUNT_READING, WALLET_READING]), TRADE["chain"], pinned_implementation, normal_base(base))))
     estate_people = os.path.join(estate_store, A.ESTATE["client_id"])
     call("S11", "[estate %s] POST /v1/auth/login/options {}, POST /v1/auth/login/verify {nonce, issuedAtMs, response} as each of %s with the passkey stored under %s "
@@ -3412,23 +3773,34 @@ def dry_lines(base: str = DEFAULT_BASE, owner: str = DEFAULT_OWNER, store_dir: s
              _j({"wallet_id": "<wallet UUID>"}), TRADE_POLL_SECONDS, TRADE["chain"], TRADE_RAW, TRADE_DEADLINE_SECONDS, FUNDED_SENTENCE % (TRADE_RAW, "<hash>")))
     call("S11", "GET %s → expect 200: the gas account before the trade" % GAS_ACCOUNT_ROUTE)
     call("S11", "MCP tools/call wallet.build_transaction %s → expect a ticket and the pact it was built under" % _j(trade_build))
-    call("S11", "MCP tools/call wallet.submit_transaction %s → expect the execution: user_op_hash, handle_ops_tx_hash, status, reserved_usd, debited_usd" % _j(trade_submit))
+    call("S11", "MCP tools/call wallet.submit_transaction %s → expect the execution: user_op_hash, handle_ops_tx_hash, status, reserved_usd, debited_usd — the value operation's, the "
+         "swap's — and, from a Wallet since its Spec W-OPS, operations: every operation in the order sent (the approval's where the trade needs one, then the swap's), each "
+         "{kind, user_op_hash, handle_ops_tx_hash, reserved_usd, debited_usd, status, success}; the answer waited for up to %d s, longer than the relay's %d s for a door "
+         "(Spec T34)" % (_j(trade_submit), int(TOOL_WAIT_SECONDS), RELAY_DOOR_WAIT_SECONDS))
     call("S11", "[told] a submit refused with %s on a session whose request id ends :delegate → the gateway's words verbatim, and beside them: \"%s\"" % (
         DELEGATION_REFUSED_REASON, DELEGATION_REFUSED_SAID))
-    call("S11", "MCP tools/call wallet.ticket_status %s every %s s until the handleOps transaction is named, deadline %s s" % (
-        _j({"ticket_id": "<ticket>"}), TRADE_POLL_SECONDS, TRADE_DEADLINE_SECONDS))
-    call("S11", "[read] eth_getTransactionReceipt <handleOps> at %s → expect status 0x1 and the UserOperationEvent: success, sender the wallet, paymaster %s"
+    call("S11", "[unanswered] a submit whose answer never arrived — the relay's \"%s …\", its older \"… %s\", or the harness's own wait run out — is not \"no swap\": "
+         "MCP tools/call wallet.ticket_status %s every %s s for up to %d s, and the chain as S12 reads it → the swap landed and succeeded: S11 passes on the landing, with the finding that "
+         "the answer never arrived, and S12 and S12a run; it did not: S11 fails (a fault), saying which operations landed and which did not; S13 halts nothing before this "
+         "reading has ended (Spec T34)" % (RELAY_ASKED_UNANSWERED, H.RELAY_UNREACHABLE, _j({"ticket_id": "<ticket>"}), TRADE_POLL_SECONDS, int(FATE_WAIT_SECONDS)))
+    call("S11", "MCP tools/call wallet.ticket_status %s every %s s until every operation of the trade has landed — its handleOps transaction named, its debit stated — or one has "
+         "ended badly, deadline %s s" % (_j({"ticket_id": "<ticket>"}), TRADE_POLL_SECONDS, TRADE_DEADLINE_SECONDS))
+    call("S11", "[read] eth_getTransactionReceipt <handleOps> at %s, for each operation in the order sent → expect status 0x1 and the UserOperationEvent for that operation's hash: "
+         "success, sender the wallet, paymaster %s; an operation before the swap's that did not land or reverted fails S11 (a fault), naming it"
          % (T.REHEARSAL_RPC[TRADE["chain"]].url, H.checksum_address(PAYMASTER[TRADE["chain"]])))
     station("S12", "the reader: the swap on chain, the debit with its 10% charge, the balances reconciled")
     call("S12", "[read] the receipt's Transfer logs → expect USDC out of the wallet and WETH into it")
-    call("S12", "MCP tools/call wallet.ticket_status %s → expect debited_usd" % _j({"ticket_id": "<ticket>"}))
-    call("S12", "GET %s → expect the gas account after: fallen by the debit (and the delegation's, where the operation delegated the key first)" % GAS_ACCOUNT_ROUTE)
-    call("S12", "[read] eth_call latestRoundData() and decimals() on %s at the landing block → the debit within gas plus %d bps (at least a cent), at that price ± %d bps"
-         % (ETH_USD_FEED[TRADE["chain"]], MARGIN_BPS, PRICE_BAND_BPS))
+    call("S12", "[read] the receipt of every operation's handleOps transaction, as S11 read it or read again by its hash → expect status 0x1 and the UserOperationEvent for that "
+         "operation's hash: success (Spec T34)")
+    call("S12", "MCP tools/call wallet.ticket_status %s → expect debited_usd, and each operation's own where the ticket lists its operations" % _j({"ticket_id": "<ticket>"}))
+    call("S12", "GET %s → expect the gas account after: fallen by the sum of every operation's debit — the approval's, where the trade had one, and the swap's — and the "
+         "delegation's, where the walk delegated the key first" % GAS_ACCOUNT_ROUTE)
+    call("S12", "[read] eth_call latestRoundData() and decimals() on %s at the landing block → the debit of each operation within gas plus %d bps (at least a cent), at that "
+         "price ± %d bps" % (ETH_USD_FEED[TRADE["chain"]], MARGIN_BPS, PRICE_BAND_BPS))
     call("S12", "MCP tools/call wallet.get_balances %s → expect USDC fallen and WETH risen by exactly what the chain moved" % _j({"wallet_id": "<wallet UUID>"}))
     station("S12a", "the commission: %d bps of the trade's output to the fee address %s, on chain" % (T.FEE_BPS, H.short(T.address("FEE_ADDRESS"))))
-    call("S12a", "[read] the handleOps receipt's ERC-20 Transfer logs → expect the pool's %s to the router, %d bps of it to %s, the rest to the wallet "
-         "(corridor_harness.fee_check)" % (TRADE["to_asset"], T.FEE_BPS, H.short(T.address("FEE_ADDRESS"))))
+    call("S12a", "[read] the handleOps receipt's ERC-20 Transfer logs — the swap's, the trade's value operation, where an approval's operation came before it — → expect the "
+         "pool's %s to the router, %d bps of it to %s, the rest to the wallet (corridor_harness.fee_check)" % (TRADE["to_asset"], T.FEE_BPS, H.short(T.address("FEE_ADDRESS"))))
     call("S12a", "[read] eth_getLogs Transfer to %s at the landing block → expect the same leg in the swap's transaction; the line: "
          "\"commission <amount> %s to %s (%d bps)\"" % (H.short(T.address("FEE_ADDRESS")), TRADE["to_asset"], H.short(T.address("FEE_ADDRESS")), T.FEE_BPS))
     station("S13", "this run's agent removed; the owner never touched")
